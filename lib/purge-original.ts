@@ -1,0 +1,58 @@
+import { db } from "./db";
+import { candidates } from "./schema";
+import { and, eq, lt, sql, isNotNull } from "drizzle-orm";
+import { deleteFile } from "./storage";
+
+const DEFAULT_PURGE_DAYS = 30;
+
+/**
+ * 평가 완료된 후보자의 마스킹 텍스트 + 원본 파일 자동 삭제.
+ *
+ * 조건:
+ *  - status in (screened, interviewed, failed)
+ *  - created_at < now - N일
+ *  - resume_masked_text 또는 resume_file_path 가 남아있음
+ *
+ * 평가 결과(screeningReport, evaluation, 점수)는 그대로 보존.
+ * — PIPA 가명처리 원칙: 식별 가능성 제거가 목적, 평가 메타 폐기 아님.
+ * — 원본(resume_text)은 업로드 시점에 이미 저장 안 함.
+ */
+export async function purgeExpiredOriginals(
+  daysOverride?: number
+): Promise<{ purgedCount: number; failedFiles: number }> {
+  const days = daysOverride ?? Number(process.env.PURGE_AFTER_DAYS ?? DEFAULT_PURGE_DAYS);
+  const cutoff = sql`datetime('now', ${`-${days} days`})`;
+
+  // 폐기 대상: 마스킹 텍스트가 있고 (=업로드 후 마스킹 끝남) 일정 기간 경과한 후보.
+  // 큐 진행 중이어도 마스킹 텍스트가 LLM 입력으로 충분하므로 원본은 안전하게 제거 가능.
+  const targets = await db
+    .select({
+      id: candidates.id,
+      filePath: candidates.resumeFilePath,
+    })
+    .from(candidates)
+    .where(
+      and(
+        lt(candidates.createdAt, cutoff),
+        isNotNull(candidates.resumeMaskedText)
+      )
+    );
+
+  let failedFiles = 0;
+  for (const t of targets) {
+    if (t.filePath) {
+      try {
+        await deleteFile(t.filePath);
+      } catch (e) {
+        console.error(`purge: file delete failed (cid=${t.id})`, e);
+        failedFiles++;
+      }
+    }
+    await db
+      .update(candidates)
+      .set({ resumeText: "", resumeMaskedText: null, resumeFilePath: "" })
+      .where(eq(candidates.id, t.id));
+  }
+
+  return { purgedCount: targets.length, failedFiles };
+}

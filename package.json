@@ -1,0 +1,52 @@
+{
+  "name": "intervia",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3003",
+    "build": "next build",
+    "start": "next start",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:migrate-multitenant": "node scripts/migrate-multitenant.mjs",
+    "db:migrate-email-verification": "node scripts/migrate-email-verification.mjs",
+    "db:migrate-masked-text": "node scripts/migrate-masked-text.mjs",
+    "db:migrate-outcome": "node scripts/migrate-outcome.mjs",
+    "db:migrate-drop-status": "node scripts/migrate-drop-status.mjs",
+    "db:seed-test": "node scripts/seed-test.mjs",
+    "dart:fetch": "node scripts/fetch-dart-corps.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^2.6.0",
+    "@libsql/client": "^0.17.3",
+    "@next/env": "^16.2.6",
+    "@vercel/blob": "^2.3.3",
+    "bcryptjs": "^3.0.3",
+    "cheerio": "^1.2.0",
+    "drizzle-orm": "^0.45.2",
+    "fflate": "^0.8.3",
+    "lucide-react": "^1.16.0",
+    "mammoth": "^1.12.0",
+    "next": "16.2.6",
+    "nodemailer": "^8.0.7",
+    "pdf-parse": "^1.1.1",
+    "qrcode": "^1.5.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.0",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
+    "pdfkit": "^0.18.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,175 @@
+/**
+ * 지원자가 면접 시간 선택 → 확정.
+ * body: { slotIndex: number } — proposedSlots 배열 중 선택한 인덱스
+ */
+import { db } from "@/lib/db";
+import {
+  interviewSchedules,
+  candidates,
+  jobPostings,
+  organizations,
+  users,
+} from "@/lib/schema";
+import { eq } from "drizzle-orm";
+import {
+  buildScheduleConfirmedEmail,
+  type Slot,
+} from "@/lib/schedules";
+import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import {
+  createNotification,
+  notifyJobInterviewers,
+} from "@/lib/notifications";
+
+export const runtime = "nodejs";
+
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  const { token } = await params;
+  const body = (await req.json().catch(() => null)) as {
+    slotIndex?: number;
+  } | null;
+  if (!body || typeof body.slotIndex !== "number")
+    return new Response("slotIndex 필요", { status: 400 });
+
+  const [sched] = await db
+    .select()
+    .from(interviewSchedules)
+    .where(eq(interviewSchedules.accessToken, token));
+  if (!sched) return new Response("Not found", { status: 404 });
+  if (sched.status !== "pending" && sched.status !== "counter_proposed")
+    return new Response("이미 처리된 일정입니다.", { status: 409 });
+  if (new Date(sched.expiresAt) < new Date())
+    return new Response("만료된 링크입니다.", { status: 410 });
+
+  const slots = sched.proposedSlots as Slot[];
+  if (body.slotIndex < 0 || body.slotIndex >= slots.length)
+    return new Response("잘못된 슬롯 선택", { status: 400 });
+
+  const selected = slots[body.slotIndex];
+
+  await db
+    .update(interviewSchedules)
+    .set({
+      status: "selected",
+      selectedSlot: selected,
+      respondedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(interviewSchedules.id, sched.id));
+
+  // 후보자 stage 전환 → round1_waiting (1차 면접 대기)
+  await db
+    .update(candidates)
+    .set({ stage: "round1_waiting" })
+    .where(eq(candidates.id, sched.candidateId));
+
+  // 확정 메일 발송 (후보자 + 면접관)
+  const [cand] = await db
+    .select({ name: candidates.name, email: candidates.email })
+    .from(candidates)
+    .where(eq(candidates.id, sched.candidateId));
+  const [job] = await db
+    .select({ title: jobPostings.title })
+    .from(jobPostings)
+    .where(eq(jobPostings.id, sched.jobId));
+  const org = sched.orgId
+    ? (
+        await db
+          .select({ name: organizations.name })
+          .from(organizations)
+          .where(eq(organizations.id, sched.orgId))
+      )[0]
+    : null;
+
+  if (await isSmtpAvailable(sched.orgId)) {
+    // 후보자 본인
+    if (cand?.email) {
+      try {
+        const mail = buildScheduleConfirmedEmail({
+          candidateName: cand.name,
+          jobTitle: job?.title ?? "공고",
+          orgName: org?.name ?? "법인",
+          slot: selected,
+          modeOnline: sched.modeOnline,
+          address: sched.address,
+          forInterviewer: false,
+        });
+        await sendMail({ to: cand.email, ...mail, orgId: sched.orgId, audience: "candidate" });
+      } catch (e) {
+        console.error("confirm mail to candidate failed", e);
+      }
+    }
+    // 면접관 (제시한 사람) — 알림 메일
+    if (sched.proposedByUserId) {
+      const [interviewer] = await db
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, sched.proposedByUserId));
+      if (interviewer?.email) {
+        try {
+          const mail = buildScheduleConfirmedEmail({
+            candidateName: cand?.name ?? "후보자",
+            jobTitle: job?.title ?? "공고",
+            orgName: org?.name ?? "법인",
+            slot: selected,
+            modeOnline: sched.modeOnline,
+            address: sched.address,
+            forInterviewer: true,
+          });
+          await sendMail({
+            to: interviewer.email,
+            ...mail,
+            orgId: sched.orgId,
+            audience: "org",
+          });
+        } catch (e) {
+          console.error("confirm mail to interviewer failed", e);
+        }
+      }
+    }
+  }
+
+  // 인앱 알림 — 제시한 면접관 + 공고 면접관 전원에게 (중복 시 fanout 에서 두 번 들어가도 무해)
+  const notifTitle = `${cand?.name ?? "후보자"} 님이 1차 면접 시간을 확정했습니다`;
+  const notifHref = `/candidates/${sched.candidateId}`;
+  if (sched.proposedByUserId) {
+    try {
+      await createNotification({
+        userId: sched.proposedByUserId,
+        type: "schedule_confirmed",
+        title: notifTitle,
+        href: notifHref,
+        payload: { scheduleId: sched.id, slot: selected },
+      });
+    } catch (e) {
+      console.error("schedule confirm notify proposer failed", e);
+    }
+  }
+  try {
+    // proposer 는 위에서 풍부한 일정 메일을 이미 받음 — 중복 차단.
+    await notifyJobInterviewers(
+      sched.jobId,
+      {
+        type: "schedule_confirmed",
+        title: notifTitle,
+        href: notifHref,
+        payload: { scheduleId: sched.id, slot: selected },
+      },
+      sched.proposedByUserId
+        ? { excludeEmailUserIds: [sched.proposedByUserId] }
+        : undefined
+    );
+  } catch (e) {
+    console.error("schedule confirm notify interviewers failed", e);
+  }
+
+  return Response.json({
+    ok: true,
+    selectedSlot: selected,
+    modeOnline: sched.modeOnline,
+    address: sched.address,
+  });
+}

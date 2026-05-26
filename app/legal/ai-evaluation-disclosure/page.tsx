@@ -1,0 +1,325 @@
+import {
+  COMPANY_INFO,
+  SITE_INFO,
+  APPEAL_CONTACT,
+  PROCESSORS,
+} from "@/lib/site-info";
+import Link from "next/link";
+
+export const metadata = {
+  title: `AI 평가 사전공개 — ${SITE_INFO.serviceName}`,
+};
+
+/**
+ * 개인정보 보호법 §37의2 4항 사전공개 의무 충족용 페이지.
+ *
+ * 동의 화면(체크박스)만으로는 "쉽게 확인" 요건이 모호하므로,
+ * 비로그인 + 검색·링크로 누구나 도달 가능한 공개 페이지로 별도 운영.
+ *
+ * 채용기업은 본 페이지 URL 을 채용공고 footer 에 함께 게재하도록 권고.
+ */
+export default function AiEvaluationDisclosurePage() {
+  return (
+    <main className="max-w-3xl mx-auto w-full px-6 py-10">
+      <Link href="/" className="text-xs text-slate-500 hover:underline">
+        ← 홈
+      </Link>
+      <h1 className="text-2xl font-bold text-slate-900 mt-3">
+        AI 평가 사전공개
+      </h1>
+      <p className="text-xs text-slate-500 mt-1">
+        개인정보 보호법 §37의2 (자동화된 결정에 대한 정보주체의 권리) 4항에
+        따른 사전공개. 누구나 로그인 없이 확인할 수 있습니다.
+      </p>
+
+      <p className="text-sm text-slate-700 leading-relaxed mt-6">
+        본 문서는 <strong>{SITE_INFO.serviceName}</strong>(제공:{" "}
+        {COMPANY_INFO.name})의 AI 채용 평가 시스템이 어떤 기준과 절차로
+        동작하는지를 정보주체(지원자)가 사전에 확인할 수 있도록 공개하는
+        문서입니다.
+      </p>
+
+      <Section n="1" title="평가 대상과 방식">
+        <ul className="list-disc list-inside space-y-1">
+          <li>
+            <strong>서류 평가</strong>: 지원자가 제출한 이력서·자기소개서·
+            포트폴리오 텍스트를 기반으로 LLM(대규모 언어모델)이 점수와 의견을
+            산출합니다.
+          </li>
+          <li>
+            <strong>AI 면접 평가</strong>: 채팅 기반 면접 응답을 기반으로
+            LLM이 점수와 의견을 산출합니다.
+          </li>
+          <li>
+            서류·면접 단계 모두 LLM 호출 전에 이름·연락처·이메일·주소·학교·
+            생년월일 등 직접 식별자와{" "}
+            <strong>채용절차법 §4의2 평가 금지 항목</strong>(성별·나이·출신
+            지역·가족관계·종교·정치성향·신체조건·학교명 등)을{" "}
+            <strong>식별 가능한 정보를 자동 마스킹 처리하여 LLM 에 전달</strong>
+            합니다. 마스킹은 정규식·사전 기반 자동 처리로, 사전에 등록되지 않은
+            신규 학교명·회사명·변형 표기 등은 잔존할 가능성이 있습니다.
+          </li>
+        </ul>
+      </Section>
+
+      <Section n="2" title="평가 차원과 가중치">
+        <table className="w-full text-sm border border-slate-200 mt-2">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-3 py-2 text-left w-40">차원</th>
+              <th className="px-3 py-2 text-left">평가 내용</th>
+              <th className="px-3 py-2 text-right w-20">가중치</th>
+            </tr>
+          </thead>
+          <tbody className="text-slate-700">
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">기술 적합도</td>
+              <td className="px-3 py-2">
+                JD의 hard skill 요구사항과 이력서·면접 답변에 나타난 기술
+                경험의 부합 정도
+              </td>
+              <td className="px-3 py-2 text-right">35~40%</td>
+            </tr>
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">실무 경험</td>
+              <td className="px-3 py-2">
+                책임 범위·프로젝트 규모·정량적 성과·트레이드오프 인지
+              </td>
+              <td className="px-3 py-2 text-right">30%</td>
+            </tr>
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">직무 매칭 / 협업</td>
+              <td className="px-3 py-2">
+                JD 주요 업무와의 일치 (서류) 또는 커뮤니케이션·경청 (면접)
+              </td>
+              <td className="px-3 py-2 text-right">15~20%</td>
+            </tr>
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">성장·태도 / 직무 적합성</td>
+              <td className="px-3 py-2">
+                선호 인재상 부합, 학습 흔적, 커리어 일관성, 동기
+              </td>
+              <td className="px-3 py-2 text-right">10~20%</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="text-xs text-slate-500 mt-2">
+          가중치는 서류·면접 단계에서 약간 다릅니다. 모든 차원은 0~100 점,
+          종합 점수도 0~100 점으로 산출됩니다. 추천 등급: 85+ 강력추천 / 70+
+          추천 / 55+ 보류 / 미만 비추천.
+        </p>
+      </Section>
+
+      <Section n="3" title="사용 모델·기술">
+        <ul className="list-disc list-inside space-y-1">
+          <li>
+            모델 (Google 제공, 결제 등급 — 입력이 모델 학습에 활용되지 않음):
+            <ul className="list-disc list-inside ml-5 mt-1">
+              <li>
+                서류 평가·AI 면접 채팅·면접 응답 평가 모두{" "}
+                <strong>Google Gemini 2.5 Flash</strong> —{" "}
+                <strong>Google Cloud 서울 리전(asia-northeast3, 대한민국) 에서 처리</strong>{" "}
+                (AI 처리 단계의 국외이전 없음)
+              </li>
+            </ul>
+          </li>
+          <li>
+            LLM에 전달되는 텍스트는 본 페이지 §1 의 마스킹을 거친 텍스트로
+            한정됩니다.
+          </li>
+          <li>
+            평가 결과는 JSON 으로 산출되어 회사 데이터베이스(Turso, 일본
+            도쿄 리전)에 저장됩니다.
+          </li>
+        </ul>
+      </Section>
+
+      <Section n="4" title="인적 검토 절차">
+        <p className="text-sm text-slate-700 mb-2">
+          AI 평가는 <strong>최종 합·불 결정을 자동으로 내리지 않습니다</strong>.
+          모든 채용 결정에는 사람의 실질적 검토가 개입합니다.
+        </p>
+        <ol className="list-decimal list-inside space-y-1 text-sm">
+          <li>
+            <strong>서류 평가</strong>: AI 가 점수와 의견을 산출한 후, 채용
+            담당자가 점수를 참고하여 면접 진행 여부를 결정합니다.
+          </li>
+          <li>
+            <strong>AI 면접 평가</strong>: AI 가 면접 응답에 대한 점수와
+            의견을 산출한 후, 채용 담당자가 다음 단계(2차 면접·합격·불합격)를
+            결정합니다.
+          </li>
+          <li>
+            <strong>최종 결정</strong>: 채용기업의 권한 있는 담당자가
+            시스템에 결정 사유를 기록한 뒤에야 합·불 상태가 확정됩니다.
+            결정 시각·결정자·결정 사유는 감사 로그에 영구 보존됩니다.
+          </li>
+        </ol>
+      </Section>
+
+      <Section n="5" title="정보주체의 권리">
+        <p className="text-sm text-slate-700 mb-2">
+          개인정보 보호법 §37의2 에 따라 지원자는 AI 평가에 대해 다음 권리를
+          가집니다.
+        </p>
+        <ul className="list-disc list-inside space-y-1 text-sm">
+          <li>
+            <strong>설명 요구권</strong>: AI 가 어떤 기준으로 평가했는지에 대해
+            설명을 요구할 수 있습니다.
+          </li>
+          <li>
+            <strong>이의 제기권</strong>: AI 평가 결과에 대해 이의를 제기할 수
+            있습니다. 회사는 7영업일 이내에 답변합니다.
+          </li>
+          <li>
+            <strong>인적 검토 요구권</strong>: 사람의 재검토를 요구할 수
+            있습니다.
+          </li>
+          <li>
+            <strong>거부권</strong>: AI 평가 자체를 거부할 수 있습니다. 거부 시
+            본 AI 평가 절차는 제외되고, 채용기업의 일반 채용 절차로 진행됩니다
+            (채용기업이 일반 절차를 제공하지 않는 경우는 본 채용 지원이 제한될
+            수 있습니다).
+          </li>
+        </ul>
+        <p className="text-xs text-slate-600 mt-3 rounded-md bg-slate-50 border border-slate-200 p-3">
+          <strong>이의제기·설명 요청 채널</strong>:{" "}
+          <a
+            href={`mailto:${APPEAL_CONTACT.email}`}
+            className="text-primary hover:underline"
+          >
+            {APPEAL_CONTACT.email}
+          </a>
+          <br />
+          또는 면접 종료 화면의 &quot;자동화 의사결정 이의제기&quot; 링크.{" "}
+          {APPEAL_CONTACT.description}
+        </p>
+      </Section>
+
+      <Section n="6" title="평가에서 절대 사용하지 않는 정보 (차별 금지)">
+        <p className="text-sm text-slate-700 mb-2">
+          채용절차의 공정화에 관한 법률 §4의2, 남녀고용평등법, 연령차별금지법,
+          장애인차별금지법, 국가인권위원회법에 따라, 다음 정보는 평가의
+          근거·인용·언급에서 모두 제외됩니다.
+        </p>
+        <ul className="list-disc list-inside space-y-0.5 text-sm text-slate-700">
+          <li>성별, 나이, 혼인 여부</li>
+          <li>출신 지역, 본적, 출생지</li>
+          <li>출신 학교명, 학교 서열, 출신 학과의 특정 정보</li>
+          <li>가족관계, 부모·형제의 직업·학력·재산</li>
+          <li>종교, 정치적 견해, 노조 활동 이력</li>
+          <li>신체 조건 (키·체중·외모·장애 여부)</li>
+          <li>건강 상태 (직무 수행에 직접 필요한 경우 제외)</li>
+        </ul>
+        <p className="text-xs text-slate-500 mt-2">
+          위 항목들은 LLM 호출 전 마스킹되고, AI 평가 프롬프트에 명시적인
+          평가 금지 지시가 포함되어 있습니다. 그럼에도 평가 결과에 이러한
+          정보의 흔적이 발견된 경우 §5 의 이의제기 채널로 신고해 주세요.
+        </p>
+      </Section>
+
+      <Section n="7" title="평가 결과의 보유 기간">
+        <ul className="list-disc list-inside space-y-1 text-sm">
+          <li>이력서 원본 파일·마스킹 텍스트: 합·불 결정 시점 즉시 폐기</li>
+          <li>평가 결과(점수·코멘트): 채용 공고 종결 +14일 후 자동 삭제</li>
+          <li>감사 로그 (결정 시각·결정자·이의제기 기록): 분쟁 대응 목적
+            상 최장 5년 보유 (법적 의무 기간 종료 시 폐기)</li>
+        </ul>
+      </Section>
+
+      <Section n="8" title="처리위탁 / 국외이전">
+        <p className="text-sm text-slate-700 mb-2">
+          AI 평가는 다음 수탁자를 거쳐 수행됩니다. 자세한 처리 항목·보유기간은{" "}
+          <Link href="/privacy" className="text-primary hover:underline">
+            개인정보 처리방침
+          </Link>{" "}
+          §5 참고.
+        </p>
+        <table className="w-full text-xs border border-slate-200 mt-2">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-3 py-2 text-left">수탁자</th>
+              <th className="px-3 py-2 text-left">목적</th>
+              <th className="px-3 py-2 text-left">국가</th>
+            </tr>
+          </thead>
+          <tbody className="text-slate-700">
+            {PROCESSORS.filter((p) =>
+              ["Google", "Vercel Inc", "Turso", "Vercel Blob"].some((k) =>
+                p.name.includes(k)
+              )
+            ).map((p) => (
+              <tr key={p.name} className="border-t border-slate-200">
+                <td className="px-3 py-2 font-medium text-slate-900">
+                  {p.name}
+                </td>
+                <td className="px-3 py-2">{p.purpose}</td>
+                <td className="px-3 py-2">{p.country}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Section>
+
+      <Section n="9" title="채용기업에 대한 권고 사항">
+        <p className="text-sm text-slate-700">
+          본 서비스를 도입하는 채용기업은 채용 공고 본문 또는 지원 페이지
+          하단에 본 페이지 URL 을 함께 게재할 것을 권고합니다. 사전공개는
+          개인정보 보호법 §37의2 4항의 필수 의무이며, 지원자가 본 정보에
+          &quot;쉽게 접근할 수 있는 상태&quot; 가 입증 가능해야 합니다.
+        </p>
+        <p className="text-xs text-slate-500 mt-2">
+          본 페이지 URL: {SITE_INFO.baseUrl}/legal/ai-evaluation-disclosure
+        </p>
+      </Section>
+
+      <hr className="my-8 border-slate-200" />
+      <div className="text-xs text-slate-500 space-y-1">
+        <div>
+          <strong>{COMPANY_INFO.name}</strong> · 대표 {COMPANY_INFO.representative}
+        </div>
+        <div>
+          개인정보 보호책임자: {COMPANY_INFO.email}
+        </div>
+        <div className="mt-2">
+          관련 문서:{" "}
+          <Link href="/privacy" className="text-primary hover:underline">
+            개인정보 처리방침
+          </Link>{" "}
+          ·{" "}
+          <Link href="/terms" className="text-primary hover:underline">
+            이용약관
+          </Link>{" "}
+          ·{" "}
+          <Link
+            href="/legal/applicant-consent-template"
+            className="text-primary hover:underline"
+          >
+            지원자 동의 문구 템플릿
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Section({
+  n,
+  title,
+  children,
+}: {
+  n: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mt-8">
+      <h2 className="text-base font-semibold text-slate-900">
+        제{n}조 · {title}
+      </h2>
+      <div className="text-sm text-slate-700 leading-relaxed mt-2 space-y-2">
+        {children}
+      </div>
+    </section>
+  );
+}

@@ -1,0 +1,322 @@
+# 함정 모음 (Gotchas)
+
+작업 전 한 번 훑으면 시간 낭비 큰 폭으로 줄어듭니다.
+
+## 0. 멀티테넌트 — `org_id` 필터 누락이 가장 위험
+
+**증상**: 다른 법인 사용자가 우리 공고/후보자를 보게 됨.
+
+**원인**: 모든 jobs/candidates 쿼리에 `org_id` 필터 빠뜨림.
+
+**해결**:
+- 목록 쿼리: `lib/tenant.ts` 의 `jobOrgFilter(me)` / `candidateOrgFilter(me)` 를 `where(and(...))` 에 항상 끼움
+- 단일 row 조회: 로드 후 `ownsOrg(me, row.orgId)` 체크. 실패 시 **404** 로 응답 (존재 여부 위장)
+- POST/INSERT: body의 `orgId` 무시하고 서버측 `me.orgId` 사용. system_admin만 명시 허용
+- system_admin은 모든 법인 통과 — 필터 함수가 `undefined` 반환
+
+## 0-0-2. Rate limit 위치
+
+민감한 라우트 새로 만들면 반드시:
+```ts
+import { rateLimit } from "@/lib/rate-limit";
+const limited = await rateLimit(req, "my-scope", { limit: 5, windowSec: 60 }, me?.id);
+if (limited) return limited;
+```
+
+기본 한도 표 (분당):
+| Scope | Limit | 비고 |
+|---|---|---|
+| `signup` | 5 | IP 기준 |
+| `setup` | 5 | IP 기준 |
+| `change-password` | 5 | userId 기준 |
+| `resend-verification` | 3 | IP 기준 (계정 enum 방지) |
+| `send-email` | 5 | userId 기준 |
+| `llm-screen` | 30 | userId 기준 (단건) |
+| `llm-bulk-screen` | 5 | userId 기준 (1회당 ≤500건) |
+
+login 은 `auth_attempts` 잠금이 더 강력 — rate-limit 별도 적용 X.
+고트래픽 streaming endpoint (`/api/interview/[token]/chat`) 는 매 호출 DB 접근 비용 우려로 미적용 (필요 시 in-memory 카운터 검토).
+
+## 0-0-1-2. 감사 로깅 위치
+
+민감 액션 (조회/삭제/평가/메일/권한 변경 등) 에는 항상 `logAudit` 호출:
+```ts
+import { logAudit } from "@/lib/audit";
+logAudit(req, {
+  actor: me!,
+  action: "candidate.delete",
+  resourceType: "candidate",
+  resourceId: cid,
+  orgId: row.orgId,
+  metadata: { name: row.name },
+});
+```
+
+- fire-and-forget — `await` 불필요
+- system_admin 이 본인 org 아닌 candidate 조회 시 자동으로 `metadata.cross_org=true` 마킹 (`/api/candidates/[id]` GET 참고)
+- `/admin/audit` 페이지에서 cross_org 행은 amber 강조
+
+새 민감 라우트 만들 때 logAudit 빠뜨리면 컴플라이언스 위반. PR 리뷰 체크포인트.
+
+## 0-0-1-3. env 파일 분리 정책
+
+| 파일 | 누가 읽나 | 들어가는 것 |
+|---|---|---|
+| `.env.local` | `npm run dev` (dev 모드) | **dev 전용** — `file:./data.db` / 로컬 ./uploads / dev Google key |
+| `.env.production.local` | `npm run build && npm run start` (prod 모드) + 마이그레이션 스크립트 | **운영용** — Turso / Blob / 유료 Google key / 운영 SMTP |
+| Vercel 대시보드 | Vercel 배포 환경 | `.env.production.local` 의 모든 값 수동 동기화 |
+
+규칙:
+- `.env.local` 에 **`TURSO_*` / `BLOB_*` 절대 X** — dev 가 운영 DB 건드림
+- `lib/db.ts` 가 dev+TURSO 동시 감지 시 경고 + file fallback (`ALLOW_PROD_DB_IN_DEV=1` 우회 가능)
+- `lib/storage.ts` 도 동일 가드 (`ALLOW_PROD_BLOB_IN_DEV=1`)
+- 마이그레이션 스크립트: 기본 `.env.production.local` 로드 → 운영 DB. 로컬 마이그레이션은 `LOCAL_DB=1 node scripts/x.mjs`
+- 운영 시크릿(CRON/INTERNAL/MASTER)은 dev 와 별도 발급 권장. **MASTER 키 변경 시 기존 enc 데이터 복호화 불가** — 운영 DB 비어 있는 지금이 교체 적기
+
+## 0-0-1-1. 민감 정보 암호화 위치
+
+DB 에 저장하는 운영자 입력 민감 정보 (SMTP 비번 등) 는 항상 `lib/crypto.ts` 사용:
+```ts
+import { encrypt, decrypt } from "@/lib/crypto";
+// 저장:  dbRow.field = encrypt(plain);
+// 조회:  const plain = decrypt(dbRow.field);
+```
+
+- 포맷: `enc:v1:` + base64(iv12 + tag16 + ciphertext) — AES-256-GCM
+- 키: 환경변수 `MASTER_ENCRYPTION_KEY` (64 hex). 로테이션 시 `v1` 외 새 prefix 추가
+- `decrypt` 는 prefix 없는 입력을 그대로 반환 (legacy 평문 passthrough → 마이그레이션 안전)
+- GCM authTag 자동 검증 — 변조 시 throw
+
+새 라우트에서 API 응답에 암호값을 노출하지 말 것. `maskPass()` 같은 헬퍼로 마스킹.
+
+## 0-0-1. 비밀번호 정책 위치
+
+새 라우트에서 비밀번호 받는다면 반드시:
+```ts
+import { validatePassword } from "@/lib/password-policy";
+const r = await validatePassword(plain);
+if (!r.ok) return new Response(r.errors.join("\n"), { status: 400 });
+```
+
+직접 `password.length < 6` 같이 검증 X. 정책 (10자 + 3종 + HIBP) 일관성 위해 헬퍼 강제.
+
+오프라인 dev 환경에서 HIBP 가 timeout → 비치명적 (통과). 명시적 off: `SKIP_HIBP=1`.
+
+UI 쪽은 `app/password-strength.tsx` 의 `<PasswordStrength>` 컴포넌트 사용.
+
+## 0-0. SQLite CURRENT_TIMESTAMP 와 JS toISOString() 포맷 불일치
+
+**증상**: timestamp 컬럼을 `gte/lte` 로 비교했을 때 모든 row 가 false 또는 true 로 일관되게 잘못 나옴.
+
+**원인**:
+- SQLite `CURRENT_TIMESTAMP`: `'2026-05-15 17:55:22'` (공백 separator)
+- JS `new Date().toISOString()`: `'2026-05-15T17:55:22.000Z'` (T separator + ms + Z)
+
+두 문자열이 lexicographic 으로 다르게 정렬됨 (`' '` < `'T'`). `gte` 비교 깨짐.
+
+**해결**: `lib/auth-attempts.ts` 의 `sqliteTimestamp(date)` / `parseSqliteTimestamp(str)` 헬퍼처럼 변환 후 비교. UTC 유지.
+
+```ts
+function sqliteTimestamp(d: Date): string {
+  return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+}
+function parseSqliteTimestamp(s: string): Date {
+  return new Date(s.replace(" ", "T") + "Z");
+}
+```
+
+## 0-1. 서류 평가는 큐로 처리 — fire-and-forget 금지
+
+**증상**: 100건 한꺼번에 평가 시작 → 대부분 429 / 일부 좀비 (status=screening 영구 머무름).
+
+**원인**:
+- Gemini 무료 티어 ~15 RPM. 동시 호출 폭주 → quota 거부.
+- Vercel 서버리스가 응답 후 함수를 죽임 → fire-and-forget LLM 호출이 중간에 잘림.
+
+**해결**: `screening_jobs` 큐 + `/api/internal/process-screenings` 워커.
+- 단건/일괄 모두 enqueue 후 워커가 동시성 3 으로 처리.
+- transient 실패는 backoff 후 자동 재시도 (최대 3회), permanent 실패는 즉시 환불.
+- Vercel 함수 사망 대비 cron (`/api/cron/process-screenings`) 매분 안전망.
+
+새 LLM 호출 로직 추가할 때도 같은 패턴 적용 (직접 `void someAsyncLLM(...)` 금지).
+
+## 0-2. 이력서 자동 평가하지 않음 — 사용자 게이트 필요
+
+**증상**: 이력서 업로드 직후 status 가 계속 `uploaded` 이고 평가가 시작되지 않음.
+
+**원인**: 의도된 동작. 안정화 기간 동안 LLM 호출은 사용자가 텍스트 추출 결과를 확인한 뒤 "검토 진행" 버튼으로 명시적으로 시작.
+
+**해결**: `POST /api/candidates/[id]/screen` 또는 candidate 상세 페이지의 "검토 진행" 버튼. 이 시점에 토큰 차감.
+
+## 0-2-2. 이력서 업로드는 지원자 동의 확인 게이트가 있음
+
+**증상**: 업로드 API 호출 시 400 + `{code:"applicant_consent_required"}`.
+
+**원인**: 의도된 동작. 채용기업이 지원자로부터 AI 평가 적용·처리위탁(국외 인프라 포함)에 대한 동의를 받았음을 체크박스로 확인해야 업로드 가능. PIPA §15·§26·§28의8·§37의2 책임을 채용기업으로 전가하는 메커니즘.
+
+**해결**: 업로드 페이지의 "지원자 동의 확인" 체크박스 체크. API 직접 호출 시 `applicantConsentConfirmed: true` (JSON) 또는 `applicantConsentConfirmed=true` (multipart) 첨부. 표준 동의 문구는 `/legal/applicant-consent-template`. 이용약관 §5 와 연동.
+
+**legacy row**: 2026-05-22 이전 createdAt 후보자는 동의 컬럼 NULL 허용 — screen API 가 면제.
+
+## 0-3. resume_text / 파일이 비어있는 후보자
+
+**증상**: 오래된 후보자의 resume_text 가 빈 문자열, 파일 다운로드 안 됨.
+
+**원인**: `/api/cron/purge-original` 가 평가 완료 후 30일(`PURGE_AFTER_DAYS`) 경과분 자동 삭제. PIPA 가명처리.
+
+**해결**: 정상 동작. 평가 결과(screeningReport, evaluation)는 보존되어 점수/추천은 그대로 조회 가능. 원본이 필요하면 재업로드.
+
+## 1. Gemini 모델 선택 (paid tier, 2026-05-26 통합)
+
+**현재 셋업**: paid tier. 모든 task 가 Vertex AI 서울 + flash 로 단일화.
+
+| Task | 모델 | 엔드포인트 | 위치 |
+|---|---|---|---|
+| `screening` | `gemini-2.5-flash` | Vertex AI (asia-northeast3) | 🇰🇷 |
+| `interview` | `gemini-2.5-flash` | Vertex AI (asia-northeast3) | 🇰🇷 |
+| `interviewEval` | `gemini-2.5-flash` | Vertex AI (asia-northeast3) | 🇰🇷 |
+
+호출 시 `task` 파라미터만 넘기면 됨:
+```ts
+createChat({ task: "interview", systemInstruction, history });
+generateJSON<X>(prompt, { task: "screening" });
+generateJSON<X>(prompt, { task: "interviewEval" });
+```
+
+SDK: **`@google/genai`** 단일 (vertexai: true 고정).
+
+**Vertex AI 서울 응답 시간**: 13K char 프롬프트 기준 30~40초. 비동기 task (screening / interviewEval) 는 큐 처리라 UX 영향 X. interview 는 thinkingBudget=128 로 3~4초 응답 유지.
+
+**환경변수** (모두 Vertex 용):
+- `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (기본 `asia-northeast3`)
+- 로컬: `GOOGLE_APPLICATION_CREDENTIALS` (서비스계정 JSON 파일 경로)
+- Vercel: `GOOGLE_APPLICATION_CREDENTIALS_JSON` (JSON 통문자열)
+
+**왜 flash 통일인가**: asia-northeast3 데이터 레지던시는 Flash 만 보장됨 (Pro 미지원, 2026-05 기준). Pro 사용 시 직접 API (US) 경유 → §28의8 동의 항목 부활. UX 단순화를 위해 flash 선택.
+
+**과거 메모** (참고): 2026-04 무료 티어 daily limit=0 으로 flash-lite 고정 → 2026-05 paid 전환 → 2026-05-26 모든 task Vertex 서울+flash 로 통합.
+
+## 2. Google AI Studio 키 발급
+
+**증상**: 발급한 키도 `limit: 0`
+
+**원인**: GCP 결제가 연동된 프로젝트에서 발급하면 무료 티어가 자동 비활성화됨.
+
+**해결**: aistudio.google.com → "Create API key in new project" (결제 미연동 프로젝트). 또는 한 번도 결제 연동된 적 없는 새 Google 계정 사용.
+
+## 3. Next.js 16
+
+**핵심 차이점**:
+- middleware → **`proxy.ts`** (파일명 변경)
+- `params`는 Promise: `{ params }: { params: Promise<{ id: string }> }` → `const { id } = await params;`
+- API route 인자 시그니처 변경됨
+
+**확인**: `node_modules/next/dist/docs/01-app/` 안의 마크다운 문서 직접 읽기. 학습 데이터 기반 추측 금지.
+
+## 4. pdf-parse v1
+
+**증상**: 업로드 시 `ENOENT: no such file or directory, open '.../test/data/05-versions-space.pdf'`
+
+**원인**: pdf-parse v1.x의 `index.js`에 디버그 코드가 있어서 모듈 import 시 테스트 파일 읽으려고 시도함.
+
+**해결**: 서브경로 import 사용
+```ts
+const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
+```
+`lib/pdf-parse.d.ts`에 타입 선언 있음. v2로 업그레이드는 Turbopack worker 이슈로 실패함 (이미 시도해봄).
+
+## 5. Drizzle 상관 서브쿼리 + libSQL
+
+**증상**: `(SELECT ... FROM ${interviewSessions} WHERE candidate_id = ${candidates.id} ...)` 같은 상관 서브쿼리가 모든 행에 같은 값 반환.
+
+**원인**: 정확히 모르겠지만 Drizzle/libsql 조합에서 outer column 참조가 깨지는 케이스 있음.
+
+**해결**: 별도 쿼리로 가져와서 JS에서 merge. 실제 사례: `app/api/jobs/[id]/candidates/route.ts`의 GET에서 후보자 목록 + 면접 세션 분리 조회 후 Map으로 매칭.
+
+## 6. Edge runtime 제약
+
+**걸리는 것**:
+- bcryptjs (Node crypto 의존 — 그래도 bcryptjs는 됨, bcrypt는 안 됨)
+- `@libsql/client` 일부 기능
+- nodemailer
+
+**해결**: 모든 API 라우트에 `export const runtime = "nodejs"` 명시. middleware(`proxy.ts`)는 Edge에서 돌지만 DB 호출 안 함 (쿠키 존재만 체크).
+
+## 7. proxy.ts (미들웨어) 변경
+
+**증상**: matcher / 코드 바꿔도 동작 안 함
+
+**원인**: Turbopack은 코드 변경은 핫리로드하지만 middleware는 dev 서버 재시작 필요.
+
+**해결**:
+```powershell
+Get-NetTCPConnection -LocalPort 3003 | Select-Object -First 1 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+npm run dev
+```
+
+## 8. drizzle-kit push가 "DATA LOSS" 경고로 막힐 때
+
+**증상**: NOT NULL + DEFAULT 컬럼 추가 시도가 "data loss" 경고로 중단.
+
+**원인**: drizzle-kit이 안전하게 보수적으로 판단함. CI/non-TTY 환경에서 프롬프트 못 띄워서 그냥 에러.
+
+**해결**: 직접 ALTER 실행
+```javascript
+// node -e "..." 또는 임시 스크립트
+const Database = require('better-sqlite3'); // 또는 libsql
+db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
+```
+※ 현재 codebase에서 better-sqlite3는 제거됨. libsql client로 같은 작업 가능.
+
+## 9. 한국어 인코딩 / Windows PowerShell
+
+**증상**: `bash`의 `cat`, `dir` 명령이 한국어 깨짐, 또는 Windows에서 동작 안 함.
+
+**해결**:
+- 파일 읽기는 Read 도구 사용
+- 디렉토리 리스팅은 Glob 도구 사용
+- PowerShell 직접 호출 시 한국어 출력은 깨질 수 있음 — Bash로 ls (Git Bash 포함)
+
+## 10. Vercel Blob vs 로컬 파일
+
+**저장 키 컨벤션**:
+- 로컬: 파일명 (`1700000000_abcd.pdf`)
+- Blob: 전체 URL (`https://xxx.public.blob.vercel-storage.com/...`)
+
+**`resumeFilePath` 컬럼은 둘 중 어느 것이든 저장 가능**. 다운로드 시 **항상 `/api/uploads/candidate/[id]` 사용** (2026-05-16 부터). 이 라우트가:
+- 세션 + ownsOrg + 부모 공고 PIN 잠금 검증
+- Blob URL 이어도 server-side fetch 해서 stream proxy → Blob 의 public URL 외부 노출 X
+
+⚠️ `lib/storage.ts` 의 `getDownloadUrl` 은 deprecated. 직접 사용 금지.
+
+## 11. 이메일 발송 환경변수
+
+**필수 4개**: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` (없으면 mailer가 에러 throw)
+**선택**: `SMTP_FROM` (없으면 `SMTP_USER`로 fallback)
+
+**Gmail App Password 발급**: https://myaccount.google.com/apppasswords (2단계 인증 활성화 후 가능)
+
+## 12. proxy.ts에서 보호 안 되는 경로
+
+| 경로 | 이유 |
+|---|---|
+| `/login`, `/signup` | 인증 흐름 |
+| `/interview/*` | 후보자가 토큰만으로 접근 |
+| `/api/auth/*` | 인증 API 자체 |
+| `/api/interview/*` | 후보자 면접 API |
+| `/api/uploads/*` | 미들웨어 단계 면제이지만 **라우트 자체가 인증/권한 검증함** (2026-05-16 패치) |
+
+## 13. 관리자 우회 로직 위치
+
+| 위치 | 우회 방법 |
+|---|---|
+| API 서버 | `lib/job-lock.ts` `isJobUnlocked()` 안에서 `getCurrentUser().isAdmin` 체크 |
+| 클라이언트 (대시보드 PIN 모달) | `app/jobs-list.tsx`의 `handleClick`에서 `if (!isAdmin)` 체크 — server component에서 `isAdmin` prop으로 전달 |
+
+새 페이지에서 잠금 체크 추가 시 양쪽 다 챙길 것.
+
+## 14. 한국 환경 특이사항
+
+- Gmail SMTP 사용 가능 (다른 국가에서 차단되는 경우는 없음)
+- Gemini 무료 티어 사용 가능 (단, 결제 미연동 프로젝트로 발급)
+- 결제 수단 한국 카드 OK (단, Vercel은 한국 카드 거부 사례 있음 — PayPal 우회 필요할 수 있음)

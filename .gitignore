@@ -1,0 +1,67 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# Google Cloud 서비스 계정 키 (Vertex AI 인증 — 절대 커밋 X)
+*.gcp-key.json
+.gcp-key.json
+gcp-key.json
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# app data (Phase 1)
+/data.db
+/data.db-journal
+/uploads/
+
+# 사용자가 추가한 마스킹 회사명 사전 (개인 정보 — git 외부)
+/parser/data/companies-extra.txt
+
+# 임시 테스트 파일
+/test-*.ts
+/test-*.mjs
+
+# E2E 테스트용 fixture (자동 재생성: scripts/make-test-resume.mjs)
+/test-fixtures/
+
+# 법무 문서 보관 (DPA · 계약서 등 — 운영자 로컬 보관, git 외부)
+/legal/
+
+# DART 임시 다운로드
+/.tmp-dart/

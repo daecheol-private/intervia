@@ -1,0 +1,123 @@
+# 해외 주요 대학 (영문/중문)
+# US
+Harvard University
+Harvard
+Stanford University
+Stanford
+Massachusetts Institute of Technology
+MIT
+California Institute of Technology
+Caltech
+Princeton University
+Yale University
+Columbia University
+University of Pennsylvania
+Cornell University
+Brown University
+Dartmouth College
+University of Chicago
+Northwestern University
+Duke University
+Johns Hopkins University
+Carnegie Mellon University
+CMU
+University of California, Berkeley
+UC Berkeley
+UCLA
+University of California, Los Angeles
+University of Michigan
+University of Washington
+Georgia Institute of Technology
+Georgia Tech
+University of Texas at Austin
+UT Austin
+University of Illinois Urbana-Champaign
+UIUC
+NYU
+New York University
+USC
+University of Southern California
+Boston University
+Boston College
+Purdue University
+# UK / Europe
+University of Oxford
+Oxford University
+Oxford
+University of Cambridge
+Cambridge University
+Cambridge
+Imperial College London
+Imperial College
+London School of Economics
+LSE
+University College London
+UCL
+King's College London
+University of Edinburgh
+ETH Zurich
+EPFL
+Sorbonne Université
+Sorbonne
+TU Munich
+Technical University of Munich
+TUM
+Heidelberg University
+# Asia
+The University of Tokyo
+University of Tokyo
+東京大学
+東京大學
+Kyoto University
+京都大学
+Osaka University
+Tokyo Institute of Technology
+National University of Singapore
+NUS
+Nanyang Technological University
+NTU
+The University of Hong Kong
+HKU
+香港大學
+The Chinese University of Hong Kong
+CUHK
+香港中文大學
+Hong Kong University of Science and Technology
+HKUST
+香港科技大學
+National Taiwan University
+NTU Taiwan
+國立臺灣大學
+Tsinghua University
+清華大學
+清华大学
+Peking University
+北京大學
+北京大学
+Fudan University
+復旦大學
+复旦大学
+Shanghai Jiao Tong University
+上海交通大學
+上海交通大学
+Zhejiang University
+浙江大學
+浙江大学
+University of Science and Technology of China
+USTC
+中國科學技術大學
+中国科学技术大学
+Nanjing University
+南京大學
+南京大学
+# Australia / Canada
+University of Toronto
+McGill University
+University of British Columbia
+UBC
+University of Waterloo
+Australian National University
+ANU
+University of Melbourne
+University of Sydney
+UNSW Sydney
