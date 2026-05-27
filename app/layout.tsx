@@ -22,6 +22,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = await getCurrentUser();
+  // 안전장치 — MAIL_OVERRIDE_TO 가 운영 환경에 설정돼있으면 system_admin 에게 경고 배너.
+  // 출시 직전 제거 망각 방지용. Preview 환경에서는 정상 설정이므로 배너 X.
+  const overrideTo = process.env.MAIL_OVERRIDE_TO?.trim();
+  const isProdEnv = process.env.VERCEL_ENV === "production";
+  const showOverrideBanner =
+    !!overrideTo && isProdEnv && user?.role === "system_admin";
   return (
     <html lang="ko" className="h-full antialiased">
       <head>
@@ -31,6 +37,16 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-surface text-ink">
+        {showOverrideBanner && (
+          <div
+            role="alert"
+            className="bg-danger text-white text-xs sm:text-sm px-4 py-2 text-center font-medium"
+          >
+            ⚠️ <strong>MAIL_OVERRIDE_TO</strong> 활성 (운영) — 모든 후보자 메일이{" "}
+            <strong>{overrideTo}</strong> 로 리다이렉트 중입니다. 실제 지원자에게는
+            메일이 가지 않습니다. 출시 전 Vercel 환경변수에서 반드시 제거하세요.
+          </div>
+        )}
         <NavBar
           userName={user?.name ?? null}
           isAdmin={user?.isAdmin ?? false}
