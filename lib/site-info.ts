@@ -8,7 +8,7 @@
 export const SITE_INFO = {
   serviceName: "Intervia",
   serviceDescription: "AI 기반 채용 면접 플랫폼",
-  baseUrl: process.env.APP_BASE_URL ?? "http://localhost:3002",
+  baseUrl: process.env.APP_BASE_URL ?? "http://localhost:3003",
 } as const;
 
 export const COMPANY_INFO = {

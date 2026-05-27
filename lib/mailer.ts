@@ -230,8 +230,10 @@ ${url}
 
 링크 만료: ${expiresAt}
 
-* 본 면접은 채팅 방식으로 약 15~60분 소요됩니다.
+* 본 면접은 채팅 방식으로 약 10~30분 소요됩니다.
 * 면접 결과는 채용 담당자에게 전달되며 후속 안내드릴 예정입니다.
+* 충분한 시간과 집중할 수 있는 환경에서 진행해 주세요.
+* 답변에 외부 도구(ChatGPT 등)의 복사·붙여넣기를 다량 사용하면 평가 리포트에 표시될 수 있습니다.
 
 내 정보 보기 / 평가 조회: ${url}/me
 
@@ -253,8 +255,10 @@ ${url}
       </p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:13px;color:#475569;line-height:1.6;">
         <div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">면접 안내</div>
-        • 채팅 방식으로 약 15~60분 소요됩니다.<br>
+        • 채팅 방식으로 약 10~30분 소요됩니다.<br>
         • 평가 결과는 채용 담당자에게 직접 전달됩니다.<br>
+        • <strong>충분한 시간과 집중할 수 있는 환경</strong>에서 진행해 주세요.<br>
+        • 답변에 <strong>외부 도구(ChatGPT 등)의 복사·붙여넣기</strong>를 다량 사용하면 평가 리포트에 표시될 수 있습니다.<br>
         • 링크 만료: <strong>${expiresAt}</strong>
       </div>
     `,

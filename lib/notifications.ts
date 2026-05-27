@@ -100,7 +100,20 @@ export async function notifyJobInterviewers(
   const orgId = job?.orgId ?? null;
   if (!(await isSmtpAvailable(orgId))) return;
 
-  const base = process.env.APP_BASE_URL ?? "";
+  // APP_BASE_URL 미설정 시 fallback:
+  //   - dev: localhost:3003 (npm run dev 기본 포트)
+  //   - prod: 경고 로그 — 운영에서는 반드시 등록 필요 (메일 링크가 깨짐)
+  const envBase = process.env.APP_BASE_URL?.trim().replace(/\/$/, "");
+  let base = envBase ?? "";
+  if (!envBase) {
+    if (process.env.NODE_ENV === "production") {
+      console.warn(
+        "[notifications] APP_BASE_URL 미설정 — 메일 링크가 상대경로로 나갑니다. Vercel 환경변수에 등록 필요."
+      );
+    } else {
+      base = "http://localhost:3003";
+    }
+  }
   const fullUrl = input.href.startsWith("http")
     ? input.href
     : `${base}${input.href}`;

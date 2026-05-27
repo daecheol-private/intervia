@@ -1043,7 +1043,7 @@ export default function JobDetailPage() {
                             onToggle={() => void loadCandidates()}
                           />
                           <span className="font-semibold text-slate-900">{c.name}</span>
-                          <StageBadge stage={c.stage} />
+                          {c.outcome !== "hired" && <StageBadge stage={c.stage} />}
                           {c.outcome ? (
                             <OutcomeBadge outcome={c.outcome} />
                           ) : (
@@ -1130,7 +1130,7 @@ export default function JobDetailPage() {
                           <span className="font-semibold text-slate-900">
                             {c.name}
                           </span>
-                          <StageBadge stage={c.stage} />
+                          {c.outcome !== "hired" && <StageBadge stage={c.stage} />}
                           {c.outcome ? (
                             <OutcomeBadge outcome={c.outcome} />
                           ) : (
@@ -1259,6 +1259,17 @@ export default function JobDetailPage() {
                           {bulkBusy ? "발송 중..." : `📧 AI 면접 발송 (${inProgress.length})`}
                         </button>
                       )}
+                      {/* round1_scheduling 후보 — 후보자 응답 대기 또는 역제시 상태. 새 시간 다시 제시 가능. */}
+                      {onlyStage === "round1_scheduling" && (
+                        <SchedulePropose
+                          jobId={Number(jobId)}
+                          selectedIds={inProgress.map((c) => c.id)}
+                          onDone={() => {
+                            setSelected(new Set());
+                            void loadCandidates();
+                          }}
+                        />
+                      )}
                       {onlyStage === "ai_evaluated" && (
                         <button
                           onClick={() => void bulkAdvance("round1_candidate", inProgress.map((c) => c.id))}
@@ -1322,7 +1333,7 @@ export default function JobDetailPage() {
                             onToggle={() => void loadCandidates()}
                           />
                           <span className="font-semibold text-slate-900">{c.name}</span>
-                          <StageBadge stage={c.stage} />
+                          {c.outcome !== "hired" && <StageBadge stage={c.stage} />}
                           {c.outcome ? (
                             <OutcomeBadge outcome={c.outcome} />
                           ) : (

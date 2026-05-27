@@ -34,6 +34,8 @@ type Candidate = {
       tech_fit?: { score: number; reason: string };
       experience_depth?: { score: number; reason: string };
       role_match?: { score: number; reason: string };
+      achievement?: { score: number; reason: string };
+      stability?: { score: number; reason: string };
       growth_attitude?: { score: number; reason: string };
     };
     level_match?: {
@@ -196,8 +198,8 @@ export default function CandidateDetailPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ days: 7 }),
     });
-    setCreating(false);
     if (!res.ok) {
+      setCreating(false);
       const ct = res.headers.get("content-type") ?? "";
       const msg = ct.includes("application/json")
         ? ((await res.json().catch(() => ({}))).error ?? "발급 실패")
@@ -205,6 +207,25 @@ export default function CandidateDetailPage() {
       alert("발급 실패: " + msg);
       return;
     }
+    // 링크 생성 직후 후보자 이메일이 있으면 자동 발송 (UX 한 스텝 축소).
+    // 발송 실패해도 링크 자체는 만들어졌으므로 사용자가 InterviewLinkBox 의
+    // "재발송" 버튼으로 수동 재시도 가능.
+    const session = (await res.json().catch(() => null)) as
+      | { id: number }
+      | null;
+    const candidateEmail = data?.candidate.email ?? null;
+    if (session?.id && candidateEmail) {
+      try {
+        await fetch(`/api/interview-sessions/${session.id}/send-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: candidateEmail }),
+        });
+      } catch {
+        /* 발송 실패는 silent — UI 의 재발송 버튼으로 수동 처리 */
+      }
+    }
+    setCreating(false);
     void load();
   };
 
@@ -313,12 +334,14 @@ export default function CandidateDetailPage() {
               <h1 className="text-2xl font-bold text-slate-900">
                 {candidate.name}
               </h1>
-              <StageBadge stage={candidate.stage} />
+              {candidate.outcome !== "hired" && <StageBadge stage={candidate.stage} />}
               {candidate.outcome && <OutcomeBadge outcome={candidate.outcome} reason={candidate.outcomeReason} />}
               <EmailSentBadge sentAt={candidate.lastInterviewEmailSentAt} />
               <EditCandidateButton candidate={candidate} onSaved={load} />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+            {/* 이메일은 길어 잘리기 쉬워 2배 폭 할당. 나이·경력은 짧은 텍스트라 auto.
+                모바일은 2열로 wrap. */}
+            <div className="grid grid-cols-2 sm:grid-cols-[1fr_2fr_auto_auto] gap-x-4 gap-y-3 mt-4">
               <InfoCell label="연락처" value={candidate.phone} />
               <InfoCell label="이메일" value={candidate.email} />
               <InfoCell
@@ -360,6 +383,7 @@ export default function CandidateDetailPage() {
         </div>
         <StagePanel
           candidate={candidate}
+          jobTitle={job.title}
           onChanged={() => void load()}
           showFullResume={showFullResume}
           setShowFullResume={setShowFullResume}
@@ -369,6 +393,7 @@ export default function CandidateDetailPage() {
       {/* Composite */}
       <Section
         title="종합 점수"
+        collapsible={false}
         summary={
           composite != null ? (
             <span className="flex items-center gap-2">
@@ -634,7 +659,7 @@ export default function CandidateDetailPage() {
                   disabled={creating}
                   className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm"
                 >
-                  {creating ? "생성 중..." : "면접 링크 생성"}
+                  {creating ? "처리 중..." : "AI면접 요청"}
                 </button>
               </>
             ) : (
@@ -654,7 +679,7 @@ export default function CandidateDetailPage() {
                   className="px-5 py-2 rounded-lg bg-slate-200 text-slate-400 text-sm font-medium cursor-not-allowed"
                   title="AI 서류평가 후 활성화됩니다"
                 >
-                  면접 링크 생성
+                  AI면접 요청
                 </button>
               </>
             )}
@@ -679,6 +704,7 @@ export default function CandidateDetailPage() {
       {activeSchedule && (
         <Section
           title="1차 면접 일정"
+          collapsible={false}
           summary={
             activeSchedule.status === "selected" && activeSchedule.selectedSlot ? (
               <span className="flex items-center gap-2">
@@ -699,7 +725,11 @@ export default function CandidateDetailPage() {
             )
           }
         >
-          <ScheduleBox schedule={activeSchedule} onChanged={load} />
+          <ScheduleBox
+            schedule={activeSchedule}
+            jobId={candidate.jobId}
+            onChanged={load}
+          />
         </Section>
       )}
 
@@ -719,11 +749,14 @@ export default function CandidateDetailPage() {
 
 function InfoCell({ label, value }: { label: string; value: string | null }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div className="text-[11px] text-slate-500 uppercase tracking-wider">
         {label}
       </div>
-      <div className="text-sm font-medium text-slate-900 mt-0.5 truncate">
+      <div
+        className="text-sm font-medium text-slate-900 mt-0.5 truncate"
+        title={value ?? undefined}
+      >
         {value ?? <span className="text-slate-300">-</span>}
       </div>
     </div>
@@ -765,7 +798,7 @@ function AttachmentsPanel({ candidateId }: { candidateId: number }) {
   } as const;
 
   return (
-    <Section title="첨부 파일">
+    <Section title="첨부 파일" collapsible={false}>
       <p className="text-xs text-slate-500 mb-3">
         업로드 시 함께 올라온 포트폴리오·자기소개서 등. 사람 면접관 참고용이며 AI 평가/면접에는 사용되지 않습니다.
       </p>
@@ -932,12 +965,42 @@ function formatSlot(s: { start: string; end: string }): string {
 
 function ScheduleBox({
   schedule,
+  jobId,
   onChanged,
 }: {
   schedule: Schedule;
+  jobId: number;
   onChanged: () => void;
 }) {
   const selected = schedule.selectedSlot;
+  const [confirming, setConfirming] = useState<string | null>(null); // 진행 중인 slot 의 start
+  const [confirmErr, setConfirmErr] = useState<string | null>(null);
+
+  // 후보자가 counter 제시한(또는 HR 가 처음 제시한) 슬롯을 확정.
+  const confirmSlot = async (slot: { start: string; end: string }) => {
+    if (!confirm(`${formatSlot(slot)} 으로 확정하시겠습니까?\n후보자와 면접관에게 확정 메일이 발송됩니다.`))
+      return;
+    setConfirming(slot.start);
+    setConfirmErr(null);
+    try {
+      const r = await fetch(`/api/schedules/${schedule.id}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slot }),
+      });
+      if (!r.ok) {
+        setConfirmErr(await r.text());
+        return;
+      }
+      onChanged();
+    } finally {
+      setConfirming(null);
+    }
+  };
+
+  const canConfirm =
+    schedule.status === "counter_proposed" || schedule.status === "pending";
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
@@ -967,22 +1030,66 @@ function ScheduleBox({
           </div>
           <ul className="text-sm text-slate-700 space-y-1">
             {schedule.proposedSlots.map((s, i) => (
-              <li key={i}>· {formatSlot(s)}</li>
+              <li
+                key={i}
+                className="flex items-center justify-between gap-2"
+              >
+                <span>· {formatSlot(s)}</span>
+                {canConfirm && (
+                  <button
+                    onClick={() => void confirmSlot(s)}
+                    disabled={confirming !== null}
+                    className="text-[11px] px-2 py-0.5 rounded-md border border-primary/40 text-primary-deep hover:bg-primary-soft disabled:opacity-50"
+                  >
+                    {confirming === s.start ? "확정 중..." : "이 시간으로 확정"}
+                  </button>
+                )}
+              </li>
             ))}
           </ul>
         </div>
       )}
 
-      {schedule.counterSlots && schedule.counterSlots.length > 0 && (
+      {schedule.counterSlots && schedule.counterSlots.length > 0 && !selected && (
         <div>
           <div className="text-xs font-semibold text-warning mb-2">
             후보자 역제시
           </div>
           <ul className="text-sm text-slate-700 space-y-1">
             {schedule.counterSlots.map((s, i) => (
-              <li key={i}>· {formatSlot(s)}</li>
+              <li key={i} className="flex items-center justify-between gap-2">
+                <span>· {formatSlot(s)}</span>
+                {canConfirm && (
+                  <button
+                    onClick={() => void confirmSlot(s)}
+                    disabled={confirming !== null}
+                    className="text-[11px] px-2 py-0.5 rounded-md bg-primary text-surface hover:bg-primary-deep disabled:opacity-50"
+                  >
+                    {confirming === s.start ? "확정 중..." : "이 시간으로 확정"}
+                  </button>
+                )}
+              </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {confirmErr && (
+        <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
+          {confirmErr}
+        </div>
+      )}
+
+      {canConfirm && (
+        <div className="text-[11px] text-slate-500 pt-1">
+          위 시간이 모두 안 맞으면{" "}
+          <Link
+            href={`/jobs/${jobId}`}
+            className="text-primary-deep hover:underline font-medium"
+          >
+            공고 페이지에서 새 시간 다시 제시
+          </Link>
+          하세요.
         </div>
       )}
 
@@ -1280,59 +1387,220 @@ function ScoreBar({ label, score }: { label: string; score: number | null }) {
   );
 }
 
+// 서류평가 6축 정의 — FitHexagon + BreakdownBlock 공유.
+// 순서 = 12시부터 시계방향. 가중치 합은 100%.
+// LLM 프롬프트(lib/prompts.ts)의 가중치와 일치해야 함.
+const SCREENING_AXES = [
+  { key: "tech_fit", label: "기술 적합도", weight: "30%" },
+  { key: "experience_depth", label: "경험 깊이", weight: "20%" },
+  { key: "role_match", label: "직무 매칭도", weight: "15%" },
+  { key: "achievement", label: "성과 임팩트", weight: "15%" },
+  { key: "stability", label: "재직 안정성", weight: "10%" },
+  { key: "growth_attitude", label: "성장·태도", weight: "10%" },
+] as const;
+
+type BreakdownKey = (typeof SCREENING_AXES)[number]["key"];
+
+function FitHexagon({
+  breakdown,
+}: {
+  breakdown: NonNullable<NonNullable<Candidate["screeningReport"]>["breakdown"]>;
+}) {
+  const size = 300;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 90; // 차트 반지름 (라벨 공간 확보)
+  const N = SCREENING_AXES.length;
+
+  // i번째 축의 좌표 — 12시부터 시계방향, ratio=0(중심) ~ 1(외곽).
+  const axisPoint = (i: number, ratio: number) => {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / N;
+    return {
+      x: cx + Math.cos(angle) * r * ratio,
+      y: cy + Math.sin(angle) * r * ratio,
+    };
+  };
+
+  const polyAt = (ratio: number) =>
+    Array.from({ length: N }, (_, i) => axisPoint(i, ratio))
+      .map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+      .join(" ");
+
+  // 후보자 점수 폴리곤 — 누락된 축은 0 으로 처리 (구버전 데이터 호환).
+  const hasAnyScore = SCREENING_AXES.some(
+    (a) => breakdown[a.key as BreakdownKey] != null
+  );
+  const scoresPoly = SCREENING_AXES.map((a, i) => {
+    const d = breakdown[a.key as BreakdownKey];
+    const score = d?.score ?? 0;
+    const ratio = Math.max(0, Math.min(1, score / 100));
+    const p = axisPoint(i, ratio);
+    return `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+  }).join(" ");
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className="block mx-auto"
+      role="img"
+      aria-label="서류평가 6축 적합도 차트"
+    >
+      {/* 배경 격자: 25/50/75/100% 동심육각형 */}
+      {[0.25, 0.5, 0.75, 1.0].map((ratio) => (
+        <polygon
+          key={ratio}
+          points={polyAt(ratio)}
+          fill="none"
+          stroke="#e2e8f0"
+          strokeWidth={1}
+        />
+      ))}
+      {/* 축선 (중심에서 외곽까지) */}
+      {SCREENING_AXES.map((_, i) => {
+        const p = axisPoint(i, 1);
+        return (
+          <line
+            key={i}
+            x1={cx}
+            y1={cy}
+            x2={p.x}
+            y2={p.y}
+            stroke="#e2e8f0"
+            strokeWidth={1}
+          />
+        );
+      })}
+      {/* 후보자 점수 폴리곤 */}
+      {hasAnyScore && (
+        <polygon
+          points={scoresPoly}
+          fill="rgb(16, 185, 129)"
+          fillOpacity={0.2}
+          stroke="rgb(16, 185, 129)"
+          strokeWidth={2}
+        />
+      )}
+      {/* 꼭짓점 도트 */}
+      {SCREENING_AXES.map((a, i) => {
+        const d = breakdown[a.key as BreakdownKey];
+        if (!d) return null;
+        const ratio = Math.max(0, Math.min(1, d.score / 100));
+        const p = axisPoint(i, ratio);
+        return (
+          <circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r={3}
+            fill="rgb(16, 185, 129)"
+          />
+        );
+      })}
+      {/* 축 라벨 + 점수 */}
+      {SCREENING_AXES.map((a, i) => {
+        const p = axisPoint(i, 1);
+        const d = breakdown[a.key as BreakdownKey];
+        // 라벨을 외곽선에서 22px 더 바깥쪽으로 — 폴리곤과 겹치지 않게.
+        const dx = (p.x - cx) * (1 + 22 / r) + cx - p.x;
+        const dy = (p.y - cy) * (1 + 22 / r) + cy - p.y;
+        const lx = p.x + dx;
+        const ly = p.y + dy;
+        return (
+          <g key={i}>
+            <text
+              x={lx}
+              y={ly}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize="11"
+              fill="#475569"
+              fontWeight="600"
+            >
+              {a.label}
+            </text>
+            <text
+              x={lx}
+              y={ly + 13}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize="11"
+              fill={d ? "#0f172a" : "#cbd5e1"}
+              fontWeight="700"
+              className="tabular-nums"
+            >
+              {d ? d.score : "—"}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function BreakdownBlock({
   breakdown,
 }: {
   breakdown: NonNullable<NonNullable<Candidate["screeningReport"]>["breakdown"]>;
 }) {
-  const items: Array<{
-    key: keyof typeof breakdown;
-    label: string;
-    weight: string;
-  }> = [
-    { key: "tech_fit", label: "기술 적합도", weight: "40%" },
-    { key: "experience_depth", label: "경험 깊이", weight: "30%" },
-    { key: "role_match", label: "직무 매칭도", weight: "20%" },
-    { key: "growth_attitude", label: "성장·태도", weight: "10%" },
-  ];
+  const hasNewAxes =
+    breakdown.achievement != null || breakdown.stability != null;
   return (
-    <div>
-      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-        차원별 점수
+    <div className="space-y-3">
+      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        공고 적합도 (6축)
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {items.map(({ key, label, weight }) => {
-          const d = breakdown[key];
-          if (!d) return null;
-          return (
-            <div
-              key={key}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs font-medium text-slate-700">
-                  {label}{" "}
-                  <span className="text-[10px] text-slate-400">{weight}</span>
-                </span>
-                <span className="text-lg font-bold text-slate-900 tabular-nums">
-                  {d.score}
-                </span>
+      {/* 좌: 육각형 차트 (고정폭). 우: 6축 사유 리스트 (남은 폭 채움).
+          모바일/좁은 화면에서는 자동으로 위아래로 쌓임. */}
+      <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-x-6 gap-y-4 items-center">
+        <div className="flex justify-center md:justify-start">
+          <FitHexagon breakdown={breakdown} />
+        </div>
+        <div className="divide-y divide-slate-100">
+          {SCREENING_AXES.map(({ key, label, weight }) => {
+            const d = breakdown[key as BreakdownKey];
+            return (
+              <div key={key} className="py-2 first:pt-0 last:pb-0">
+                <div className="flex items-baseline justify-between gap-2 mb-1">
+                  <span className="text-sm font-medium text-slate-800">
+                    {label}
+                    <span className="text-[10px] text-slate-400 ml-1.5 font-normal">
+                      {weight}
+                    </span>
+                  </span>
+                  <span
+                    className={`text-base font-bold tabular-nums ${
+                      d ? scoreColor(d.score) : "text-slate-300"
+                    }`}
+                  >
+                    {d ? d.score : "—"}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{
+                      width: `${d ? Math.max(0, Math.min(100, d.score)) : 0}%`,
+                    }}
+                  />
+                </div>
+                {d?.reason && (
+                  <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                    {d.reason}
+                  </p>
+                )}
               </div>
-              <div className="mt-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary"
-                  style={{ width: `${Math.max(0, Math.min(100, d.score))}%` }}
-                />
-              </div>
-              {d.reason && (
-                <p className="text-[11px] text-slate-600 mt-1.5 leading-snug">
-                  {d.reason}
-                </p>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
+      {!hasNewAxes && (
+        <div className="text-[11px] text-slate-400 text-center">
+          구버전 평가 데이터 — 성과 임팩트 / 재직 안정성 축은 재평가 후
+          채워집니다.
+        </div>
+      )}
     </div>
   );
 }
@@ -1511,7 +1779,7 @@ function InterviewLinkBox({
           disabled={sending}
           className="px-4 py-2 rounded-lg text-sm font-medium bg-primary hover:bg-primary-deep text-surface disabled:opacity-50 transition-colors"
         >
-          {sending ? "발송 중..." : "📧 발송"}
+          {sending ? "발송 중..." : "📧 재발송"}
         </button>
       </div>
       {sent && (
@@ -1799,7 +2067,7 @@ function AppealsPanel({ candidateId }: { candidateId: number }) {
   };
 
   return (
-    <Section title="자동화 의사결정 이의제기">
+    <Section title="자동화 의사결정 이의제기" collapsible={false}>
       <div className="text-xs text-slate-500 mb-3">
         PIPA §37의2 에 따라 영업일 기준 7일 이내 답변 회신 의무. 상태를 변경하면
         후보자에게 통지되지 않으니 별도 이메일로 답변을 보내야 합니다.
@@ -2001,13 +2269,27 @@ function OutcomeBadge({
   );
 }
 
+// lib/candidate-stage.ts 의 buildDecisionEmail 본문과 동일한 기본 템플릿.
+// 변경 시 양쪽을 함께 수정해야 사용자가 본 미리보기와 실제 발송 본문이 일치.
+function defaultDecisionBody(
+  decision: "hired" | "rejected",
+  candidateName: string,
+  jobTitle: string
+): string {
+  return decision === "hired"
+    ? `${candidateName}님, ${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
+    : `${candidateName}님, ${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`;
+}
+
 function StagePanel({
   candidate,
+  jobTitle,
   onChanged,
   showFullResume,
   setShowFullResume,
 }: {
   candidate: Candidate;
+  jobTitle: string;
   onChanged: () => void;
   showFullResume: boolean;
   setShowFullResume: (v: boolean) => void;
@@ -2017,8 +2299,31 @@ function StagePanel({
   const [decision, setDecision] = useState<"hired" | "rejected">("rejected");
   const [reason, setReason] = useState<string>("");
   const [note, setNote] = useState("");
-  const [customMessage, setCustomMessage] = useState("");
-  const [sendMail, setSendMail] = useState(true);
+  const [customMessage, setCustomMessage] = useState(() =>
+    defaultDecisionBody("rejected", candidate.name, jobTitle)
+  );
+  // 사용자가 한 번이라도 본문을 직접 수정하면 더 이상 decision 변경 시 덮어쓰지 않음.
+  const [messageEdited, setMessageEdited] = useState(false);
+  // 메일 발송 기본값 false — 의도하지 않은 메일 발송 방지. 본문 미리보기는 항상 노출.
+  const [sendMail, setSendMail] = useState(false);
+
+  // decide 모달: decision 또는 후보자 정보 바뀌면 기본 템플릿 재생성 (사용자가 직접 수정하지 않은 경우만).
+  useEffect(() => {
+    if (open === "decide" && !messageEdited) {
+      setCustomMessage(defaultDecisionBody(decision, candidate.name, jobTitle));
+    }
+  }, [open, decision, candidate.name, jobTitle, messageEdited]);
+
+  // notify 모달 열 때 — 이미 확정된 outcome 기반으로 기본 템플릿 채움 + edit 플래그 리셋.
+  const openNotify = () => {
+    if (candidate.outcome === "hired" || candidate.outcome === "rejected") {
+      setCustomMessage(
+        defaultDecisionBody(candidate.outcome, candidate.name, jobTitle)
+      );
+      setMessageEdited(false);
+    }
+    setOpen("notify");
+  };
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
     null
   );
@@ -2073,11 +2378,52 @@ function StagePanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ stage: newStage }),
     });
-    setBusy(false);
     if (!r.ok) {
+      setBusy(false);
       setMsg({ kind: "err", text: await r.text() });
       return;
     }
+    // ai_pending 진입 시 — AI면접 링크 자동 생성 + 후보자 자동 발송
+    // (서류 평가 화면의 "AI면접 요청" 버튼과 동일한 흐름).
+    // 발송 실패는 silent — 사용자가 InterviewLinkBox 의 재발송 버튼으로 수동 대응 가능.
+    if (newStage === "ai_pending") {
+      try {
+        const linkRes = await fetch(
+          `/api/candidates/${candidate.id}/interview-link`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ days: 7 }),
+          }
+        );
+        if (linkRes.ok && candidate.email) {
+          const session = (await linkRes.json().catch(() => null)) as
+            | { id: number }
+            | null;
+          if (session?.id) {
+            await fetch(`/api/interview-sessions/${session.id}/send-email`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ to: candidate.email }),
+            });
+          }
+        } else if (!linkRes.ok) {
+          // 링크 생성 자체가 실패했으면 사용자에게 알림 — 단계는 이미 바뀐 상태.
+          const ct = linkRes.headers.get("content-type") ?? "";
+          const msg = ct.includes("application/json")
+            ? ((await linkRes.json().catch(() => ({}))).error ??
+              "면접 링크 생성 실패")
+            : await linkRes.text();
+          setMsg({
+            kind: "err",
+            text: `단계는 변경됐으나 면접 링크 생성에 실패했습니다: ${msg}`,
+          });
+        }
+      } catch {
+        /* 발송 실패는 silent */
+      }
+    }
+    setBusy(false);
     setOpen(null);
     onChanged();
   };
@@ -2229,7 +2575,7 @@ function StagePanel({
           (candidate.decisionEmailCount ?? 0) === 0 &&
           candidate.email && (
             <button
-              onClick={() => setOpen("notify")}
+              onClick={openNotify}
               disabled={busy}
               className="ml-auto text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50 transition-colors"
               title="후보자에게 결과 통보 메일이 아직 발송되지 않았습니다"
@@ -2331,8 +2677,8 @@ function StagePanel({
               />
             </div>
 
-            {candidate.email && (
-              <div>
+            {candidate.email && (decision === "hired" || decision === "rejected") && (
+              <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="checkbox"
@@ -2341,15 +2687,34 @@ function StagePanel({
                   />
                   결과 통보 메일을 {candidate.email} 로 발송
                 </label>
-                {sendMail && (decision === "hired" || decision === "rejected") && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    발송 본문 미리보기 (수정하면 수정본이 발송됨 — 위 체크 안 하면 발송 X)
+                  </label>
                   <textarea
                     value={customMessage}
-                    onChange={(e) => setCustomMessage(e.target.value)}
-                    rows={4}
-                    placeholder="(선택) 후보자에게 보낼 본문. 비우면 기본 템플릿 사용."
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mt-2"
+                    onChange={(e) => {
+                      setCustomMessage(e.target.value);
+                      setMessageEdited(true);
+                    }}
+                    rows={8}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm leading-relaxed"
                   />
-                )}
+                  {messageEdited && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomMessage(
+                          defaultDecisionBody(decision, candidate.name, jobTitle)
+                        );
+                        setMessageEdited(false);
+                      }}
+                      className="mt-1 text-[11px] text-slate-500 hover:text-slate-700 underline"
+                    >
+                      기본 템플릿으로 되돌리기
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -2388,13 +2753,40 @@ function StagePanel({
               <br />
               결정: <strong>{candidate.outcome === "hired" ? "최종합격" : "불합격"}</strong>
             </div>
-            <textarea
-              value={customMessage}
-              onChange={(e) => setCustomMessage(e.target.value)}
-              rows={5}
-              placeholder="(선택) 후보자에게 보낼 본문. 비우면 기본 템플릿 사용."
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                발송 본문 미리보기 (수정하면 수정본이 발송됨)
+              </label>
+              <textarea
+                value={customMessage}
+                onChange={(e) => {
+                  setCustomMessage(e.target.value);
+                  setMessageEdited(true);
+                }}
+                rows={8}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm leading-relaxed"
+              />
+              {messageEdited &&
+                (candidate.outcome === "hired" ||
+                  candidate.outcome === "rejected") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomMessage(
+                        defaultDecisionBody(
+                          candidate.outcome as "hired" | "rejected",
+                          candidate.name,
+                          jobTitle
+                        )
+                      );
+                      setMessageEdited(false);
+                    }}
+                    className="mt-1 text-[11px] text-slate-500 hover:text-slate-700 underline"
+                  >
+                    기본 템플릿으로 되돌리기
+                  </button>
+                )}
+            </div>
             <div className="flex gap-2 pt-2">
               <button
                 onClick={sendDecisionMail}
@@ -2584,7 +2976,7 @@ function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
   })();
 
   return (
-    <Section title="면접관 메모 / 스코어카드" summary={noteSummary}>
+    <Section title="면접관 메모 / 스코어카드" summary={noteSummary} collapsible={false}>
       <div className="flex justify-between items-center mb-3">
         <div className="text-xs text-slate-500">
           같은 법인 멤버 누구나 자기 메모를 작성할 수 있습니다. 본인 메모만
@@ -2810,7 +3202,7 @@ function AssignmentsPanel({ candidateId }: { candidateId: number }) {
   const available = (members ?? []).filter((m) => !assignedIds.has(m.id));
 
   return (
-    <Section title="면접관 배정">
+    <Section title="면접관 배정" collapsible={false}>
       <div className="text-xs text-slate-500 mb-3">
         같은 법인 멤버 중 면접에 참여할 사람을 배정합니다. 배정은 알림·UI 강조용
         — 메모 작성 권한은 같은 법인 누구나 있습니다.

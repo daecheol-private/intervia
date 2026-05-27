@@ -33,6 +33,9 @@ import {
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { logAudit } from "@/lib/audit";
+import { chargeFeature } from "@/lib/tokens";
+import { enqueueScreening } from "@/lib/screening-queue";
+import { triggerWorker } from "@/lib/worker-trigger";
 
 export const runtime = "nodejs";
 
@@ -446,7 +449,13 @@ export async function POST(
 
   // 4) 각 그룹마다 후보자 1명 생성 + 첨부 저장
   type GroupResult =
-    | { ok: true; candidateId: number; name: string; attachments: number }
+    | {
+        ok: true;
+        candidateId: number;
+        name: string;
+        attachments: number;
+        enqueued: boolean;
+      }
     | { ok: false; group: string; reason: string }
     | { skipped: true; group: string; reason: string };
   const results: GroupResult[] = [];
@@ -490,6 +499,15 @@ export async function POST(
   const failed = results.filter((r) => "ok" in r && !r.ok);
   const skipped = results.filter((r) => "skipped" in r);
 
+  // 큐에 enqueue 된 작업이 1개라도 있으면 워커 즉시 깨우기 (fire-and-forget).
+  // 워커 60초 안에 처리 못한 잔여 작업은 cron(또는 수동 트리거)이 따라잡음.
+  const anyEnqueued = results.some(
+    (r) => "ok" in r && r.ok && "enqueued" in r && r.enqueued
+  );
+  if (anyEnqueued) {
+    triggerWorker(req);
+  }
+
   // 클라이언트가 직접 올린 ZIP — 추출 끝나 더 이상 필요 없음. 정리.
   if (zipKeysToCleanup.length > 0) {
     const { del } = await import("@vercel/blob");
@@ -526,7 +544,13 @@ async function processGroup(args: {
   providedName: string;
   providedEmail: string;
 }): Promise<
-  | { ok: true; candidateId: number; name: string; attachments: number }
+  | {
+      ok: true;
+      candidateId: number;
+      name: string;
+      attachments: number;
+      enqueued: boolean;
+    }
   | { ok: false; group: string; reason: string }
 > {
   const { group, jobId, job, me, providedName, providedEmail } = args;
@@ -716,13 +740,40 @@ async function processGroup(args: {
     }
   }
 
-  // 업로드 시점에는 마스킹/저장까지만 수행. LLM 서류평가는 사용자가 수동으로 "평가" 버튼을
-  // 눌렀을 때 (POST /api/candidates/[id]/screen) 트리거된다.
+  // 업로드 직후 서류평가 큐 자동 등록 — HR 한 스텝 축소 (별도 "평가" 버튼 클릭 불필요).
+  //   1) resume_upload 토큰 차감 (멱등). 실패 시 큐 final fail 단계에서 자동환불.
+  //   2) screening_jobs 에 enqueue.
+  //   3) 실제 LLM 호출은 워커가 비동기 처리 (POST 응답 후 triggerWorker 가 즉시 깨움 + cron 안전망).
+  //
+  // 차감/enqueue 단계가 실패해도 업로드 자체는 성공 처리 — 사용자가 후보자 상세에서
+  // "평가" 버튼으로 수동 재시도 가능 (POST /api/candidates/[id]/screen).
+  let enqueued = false;
+  try {
+    if (job.orgId) {
+      await chargeFeature({
+        orgId: job.orgId,
+        feature: "resume_upload",
+        refType: "candidate",
+        refId: inserted.id,
+        userId: me.id,
+        memo: candidateName,
+      });
+    }
+    await enqueueScreening(inserted.id, me.id);
+    enqueued = true;
+  } catch (err) {
+    log.warn("auto_enqueue_after_upload_failed", {
+      candidateId: inserted.id,
+      jobId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   return {
     ok: true,
     candidateId: inserted.id,
     name: candidateName,
     attachments: attachmentCount,
+    enqueued,
   };
 }

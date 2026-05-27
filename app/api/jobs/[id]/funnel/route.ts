@@ -82,6 +82,24 @@ export async function GET(
     )
     .groupBy(candidates.outcome, candidates.stage);
 
+  // 응답률 계산은 "그 단계를 거쳐 지나간 모든 후보" 기준 (누적).
+  //   - 현재 stage 가 ai_evaluated 이상이면 = AI 면접에 응답한 사람 (rejected 였든 hired 였든)
+  //   - 따라서 hired 를 빼기 전 원본 카운트로 계산해야 정확함.
+  const stagesRaw = { ...stages };
+
+  // 최종합격 후보는 stage 가 round2_passed (또는 그 이전) 으로 남지만,
+  // 파이프라인 UI 에서는 "최종 합격" 셀로 옮겨 표시해야 사용자 멘탈모델과 일치.
+  //   - 불합격/지원취소: 어느 단계에서 멈췄는지가 의미 있으므로 stage 카운트에 그대로 유지.
+  //   - 최종합격: 전형이 완전히 끝났으므로 이전 stage 에서 빼고 "hired" 로 이동.
+  let hiredTotal = 0;
+  for (const r of decisionBreakdown) {
+    if (r.outcome !== "hired") continue;
+    const n = Number(r.n);
+    stages[r.fromStage] = Math.max(0, Number(stages[r.fromStage]) - n);
+    hiredTotal += n;
+  }
+  stages.hired = hiredTotal;
+
   // KPI: 평균 처리 시간(일), 단계별 응답률
   const [timing] = await db
     .select({
@@ -93,35 +111,38 @@ export async function GET(
       and(eq(candidates.jobId, jobId), sql`${candidates.outcome} IS NOT NULL`)
     );
 
+  // 응답률 계산은 stagesRaw (hired 분리 전 원본) 사용 — 누적 통과 기준.
+  // 예: 최종합격 후보도 AI 면접·1차 면접을 모두 응답한 사람이므로 분자/분모에 포함.
+
   // 응답률: AI 면접 = ai_pending 이상 도달 후보 중 ai_evaluated 이상 진행된 비율
   // (지원자가 응답한 비율)
   const aiSent =
-    Number(stages.ai_pending) +
-    Number(stages.ai_evaluated) +
-    Number(stages.round1_candidate) +
-    Number(stages.round1_scheduling) +
-    Number(stages.round1_waiting) +
-    Number(stages.round1_passed) +
-    Number(stages.round2_passed);
+    Number(stagesRaw.ai_pending) +
+    Number(stagesRaw.ai_evaluated) +
+    Number(stagesRaw.round1_candidate) +
+    Number(stagesRaw.round1_scheduling) +
+    Number(stagesRaw.round1_waiting) +
+    Number(stagesRaw.round1_passed) +
+    Number(stagesRaw.round2_passed);
   const aiResponded =
-    Number(stages.ai_evaluated) +
-    Number(stages.round1_candidate) +
-    Number(stages.round1_scheduling) +
-    Number(stages.round1_waiting) +
-    Number(stages.round1_passed) +
-    Number(stages.round2_passed);
+    Number(stagesRaw.ai_evaluated) +
+    Number(stagesRaw.round1_candidate) +
+    Number(stagesRaw.round1_scheduling) +
+    Number(stagesRaw.round1_waiting) +
+    Number(stagesRaw.round1_passed) +
+    Number(stagesRaw.round2_passed);
   const aiResponseRate = aiSent > 0 ? aiResponded / aiSent : null;
 
   // 1차 면접 응답률: scheduling 이상 도달 중 waiting 이상 진행 비율
   const r1Sent =
-    Number(stages.round1_scheduling) +
-    Number(stages.round1_waiting) +
-    Number(stages.round1_passed) +
-    Number(stages.round2_passed);
+    Number(stagesRaw.round1_scheduling) +
+    Number(stagesRaw.round1_waiting) +
+    Number(stagesRaw.round1_passed) +
+    Number(stagesRaw.round2_passed);
   const r1Responded =
-    Number(stages.round1_waiting) +
-    Number(stages.round1_passed) +
-    Number(stages.round2_passed);
+    Number(stagesRaw.round1_waiting) +
+    Number(stagesRaw.round1_passed) +
+    Number(stagesRaw.round2_passed);
   const r1ResponseRate = r1Sent > 0 ? r1Responded / r1Sent : null;
 
   // 지원자 취소율

@@ -20,6 +20,7 @@ type SessionInfo = {
     id: number;
     status: "pending" | "in_progress" | "completed" | "expired";
     messages: Message[];
+    startedAt?: string | null;
   };
   candidate: { id: number; name: string };
   job: {
@@ -275,9 +276,10 @@ export default function InterviewPage() {
         </div>
 
         {!ended && (
-          <ProgressBar
-            userTurns={messages.filter((m) => m.role === "user").length}
-            durationMinutes={info.job.interviewDurationMinutes ?? 20}
+          <Timer
+            startedAt={info.session.startedAt ?? null}
+            messages={messages}
+            streaming={streaming}
           />
         )}
       </div>
@@ -526,42 +528,75 @@ function TypingDots() {
   );
 }
 
-function expectedUserTurns(minutes: number): number {
-  if (minutes <= 15) return 5;
-  if (minutes <= 30) return 10;
-  if (minutes <= 45) return 15;
-  return 20;
+/** ms → "m:ss" */
+function fmtTime(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function ProgressBar({
-  userTurns,
-  durationMinutes,
+/**
+ * 면접 타이머 — 2개 카운트업 (예상 시간/진행률 X — 면접 길이는 대화에 따라 가변).
+ *   - 전체: session.startedAt 기준 (서버가 첫 chat 호출 시 기록)
+ *   - 이번 질문: 마지막 AI 메시지 도착 시점 기준 (사용자 전송 시 리셋)
+ */
+function Timer({
+  startedAt,
+  messages,
+  streaming,
 }: {
-  userTurns: number;
-  durationMinutes: number;
+  startedAt: string | null;
+  messages: Message[];
+  streaming: boolean;
 }) {
-  const expected = expectedUserTurns(durationMinutes);
-  // 첫 트리거 "면접을 시작해주세요" 도 user 턴으로 카운팅됨 — 1 빼서 보정
-  const effective = Math.max(0, userTurns - 1);
-  const pct = Math.min(100, Math.round((effective / expected) * 100));
+  const [now, setNow] = useState<number>(() => Date.now());
+  const [answerStartAt, setAnswerStartAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      setAnswerStartAt(null);
+      return;
+    }
+    const last = messages[messages.length - 1];
+    if (last.role === "model" && !streaming) {
+      setAnswerStartAt((prev) => prev ?? Date.now());
+    } else if (last.role === "user") {
+      setAnswerStartAt(null);
+    }
+  }, [messages, streaming]);
+
+  const startMs = startedAt ? new Date(startedAt).getTime() : now;
+  const elapsedMs = Math.max(0, now - startMs);
+  const answerMs = answerStartAt != null ? now - answerStartAt : null;
+
   return (
-    <div className="mt-3" aria-label={`면접 진행률 ${pct}%`}>
-      <div className="flex justify-between items-center text-[10px] sm:text-xs text-slate-500 mb-1">
-        <span>진행 {effective} / 약 {expected} 턴</span>
-        <span>{pct}%</span>
-      </div>
-      <div
-        className="h-1.5 bg-slate-100 rounded-full overflow-hidden"
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <div
-          className="h-full bg-gradient-to-r from-primary to-primary-deep transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+    <div
+      className="mt-3 flex items-center gap-4 text-xs text-slate-500"
+      aria-label={`면접 경과 ${fmtTime(elapsedMs)}`}
+    >
+      <span className="flex items-center gap-1.5">
+        <span className="text-[10px] text-slate-400 uppercase tracking-wider">전체</span>
+        <span className="tabular-nums font-semibold text-slate-700 text-sm">
+          {fmtTime(elapsedMs)}
+        </span>
+      </span>
+      <span className="text-slate-200">|</span>
+      <span className="flex items-center gap-1.5">
+        <span className="text-[10px] text-slate-400 uppercase tracking-wider">이번 질문</span>
+        <span
+          className={`tabular-nums font-semibold text-sm ${
+            answerMs != null ? "text-primary-deep" : "text-slate-300"
+          }`}
+        >
+          {fmtTime(answerMs ?? 0)}
+        </span>
+      </span>
     </div>
   );
 }

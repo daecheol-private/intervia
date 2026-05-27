@@ -21,6 +21,8 @@ export type ScreeningContext = {
     tech_fit?: { score: number; reason: string };
     experience_depth?: { score: number; reason: string };
     role_match?: { score: number; reason: string };
+    achievement?: { score: number; reason: string };
+    stability?: { score: number; reason: string };
     growth_attitude?: { score: number; reason: string };
   };
   interview_focus?: string[];
@@ -62,6 +64,8 @@ function screeningBlock(s?: ScreeningContext | null): string {
     b.tech_fit && `tech_fit ${b.tech_fit.score}`,
     b.experience_depth && `experience_depth ${b.experience_depth.score}`,
     b.role_match && `role_match ${b.role_match.score}`,
+    b.achievement && `achievement ${b.achievement.score}`,
+    b.stability && `stability ${b.stability.score}`,
     b.growth_attitude && `growth_attitude ${b.growth_attitude.score}`,
   ]
     .filter(Boolean)
@@ -170,14 +174,26 @@ ${resume}${attachmentSection}
 - 자격 요건과 명백히 충돌하는 경력 (단, level/연차 기대치 고려)
 → 모두 "면접에서 확인" 가능한 가설로만. 단정 짓지 말 것.
 
-### 4단계 · 차원별 점수 (0~100)
-각 차원에 점수 + 한 줄 근거:
-1. **기술 적합도 (tech_fit)** — JD hard skill 직접 부합 정도 (가중 0.40)
-2. **경험 깊이 (experience_depth)** — 책임 범위·프로젝트 규모·정량 성과 (가중 0.30)
-3. **직무 매칭도 (role_match)** — 주요 업무와 후보자 과거 업무의 일치 (가중 0.20)
-4. **성장·태도 (growth_attitude)** — 선호 인재상 부합, 학습 흔적, 커리어 일관성 (가중 0.10)
+### 4단계 · 차원별 점수 (0~100, 6축)
+각 차원에 점수 + 한 줄 근거. 6축은 서로 직교적으로 평가 — 한 축이 좋다고 다른 축이 자동으로 좋아지지 않는다.
 
-raw score = round(0.4·tech_fit + 0.3·experience_depth + 0.2·role_match + 0.1·growth_attitude)
+1. **기술 적합도 (tech_fit)** — JD hard skill 직접 부합 정도 (가중 0.30)
+2. **경험 깊이 (experience_depth)** — 책임 범위·프로젝트 규모·기술적 난이도 (가중 0.20)
+3. **직무 매칭도 (role_match)** — JD 주요 업무와 후보자 과거 수행 업무의 일치 (가중 0.15)
+4. **성과 임팩트 (achievement)** — 정량 지표(매출/사용자/성능 등), 책임 범위, 수상·임팩트가 객관적으로 드러나는 정도 (가중 0.15)
+   · 0~29: 정량 지표 거의 없음, 책임/결과 추상적
+   · 30~59: 일부 지표 있으나 임팩트 약함
+   · 60~89: 정량 지표 + 명확한 책임 범위
+   · 90~100: 명확한 정량 + 도전적 책임 + 외부 인지(수상/공개 사례)
+5. **재직 안정성 (stability)** — 평균 재직 기간, 이직 패턴 (가중 0.10)
+   · 0~29: 3회 이상 1년 미만 단기 이직, 또는 설명 없는 6개월 이상 공백 반복
+   · 30~59: 단기 이직 1~2회, 평균 1~2년
+   · 60~89: 평균 2~3년, 일관된 커리어
+   · 90~100: 평균 3년+, 장기 재직 다수 (단, 1개 회사만 있어도 신입은 추정 불가 → 신입 면제 60점 부여)
+   · 신입(career_years=0) 또는 1년 미만 경력자는 평가 불가 → 60점(중립) 부여하고 reason 에 "신입 평가 면제"
+6. **성장·태도 (growth_attitude)** — 선호 인재상 부합, 학습 흔적(자격증·사이드프로젝트·강의 등), 커리어 발전 일관성 (가중 0.10)
+
+raw score = round(0.30·tech_fit + 0.20·experience_depth + 0.15·role_match + 0.15·achievement + 0.10·stability + 0.10·growth_attitude)
 
 ### 4-1단계 · 직급/연차 매칭 보정 (level_match_penalty)
 - JD 직급(${job.level}) 의 기대 연차 범위와 후보자 실제 연차를 비교한다.
@@ -235,6 +251,8 @@ overall score = clamp(0, 100, raw score + level_match.penalty)
     "tech_fit":          { "score": 0~100, "reason": "한 줄 근거" },
     "experience_depth":  { "score": 0~100, "reason": "..." },
     "role_match":        { "score": 0~100, "reason": "..." },
+    "achievement":       { "score": 0~100, "reason": "..." },
+    "stability":         { "score": 0~100, "reason": "..." },
     "growth_attitude":   { "score": 0~100, "reason": "..." }
   },
   "level_match": {

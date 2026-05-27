@@ -5,7 +5,7 @@
 export function triggerWorker(req?: Request): void {
   const base =
     process.env.APP_BASE_URL ??
-    (req ? new URL(req.url).origin : "http://localhost:3002");
+    (req ? new URL(req.url).origin : "http://localhost:3003");
   const url = `${base}/api/internal/process-screenings`;
   // 응답 안 기다림 — 호출자 응답 지연 방지
   void fetch(url, {

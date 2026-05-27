@@ -16,6 +16,8 @@ type ScreeningResult = {
     tech_fit?: { score: number; reason: string };
     experience_depth?: { score: number; reason: string };
     role_match?: { score: number; reason: string };
+    achievement?: { score: number; reason: string };
+    stability?: { score: number; reason: string };
     growth_attitude?: { score: number; reason: string };
   };
   interview_focus?: string[];
