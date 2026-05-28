@@ -11,8 +11,8 @@
  *  4) cleanupStuck() — 5분 이상 lock 잡힌 채 멈춘 job 복구 (worker 비정상 종료 대응)
  */
 import { db } from "./db";
-import { screeningJobs, candidates } from "./schema";
-import { eq, and, sql, isNull, or, lte, inArray, lt, gt } from "drizzle-orm";
+import { screeningJobs, candidates, tokenWallets } from "./schema";
+import { eq, and, sql, isNull, or, lte, inArray, lt, gt, gte } from "drizzle-orm";
 
 export const MAX_ATTEMPTS = 3;
 // 백오프: 1차 30s, 2차 2min, 3차 5min
@@ -65,16 +65,26 @@ export async function atomicClaimNext(workerId: string): Promise<{
 } | null> {
   const now = new Date().toISOString();
   // race-loss 시 그 다음 id 로 진행. 같은 호출에서 최대 20회 시도.
+  // M2 — 후보자 소속 법인의 잔액이 0 이하면 워커가 일시정지 (해당 job 스킵).
+  // 충전 후 자연스럽게 재개. candidates JOIN + LEFT JOIN tokenWallets 로 검사.
   let afterId = 0;
   for (let i = 0; i < 20; i++) {
     const [candidate] = await db
       .select({ id: screeningJobs.id })
       .from(screeningJobs)
+      .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
+      .leftJoin(tokenWallets, eq(tokenWallets.orgId, candidates.orgId))
       .where(
         and(
           eq(screeningJobs.status, "queued"),
           or(isNull(screeningJobs.notBefore), lte(screeningJobs.notBefore, now)),
-          gt(screeningJobs.id, afterId)
+          gt(screeningJobs.id, afterId),
+          // orgId 미설정(legacy) 또는 잔액 > 0 만 처리. 음수면 일시정지.
+          or(
+            isNull(candidates.orgId),
+            isNull(tokenWallets.balance),
+            gte(tokenWallets.balance, 1)
+          )
         )
       )
       .orderBy(screeningJobs.id)
@@ -234,11 +244,28 @@ export async function getActiveJobForCandidate(candidateId: number) {
   return row ?? null;
 }
 
-/** 큐에서 해당 job 앞쪽에 있는 queued 갯수 (대기 위치). */
+/** 큐에서 해당 job 앞쪽에 있는 queued 갯수 (대기 위치).
+ *  M6 — 같은 채용공고(jobs.id) 안에서만 카운트. 타법인·타공고 큐 길이로 인해
+ *  "당신은 N번 대기" 표시가 부풀려지던 문제 차단. 후보자가 본인 공고 내 순번만 본다. */
 export async function getQueuePosition(jobId: number): Promise<number> {
+  // 대상 job 의 candidate → job_posting id 를 먼저 조회
+  const [target] = await db
+    .select({ jobPostingId: candidates.jobId })
+    .from(screeningJobs)
+    .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
+    .where(eq(screeningJobs.id, jobId))
+    .limit(1);
+  if (!target) return 0;
   const [row] = await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(screeningJobs)
-    .where(and(eq(screeningJobs.status, "queued"), lt(screeningJobs.id, jobId)));
+    .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
+    .where(
+      and(
+        eq(screeningJobs.status, "queued"),
+        lt(screeningJobs.id, jobId),
+        eq(candidates.jobId, target.jobPostingId)
+      )
+    );
   return Number(row?.count ?? 0);
 }
