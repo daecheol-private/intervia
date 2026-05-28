@@ -126,6 +126,7 @@ export async function POST(
         responsibilities: job!.responsibilities,
         requirements: job!.requirements,
         idealProfile: job!.idealProfile,
+        evaluationFocus: job!.evaluationFocus,
         tone: job!.tone,
         interviewDurationMinutes: job!.interviewDurationMinutes,
       },
@@ -202,6 +203,10 @@ export async function POST(
               candidateId: candidate?.id,
               sample: acc.slice(0, 300),
             });
+            // M10 — 검출 시 DB 저장 본문을 보호 메시지로 치환하여 다음 LLM 평가
+            // 단계 (interviewEval) 가 누출된 시스템 프롬프트로 오염되지 않도록 차단.
+            // 스트림에 이미 흘러간 chunk 는 회수 불가하나, 후속 영향만은 격리.
+            acc = "[시스템 응답 보호 — 본 답변은 검수가 필요합니다. 채용 담당자에게 문의해 주세요.]";
           }
           await persist(false);
           controller.close();

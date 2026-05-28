@@ -11,6 +11,7 @@ import { jobOrgFilter, requireUser } from "@/lib/tenant";
 import { isValidPin } from "@/lib/job-lock";
 import { chargeFeature } from "@/lib/tokens";
 import { defaultClosesAt } from "@/lib/job-lifecycle";
+import { stripBiasedLines } from "@/lib/job-bias-filter";
 
 export const runtime = "nodejs";
 
@@ -114,6 +115,9 @@ export async function POST(req: Request) {
       responsibilities: body.responsibilities,
       requirements: body.requirements,
       idealProfile: (body.idealProfile ?? "").toString().slice(0, 3000),
+      evaluationFocus: stripBiasedLines(
+        (body.evaluationFocus ?? "").toString().slice(0, 3000)
+      ).cleaned,
       tone: body.tone ?? "중립적인",
       interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
       passwordHash,

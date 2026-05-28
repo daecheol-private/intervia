@@ -7,6 +7,7 @@ import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
 import { deleteCandidateFiles } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
 import { refundFeature } from "@/lib/tokens";
+import { stripBiasedLines } from "@/lib/job-bias-filter";
 
 const REFUND_WINDOW_MS = 5 * 60 * 1000;
 
@@ -93,6 +94,10 @@ export async function PUT(
     responsibilities: body.responsibilities,
     requirements: body.requirements,
     idealProfile: typeof body.idealProfile === "string" ? body.idealProfile.slice(0, 3000) : "",
+    evaluationFocus:
+      typeof body.evaluationFocus === "string"
+        ? stripBiasedLines(body.evaluationFocus.slice(0, 3000)).cleaned
+        : "",
     tone: body.tone,
     interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
   };
