@@ -58,7 +58,13 @@ type Candidate = {
   favorited?: boolean;
 };
 
-type Job = { id: number; title: string; position: string };
+type Job = {
+  id: number;
+  title: string;
+  position: string;
+  status?: "active" | "closed";
+  closesAt?: string | null;
+};
 
 type InterviewEvaluation = {
   overall_score: number;
@@ -114,6 +120,35 @@ const recColor: Record<string, string> = {
 };
 /** 강력추천/비추천만 노출. 중간 단계는 점수로 판단. */
 const showRec = (rec: string) => rec === "강력추천" || rec === "비추천";
+
+// Low — 후보자 이름이 비어있거나 파일명으로 폴백된 경우 "(이름 미식별)" 표시.
+// PII 추출 실패의 fingerprint: 이름이 null/빈문자 또는 .pdf/.docx/.txt 등 확장자 포함.
+function displayCandidateName(name: string | null | undefined): string {
+  if (!name) return "(이름 미식별)";
+  if (/\.(pdf|docx?|hwpx?|txt|rtf|odt)$/i.test(name.trim())) return "(이름 미식별)";
+  return name;
+}
+
+// Low — 한국 휴대전화 포맷. 입력이 숫자만이면 010-XXXX-XXXX/0XX-XXX-XXXX 등 자동 표기.
+// 이미 -·.·공백 포함되어 있으면 그대로 둠. 국제번호(+82) 도 그대로.
+function formatPhoneKr(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const trimmed = phone.trim();
+  if (!trimmed) return null;
+  if (/[\s\-+.]/.test(trimmed)) return trimmed;
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("010"))
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10 && digits.startsWith("10"))
+    return `0${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`;
+  if (digits.length === 10 && digits.startsWith("02"))
+    return `02-${digits.slice(2, 6)}-${digits.slice(6)}`;
+  if (digits.length === 11 && /^01[016-9]/.test(digits))
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  if (digits.length === 9 && digits.startsWith("02"))
+    return `02-${digits.slice(2, 5)}-${digits.slice(5)}`;
+  return trimmed;
+}
 
 /** 점수대별 강조 색 — 점수 큰 숫자에 적용. */
 function scoreColor(score: number): string {
@@ -304,6 +339,39 @@ export default function CandidateDetailPage() {
   }
 
   const { candidate, job, sessions, schedules, screeningPhase } = data;
+
+  // 공고가 만료(closesAt 지났고 active) 상태면 후보자 상세 진입 차단.
+  // 목록 페이지에서의 일괄 합/불 결정·삭제는 가능하지만 상세 페이지에서의 단일 액션은 잠금.
+  const jobExpired =
+    job.status === "active" &&
+    !!job.closesAt &&
+    new Date(job.closesAt).getTime() < Date.now();
+  if (jobExpired) {
+    return (
+      <main className="max-w-md mx-auto w-full px-6 py-12">
+        <div className="bg-card border border-warning/30 rounded-2xl p-8 text-center shadow-sm">
+          <div className="text-4xl mb-3">⏰</div>
+          <h1 className="text-base font-bold text-ink mb-2">
+            공고 종결일이 지났습니다
+          </h1>
+          <p className="text-xs text-ink-soft leading-relaxed mb-5">
+            만료된 공고의 후보자 상세 보기는 잠겨 있습니다.<br />
+            공고를 연장 또는 종결한 뒤 다시 확인해 주세요.<br />
+            <span className="text-ink-muted">
+              (목록에서 일괄 합/불 결정·삭제는 가능합니다)
+            </span>
+          </p>
+          <Link
+            href={`/jobs/${job.id}`}
+            className="inline-block px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium transition-colors"
+          >
+            공고로 돌아가기
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   const activeSession = sessions[0] ?? null;
   const activeSchedule =
     (schedules ?? []).find(
@@ -332,7 +400,7 @@ export default function CandidateDetailPage() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold text-slate-900">
-                {candidate.name}
+                {displayCandidateName(candidate.name)}
               </h1>
               {candidate.outcome !== "hired" && <StageBadge stage={candidate.stage} />}
               {candidate.outcome && <OutcomeBadge outcome={candidate.outcome} reason={candidate.outcomeReason} />}
@@ -342,7 +410,7 @@ export default function CandidateDetailPage() {
             {/* 이메일은 길어 잘리기 쉬워 2배 폭 할당. 나이·경력은 짧은 텍스트라 auto.
                 모바일은 2열로 wrap. */}
             <div className="grid grid-cols-2 sm:grid-cols-[1fr_2fr_auto_auto] gap-x-4 gap-y-3 mt-4">
-              <InfoCell label="연락처" value={candidate.phone} />
+              <InfoCell label="연락처" value={formatPhoneKr(candidate.phone)} />
               <InfoCell label="이메일" value={candidate.email} />
               <InfoCell
                 label="나이"
@@ -375,9 +443,11 @@ export default function CandidateDetailPage() {
             />
             <button
               onClick={handleDelete}
-              className="px-3 py-1.5 rounded-lg border border-danger/30 text-danger hover:bg-danger-soft text-sm transition-colors"
+              className="px-2 py-1.5 rounded-lg text-ink-muted hover:text-danger hover:bg-danger-soft text-xs transition-colors"
+              title="후보자 삭제"
+              aria-label="후보자 삭제"
             >
-              삭제
+              🗑 삭제
             </button>
           </div>
         </div>
@@ -2556,15 +2626,17 @@ function StagePanel({
               <button
                 onClick={() => setOpen("stage")}
                 disabled={busy}
-                className="text-xs px-3 py-1.5 rounded-md border border-border-strong hover:bg-surface-alt transition-colors"
+                className="text-xs px-3.5 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-semibold disabled:opacity-50 transition-colors shadow-sm"
+                title="다음 단계로 진행"
               >
-                단계 변경
+                ▶ 단계 변경
               </button>
             )}
             <button
               onClick={() => setOpen("decide")}
               disabled={busy}
-              className="text-xs px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium transition-colors"
+              className="text-xs px-3 py-1.5 rounded-md border border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink transition-colors"
+              title="최종합격·불합격·지원취소로 종결"
             >
               종결 결정
             </button>

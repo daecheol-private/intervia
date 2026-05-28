@@ -64,6 +64,9 @@ export async function POST(
   if (!auth.ok) return auth.res;
 
   const c = auth.candidate;
+  // Low — 후보자 본인 열람에는 점수·추천 등 평가 결과 미노출. 후보자가 점수를 보고
+  // 이의제기 통계 분쟁을 유발하지 않도록 보유 항목 요약만 제공. 평가 설명 요청은
+  // PIPA §37의2 의 이의제기 채널 (/api/interview/[token]/appeal) 로 별도 안내.
   const safe = {
     name: c.name,
     email: c.email,
@@ -73,8 +76,6 @@ export async function POST(
     careerSummary: c.careerSummary,
     resumeStored: !!c.resumeFilePath,
     maskedTextLength: c.resumeMaskedText?.length ?? 0,
-    screeningScore: c.screeningScore,
-    screeningRecommendation: c.screeningReport?.recommendation ?? null,
     // 진행 상태 — stage 한글 라벨 + outcome (종결 시)
     stage: c.stage,
     outcome: c.outcome,
