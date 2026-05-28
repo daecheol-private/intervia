@@ -33,6 +33,16 @@ export async function POST(req: Request) {
       { status: 401 }
     );
 
+  // H7 — challenge 가 stateless HMAC 이라 무차별 대입을 IP rate-limit (10/분) 만으로 막기 부족.
+  // 사용자 단위로 분당 5회 추가 제한 — IP 분산 공격도 차단. 잠금되면 비번부터 다시 입력 강제.
+  const userLimited = await rateLimit(
+    req,
+    "login-totp-user",
+    { limit: 5, windowSec: 60 },
+    cv.userId
+  );
+  if (userLimited) return userLimited;
+
   const [user] = await db.select().from(users).where(eq(users.id, cv.userId));
   if (!user || !user.totpSecret || !user.totpEnabledAt)
     return new Response("2단계 인증이 활성화되어 있지 않습니다.", {

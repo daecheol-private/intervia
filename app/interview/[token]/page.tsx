@@ -629,10 +629,13 @@ function ConsentGate({
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // H5 — 본인 확인용 이메일 (지원 시 등록한 메일과 일치 여부 서버 검증)
+  const [email, setEmail] = useState("");
 
   const allRequiredChecked = items
     .filter((i) => i.required)
     .every((i) => checks[i.key]);
+  const emailFilled = email.trim().length > 0;
 
   const submit = async () => {
     setBusy(true);
@@ -640,11 +643,18 @@ function ConsentGate({
     const res = await fetch(`/api/interview/${token}/consent`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ consents: checks }),
+      body: JSON.stringify({ consents: checks, email: email.trim() }),
     });
     setBusy(false);
     if (!res.ok) {
-      setErr(await res.text());
+      let msg = await res.text();
+      try {
+        const data = JSON.parse(msg);
+        if (data?.error) msg = data.error;
+      } catch {
+        /* plain text */
+      }
+      setErr(msg);
       return;
     }
     onAccepted();
@@ -705,6 +715,24 @@ function ConsentGate({
         </ul>
 
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50">
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              본인 확인 — 지원 시 등록한 이메일
+            </label>
+            <input
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            />
+            <p className="text-[11px] text-slate-500 mt-1">
+              면접 링크 유출 방지를 위해 지원 시 등록한 이메일과 일치해야 면접이
+              시작됩니다.
+            </p>
+          </div>
           <p className="text-[11px] text-slate-500 leading-relaxed mb-3">
             동의 거부 시 면접 절차에 참여할 수 없습니다. 자동화 의사결정 결과에
             대해서는 본인 식별 후 설명 요청 및 이의제기 권리가 있습니다 (PIPA
@@ -727,7 +755,7 @@ function ConsentGate({
           <div className="flex gap-2">
             <button
               onClick={submit}
-              disabled={!allRequiredChecked || busy}
+              disabled={!allRequiredChecked || !emailFilled || busy}
               className="flex-1 px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {busy ? "처리 중..." : "동의하고 면접 시작"}

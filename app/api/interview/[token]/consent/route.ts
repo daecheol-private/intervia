@@ -7,7 +7,7 @@
  * 인증: 토큰만 (후보자는 비로그인). 토큰 자체가 인증 수단.
  */
 import { db } from "@/lib/db";
-import { interviewSessions, consentLogs } from "@/lib/schema";
+import { interviewSessions, consentLogs, candidates } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import {
   CONSENT_VERSION,
@@ -42,9 +42,40 @@ export async function POST(
 
   const body = (await req.json().catch(() => null)) as {
     consents?: Record<string, unknown>;
+    email?: string;
   } | null;
   if (!body?.consents)
     return new Response("동의 항목이 누락되었습니다.", { status: 400 });
+
+  // H5 — 토큰 URL 만 알고 있는 제3자 차단: 본인 이메일 입력 검증.
+  // 후보자 컬럼에 email 이 등록된 경우만 적용 (legacy 후보자 면제).
+  const [candidate] = await db
+    .select({ email: candidates.email })
+    .from(candidates)
+    .where(eq(candidates.id, session.candidateId));
+  if (candidate?.email) {
+    const provided = (body.email ?? "").trim().toLowerCase();
+    const expected = candidate.email.trim().toLowerCase();
+    if (!provided) {
+      return Response.json(
+        {
+          error: "본인 확인을 위해 지원 시 등록한 이메일을 입력해 주세요.",
+          code: "email_required",
+        },
+        { status: 400 }
+      );
+    }
+    if (provided !== expected) {
+      return Response.json(
+        {
+          error:
+            "입력하신 이메일이 지원 시 등록한 이메일과 일치하지 않습니다. 이메일을 확인하거나 채용 담당자에게 문의해 주세요.",
+          code: "email_mismatch",
+        },
+        { status: 403 }
+      );
+    }
+  }
 
   const v = validateConsents(body.consents);
   if (!v.ok) {

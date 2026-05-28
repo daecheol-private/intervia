@@ -179,12 +179,19 @@ async function writeLedger(args: {
   userId?: number | null;
   memo?: string | null;
 }): Promise<number> {
-  const current = await ensureWallet(args.orgId);
-  const next = current + args.delta;
-  await db
+  // H4 — 원자적 차감/증가. SELECT-then-UPDATE 패턴은 두 동시 호출이 같은 current 를 읽고
+  // 둘 다 같은 next 로 덮어쓰는 race 발생 (실제 차감은 1회만 적용된 결과). 단일 UPDATE
+  // + RETURNING balance 로 race 차단. 멱등 가드는 호출자 (chargeFeature 등) 에서 처리.
+  await ensureWallet(args.orgId);
+  const updated = await db
     .update(tokenWallets)
-    .set({ balance: next, updatedAt: sql`CURRENT_TIMESTAMP` })
-    .where(eq(tokenWallets.orgId, args.orgId));
+    .set({
+      balance: sql`${tokenWallets.balance} + ${args.delta}`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(tokenWallets.orgId, args.orgId))
+    .returning({ balance: tokenWallets.balance });
+  const next = updated[0]?.balance ?? 0;
   await db.insert(tokenLedger).values({
     orgId: args.orgId,
     delta: args.delta,
