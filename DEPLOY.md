@@ -23,10 +23,35 @@ turso db tokens create interviewer-db   # → eyJhbGc... (auth token)
 # TURSO_DATABASE_URL=libsql://...
 # TURSO_AUTH_TOKEN=...
 
-node scripts/setup-fresh-db.mjs
+npm run db:migrate
 ```
 
-→ 모든 테이블 일괄 생성 + 토큰 가격 시드 (job_post/resume_upload/interview).
+→ `drizzle/` 의 모든 migration 적용 (멱등 — 이미 적용된 건 skip).
+→ 토큰 가격 시드는 별도 (필요 시 `node scripts/setup-fresh-db.mjs` — 멱등).
+
+### 운영 배포 후 자동 migration
+
+매 배포마다 Vercel `vercel-build` 가 `npm run db:migrate && npm run build` 를 실행.
+새 schema 변경은 main push만 하면 운영 Turso 에 자동 적용된다. 수동 작업 불필요.
+
+### 워크플로우 (변경 시)
+
+1. 로컬 `lib/schema.ts` 수정
+2. `npm run db:generate` → `drizzle/NNNN_*.sql` 생성
+3. 생성 SQL 검토 (특히 DROP/RENAME 은 데이터 손실 위험 — 별도 결정)
+4. `npm run db:migrate` → 로컬 적용 + 동작 확인
+5. 커밋 (`git add drizzle/`) + main push
+6. Vercel `vercel-build` 가 Turso 에 자동 적용
+
+### 드리프트 점검
+
+운영 DB 가 schema.ts 와 어긋났는지 의심되면:
+
+```bash
+npm run db:sync-check
+```
+
+→ 누락 컬럼·인덱스·테이블 보고 + 자동 ADD COLUMN/CREATE INDEX (ADDITIVE 만).
 
 ### 관리자 계정 시드
 Turso DB는 비어 있으니 관리자 계정 1개 생성:

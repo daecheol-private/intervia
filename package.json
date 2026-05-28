@@ -5,15 +5,13 @@
   "scripts": {
     "dev": "next dev -p 3003",
     "build": "next build",
+    "vercel-build": "tsx scripts/db-migrate.ts && next build",
     "start": "next start",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:sync-check": "tsx scripts/sync-schema.ts",
     "db:studio": "drizzle-kit studio",
-    "db:migrate-multitenant": "node scripts/migrate-multitenant.mjs",
-    "db:migrate-email-verification": "node scripts/migrate-email-verification.mjs",
-    "db:migrate-masked-text": "node scripts/migrate-masked-text.mjs",
-    "db:migrate-outcome": "node scripts/migrate-outcome.mjs",
-    "db:migrate-drop-status": "node scripts/migrate-drop-status.mjs",
     "db:seed-test": "node scripts/seed-test.mjs",
     "dart:fetch": "node scripts/fetch-dart-corps.mjs"
   },
@@ -47,6 +45,7 @@
     "drizzle-kit": "^0.31.10",
     "pdfkit": "^0.18.0",
     "tailwindcss": "^4",
+    "tsx": "^4.22.3",
     "typescript": "^5"
   }
 }

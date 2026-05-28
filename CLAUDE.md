@@ -43,6 +43,14 @@ SDK 단일: **`@google/genai`** (vertexai: true). 분기 없음 — `clientFor(t
 
 1. UI: client component (`"use client"`) + Tailwind. 기존 디자인 톤 유지 (slate-50 배경, white 카드, blue accent).
 2. API: `app/api/.../route.ts`, `runtime = "nodejs"`, params는 `Promise`.
-3. DB 변경: `lib/schema.ts` 수정 → `npm run db:push` (안 되면 ALTER 직접).
+3. DB 변경 (정식 워크플로우):
+   - `lib/schema.ts` 수정
+   - `npm run db:generate` → `drizzle/NNNN_*.sql` 생성
+   - 생성된 SQL 검토 (특히 destructive 변경 — DROP/RENAME 은 별도 결정)
+   - `npm run db:migrate` → 로컬 적용
+   - 커밋 (`git add drizzle/`)
+   - main push → Vercel `vercel-build` 가 자동으로 Turso 에 migration 적용
+   - 임시 빠른 dev 만 (운영 영향 없는 실험): `npm run db:push`
+   - 드리프트 의심 시: `npm run db:sync-check` (스키마 vs 대상 DB 누락 컬럼 보고)
 4. 타입체크: `npx tsc --noEmit`.
 5. 큰 변경이면 `docs/` 업데이트.
