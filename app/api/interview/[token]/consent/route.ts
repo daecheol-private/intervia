@@ -8,7 +8,7 @@
  */
 import { db } from "@/lib/db";
 import { interviewSessions, consentLogs } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   CONSENT_VERSION,
   validateConsents,
@@ -62,6 +62,26 @@ export async function POST(
   const cleaned: Record<string, boolean> = {};
   for (const [k, v2] of Object.entries(body.consents)) {
     cleaned[k] = v2 === true;
+  }
+
+  // M11 — 같은 세션·동의버전의 동의 로그가 이미 있으면 중복 INSERT 방지 (멱등).
+  // 후보자가 새로고침·재시도해도 감사 로그는 1행만 유지. 재제출도 차단된 결과로 표시.
+  const [existing] = await db
+    .select({ id: consentLogs.id })
+    .from(consentLogs)
+    .where(
+      and(
+        eq(consentLogs.interviewSessionId, session.id),
+        eq(consentLogs.consentVersion, CONSENT_VERSION)
+      )
+    )
+    .limit(1);
+  if (existing) {
+    return Response.json({
+      ok: true,
+      consentVersion: CONSENT_VERSION,
+      alreadyRecorded: true,
+    });
   }
 
   await db.insert(consentLogs).values({

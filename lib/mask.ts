@@ -59,7 +59,7 @@ const RE_ROAD_ADDR =
 const RE_JIBUN = /[가-힣]+동\s?\d+(?:[-]\d+)?(?:번지)?/g;
 
 // 회사명 — 접미사로 회사 식별
-// "엑스퍼넷(주)", "(주)엑스퍼넷", "엑스퍼넷 주식회사", "엑스퍼넷 부설연구소" 등
+// "회사명(주)", "(주)회사명", "회사명 주식회사", "회사명 부설연구소" 등
 const RE_COMPANY_SUFFIX =
   /[가-힣A-Za-z0-9·\-&]{2,30}\s*(?:주식회사|㈜|\(주\)|부설연구소|연구소|컴퍼니|그룹|코퍼레이션|Corporation|Corp\.?|Inc\.?|LLC|Ltd\.?|Co\.?\s*,?\s*Ltd\.?)/g;
 const RE_COMPANY_PREFIX =
@@ -237,12 +237,29 @@ function applyDicts(text: string): string {
 
 // ---------- 엔트리 ----------
 
+// M5 — 마스크 토큰 역주입 방지: 입력에 우리 마스크 토큰과 동일한 리터럴이 들어 있으면
+// 마스킹 결과와 구분 불가 → 후속 재마스킹·LLM 처리에서 가짜 마스크로 오인 위험.
+// 입력 단계에서 ZWSP(zero-width space) 삽입하여 시각적으론 동일하나 패턴 매칭 차단.
+const MASK_TOKEN_LITERALS = [
+  "[이름]","[전화]","[이메일]","[주민번호]","[URL]","[생년월일]",
+  "[우편번호]","[주소]","[학교]","[회사]","[지역]","[내선번호]","[나이]",
+];
+function neutralizeMaskTokens(text: string): string {
+  let out = text;
+  for (const t of MASK_TOKEN_LITERALS) {
+    if (!out.includes(t)) continue;
+    out = out.split(t).join("[​" + t.slice(1));
+  }
+  return out;
+}
+
 export function maskText(
   text: string,
   opts: { level?: MaskLevel; known?: KnownPII } = {}
 ): string {
   const level = opts.level ?? "standard";
-  let out = text;
+  // 0) 입력 내 우리 마스크 토큰 리터럴 무력화 (역주입 방지)
+  let out = neutralizeMaskTokens(text);
   // 1) 라벨 먼저 — known/regex 가 만든 토큰 ([이름] 등) 을 라벨이 재해석하는 사고 방지
   if (level === "standard") out = applyLabels(out);
   // 2) known PII (가장 정확) — 라벨이 못 잡은 본문 내 PII 대응

@@ -85,7 +85,16 @@ export async function POST(
       "후보자에게 이메일이 없습니다. 후보자 정보를 수정하거나 직접 입력하세요.",
       { status: 400 }
     );
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient))
+  // M4 — RFC5321/5322 기반 실용 정규식 + 길이 가드 (local 64, total 254).
+  // 기존 /^[^\s@]+@[^\s@]+\.[^\s@]+$/ 은 "a@b.c" 통과 등 너무 느슨.
+  const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
+  const localPart = recipient.split("@")[0] ?? "";
+  if (
+    recipient.length > 254 ||
+    localPart.length > 64 ||
+    recipient.includes("..") ||
+    !EMAIL_RE.test(recipient)
+  )
     return new Response("올바른 이메일 형식이 아닙니다.", { status: 400 });
 
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
