@@ -2245,18 +2245,50 @@ const STAGE_COLOR: Record<string, string> = {
 };
 
 // 수동 진행 다음 단계 매핑 — 버튼 노출 가드와 모달 안 버튼이 공유.
-const STAGE_NEXT_MAP: Record<string, string | null> = {
-  applied: "screened",
-  screened: "ai_pending",
-  ai_evaluated: "round1_candidate",
-  round1_candidate: "round1_passed",
-  round1_scheduling: "round1_passed",
-  round1_waiting: "round1_passed",
-  round1_passed: "round2_passed",
-  round2_passed: null,
+// M7 — 단계별로 1개 옵션만 노출되던 문제 해결. 정상 진행 외에 스킵·되돌리기 등
+// 추가 옵션을 함께 노출하여 실 사용자 흐름을 막지 않게 함. 가장 일반적인 단계를
+// "권장"으로 첫 번째에 배치, 그 외는 "기타" 그룹으로 표시.
+type StageOption = { stage: string; label?: string; variant?: "primary" | "secondary" };
+const STAGE_TRANSITIONS_MAP: Record<string, StageOption[]> = {
+  applied: [
+    { stage: "screened", variant: "primary" },
+    { stage: "ai_pending", label: "서류 스킵하고 AI면접 대기로", variant: "secondary" },
+  ],
+  screened: [
+    { stage: "ai_pending", variant: "primary" },
+    { stage: "round1_candidate", label: "AI면접 스킵하고 1차 후보로", variant: "secondary" },
+  ],
+  ai_pending: [
+    { stage: "ai_evaluated", label: "AI면접 강제 완료로 표시", variant: "secondary" },
+  ],
+  ai_evaluated: [
+    { stage: "round1_candidate", variant: "primary" },
+    { stage: "round2_passed", label: "1차 면접 스킵하고 2차 합격으로", variant: "secondary" },
+  ],
+  round1_candidate: [
+    { stage: "round1_scheduling", label: "1차 일정 조율 중", variant: "primary" },
+    { stage: "round1_passed", label: "1차 면접 합격으로 (스킵)", variant: "secondary" },
+  ],
+  round1_scheduling: [
+    { stage: "round1_waiting", label: "1차 면접 응시 대기", variant: "primary" },
+    { stage: "round1_passed", label: "1차 면접 합격", variant: "secondary" },
+  ],
+  round1_waiting: [
+    { stage: "round1_passed", variant: "primary" },
+    { stage: "round1_scheduling", label: "일정 재조정", variant: "secondary" },
+  ],
+  round1_passed: [
+    { stage: "round2_passed", variant: "primary" },
+  ],
+  round2_passed: [],
 };
 
-/** 현재 단계 기준 다음으로 진행할 단계만 노출. AI면접·대기/평가는 자동 전환이므로 수동 버튼 X. */
+// 하위호환 — 외부 노출 가드 (button visibility) 용.
+const STAGE_NEXT_MAP: Record<string, string | null> = Object.fromEntries(
+  Object.entries(STAGE_TRANSITIONS_MAP).map(([k, v]) => [k, v[0]?.stage ?? null])
+);
+
+/** 현재 단계 기준 다음으로 진행할 단계를 모두 노출. 권장은 강조 표시. */
 function ProgressiveStageButtons({
   currentStage,
   busy,
@@ -2266,8 +2298,8 @@ function ProgressiveStageButtons({
   busy: boolean;
   onMove: (s: string) => void;
 }) {
-  const next = STAGE_NEXT_MAP[currentStage] ?? null;
-  if (!next) {
+  const opts = STAGE_TRANSITIONS_MAP[currentStage] ?? [];
+  if (opts.length === 0) {
     return (
       <p className="text-sm text-slate-500">
         다음 단계가 없습니다. 종결 결정으로 마무리해 주세요.
@@ -2275,13 +2307,28 @@ function ProgressiveStageButtons({
     );
   }
   return (
-    <button
-      onClick={() => onMove(next)}
-      disabled={busy}
-      className="w-full px-4 py-3 rounded-lg border border-primary/40 bg-primary-soft hover:bg-primary-soft text-primary-deep text-sm font-medium disabled:opacity-50"
-    >
-      → {STAGE_LABEL[next]}
-    </button>
+    <div className="space-y-2">
+      {opts.map((o) => {
+        const isPrimary = (o.variant ?? "primary") === "primary";
+        return (
+          <button
+            key={o.stage}
+            onClick={() => onMove(o.stage)}
+            disabled={busy}
+            className={
+              isPrimary
+                ? "w-full px-4 py-3 rounded-lg border border-primary/40 bg-primary-soft hover:bg-primary-soft text-primary-deep text-sm font-semibold disabled:opacity-50 transition-colors"
+                : "w-full px-4 py-2.5 rounded-lg border border-border-default bg-card hover:bg-surface-alt text-ink-soft text-sm font-medium disabled:opacity-50 transition-colors"
+            }
+          >
+            → {o.label ?? STAGE_LABEL[o.stage] ?? o.stage}
+          </button>
+        );
+      })}
+      <p className="text-[11px] text-slate-400 pt-1">
+        반려·합격·취소 등 종결은 우측 "종결 결정"을 사용해 주세요.
+      </p>
+    </div>
   );
 }
 
