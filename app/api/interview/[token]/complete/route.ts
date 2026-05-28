@@ -11,6 +11,7 @@ import { generateJSON } from "@/lib/gemini";
 import { buildSummaryPrompt } from "@/lib/prompts";
 import { hasValidConsent } from "@/lib/consent";
 import { notifyJobInterviewers } from "@/lib/notifications";
+import { refundFeature } from "@/lib/tokens";
 
 export const runtime = "nodejs";
 
@@ -169,6 +170,7 @@ export async function POST(
           responsibilities: job!.responsibilities,
           requirements: job!.requirements,
           idealProfile: job!.idealProfile,
+          evaluationFocus: job!.evaluationFocus,
           tone: job!.tone,
         },
         candidate!.resumeMaskedText ?? "",
@@ -197,6 +199,23 @@ export async function POST(
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[interview/complete] LLM 평가 실패 (session ${session.id}):`, msg);
+    // H3 — 평가 실패 시 면접 토큰 환불 (멱등). 재시도 시 chargeFeature 가 다시 차감.
+    let refunded = 0;
+    if (job?.orgId) {
+      try {
+        const r = await refundFeature({
+          orgId: job.orgId,
+          feature: "interview",
+          refType: "interview_session",
+          refId: session.id,
+          userId: null,
+          memo: `LLM 평가 실패 자동 환불: ${msg.slice(0, 80)}`,
+        });
+        refunded = r.refunded;
+      } catch (re) {
+        console.error("[interview/complete] refund failed:", re);
+      }
+    }
     // 평가 실패해도 면접 자체는 종료 — 면접관에게 재평가 필요 알림.
     if (nextStage === "ai_evaluated") {
       void notifyJobInterviewers(candidate!.jobId, {
@@ -212,6 +231,7 @@ export async function POST(
         evaluation: null,
         evaluation_error: msg,
         message: "면접은 종료되었으나 자동 평가 생성에 실패했습니다.",
+        refunded,
       },
       { status: 200 }
     );
