@@ -7,6 +7,7 @@ import { upload } from "@vercel/blob/client";
 import { FavoriteStar } from "@/app/components/FavoriteStar";
 import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
 import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
+import { JobExpiredDecisionModal } from "@/app/components/JobExpiredDecisionModal";
 import Link from "next/link";
 import { compositeScore, formatKstDateTime, formatLocalDate } from "@/lib/utils";
 import {
@@ -30,6 +31,7 @@ type Job = {
   closedAt?: string | null;
   extensionCount?: number;
   favorited?: boolean;
+  evaluationFocus?: string;
 };
 
 type Candidate = {
@@ -90,6 +92,8 @@ export default function JobDetailPage() {
   const [locked, setLocked] = useState<{ title: string } | null>(null);
   const [loadError, setLoadError] = useState<"not_found" | "failed" | null>(null);
   const [search, setSearch] = useState("");
+  // 만료 결정 모달 — 닫아도 페이지 상단 띠는 유지. 다시 열기 가능.
+  const [expiredModalDismissed, setExpiredModalDismissed] = useState(false);
   // URL ?stage=screened 로 진입 시 초기 필터 적용. "all" 은 미지정.
   const [stageFilter, setStageFilter] = useState<Candidate["stage"] | "all">(
     () => {
@@ -473,6 +477,12 @@ export default function JobDetailPage() {
     );
   }
 
+  // 공고 만료 — closesAt 지났고 아직 active. HR 액션 UI 잠금.
+  const isExpired =
+    job.status === "active" &&
+    !!job.closesAt &&
+    new Date(job.closesAt).getTime() < Date.now();
+
   // 탭 분류 (status 의존 제거):
   //   screened (평가완료): AI 서류평가 리포트가 있음
   //   interviewed (면접완료): AI 면접 세션 완료됨
@@ -768,6 +778,47 @@ export default function JobDetailPage() {
 
   return (
     <main className="max-w-5xl mx-auto w-full px-6 py-8">
+      {/* 만료 결정 모달 — closesAt 지났는데 아직 active 면 노출. 사용자가 닫을 수 있음. */}
+      {isExpired && !expiredModalDismissed && (
+        <JobExpiredDecisionModal
+          jobId={Number(jobId)}
+          closesAt={job.closesAt!}
+          onResolved={() => {
+            setExpiredModalDismissed(false);
+            void loadJob();
+          }}
+          onDismiss={() => setExpiredModalDismissed(true)}
+        />
+      )}
+      {/* 만료 상태 띠 — 모달 닫은 뒤에도 페이지 상단에 항상 노출, 다시 열기 가능 */}
+      {isExpired && (
+        <div className="mb-3 rounded-lg border border-warning/30 bg-warning-soft/40 px-4 py-2.5 flex items-center gap-3 text-xs flex-wrap">
+          <span className="text-warning">⏰</span>
+          <span className="text-ink-soft flex-1 min-w-0">
+            공고 종결 예정일이 지났습니다. HR 액션이 잠시 중단된 상태입니다.
+            <span className="text-danger font-medium ml-1.5">
+              ⚠{" "}
+              {Math.max(
+                0,
+                Math.ceil(
+                  (new Date(job.closesAt!).getTime() +
+                    14 * 86_400_000 -
+                    Date.now()) /
+                    86_400_000
+                )
+              )}
+              일 후 자동 삭제
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setExpiredModalDismissed(false)}
+            className="text-xs font-medium text-primary-deep hover:underline"
+          >
+            연장 / 종결 결정하기 →
+          </button>
+        </div>
+      )}
       <Link
         href="/"
         className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
@@ -797,6 +848,13 @@ export default function JobDetailPage() {
             <FavoriteStar jobId={Number(jobId)} initial={job.favorited ?? false} size="md" />
             <ShareButton jobId={Number(jobId)} jobTitle={job.title} />
             <Link
+              href={`/jobs/${jobId}/report`}
+              className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm font-medium"
+              title="채용 결과 리포트 (인쇄/PDF 가능)"
+            >
+              📊 리포트
+            </Link>
+            <Link
               href={`/jobs/${jobId}/edit`}
               className="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm text-slate-700"
             >
@@ -810,6 +868,21 @@ export default function JobDetailPage() {
             </button>
           </div>
         </div>
+        {job.evaluationFocus && job.evaluationFocus.trim() && (
+          <div className="mt-4 rounded-lg border border-accent/40 bg-accent-soft/30 px-4 py-3">
+            <div className="flex items-baseline gap-2 mb-1.5">
+              <span className="text-xs font-semibold text-accent-deep">
+                🤖 AI 평가 가이드
+              </span>
+              <span className="text-[10px] text-ink-soft">
+                HR 전용 · 후보자에게 비공개
+              </span>
+            </div>
+            <p className="text-xs text-ink-soft whitespace-pre-wrap leading-relaxed">
+              {job.evaluationFocus}
+            </p>
+          </div>
+        )}
         <LifecyclePanel job={job} onChanged={() => void loadJob()} />
       </div>
 
@@ -871,11 +944,13 @@ export default function JobDetailPage() {
           }
         }}
         className={`mt-3 rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
-          !consentConfirmed
-            ? "border-slate-200 bg-slate-50 opacity-60"
-            : dragOver
-              ? "border-primary bg-primary-soft"
-              : "border-slate-300 bg-white hover:bg-slate-50"
+          isExpired
+            ? "border-slate-200 bg-slate-50 opacity-50 pointer-events-none"
+            : !consentConfirmed
+              ? "border-slate-200 bg-slate-50 opacity-60"
+              : dragOver
+                ? "border-primary bg-primary-soft"
+                : "border-slate-300 bg-white hover:bg-slate-50"
         }`}
       >
         <input
@@ -900,29 +975,43 @@ export default function JobDetailPage() {
         <div className="flex flex-col items-center gap-2">
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || !consentConfirmed}
+            disabled={uploading || !consentConfirmed || isExpired}
             className="text-sm font-medium text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={!consentConfirmed ? "먼저 AI 평가 적용 고지 확인을 완료해 주세요" : ""}
+            title={
+              isExpired
+                ? "공고 종결일이 지났습니다. 연장 후 업로드 가능"
+                : !consentConfirmed
+                  ? "먼저 AI 평가 적용 고지 확인을 완료해 주세요"
+                  : ""
+            }
           >
-            {uploading
-              ? "업로드 중..."
-              : !consentConfirmed
-                ? "AI 평가 적용 고지 확인 후 업로드 가능"
-                : "파일을 끌어다 놓거나 클릭해 선택"}
+            {isExpired
+              ? "공고 종결일 경과 — 연장 후 업로드 가능"
+              : uploading
+                ? "업로드 중..."
+                : !consentConfirmed
+                  ? "AI 평가 적용 고지 확인 후 업로드 가능"
+                  : "파일을 끌어다 놓거나 클릭해 선택"}
           </button>
           <button
             onClick={() => folderInputRef.current?.click()}
-            disabled={uploading || !consentConfirmed}
+            disabled={uploading || !consentConfirmed || isExpired}
             className="text-xs text-slate-600 hover:text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
             📁 폴더로 선택하기
           </button>
         </div>
-        <p className="text-xs text-slate-500 mt-2">
-          파일 · ZIP · 폴더 모두 지원 · 폴더 드래그 OK
-          <br />
-          한 응시자에 이력서 + 포트폴리오를 함께 넣으려면 응시자 이름 폴더를 만들어 그 안에 넣어주세요.
-        </p>
+        <ul className="text-xs text-slate-500 mt-3 space-y-1 text-left inline-block">
+          <li>· PDF · DOCX · HWP · 이미지 · ZIP 지원</li>
+          <li>· 여러 파일 한 번에, 폴더 드래그도 가능</li>
+          <li>
+            · 한 응시자에 이력서 + 포트폴리오를 함께 올리려면 응시자 이름 폴더로 묶어주세요
+            <br />
+            <span className="ml-2 font-mono text-[10px] text-slate-400">
+              예) 홍길동/이력서.pdf, 홍길동/포트폴리오.pdf
+            </span>
+          </li>
+        </ul>
       </div>
 
       {/* Tabs */}
@@ -1033,7 +1122,7 @@ export default function JobDetailPage() {
                     </div>
                     <Link
                       href={`/candidates/${c.id}`}
-                      className="card-hover bg-white border-2 border-amber-300/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-4 block"
+                      className={`card-hover bg-white border-2 border-amber-300/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1118,7 +1207,7 @@ export default function JobDetailPage() {
                     </div>
                     <Link
                       href={`/candidates/${c.id}`}
-                      className="card-hover bg-card border-2 border-accent/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-4 block"
+                      className={`card-hover bg-card border-2 border-accent/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1323,7 +1412,7 @@ export default function JobDetailPage() {
                       </div>
                       <Link
                         href={`/candidates/${c.id}`}
-                        className="card-hover bg-white border border-slate-200 rounded-xl p-4 pl-10 flex justify-between items-start gap-4 block"
+                        className={`card-hover bg-white border border-slate-200 rounded-xl p-4 pl-10 flex justify-between items-start gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
                       >
                         <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1518,6 +1607,45 @@ function Tag({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
+}
+
+/**
+ * 후보자 카드의 stage 그룹 색 — 깔때기(FunnelPanel) 그룹과 동일.
+ * G1 서류(slate) / G2 AI면접(info) / G3 1차(accent) / G4 2차(primary)
+ * G5 최종합격(primary deep) / 종결(danger·rose)
+ *
+ * 좌측 4px border 로 표시 → 어떤 단계 그룹인지 한눈에. 즐겨찾기 amber 외곽과 직교.
+ */
+/**
+ * 종결된 후보(불합격·지원취소) 는 흐리게 표시 — 즐겨찾기·1차후보 섹션에서도 동일.
+ * 합격은 그대로(강조 유지).
+ */
+function dimIfClosed(outcome: Candidate["outcome"]): string {
+  if (outcome === "rejected" || outcome === "withdrawn")
+    return "opacity-55 grayscale-[20%]";
+  return "";
+}
+
+function stageGroupBorder(
+  stage: Candidate["stage"],
+  outcome: Candidate["outcome"]
+): string {
+  if (outcome === "rejected" || outcome === "withdrawn")
+    return "border-l-4 border-l-danger/60";
+  if (stage === "hired" || outcome === "hired")
+    return "border-l-4 border-l-primary";
+  if (stage === "round2_passed") return "border-l-4 border-l-primary";
+  if (
+    stage === "round1_candidate" ||
+    stage === "round1_scheduling" ||
+    stage === "round1_waiting" ||
+    stage === "round1_passed"
+  )
+    return "border-l-4 border-l-accent";
+  if (stage === "ai_pending" || stage === "ai_evaluated")
+    return "border-l-4 border-l-info";
+  // applied · screened
+  return "border-l-4 border-l-slate-400";
 }
 
 const STAGE_META = STAGE_META_SHARED as Record<
@@ -1820,6 +1948,8 @@ function interviewBadge(status: Candidate["latestInterviewStatus"]): {
 
 type Funnel = {
   stages: Record<string, number>;
+  /** 결정되지 않은(outcome IS NULL) 후보만 stage 별 카운트. "오늘 결정할 일" 계산용. */
+  pendingByStage: Record<string, number>;
   total: number;
   avgScreeningScore: number | null;
   countWithScreeningScore: number;
@@ -2072,6 +2202,14 @@ function SchedulePropose({
   );
 }
 
+type MemberResult = {
+  userId: number;
+  email: string;
+  name: string;
+  status: "assigned" | "already_assigned" | "skipped_other_org" | "failed";
+  error?: string;
+};
+
 function ShareButton({
   jobId,
   jobTitle,
@@ -2082,6 +2220,13 @@ function ShareButton({
   const [open, setOpen] = useState(false);
   const [emails, setEmails] = useState("");
   const [busy, setBusy] = useState(false);
+  const [members, setMembers] = useState<
+    { id: number; email: string; name: string; role: string }[]
+  >([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<number>>(
+    new Set()
+  );
+  const [memberLoading, setMemberLoading] = useState(false);
   const [results, setResults] = useState<
     | {
         results: {
@@ -2089,11 +2234,60 @@ function ShareButton({
           status: "sent" | "already_member" | "failed";
           error?: string;
         }[];
+        memberResults: MemberResult[];
         invalidInputs: string[];
       }
     | null
   >(null);
   const [err, setErr] = useState("");
+
+  // 모달 열릴 때 같은 법인 멤버 로드 (본인 제외, disabled 제외).
+  // /api/orgs/members 는 org_admin/system_admin 만 허용 — member 는 403 받고 빈 목록.
+  useEffect(() => {
+    if (!open) return;
+    setMemberLoading(true);
+    Promise.all([
+      fetch("/api/orgs/members").then((r) =>
+        r.ok ? r.json() : Promise.resolve([])
+      ),
+      fetch("/api/auth/status").then((r) =>
+        r.ok ? r.json() : Promise.resolve({ user: null })
+      ),
+    ])
+      .then(([list, status]) => {
+        const rows = Array.isArray(list)
+          ? (list as {
+              id: number;
+              email: string;
+              name: string;
+              role: string;
+              status?: string;
+            }[])
+          : [];
+        const myId = status?.user?.id ?? null;
+        setMembers(
+          rows
+            .filter((m) => m.id !== myId && m.status !== "disabled")
+            .map((m) => ({
+              id: m.id,
+              email: m.email,
+              name: m.name,
+              role: m.role,
+            }))
+        );
+      })
+      .catch(() => setMembers([]))
+      .finally(() => setMemberLoading(false));
+  }, [open]);
+
+  const toggleMember = (id: number) => {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -2102,12 +2296,14 @@ function ShareButton({
     const r = await fetch(`/api/jobs/${jobId}/invite`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ emails }),
+      body: JSON.stringify({
+        emails,
+        memberIds: Array.from(selectedMemberIds),
+      }),
     });
     setBusy(false);
     if (!r.ok) {
       const t = await r.text();
-      // JSON 에러 응답이면 사람 읽을 수 있는 메시지만 추출
       let display = t || "발송 실패";
       try {
         const j = JSON.parse(t);
@@ -2120,15 +2316,23 @@ function ShareButton({
       return;
     }
     const data = await r.json();
-    setResults({ results: data.results, invalidInputs: data.invalidInputs });
+    setResults({
+      results: data.results ?? [],
+      memberResults: data.memberResults ?? [],
+      invalidInputs: data.invalidInputs ?? [],
+    });
   };
 
   const close = () => {
     setOpen(false);
     setEmails("");
+    setSelectedMemberIds(new Set());
     setErr("");
     setResults(null);
   };
+
+  const canSubmit =
+    !busy && (emails.trim().length > 0 || selectedMemberIds.size > 0);
 
   return (
     <>
@@ -2151,24 +2355,78 @@ function ShareButton({
             <p className="text-xs text-slate-500 mt-1 truncate">{jobTitle}</p>
             {!results ? (
               <>
+                {/* 법인 멤버 선택 — 선택 시 면접관 자동 추가 + 알림 메일 */}
+                <div className="mt-4">
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <span className="text-xs font-semibold text-slate-700">
+                      법인 멤버 선택 (면접관으로 자동 추가)
+                    </span>
+                    {selectedMemberIds.size > 0 && (
+                      <span className="text-[11px] text-primary-deep font-medium">
+                        {selectedMemberIds.size}명 선택됨
+                      </span>
+                    )}
+                  </div>
+                  {memberLoading ? (
+                    <div className="text-xs text-slate-400 py-3 px-3 border border-dashed border-slate-200 rounded-lg">
+                      멤버 목록 불러오는 중...
+                    </div>
+                  ) : members.length === 0 ? (
+                    <div className="text-xs text-slate-400 py-3 px-3 border border-dashed border-slate-200 rounded-lg">
+                      선택 가능한 법인 멤버가 없습니다.
+                    </div>
+                  ) : (
+                    <ul className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                      {members.map((m) => {
+                        const checked = selectedMemberIds.has(m.id);
+                        return (
+                          <li key={m.id}>
+                            <label className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleMember(m.id)}
+                                className="w-4 h-4 rounded border-slate-300 accent-primary"
+                              />
+                              <span className="flex-1 min-w-0">
+                                <span className="text-sm font-medium text-slate-900 truncate block">
+                                  {m.name}
+                                </span>
+                                <span className="text-[11px] text-slate-500 truncate block">
+                                  {m.email}
+                                </span>
+                              </span>
+                              {m.role !== "member" && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-soft text-primary-deep font-medium">
+                                  {m.role === "system_admin" ? "최고관리자" : "관리자"}
+                                </span>
+                              )}
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
                 <label className="block mt-4">
-                  <span className="text-xs text-slate-600">
-                    이메일 (콤마{" "}
+                  <span className="text-xs font-semibold text-slate-700">
+                    외부 이메일로 공유 (콤마{" "}
                     <code className="font-mono bg-slate-100 px-1 rounded">,</code>{" "}
                     또는 세미콜론{" "}
                     <code className="font-mono bg-slate-100 px-1 rounded">;</code>{" "}
-                    으로 구분, 최대 20명)
+                    구분, 최대 20명)
                   </span>
                   <textarea
                     value={emails}
                     onChange={(e) => setEmails(e.target.value)}
-                    rows={4}
+                    rows={3}
                     placeholder={'alice@example.com, bob@example.com; carol@example.com'}
                     className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono"
                   />
                 </label>
                 <p className="text-[11px] text-slate-500 mt-2 bg-primary-soft border border-primary/30 rounded-lg p-2">
-                  📨 받는 분이 링크를 클릭하면 별도 합류 요청 없이 즉시 법인 멤버로 합류됩니다. 링크는 1회용, 7일 만료.
+                  📨 법인 멤버 — 면접관으로 자동 추가됩니다. 외부 이메일 — 1회용 링크(7일)로 공유, 클릭 시 자동 합류.
                 </p>
                 {err && (
                   <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg p-3 mt-2">
@@ -2184,16 +2442,53 @@ function ShareButton({
                   </button>
                   <button
                     onClick={submit}
-                    disabled={busy || emails.trim().length === 0}
+                    disabled={!canSubmit}
                     className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 transition-colors"
                   >
-                    {busy ? "발송 중..." : "공유 메일 발송"}
+                    {busy ? "발송 중..." : "공유"}
                   </button>
                 </div>
               </>
             ) : (
               <>
                 <div className="mt-4 space-y-2 max-h-[40vh] overflow-y-auto text-xs">
+                  {results.memberResults.length > 0 && (
+                    <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold pt-1">
+                      법인 멤버
+                    </div>
+                  )}
+                  {results.memberResults.map((m) => (
+                    <div
+                      key={`m-${m.userId}`}
+                      className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border ${
+                        m.status === "assigned"
+                          ? "bg-primary-soft border-primary/30 text-primary-deep"
+                          : m.status === "already_assigned"
+                            ? "bg-surface-alt border-border-default text-ink-soft"
+                            : m.status === "skipped_other_org"
+                              ? "bg-amber-50 border-amber-200 text-amber-700"
+                              : "bg-danger-soft border-danger/30 text-danger"
+                      }`}
+                    >
+                      <span className="truncate">
+                        {m.name} <span className="opacity-60">({m.email})</span>
+                      </span>
+                      <span className="shrink-0 font-medium">
+                        {m.status === "assigned"
+                          ? "✓ 면접관 추가 + 메일 발송"
+                          : m.status === "already_assigned"
+                            ? "이미 면접관 (메일만 발송)"
+                            : m.status === "skipped_other_org"
+                              ? "타 법인 — 스킵"
+                              : "✗ 실패"}
+                      </span>
+                    </div>
+                  ))}
+                  {results.results.length > 0 && (
+                    <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold pt-2">
+                      외부 이메일
+                    </div>
+                  )}
                   {results.results.map((r) => (
                     <div
                       key={r.email}
@@ -2529,18 +2824,88 @@ function FunnelPanel({
 
   if (!data || data.total === 0) return null;
 
-  // 전형 단계 — 1줄 표시. 컬러 스토리: 중립(지원) → 포레스트(서류) → 정보(AI진행) → 애프리콧(사람면접) → 포레스트(합격) → 솔리드(최종)
-  const pipelineCells: { stage: string; label: string; color: string }[] = [
-    { stage: "applied", label: "지원", color: "bg-surface-alt text-ink-soft" },
-    { stage: "screened", label: "서류평가", color: "bg-primary-soft text-primary-deep" },
-    { stage: "ai_pending", label: "AI면접·대기", color: "bg-info-soft text-info" },
-    { stage: "ai_evaluated", label: "AI면접·평가", color: "bg-info-soft text-info" },
-    { stage: "round1_candidate", label: "1차·후보", color: "bg-accent-soft text-accent-deep" },
-    { stage: "round1_scheduling", label: "1차·스케쥴", color: "bg-accent-soft text-accent-deep" },
-    { stage: "round1_waiting", label: "1차·대기", color: "bg-accent-soft text-accent-deep" },
-    { stage: "round1_passed", label: "1차 합격", color: "bg-primary-soft text-primary-deep" },
-    { stage: "round2_passed", label: "2차 합격", color: "bg-primary-soft text-primary" },
-    { stage: "hired", label: "최종 합격", color: "bg-primary text-surface" },
+  // 전형 단계 — 1줄 표시. 그룹별 색 묶음:
+  //   G1 스크리닝(지원·서류) / G2 AI면접(대기·평가) / G3 1차(후보·스케쥴·대기·합격) / G4 2차 / G5 최종
+  // 그룹별 색상 토큰 — 후보자 카드 좌측 색띠와 동일.
+  // active: 값이 있는 셀(테두리 진하고 배경 살짝), empty: 값 0인 셀(테두리만 옅게).
+  type PipelineCell = {
+    stage: string;
+    label: string;
+    group: 1 | 2 | 3 | 4 | 5;
+    active: string;
+    empty: string;
+  };
+  const pipelineCells: PipelineCell[] = [
+    {
+      stage: "applied",
+      label: "지원",
+      group: 1,
+      active: "border-slate-400 bg-slate-50 text-slate-700",
+      empty: "border-slate-200 text-slate-300",
+    },
+    {
+      stage: "screened",
+      label: "서류평가",
+      group: 1,
+      active: "border-slate-400 bg-slate-50 text-slate-700",
+      empty: "border-slate-200 text-slate-300",
+    },
+    {
+      stage: "ai_pending",
+      label: "AI면접·대기",
+      group: 2,
+      active: "border-info bg-info-soft text-info",
+      empty: "border-info/30 text-info/40",
+    },
+    {
+      stage: "ai_evaluated",
+      label: "AI면접·평가",
+      group: 2,
+      active: "border-info bg-info-soft text-info",
+      empty: "border-info/30 text-info/40",
+    },
+    {
+      stage: "round1_candidate",
+      label: "1차·후보",
+      group: 3,
+      active: "border-accent bg-accent-soft text-accent-deep",
+      empty: "border-accent/30 text-accent/40",
+    },
+    {
+      stage: "round1_scheduling",
+      label: "1차·스케쥴",
+      group: 3,
+      active: "border-accent bg-accent-soft text-accent-deep",
+      empty: "border-accent/30 text-accent/40",
+    },
+    {
+      stage: "round1_waiting",
+      label: "1차·대기",
+      group: 3,
+      active: "border-accent bg-accent-soft text-accent-deep",
+      empty: "border-accent/30 text-accent/40",
+    },
+    {
+      stage: "round1_passed",
+      label: "1차 합격",
+      group: 3,
+      active: "border-accent bg-accent-soft text-accent-deep",
+      empty: "border-accent/30 text-accent/40",
+    },
+    {
+      stage: "round2_passed",
+      label: "2차 합격",
+      group: 4,
+      active: "border-primary bg-primary-soft text-primary-deep",
+      empty: "border-primary/30 text-primary/40",
+    },
+    {
+      stage: "hired",
+      label: "최종 합격",
+      group: 5,
+      active: "border-primary bg-primary text-surface",
+      empty: "border-primary/40 text-primary/50",
+    },
   ];
 
   // 결정 단계 — 불합격/지원취소. 최종 합격은 파이프라인에 포함되어 제외.
@@ -2563,12 +2928,71 @@ function FunnelPanel({
   );
   const rejectedTotal = rejectedBreakdown.reduce((s, r) => s + r.n, 0);
   const withdrawnTotal = withdrawnBreakdown.reduce((s, r) => s + r.n, 0);
-  const fmtPct = (v: number | null) =>
-    v == null ? "-" : `${Math.round(v * 100)}%`;
+
+  // -- "오늘 결정할 일" — HR 액션이 필요한 단계 집계 -------------------------
+  // pendingByStage(outcome IS NULL 만) 사용 — 이미 종결된 후보는 카운트에서 제외.
+  const pending = data.pendingByStage ?? {};
+  const actionItems: { stage: string; label: string; count: number; tone: string }[] = [
+    {
+      stage: "screened",
+      label: "서류평가 후 면접 진행 결정",
+      count: pending["screened"] ?? 0,
+      tone: "bg-primary-soft text-primary-deep border-primary/30 hover:bg-primary-soft/70",
+    },
+    {
+      stage: "ai_evaluated",
+      label: "AI 면접 후 합·불 결정",
+      count: pending["ai_evaluated"] ?? 0,
+      tone: "bg-accent-soft text-accent-deep border-accent/40 hover:bg-accent-soft/70",
+    },
+    {
+      stage: "round1_candidate",
+      label: "1차 면접 일정 제시",
+      count: pending["round1_candidate"] ?? 0,
+      tone: "bg-primary-soft text-primary-deep border-primary/30 hover:bg-primary-soft/70",
+    },
+    {
+      stage: "round1_passed",
+      label: "2차 면접 진행 결정",
+      count: pending["round1_passed"] ?? 0,
+      tone: "bg-accent-soft text-accent-deep border-accent/40 hover:bg-accent-soft/70",
+    },
+    {
+      stage: "round2_passed",
+      label: "최종합격 결정",
+      count: pending["round2_passed"] ?? 0,
+      tone: "bg-warning-soft text-warning border-warning/30 hover:bg-warning-soft/70",
+    },
+  ].filter((x) => x.count > 0);
+  const actionTotal = actionItems.reduce((s, x) => s + x.count, 0);
 
   return (
     <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-      <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
+      {/* 🔔 오늘 결정할 일 — 인사담당이 처리해야 할 단계 */}
+      {actionTotal > 0 && (
+        <div className="mb-4 rounded-xl border border-primary/25 bg-primary-soft/40 p-3">
+          <div className="text-[11px] font-semibold text-primary-deep uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            🔔 오늘 결정할 일
+            <span className="text-ink-soft font-medium normal-case tracking-normal">
+              총 {actionTotal}건 — 클릭하면 해당 단계 후보자만 표시됩니다
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {actionItems.map((a) => (
+              <a
+                key={a.stage}
+                href={`?stage=${a.stage}`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${a.tone}`}
+              >
+                <span>{a.label}</span>
+                <span className="font-bold tabular-nums">{a.count}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-baseline justify-between mb-2 gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-slate-900">전형 단계 현황</h3>
         <div className="text-xs text-slate-500">
           총 <strong className="text-slate-900">{data.total}</strong>명
@@ -2584,18 +3008,23 @@ function FunnelPanel({
         </div>
       </div>
 
-      {/* 파이프라인 — 1줄 (가로 스크롤). 화살표로 흐름 표시. */}
-      <div className="flex items-stretch gap-1 overflow-x-auto pb-2">
+      {/* 파이프라인 — 1줄, 컨테이너 안에 모두 보이게. 모든 셀 동일 폭(flex-1). */}
+      <div className="flex items-stretch gap-0.5 pb-2">
         {pipelineCells.map((cell, i) => {
           const n = data.stages[cell.stage] ?? 0;
+          const next = pipelineCells[i + 1];
+          const isGroupBoundary = next && next.group !== cell.group;
           return (
-            <div key={cell.stage} className="flex items-center gap-1 shrink-0">
+            <div
+              key={cell.stage}
+              className="flex items-center gap-0.5 flex-1 min-w-0"
+            >
               <div
-                className={`rounded-md px-2 py-1.5 text-center min-w-[68px] ${
-                  n > 0 ? cell.color : "bg-slate-50 text-slate-300"
+                className={`rounded-md border-2 px-1 py-1.5 text-center flex-1 min-w-0 ${
+                  n > 0 ? cell.active : cell.empty
                 }`}
               >
-                <div className="text-[10px] tracking-wider opacity-80 whitespace-nowrap">
+                <div className="text-[10px] tracking-wider opacity-80 truncate">
                   {cell.label}
                 </div>
                 <div className="text-base font-bold mt-0.5 tabular-nums">
@@ -2603,7 +3032,15 @@ function FunnelPanel({
                 </div>
               </div>
               {i < pipelineCells.length - 1 && (
-                <span className="text-slate-300 text-xs">▸</span>
+                <span
+                  className={`text-[10px] shrink-0 ${
+                    isGroupBoundary
+                      ? "text-slate-400 px-0.5"
+                      : "text-slate-300"
+                  }`}
+                >
+                  {isGroupBoundary ? "▶" : "▸"}
+                </span>
               )}
             </div>
           );
@@ -2652,55 +3089,7 @@ function FunnelPanel({
         </div>
       )}
 
-      {/* KPI — 평균 처리 시간 / 응답률 / 취소율 */}
-      <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiItem
-          label="평균 처리 시간"
-          value={
-            data.kpi?.avgDecisionDays != null
-              ? `${data.kpi.avgDecisionDays}일`
-              : "-"
-          }
-          sub={`종결 ${data.kpi?.decidedCount ?? 0}건 기준`}
-        />
-        <KpiItem
-          label="AI 면접 응답률"
-          value={fmtPct(data.kpi?.aiResponseRate ?? null)}
-          sub="발송 → 평가 진행"
-        />
-        <KpiItem
-          label="1차 면접 응답률"
-          value={fmtPct(data.kpi?.r1ResponseRate ?? null)}
-          sub="일정 발송 → 확정"
-        />
-        <KpiItem
-          label="지원자 취소율"
-          value={fmtPct(data.kpi?.withdrawnRate ?? null)}
-          sub={`전체 ${data.total}명 중`}
-        />
-      </div>
     </div>
   );
 }
 
-function KpiItem({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-      <div className="text-[10px] text-slate-500 uppercase tracking-wider">
-        {label}
-      </div>
-      <div className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">
-        {value}
-      </div>
-      <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>
-    </div>
-  );
-}

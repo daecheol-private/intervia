@@ -47,6 +47,45 @@ export function parseEmailList(raw: string): {
   return { valid, invalid };
 }
 
+/** 법인 멤버를 공고 면접관으로 추가 알림 메일. 합류 토큰이 아니라 바로 공고 페이지로 이동. */
+export function buildInterviewerAssignedEmail(opts: {
+  inviterName: string;
+  orgName: string;
+  jobTitle: string;
+  url: string;
+}): { subject: string; html: string; text: string } {
+  const { inviterName, orgName, jobTitle, url } = opts;
+  const subject = `[Intervia] 공고 면접관으로 추가 — ${jobTitle}`;
+  const text = `${inviterName}님이 ${orgName}의 "${jobTitle}" 공고 면접관으로 회원님을 추가했습니다.
+
+후보자 상세·평가·스코어카드 작성 권한이 부여됩니다.
+아래 링크로 바로 이동하세요:
+
+${url}
+
+Intervia 채용팀`;
+  const esc = (s: string) =>
+    s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
+  const html = wrapEmailCard({
+    innerHtml: `
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">🎯 공고 면접관 지정</h1>
+      <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 12px;">
+        <strong style="color:#0f172a;">${esc(inviterName)}</strong>님이
+        <strong style="color:#0f172a;">${esc(orgName)}</strong>의
+        "<strong style="color:#0f172a;">${esc(jobTitle)}</strong>" 공고 면접관으로 회원님을 추가했습니다.
+      </p>
+      <p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 20px;">
+        후보자 상세·평가·스코어카드 작성 권한이 부여됩니다.
+      </p>
+      <p style="text-align:center;margin:0 0 16px;">
+        <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">공고 바로 가기</a>
+      </p>
+    `,
+    footer: "본 메일은 Intervia 채용 플랫폼에서 발송되었습니다.",
+  });
+  return { subject, html, text };
+}
+
 /** 초대 메일 본문 생성. */
 export function buildInviteEmail(opts: {
   inviterName: string;

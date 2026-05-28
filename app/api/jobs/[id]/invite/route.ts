@@ -10,11 +10,12 @@
 import { db } from "@/lib/db";
 import {
   jobPostings,
+  jobInterviewers,
   orgInvites,
   organizations,
   users,
 } from "@/lib/schema";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import {
@@ -22,6 +23,7 @@ import {
   inviteExpiresAt,
   parseEmailList,
   buildInviteEmail,
+  buildInterviewerAssignedEmail,
   INVITE_MAX_PER_REQUEST,
 } from "@/lib/invites";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
@@ -50,9 +52,14 @@ export async function POST(
   const jobId = Number(id);
   const body = (await req.json().catch(() => null)) as {
     emails?: string;
+    memberIds?: number[];
   } | null;
-  if (!body?.emails || typeof body.emails !== "string")
-    return new Response("emails 필요", { status: 400 });
+  const emailsInput = typeof body?.emails === "string" ? body.emails : "";
+  const memberIds = Array.isArray(body?.memberIds)
+    ? body!.memberIds.map(Number).filter((n) => Number.isInteger(n) && n > 0)
+    : [];
+  if (!emailsInput && memberIds.length === 0)
+    return new Response("emails 또는 memberIds 필요", { status: 400 });
 
   const [job] = await db
     .select()
@@ -70,9 +77,12 @@ export async function POST(
     .where(eq(organizations.id, job.orgId));
   const orgName = org?.name ?? "법인";
 
-  const parsed = parseEmailList(body.emails);
-  if (parsed.valid.length === 0)
-    return new Response("유효한 이메일이 없습니다.", { status: 400 });
+  const parsed = parseEmailList(emailsInput);
+  if (parsed.valid.length === 0 && memberIds.length === 0)
+    return new Response(
+      "유효한 이메일이 없거나 멤버를 선택하지 않았습니다.",
+      { status: 400 }
+    );
   if (parsed.valid.length > INVITE_MAX_PER_REQUEST)
     return new Response(
       `한 번에 최대 ${INVITE_MAX_PER_REQUEST}개 이메일까지 가능합니다.`,
@@ -96,6 +106,79 @@ export async function POST(
     status: "sent" | "already_member" | "failed";
     error?: string;
   }[] = [];
+
+  // 멤버 선택: 같은 법인 멤버를 면접관으로 자동 등록 + 알림 메일.
+  // 외부 이메일 초대와 응답 형식 통일 위해 results 배열에 같이 누적.
+  const memberResults: {
+    userId: number;
+    email: string;
+    name: string;
+    status: "assigned" | "already_assigned" | "skipped_other_org" | "failed";
+    error?: string;
+  }[] = [];
+  if (memberIds.length > 0) {
+    const memberRows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        orgId: users.orgId,
+      })
+      .from(users)
+      .where(inArray(users.id, memberIds));
+    const jobUrl = `${base}/jobs/${jobId}`;
+    for (const m of memberRows) {
+      if (m.orgId !== job.orgId) {
+        memberResults.push({
+          userId: m.id,
+          email: m.email,
+          name: m.name,
+          status: "skipped_other_org",
+        });
+        continue;
+      }
+      // 면접관 등록 — 멱등 (onConflictDoNothing)
+      const inserted = await db
+        .insert(jobInterviewers)
+        .values({
+          jobId,
+          userId: m.id,
+          assignedByUserId: me!.id,
+        })
+        .onConflictDoNothing()
+        .returning({ userId: jobInterviewers.userId });
+      const wasAlready = inserted.length === 0;
+      const mail = buildInterviewerAssignedEmail({
+        inviterName: me!.name,
+        orgName,
+        jobTitle: job.title,
+        url: jobUrl,
+      });
+      try {
+        await sendMail({
+          to: m.email,
+          ...mail,
+          orgId: job.orgId,
+          audience: "org",
+        });
+        memberResults.push({
+          userId: m.id,
+          email: m.email,
+          name: m.name,
+          status: wasAlready ? "already_assigned" : "assigned",
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        memberResults.push({
+          userId: m.id,
+          email: m.email,
+          name: m.name,
+          status: "failed",
+          error: msg,
+        });
+      }
+    }
+  }
 
   for (const email of parsed.valid) {
     // 이미 같은 법인 active 멤버 → 스킵
@@ -170,12 +253,16 @@ export async function POST(
       alreadyMember: results.filter((r) => r.status === "already_member").length,
       failed: results.filter((r) => r.status === "failed").length,
       invalidInputs: parsed.invalid.length,
+      memberAssigned: memberResults.filter((r) => r.status === "assigned").length,
+      memberAlreadyAssigned: memberResults.filter((r) => r.status === "already_assigned").length,
+      memberFailed: memberResults.filter((r) => r.status === "failed").length,
     },
   });
 
   return Response.json({
     ok: true,
     results,
+    memberResults,
     invalidInputs: parsed.invalid,
   });
 }
