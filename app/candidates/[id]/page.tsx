@@ -762,11 +762,18 @@ export default function CandidateDetailPage() {
             onRegenerate={createLink}
           />
         )}
-        {completedSession && (
+        {completedSession && completedSession.evaluation && (
           <InterviewResult
             session={completedSession}
             onShowTranscript={() => setShowTranscript(true)}
             onRegenerate={createLink}
+          />
+        )}
+        {completedSession && !completedSession.evaluation && (
+          <InterviewEvaluationRetry
+            sessionId={completedSession.id}
+            onShowTranscript={() => setShowTranscript(true)}
+            onSuccess={load}
           />
         )}
       </Section>
@@ -1932,6 +1939,94 @@ function InterviewLinkBox({
       >
         링크 새로 발급
       </button>
+    </div>
+  );
+}
+
+/** M3 — 면접 종료됐는데 evaluation=null 인 케이스(LLM 평가 실패). 토큰은 H3에서 환불됐고,
+ *  재시도 시 본 라우트가 다시 차감 후 재평가. 실패하면 또 환불 (멱등). */
+function InterviewEvaluationRetry({
+  sessionId,
+  onShowTranscript,
+  onSuccess,
+}: {
+  sessionId: number;
+  onShowTranscript: () => void;
+  onSuccess: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
+    null
+  );
+  const retry = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch(
+        `/api/interview-sessions/${sessionId}/reevaluate`,
+        { method: "POST" }
+      );
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+      } | null;
+      if (res.ok && data?.ok) {
+        setMsg({ kind: "ok", text: "재평가 성공. 잠시 후 결과가 반영됩니다." });
+        onSuccess();
+      } else {
+        setMsg({
+          kind: "err",
+          text:
+            data?.error ?? `재평가 실패 (HTTP ${res.status}). 잠시 후 다시 시도해 주세요.`,
+        });
+      }
+    } catch (e) {
+      setMsg({
+        kind: "err",
+        text: `재평가 요청 중 오류: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700 mb-1">
+          AI 평가 생성 실패
+        </div>
+        <p className="text-amber-900 leading-relaxed">
+          면접은 정상 종료되었으나 AI 평가 JSON 생성에 실패했습니다. 사용된 토큰은
+          자동 환불되었습니다. 아래 버튼으로 재평가를 요청하면 토큰이 다시 차감되며,
+          또 실패하면 환불됩니다.
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={retry}
+          disabled={busy}
+          className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+        >
+          {busy ? "재평가 중..." : "🔄 AI 평가 재시도"}
+        </button>
+        <button
+          onClick={onShowTranscript}
+          className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+        >
+          대화록 보기
+        </button>
+      </div>
+      {msg && (
+        <div
+          className={`text-xs px-3 py-2 rounded-lg border ${
+            msg.kind === "ok"
+              ? "bg-primary-soft border-primary/30 text-primary-deep"
+              : "bg-danger-soft border-danger/30 text-danger"
+          }`}
+        >
+          {msg.text}
+        </div>
+      )}
     </div>
   );
 }
