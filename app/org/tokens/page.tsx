@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { formatLocalDateTime } from "@/lib/utils";
 
 type Pricing = { job_post: number; resume_upload: number; interview: number };
 
@@ -210,7 +211,7 @@ export default function TokensPage() {
             {data.ledger.map((r) => (
               <tr key={r.id}>
                 <td className="px-4 py-2 text-xs text-slate-500">
-                  {new Date(r.createdAt).toLocaleString("ko-KR")}
+                  {formatLocalDateTime(r.createdAt, { format: { second: "2-digit" } })}
                 </td>
                 <td className="px-4 py-2 text-xs">{reasonLabel(r.reason)}</td>
                 <td className="px-4 py-2 text-xs text-slate-600">

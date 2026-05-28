@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { formatLocalDateTime } from "@/lib/utils";
 
 type Metrics = {
   scope: "system" | "org";
@@ -251,7 +252,7 @@ export default function MetricsPage() {
                 {data.recentCrossOrg.map((r) => (
                   <li key={r.id} className="text-slate-700">
                     <span className="text-slate-400">
-                      {new Date(r.createdAt).toLocaleString("ko-KR")}
+                      {formatLocalDateTime(r.createdAt, { format: { second: "2-digit" } })}
                     </span>{" "}
                     {r.action}{" "}
                     {r.orgId ? (

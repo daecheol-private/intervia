@@ -29,10 +29,13 @@ function parseDbTimestamp(iso: string | Date): Date {
  *
  * 클라이언트에서 진짜 브라우저 TZ 로 보고 싶으면 useEffect 안에서
  * formatLocalDateTime(iso, { timeZone: undefined }) 호출 — 브라우저 자동.
+ *
+ * format 옵션으로 Intl.DateTimeFormatOptions 의 임의 키를 덮어쓸 수 있음
+ * (예: { format: { second: "2-digit" } } 로 초까지 표시).
  */
 export function formatLocalDateTime(
   iso: string | Date,
-  opts: { timeZone?: string } = {}
+  opts: { timeZone?: string; format?: Intl.DateTimeFormatOptions } = {}
 ): string {
   const d = parseDbTimestamp(iso);
   return d.toLocaleString("ko-KR", {
@@ -42,6 +45,7 @@ export function formatLocalDateTime(
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    ...opts.format,
   });
 }
 

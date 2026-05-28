@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { formatLocalDateTime } from "@/lib/utils";
 
 type JoinRequest = {
   id: number;
@@ -106,7 +107,7 @@ export default function JoinRequestsPage() {
                 <span className="text-xs text-slate-500">{r.userEmail}</span>
               </div>
               <div className="text-xs text-slate-500 mt-1">
-                {r.orgName} · {new Date(r.createdAt).toLocaleString("ko-KR")}
+                {r.orgName} · {formatLocalDateTime(r.createdAt, { format: { second: "2-digit" } })}
               </div>
             </div>
             {r.status === "pending" ? (

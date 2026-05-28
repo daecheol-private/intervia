@@ -12,6 +12,7 @@ import {
 } from "@/lib/schema";
 import { and, count, desc, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
+import { formatLocalDateTime } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -265,11 +266,8 @@ export default async function AdminDashboardPage() {
                   </span>
                 </span>
                 <span className="text-xs text-slate-400 shrink-0 tabular-nums">
-                  {new Date(u.createdAt).toLocaleString("ko-KR", {
-                    month: "2-digit",
-                    day: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
+                  {formatLocalDateTime(u.createdAt, {
+                    format: { year: undefined },
                   })}
                 </span>
               </li>
@@ -338,11 +336,8 @@ export default async function AdminDashboardPage() {
                     )}
                   </span>
                   <span className="text-xs text-slate-400 shrink-0 tabular-nums">
-                    {new Date(a.createdAt).toLocaleString("ko-KR", {
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
+                    {formatLocalDateTime(a.createdAt, {
+                      format: { year: undefined },
                     })}
                   </span>
                 </li>

@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
+import { formatLocalDateTime } from "@/lib/utils";
 
 const STAGE_LABEL_KO: Record<string, string> = {
   applied: "지원 접수",
@@ -180,7 +181,7 @@ export default function SelfPage() {
               />
               <Row
                 label="접수일"
-                value={new Date(data.createdAt).toLocaleString("ko-KR")}
+                value={formatLocalDateTime(data.createdAt, { format: { second: "2-digit" } })}
               />
             </div>
             <div className="flex gap-2 pt-2">
