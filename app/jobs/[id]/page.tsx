@@ -8,6 +8,7 @@ import { FavoriteStar } from "@/app/components/FavoriteStar";
 import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 import { JobExpiredDecisionModal } from "@/app/components/JobExpiredDecisionModal";
+import { notify, confirmDialog } from "@/app/components/Dialog";
 import Link from "next/link";
 import { compositeScore, formatKstDateTime, formatLocalDate } from "@/lib/utils";
 import { isEncryptedZipFile } from "@/lib/zip-encrypted-client";
@@ -85,6 +86,17 @@ type Candidate = {
   favorited: boolean;
 };
 
+/** 1차 면접 확정 일정 항목 (GET /api/jobs/[id]/round1-schedule). */
+type Round1ScheduleItem = {
+  candidateId: number;
+  name: string;
+  selectedSlot: { start: string; end: string };
+  modeOnline: boolean;
+  address: string | null;
+  addressDetail: string | null;
+  onlineMeetingUrl: string | null;
+};
+
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -122,6 +134,9 @@ export default function JobDetailPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [decideIds, setDecideIds] = useState<number[] | null>(null);
+  // 1차 면접 확정 일정 팝업 — null=닫힘, 배열=열림(시간순 정렬된 목록).
+  const [round1Schedule, setRound1Schedule] = useState<Round1ScheduleItem[] | null>(null);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   // 채용기업이 "지원자가 AI 평가 적용에 동의했음" 을 확인했는가.
   // 미체크 시 업로드 차단 (서버도 게이트 — PIPA 책임 전가 메커니즘).
   // 공고 단위 DB 영구 저장 — job.applicantConsentConfirmedAt 으로 부터 복원.
@@ -249,8 +264,9 @@ export default function JobDetailPage() {
     if (uploadingRef.current) return;
     // 지원자 동의 확인 가드 — 서버에서도 게이트하지만 UX 위해 사전 차단
     if (!consentConfirmed) {
-      alert(
-        "AI 평가 적용 고지 확인이 필요합니다.\n\n이력서를 업로드하기 전, 지원자에게 'AI 평가 적용 + 거부 시 일반 절차 가능' 을 안내하셨는지 체크박스로 확인해 주세요.\n\n표준 안내 문구는 '자세히' 링크에서 확인할 수 있습니다."
+      notify(
+        "이력서를 업로드하기 전, 지원자에게 'AI 평가 적용 + 거부 시 일반 절차 가능' 을 안내하셨는지 체크박스로 확인해 주세요.\n\n표준 안내 문구는 '자세히' 링크에서 확인할 수 있습니다.",
+        { tone: "warn", title: "AI 평가 적용 고지 확인 필요" }
       );
       return;
     }
@@ -271,15 +287,17 @@ export default function JobDetailPage() {
       }
     }
     if (tooLarge.length > 0) {
-      alert(
-        `⚠️ 다음 파일이 크기 제한을 초과해 업로드를 시작하지 않았습니다.\n\n${tooLarge.join("\n")}\n\n원본 ZIP/파일을 작게 분할하거나 압축률을 높여 다시 시도해 주세요.`
+      notify(
+        `다음 파일이 크기 제한을 초과해 업로드를 시작하지 않았습니다.\n\n${tooLarge.join("\n")}\n\n원본 ZIP/파일을 작게 분할하거나 압축률을 높여 다시 시도해 주세요.`,
+        { tone: "warn", title: "파일 크기 초과" }
       );
       return;
     }
     const total = entries.reduce((s, e) => s + e.file.size, 0);
     if (total > MAX_TOTAL) {
-      alert(
-        `⚠️ 업로드 총 용량 ${formatMB(total)} 이 너무 큽니다 (한 번에 최대 ${formatMB(MAX_TOTAL)}).\n\n파일 수를 나눠 여러 번에 걸쳐 업로드해 주세요.`
+      notify(
+        `업로드 총 용량 ${formatMB(total)} 이 너무 큽니다 (한 번에 최대 ${formatMB(MAX_TOTAL)}).\n\n파일 수를 나눠 여러 번에 걸쳐 업로드해 주세요.`,
+        { tone: "warn", title: "총 용량 초과" }
       );
       return;
     }
@@ -292,10 +310,11 @@ export default function JobDetailPage() {
       if (await isEncryptedZipFile(file)) encryptedZips.push(relativePath);
     }
     if (encryptedZips.length > 0) {
-      alert(
-        `🔒 암호가 걸린 압축 파일은 지원하지 않습니다.\n\n${encryptedZips
+      notify(
+        `암호가 걸린 압축 파일은 지원하지 않습니다.\n\n${encryptedZips
           .map((n) => `· ${n}`)
-          .join("\n")}\n\n압축 비밀번호를 해제한 뒤 다시 업로드해 주세요.`
+          .join("\n")}\n\n압축 비밀번호를 해제한 뒤 다시 업로드해 주세요.`,
+        { tone: "warn", title: "암호화 ZIP 미지원" }
       );
       return;
     }
@@ -462,12 +481,23 @@ export default function JobDetailPage() {
     setUploading(false);
     setUploadProgress(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    if (lines.length > 0) alert(lines.join("\n"));
+    if (lines.length > 0) {
+      const hasWarn = lines.some((l) => l.includes("⚠️"));
+      notify(lines.join("\n"), {
+        title: "업로드 결과",
+        tone: hasWarn ? "warn" : "success",
+      });
+    }
     void loadCandidates();
   };
 
   const handleDelete = async () => {
-    if (!confirm("공고와 모든 후보자/면접 기록을 삭제합니다. 진행할까요?"))
+    if (
+      !(await confirmDialog(
+        "공고와 모든 후보자/면접 기록을 삭제합니다. 진행할까요?",
+        { tone: "danger", title: "공고 삭제", confirmText: "삭제" }
+      ))
+    )
       return;
     const res = await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
     if (res.ok) router.push("/");
@@ -479,7 +509,7 @@ export default function JobDetailPage() {
     });
     if (!res.ok) {
       const text = await res.text();
-      alert("재시도 요청 실패: " + text);
+      notify(text, { tone: "danger", title: "재시도 요청 실패" });
       return;
     }
     void loadCandidates();
@@ -714,13 +744,14 @@ export default function JobDetailPage() {
         c.queueStatus !== "processing"
     );
     if (targets.length === 0) {
-      alert("선택된 후보자 중 평가 가능한 후보가 없습니다.");
+      notify("선택된 후보자 중 평가 가능한 후보가 없습니다.", { tone: "warn" });
       return;
     }
     if (
-      !confirm(
-        `${targets.length}명을 큐에 등록합니다. 토큰이 차감되며 백그라운드에서 순차 평가됩니다.`
-      )
+      !(await confirmDialog(
+        `${targets.length}명을 큐에 등록합니다. 토큰이 차감되며 백그라운드에서 순차 평가됩니다.`,
+        { title: "AI 검토 요청", confirmText: "등록" }
+      ))
     )
       return;
     setBulkBusy(true);
@@ -731,7 +762,7 @@ export default function JobDetailPage() {
     });
     setBulkBusy(false);
     if (!res.ok) {
-      alert(await res.text());
+      notify(await res.text(), { tone: "danger", title: "큐 등록 실패" });
       return;
     }
     const data = (await res.json()) as {
@@ -743,8 +774,9 @@ export default function JobDetailPage() {
     const reasonSummary = reasons.length
       ? `\n스킵: ${reasons.join(", ")}`
       : "";
-    alert(
-      `큐 등록: ${data.enqueued}건${data.skipped > 0 ? ` (스킵 ${data.skipped}건)` : ""}${reasonSummary}`
+    notify(
+      `큐 등록: ${data.enqueued}건${data.skipped > 0 ? ` (스킵 ${data.skipped}건)` : ""}${reasonSummary}`,
+      { tone: "success", title: "AI 검토 요청 완료" }
     );
     setSelected(new Set());
     void loadCandidates();
@@ -752,7 +784,14 @@ export default function JobDetailPage() {
 
   const bulkDelete = async (targetIds: number[]) => {
     if (targetIds.length === 0) return;
-    if (!confirm(`선택된 ${targetIds.length}명을 삭제할까요?`)) return;
+    if (
+      !(await confirmDialog(`선택된 ${targetIds.length}명을 삭제할까요?`, {
+        tone: "danger",
+        title: "후보자 삭제",
+        confirmText: "삭제",
+      }))
+    )
+      return;
     setBulkBusy(true);
     const res = await fetch("/api/candidates/bulk-delete", {
       method: "POST",
@@ -761,7 +800,7 @@ export default function JobDetailPage() {
     });
     setBulkBusy(false);
     if (!res.ok) {
-      alert(await res.text());
+      notify(await res.text(), { tone: "danger", title: "삭제 실패" });
       return;
     }
     setSelected(new Set());
@@ -774,7 +813,10 @@ export default function JobDetailPage() {
     const reason = decision === "hired" ? "passed_final" : "other";
     const warn = `\n\n⚠️ 종결 결정입니다.\n이력서 원본·첨부 파일은 즉시 폐기되고, 공고 종결 +14일 후 후보자 정보 전체가 자동 삭제됩니다. 메일 발송은 진행되지 않습니다 (개별 결정 메뉴에서 메일 옵션 사용).`;
     if (
-      !confirm(`선택된 ${targetIds.length}명을 "${label}" 으로 일괄 처리할까요?${warn}`)
+      !(await confirmDialog(
+        `선택된 ${targetIds.length}명을 "${label}" 으로 일괄 처리할까요?${warn}`,
+        { tone: "danger", title: `${label} 일괄 처리`, confirmText: label }
+      ))
     )
       return;
     setBulkBusy(true);
@@ -791,7 +833,10 @@ export default function JobDetailPage() {
       else fail++;
     }
     setBulkBusy(false);
-    alert(`${label} 처리: 성공 ${ok}건${fail > 0 ? ` / 실패 ${fail}건` : ""}`);
+    notify(`${label} 처리: 성공 ${ok}건${fail > 0 ? ` / 실패 ${fail}건` : ""}`, {
+      tone: fail > 0 ? "warn" : "success",
+      title: `${label} 처리 완료`,
+    });
     setSelected(new Set());
     void loadCandidates();
   };
@@ -799,9 +844,10 @@ export default function JobDetailPage() {
   const bulkInterviewSend = async (targetIds: number[]) => {
     if (targetIds.length === 0) return;
     if (
-      !confirm(
-        `선택된 ${targetIds.length}명에게 AI 면접 링크를 일괄 발송할까요?\n\n토큰이 각 후보자당 차감되며, 메일이 발송됩니다.`
-      )
+      !(await confirmDialog(
+        `선택된 ${targetIds.length}명에게 AI 면접 링크를 일괄 발송할까요?\n\n토큰이 각 후보자당 차감되며, 메일이 발송됩니다.`,
+        { title: "AI 면접 링크 발송", confirmText: "발송" }
+      ))
     )
       return;
     setBulkBusy(true);
@@ -813,7 +859,7 @@ export default function JobDetailPage() {
     setBulkBusy(false);
     if (!r.ok) {
       const text = await r.text();
-      alert(`발송 실패: ${text}`);
+      notify(text, { tone: "danger", title: "발송 실패" });
       return;
     }
     const data = (await r.json()) as {
@@ -822,8 +868,9 @@ export default function JobDetailPage() {
     const sent = data.results.filter((x) => x.status === "sent").length;
     const skipped = data.results.filter((x) => x.status === "skipped").length;
     const failed = data.results.filter((x) => x.status === "failed").length;
-    alert(
-      `AI 면접 메일 발송 결과: 성공 ${sent}건${skipped > 0 ? ` / 건너뜀 ${skipped}건` : ""}${failed > 0 ? ` / 실패 ${failed}건` : ""}`
+    notify(
+      `AI 면접 메일 발송 결과: 성공 ${sent}건${skipped > 0 ? ` / 건너뜀 ${skipped}건` : ""}${failed > 0 ? ` / 실패 ${failed}건` : ""}`,
+      { tone: failed > 0 ? "warn" : "success", title: "AI 면접 발송 결과" }
     );
     setSelected(new Set());
     void loadCandidates();
@@ -845,9 +892,127 @@ export default function JobDetailPage() {
       else fail++;
     }
     setBulkBusy(false);
-    if (fail > 0) alert(`성공 ${ok}건 / 실패 ${fail}건`);
+    if (fail > 0)
+      notify(`성공 ${ok}건 / 실패 ${fail}건`, { tone: "warn", title: "처리 결과" });
     setSelected(new Set());
     void loadCandidates();
+  };
+
+  const openRound1Schedule = async () => {
+    setScheduleLoading(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/round1-schedule`);
+      if (!res.ok) {
+        notify(`일정을 불러오지 못했습니다 (HTTP ${res.status}).`, {
+          tone: "danger",
+          title: "조회 실패",
+        });
+        return;
+      }
+      const data = (await res.json()) as Round1ScheduleItem[];
+      setRound1Schedule(data);
+    } catch (e) {
+      notify(`일정 조회 오류: ${e instanceof Error ? e.message : String(e)}`, {
+        tone: "danger",
+        title: "조회 오류",
+      });
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  // 선택된 후보에 대한 일괄 액션 버튼 묶음. 단계 블록과 즐겨찾기 섹션이 공유한다.
+  // (즐겨찾기 후보는 단계 블록에서 제외되므로, 여기서 같은 버튼을 렌더해야 동작함)
+  const renderBulkActions = (cands: Candidate[]) => {
+    const selectedInBlock = cands.map((c) => c.id).filter((id) => selected.has(id));
+    if (selectedInBlock.length === 0) return null;
+    const selCands = cands.filter((c) => selected.has(c.id));
+    const inProgress = selCands.filter((c) => c.outcome == null);
+    const allInProgress =
+      selCands.length > 0 && inProgress.length === selCands.length;
+    const stages = new Set(inProgress.map((c) => c.stage));
+    const onlyStage = allInProgress && stages.size === 1 ? [...stages][0] : null;
+    const screenable = selCands.filter(
+      (c) =>
+        (c.screeningReport == null || c.lastJobStatus === "failed") &&
+        c.queueStatus !== "queued" &&
+        c.queueStatus !== "processing"
+    );
+    return (
+      <div className="flex items-center gap-2 ml-auto flex-wrap">
+        <Link
+          href={`/jobs/${jobId}/compare?ids=${selectedInBlock.join(",")}`}
+          className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium whitespace-nowrap"
+        >
+          비교 ({selectedInBlock.length})
+        </Link>
+        {screenable.length > 0 && (
+          <button
+            onClick={() => void bulkScreen(screenable.map((c) => c.id))}
+            disabled={bulkBusy}
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+            title="평가 안 됐거나 실패한 후보를 다시 큐에 넣습니다"
+          >
+            {bulkBusy ? "처리 중..." : `AI 검토 요청 (${screenable.length})`}
+          </button>
+        )}
+        {(onlyStage === "screened" || onlyStage === "ai_pending") && (
+          <button
+            onClick={() => void bulkInterviewSend(inProgress.map((c) => c.id))}
+            disabled={bulkBusy}
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+            title="선택된 후보 전원에게 AI 면접 링크 메일 발송"
+          >
+            {bulkBusy ? "발송 중..." : `📧 AI 면접 발송 (${inProgress.length})`}
+          </button>
+        )}
+        {(onlyStage === "round1_candidate" ||
+          onlyStage === "round1_scheduling") && (
+          <SchedulePropose
+            jobId={Number(jobId)}
+            selectedIds={inProgress.map((c) => c.id)}
+            onDone={() => {
+              setSelected(new Set());
+              void loadCandidates();
+            }}
+          />
+        )}
+        {onlyStage === "ai_evaluated" && (
+          <button
+            onClick={() => void bulkAdvance("round1_candidate", inProgress.map((c) => c.id))}
+            disabled={bulkBusy}
+            className="px-2.5 py-1.5 rounded-lg bg-accent-deep hover:bg-accent text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+          >
+            ⭐ 1차 면접 후보로 지정
+          </button>
+        )}
+        {onlyStage === "round1_passed" && (
+          <button
+            onClick={() => void bulkAdvance("round2_passed", inProgress.map((c) => c.id))}
+            disabled={bulkBusy}
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+          >
+            → 2차 합격
+          </button>
+        )}
+        {allInProgress && (
+          <button
+            onClick={() => setDecideIds(inProgress.map((c) => c.id))}
+            disabled={bulkBusy}
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+          >
+            합/불 결정
+          </button>
+        )}
+        <button
+          onClick={() => void bulkDelete(selectedInBlock)}
+          disabled={bulkBusy}
+          className="px-2.5 py-1.5 rounded-lg bg-danger hover:bg-danger/85 text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+        >
+          {bulkBusy ? "삭제 중..." : `삭제 (${selectedInBlock.length})`}
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -921,6 +1086,25 @@ export default function JobDetailPage() {
           <div className="flex gap-2 shrink-0 items-center">
             <FavoriteStar jobId={Number(jobId)} initial={job.favorited ?? false} size="md" />
             <ShareButton jobId={Number(jobId)} jobTitle={job.title} />
+            {(() => {
+              const waitingCount = candidatesList.filter(
+                (c) => c.stage === "round1_waiting"
+              ).length;
+              return (
+                <button
+                  onClick={openRound1Schedule}
+                  disabled={waitingCount === 0 || scheduleLoading}
+                  title={
+                    waitingCount === 0
+                      ? "1차 면접 일정이 확정된 대기 후보가 없습니다"
+                      : "확정된 1차 면접 일정을 시간순으로 봅니다"
+                  }
+                  className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  🗓 1차 면접 일정{waitingCount > 0 ? ` (${waitingCount})` : ""}
+                </button>
+              );
+            })()}
             <Link
               href={`/jobs/${jobId}/report`}
               className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm font-medium"
@@ -975,16 +1159,17 @@ export default function JobDetailPage() {
           });
           setConsentBusy(false);
           if (!r.ok) {
-            alert("고지 확인 저장 실패: " + (await r.text()));
+            notify(await r.text(), { tone: "danger", title: "고지 확인 저장 실패" });
             return;
           }
           setConsentConfirmed(true);
         }}
         onRevoke={async () => {
           if (
-            !confirm(
-              "고지 확인을 해제합니다.\n지원자에게 안내한 사실이 실제로 없었다면, 업로드한 모든 이력서를 검토·삭제하는 것이 권장됩니다."
-            )
+            !(await confirmDialog(
+              "고지 확인을 해제합니다.\n지원자에게 안내한 사실이 실제로 없었다면, 업로드한 모든 이력서를 검토·삭제하는 것이 권장됩니다.",
+              { tone: "warn", title: "고지 확인 해제", confirmText: "해제" }
+            ))
           )
             return;
           setConsentBusy(true);
@@ -993,7 +1178,7 @@ export default function JobDetailPage() {
           });
           setConsentBusy(false);
           if (!r.ok) {
-            alert("해제 실패: " + (await r.text()));
+            notify(await r.text(), { tone: "danger", title: "해제 실패" });
             return;
           }
           setConsentConfirmed(false);
@@ -1061,13 +1246,18 @@ export default function JobDetailPage() {
                   : ""
             }
           >
-            {isExpired
-              ? "공고 종결일 경과 — 연장 후 업로드 가능"
-              : uploading
-                ? "업로드 중..."
-                : !consentConfirmed
-                  ? "AI 평가 적용 고지 확인 후 업로드 가능"
-                  : "파일을 끌어다 놓거나 클릭해 선택"}
+            {isExpired ? (
+              "공고 종결일 경과 — 연장 후 업로드 가능"
+            ) : uploading ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-primary animate-spin" />
+                업로드 중...
+              </span>
+            ) : !consentConfirmed ? (
+              "AI 평가 적용 고지 확인 후 업로드 가능"
+            ) : (
+              "파일을 끌어다 놓거나 클릭해 선택"
+            )}
           </button>
           <button
             onClick={() => folderInputRef.current?.click()}
@@ -1200,13 +1390,19 @@ export default function JobDetailPage() {
         <>
           {favoriteCandidates.length > 0 && (
             <div className="mt-3 mb-4 bg-amber-50/60 border border-amber-300/60 rounded-2xl p-3">
-              <div className="flex items-baseline gap-2 mb-2 px-1 flex-wrap">
+              <div className="flex items-center gap-2 mb-2 px-1 flex-wrap">
                 <span className="text-sm font-semibold text-amber-700">
                   ★ 즐겨찾기
                 </span>
                 <span className="text-xs text-amber-700/80">
                   ({favoriteCandidates.length}명)
                 </span>
+                {favoriteCandidates.some((c) => selected.has(c.id)) && (
+                  <span className="text-xs text-primary-deep font-medium">
+                    · {favoriteCandidates.filter((c) => selected.has(c.id)).length}명 선택됨
+                  </span>
+                )}
+                {renderBulkActions(favoriteCandidates)}
               </div>
               <ul className="space-y-3">
                 {favoriteCandidates.map((c) => (
@@ -1418,19 +1614,6 @@ export default function JobDetailPage() {
                 return next;
               });
             };
-            const selCands = items.filter((c) => selected.has(c.id));
-            const inProgress = selCands.filter((c) => c.outcome == null);
-            const allInProgress =
-              selCands.length > 0 && inProgress.length === selCands.length;
-            const stages = new Set(inProgress.map((c) => c.stage));
-            const onlyStage =
-              allInProgress && stages.size === 1 ? [...stages][0] : null;
-            const screenable = selCands.filter(
-              (c) =>
-                (c.screeningReport == null || c.lastJobStatus === "failed") &&
-                c.queueStatus !== "queued" &&
-                c.queueStatus !== "processing"
-            );
             const hasSel = selectedInBlock.length > 0;
             return (
               <div key={gk} className="mt-4">
@@ -1448,81 +1631,7 @@ export default function JobDetailPage() {
                       · {selectedInBlock.length}명 선택됨
                     </span>
                   )}
-                  {hasSel && (
-                    <div className="flex items-center gap-2 ml-auto flex-wrap">
-                      <Link
-                        href={`/jobs/${jobId}/compare?ids=${selectedInBlock.join(",")}`}
-                        className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium whitespace-nowrap"
-                      >
-                        비교 ({selectedInBlock.length})
-                      </Link>
-                      {screenable.length > 0 && (
-                        <button
-                          onClick={() => void bulkScreen(screenable.map((c) => c.id))}
-                          disabled={bulkBusy}
-                          className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
-                          title="평가 안 됐거나 실패한 후보를 다시 큐에 넣습니다"
-                        >
-                          {bulkBusy ? "처리 중..." : `AI 검토 요청 (${screenable.length})`}
-                        </button>
-                      )}
-                      {(onlyStage === "screened" || onlyStage === "ai_pending") && (
-                        <button
-                          onClick={() => void bulkInterviewSend(inProgress.map((c) => c.id))}
-                          disabled={bulkBusy}
-                          className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
-                          title="선택된 후보 전원에게 AI 면접 링크 메일 발송"
-                        >
-                          {bulkBusy ? "발송 중..." : `📧 AI 면접 발송 (${inProgress.length})`}
-                        </button>
-                      )}
-                      {/* round1_scheduling 후보 — 후보자 응답 대기 또는 역제시 상태. 새 시간 다시 제시 가능. */}
-                      {onlyStage === "round1_scheduling" && (
-                        <SchedulePropose
-                          jobId={Number(jobId)}
-                          selectedIds={inProgress.map((c) => c.id)}
-                          onDone={() => {
-                            setSelected(new Set());
-                            void loadCandidates();
-                          }}
-                        />
-                      )}
-                      {onlyStage === "ai_evaluated" && (
-                        <button
-                          onClick={() => void bulkAdvance("round1_candidate", inProgress.map((c) => c.id))}
-                          disabled={bulkBusy}
-                          className="px-2.5 py-1.5 rounded-lg bg-accent-deep hover:bg-accent text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
-                        >
-                          ⭐ 1차 면접 후보로 지정
-                        </button>
-                      )}
-                      {onlyStage === "round1_passed" && (
-                        <button
-                          onClick={() => void bulkAdvance("round2_passed", inProgress.map((c) => c.id))}
-                          disabled={bulkBusy}
-                          className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
-                        >
-                          → 2차 합격
-                        </button>
-                      )}
-                      {allInProgress && (
-                        <button
-                          onClick={() => setDecideIds(inProgress.map((c) => c.id))}
-                          disabled={bulkBusy}
-                          className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
-                        >
-                          합/불 결정
-                        </button>
-                      )}
-                      <button
-                        onClick={() => void bulkDelete(selectedInBlock)}
-                        disabled={bulkBusy}
-                        className="px-2.5 py-1.5 rounded-lg bg-danger hover:bg-danger/85 text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
-                      >
-                        {bulkBusy ? "삭제 중..." : `삭제 (${selectedInBlock.length})`}
-                      </button>
-                    </div>
-                  )}
+                  {hasSel && renderBulkActions(items)}
                 </div>
                 <ul className={`space-y-3 ${dimmed ? "opacity-60" : ""}`}>
                   {items.map((c) => (
@@ -1651,8 +1760,113 @@ export default function JobDetailPage() {
           </div>
         </div>
       )}
+
+      {round1Schedule && (
+        <div
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          onClick={() => setRound1Schedule(null)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="font-bold text-slate-900">🗓 1차 면접 확정 일정</h3>
+              <span className="text-xs text-slate-400">
+                {round1Schedule.length}명 · 시간순
+              </span>
+            </div>
+            {round1Schedule.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-500 text-center py-6">
+                확정된 1차 면접 일정이 없습니다.
+              </p>
+            ) : (
+              <ol className="mt-4 space-y-2 overflow-y-auto">
+                {round1Schedule.map((s, i) => (
+                  <li
+                    key={s.candidateId}
+                    className="flex items-start gap-3 border border-slate-200 rounded-xl p-3"
+                  >
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-primary-soft text-primary-deep text-xs font-bold flex items-center justify-center mt-0.5">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-slate-900 tabular-nums">
+                        {fmtSlotRange(s.selectedSlot)}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-slate-600">
+                        <span className="font-medium text-slate-800">{s.name}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded ${
+                            s.modeOnline
+                              ? "bg-sky-100 text-sky-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {s.modeOnline ? "온라인" : "오프라인"}
+                        </span>
+                        {!s.modeOnline && s.address && (
+                          <span className="text-slate-500">
+                            {s.address}
+                            {s.addressDetail ? ` ${s.addressDetail}` : ""}
+                          </span>
+                        )}
+                        {s.modeOnline && s.onlineMeetingUrl && (
+                          <a
+                            href={s.onlineMeetingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary-deep underline break-all"
+                          >
+                            미팅 링크
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <Link
+                      href={`/candidates/${s.candidateId}`}
+                      className="shrink-0 text-xs text-slate-400 hover:text-primary-deep mt-0.5"
+                    >
+                      상세 →
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            )}
+            <button
+              onClick={() => setRound1Schedule(null)}
+              className="mt-4 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50 shrink-0"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
+}
+
+/** 팝업용 슬롯 포맷 — "2026. 06. 03. (수) 13:30 ~ 14:30" (KST). */
+function fmtSlotRange(slot: { start: string; end: string }): string {
+  const s = new Date(slot.start);
+  const e = new Date(slot.end);
+  const datePart = s.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const endTime = e.toLocaleTimeString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${datePart} ~ ${endTime}`;
 }
 
 function formatMB(bytes: number): string {
@@ -2526,11 +2740,12 @@ function LifecyclePanel({ job, onChanged }: { job: Job; onChanged: () => void })
     setBusy(false);
     const data = await r.json().catch(() => null);
     if (!r.ok) {
-      alert(data?.message ?? "연장 실패");
+      notify(data?.message ?? "연장 실패", { tone: "danger", title: "연장 실패" });
       return;
     }
-    alert(
-      `공고를 ${data.extensionDays ?? 30}일 연장했습니다. (${data.totalCost} 토큰 차감)`
+    notify(
+      `공고를 ${data.extensionDays ?? 30}일 연장했습니다. (${data.totalCost} 토큰 차감)`,
+      { tone: "success", title: "공고 연장 완료" }
     );
     setShowExtend(false);
     onChanged();
@@ -2695,7 +2910,14 @@ function InterviewersPanel({ jobId }: { jobId: number }) {
   };
 
   const remove = async (userId: number) => {
-    if (!confirm("면접관에서 제외할까요?")) return;
+    if (
+      !(await confirmDialog("면접관에서 제외할까요?", {
+        tone: "danger",
+        title: "면접관 제외",
+        confirmText: "제외",
+      }))
+    )
+      return;
     setBusy(true);
     const r = await fetch(
       `/api/jobs/${jobId}/interviewers?userId=${userId}`,

@@ -48,6 +48,10 @@ export default function InterviewPage() {
   const [streaming, setStreaming] = useState(false);
   const [ended, setEnded] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  // 전체 타이머 fallback — 첫 메시지 전송 시점을 클라이언트가 기록.
+  // (서버 startedAt 은 첫 chat 호출 때 기록되지만 info 를 재요청하지 않아 클라이언트엔 null 로 남음.
+  //  새로고침 시엔 info 재로드로 서버 startedAt 이 채워져 그쪽이 우선.)
+  const [clientStartedAt, setClientStartedAt] = useState<string | null>(null);
   // LLM 보조 신호 탐지용 — 현재 입력 turn 동안 누적 (sendMessage 후 리셋)
   const turnSignals = useRef<{
     pasteCount: number;
@@ -125,6 +129,8 @@ export default function InterviewPage() {
 
   async function sendMessage(text: string) {
     setStreaming(true);
+    // 첫 전송 = 면접 시작 → 전체 타이머 기준점 기록 (서버 startedAt 부재 시 fallback).
+    setClientStartedAt((prev) => prev ?? new Date().toISOString());
     const userMsg: Message = { role: "user", content: text };
     const next = [...messages, userMsg];
     setMessages(next);
@@ -298,7 +304,7 @@ export default function InterviewPage() {
 
         {!ended && (
           <Timer
-            startedAt={info.session.startedAt ?? null}
+            startedAt={info.session.startedAt ?? clientStartedAt}
             messages={messages}
             streaming={streaming}
           />

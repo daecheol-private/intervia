@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { NavBar } from "./components/NavBar";
 import { Footer } from "./components/Footer";
 import { ForcePasswordChange } from "./components/ForcePasswordChange";
+import { DialogHost } from "./components/Dialog";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -59,6 +60,7 @@ export default async function RootLayout({
         {user?.mustChangePassword && (
           <ForcePasswordChange email={user.email} />
         )}
+        <DialogHost />
       </body>
     </html>
   );

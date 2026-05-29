@@ -4,8 +4,18 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
+import { Logo } from "@/app/components/Logo";
 
 type Slot = { start: string; end: string };
+
+/** 지원자 화면 상단 브랜드 — 모든 상태(로딩·확정·취소·일정선택)에 항상 노출. */
+function BrandHeader() {
+  return (
+    <div className="flex justify-center mb-6">
+      <Logo size={28} />
+    </div>
+  );
+}
 
 type Info = {
   token: string;
@@ -114,6 +124,7 @@ export default function SchedulePage() {
   if (err) {
     return (
       <main className="max-w-md mx-auto px-6 py-16">
+        <BrandHeader />
         <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center shadow-sm">
           <div className="text-4xl mb-3">⚠️</div>
           <h1 className="text-lg font-bold text-slate-900">접근 실패</h1>
@@ -127,8 +138,9 @@ export default function SchedulePage() {
 
   if (!info) {
     return (
-      <main className="max-w-md mx-auto px-6 py-16 text-center text-sm text-slate-400">
-        불러오는 중...
+      <main className="max-w-md mx-auto px-6 py-16">
+        <BrandHeader />
+        <div className="text-center text-sm text-slate-400">불러오는 중...</div>
       </main>
     );
   }
@@ -137,6 +149,7 @@ export default function SchedulePage() {
   if (info.status === "withdrawn" || mode === "withdrawn") {
     return (
       <main className="max-w-md mx-auto px-6 py-16">
+        <BrandHeader />
         <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
           <div className="text-4xl mb-3">🗑️</div>
           <h1 className="text-lg font-bold text-slate-900">지원 취소 완료</h1>
@@ -151,6 +164,7 @@ export default function SchedulePage() {
   if (info.status === "selected" && info.selectedSlot) {
     return (
       <main className="max-w-md mx-auto px-6 py-16">
+        <BrandHeader />
         <div className="bg-card border border-primary/30 rounded-2xl p-8 text-center shadow-sm">
           <div className="text-4xl mb-3">✅</div>
           <h1 className="text-lg font-bold text-slate-900">면접 시간 확정</h1>
@@ -204,6 +218,7 @@ export default function SchedulePage() {
   // pending / counter_proposed — 선택 또는 역제시 화면
   return (
     <main className="max-w-md mx-auto px-6 py-12">
+      <BrandHeader />
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
         <header className="text-center pb-5 border-b border-slate-100">
           <div className="text-3xl mb-2">📅</div>

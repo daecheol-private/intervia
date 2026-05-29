@@ -19,9 +19,9 @@ const DEFAULT_PRICING: Record<FeatureKey, number> = {
   interview: 10,
 };
 
-// 법인 최초 등록 시 1회 자동 지급 — 무료 체험용 (1만원).
+// 법인 최초 등록 시 1회 자동 지급 — 무료 체험용 (3만원).
 // 기존 법인 합류(invite/join-request)에는 지급 X. 함수는 orgId 기준 멱등.
-export const WELCOME_BONUS_TOKENS = 100;
+export const WELCOME_BONUS_TOKENS = 300;
 
 /**
  * 충전 보너스 정책 — KRW 결제액에 따라 추가 지급 토큰 계산.

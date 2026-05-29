@@ -45,7 +45,9 @@ export function NavBar({
   ) {
     return null;
   }
-  const canManageOrg = role === "system_admin" || role === "org_admin";
+  // "법인"(/org/*) 드롭다운은 자기 소속 법인을 운영하는 org_admin 전용.
+  // 시스템관리자는 전체 법인을 "관리 > 법인"(/admin/orgs)에서 통제하므로 제외 — 메뉴 중복 방지.
+  const canManageOrg = role === "org_admin";
   const isSystemAdmin = role === "system_admin";
 
   return (

@@ -128,10 +128,7 @@ export default async function AdminDashboardPage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-6 py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-slate-500 hover:underline">
-          ← 메인
-        </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">운영 대시보드</h1>
+        <h1 className="text-2xl font-bold text-slate-900">운영 대시보드</h1>
         <p className="text-sm text-slate-500 mt-1">
           시스템 관리자 — 매일 한 번 훑어보고 이상 상태 빠르게 잡기.
         </p>

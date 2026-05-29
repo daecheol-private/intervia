@@ -36,12 +36,15 @@ import {
   Check,
 } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const me = await getCurrentUser();
   if (!me) return <Landing />;
+  // 시스템관리자의 홈은 운영 대시보드. (채용 대시보드는 자기 법인 데이터용 — 운영자에겐 부적합)
+  if (me.role === "system_admin") redirect("/admin/dashboard");
   return <Dashboard me={me} />;
 }
 

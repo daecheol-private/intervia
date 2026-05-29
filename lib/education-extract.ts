@@ -91,8 +91,9 @@ function detectMajor(line: string): string | null {
     const c = cleanMajor(lbl[1]);
     if (c) return c;
   }
-  // 2) "컴퓨터공학과" / "전자공학부" 토큰 (대학교/대학원 은 \s*학교/원 으로 안 걸림)
-  const dept = line.match(/([가-힣A-Za-z·]{2,15}(?:학과|학부))/);
+  // 2) "컴퓨터공학과" / "전자공학부" / "데이터사이언스전공" 토큰
+  //    (대학교/대학원 은 stripSchoolTokens 로 미리 제거되어 여기 안 걸림)
+  const dept = line.match(/([가-힣A-Za-z·]{2,15}(?:학과|학부|전공))/);
   if (dept) {
     const c = cleanMajor(dept[1]);
     if (c) return c;
@@ -104,6 +105,21 @@ function detectMajor(line: string): string | null {
     if (c) return c;
   }
   return null;
+}
+
+/** 사전 미등재 학교 fallback — "○○대학교/대학원" 일반 패턴. 공백 없이 전공이 붙어도 학교명만 잡음. */
+function detectSchoolGeneric(line: string): string | null {
+  const m = line.match(/([가-힣A-Za-z]{2,12}(?:대학교|대학원))/);
+  return m ? m[1] : null;
+}
+
+/** 전공 추출 전, 줄에서 학교 토큰을 제거 — 공백 소실로 학교명이 전공에 섞이는 것 방지. */
+function stripSchoolTokens(line: string, school: string | null): string {
+  let s = line;
+  if (school) s = s.split(school).join(" ");
+  // 사전 미등재 학교도 대응 — "○○대학교/대학원/대학" 토큰 제거.
+  s = s.replace(/[가-힣A-Za-z]{2,12}(?:대학교|대학원|대학)/g, " ");
+  return s;
 }
 
 function lineIndexOf(charIdx: number, lineStarts: number[]): number {
@@ -184,20 +200,29 @@ export function extractEducation(rawText: string): Education {
     found.status && !(found.rank === 1 && found.status === "졸업");
   const level = showStatus ? `${label} ${found.status}` : label;
 
-  // 학교명 — 최종학력 줄, 없으면 ±2줄 인접에서
+  // 학교명 — 최종학력 줄, 없으면 ±2줄 인접에서 (사전 매칭 우선)
   let school: string | null = uniByLine.get(found.lineIdx) ?? null;
   if (!school) {
     for (let d = 1; d <= 2 && !school; d++) {
       school = uniByLine.get(found.lineIdx - d) ?? uniByLine.get(found.lineIdx + d) ?? null;
     }
   }
+  // 사전에 없는 학교 fallback — "○○대학교/대학원" 일반 패턴 (최종학력 줄 ±2)
+  if (!school) {
+    school = detectSchoolGeneric(lines[found.lineIdx] ?? "");
+    for (let d = 1; d <= 2 && !school; d++) {
+      school =
+        detectSchoolGeneric(lines[found.lineIdx - d] ?? "") ??
+        detectSchoolGeneric(lines[found.lineIdx + d] ?? "");
+    }
+  }
 
-  // 전공 — 최종학력 줄, 없으면 ±2줄 인접에서
-  let major: string | null = detectMajor(lines[found.lineIdx] ?? "");
+  // 전공 — 최종학력 줄, 없으면 ±2줄 인접에서. 학교명이 붙어 섞이지 않게 학교 토큰 제거 후 추출.
+  const majorAt = (li: number): string | null =>
+    detectMajor(stripSchoolTokens(lines[li] ?? "", school));
+  let major: string | null = majorAt(found.lineIdx);
   for (let d = 1; d <= 2 && !major; d++) {
-    major =
-      detectMajor(lines[found.lineIdx - d] ?? "") ??
-      detectMajor(lines[found.lineIdx + d] ?? "");
+    major = majorAt(found.lineIdx - d) ?? majorAt(found.lineIdx + d);
   }
 
   return { level, school, major };

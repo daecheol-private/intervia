@@ -67,6 +67,7 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/api/jobs/[id]/candidates` | 🔑 후보자 목록 + 최근 면접 세션 머지 |
+| GET | `/api/jobs/[id]/round1-schedule` | 🔑 `stage=round1_waiting` + 확정 schedule(`status=selected`, round1) 조인 → 후보자별 선택 슬롯·온오프라인·주소, 시간 빠른 순. "1차 면접 스케쥴 보기" 팝업용 |
 | POST | `/api/jobs/[id]/candidates` | 🔑 multipart 또는 JSON manifest 업로드. **`applicantConsentConfirmed=true` 필수** — 미체크 시 400 + `{code:"applicant_consent_required"}`. 채용기업이 지원자 동의 취득 책임 확인. 업로드 후 자동 큐 enqueue + 토큰 차감. 감사 로그 `candidate.upload_with_consent` |
 | POST | `/api/candidates/[id]/screen` | 사용자 확인 후 수동 트리거. **`resume_upload` 차감** + 백그라운드 LLM 평가. 실패 시 자동 환불. status: uploaded/failed 일 때만 동작. **지원자 동의 확인 누락(2026-05-22 이후 row) 시 400** |
 | GET | `/api/candidates/[id]` | 🔑 |

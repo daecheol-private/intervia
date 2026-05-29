@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles, Link2 } from "lucide-react";
+import { Sparkles, Link2, Loader2 } from "lucide-react";
 
 export default function NewJobPage() {
   const router = useRouter();
@@ -151,8 +151,9 @@ export default function NewJobPage() {
             type="button"
             onClick={importFromUrl}
             disabled={importing || !importUrl.trim()}
-            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium whitespace-nowrap"
+            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium whitespace-nowrap inline-flex items-center gap-1.5"
           >
+            {importing && <Loader2 className="w-4 h-4 animate-spin" />}
             {importing ? "분석 중..." : "가져오기"}
           </button>
         </div>

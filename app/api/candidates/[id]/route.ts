@@ -122,6 +122,9 @@ export async function PATCH(
     name?: string;
     email?: string | null;
     phone?: string | null;
+    educationLevel?: string | null;
+    educationSchool?: string | null;
+    educationMajor?: string | null;
   } | null;
   if (!body) return new Response("바디 필요", { status: 400 });
 
@@ -137,6 +140,9 @@ export async function PATCH(
     name: string;
     email: string | null;
     phone: string | null;
+    educationLevel: string | null;
+    educationSchool: string | null;
+    educationMajor: string | null;
   }> = {};
 
   if (typeof body.name === "string") {
@@ -162,6 +168,16 @@ export async function PATCH(
       const v = body.phone.trim().slice(0, 40);
       updates.phone = v;
     }
+  }
+  // 최종학력 — 빈 문자열은 null 로(미상), 그 외 100자 제한.
+  const eduFields = [
+    ["educationLevel", body.educationLevel],
+    ["educationSchool", body.educationSchool],
+    ["educationMajor", body.educationMajor],
+  ] as const;
+  for (const [key, val] of eduFields) {
+    if (val === undefined) continue;
+    updates[key] = val === null || val.trim() === "" ? null : val.trim().slice(0, 100);
   }
 
   if (Object.keys(updates).length === 0)

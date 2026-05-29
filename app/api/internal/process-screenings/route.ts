@@ -116,21 +116,24 @@ export async function POST(req: Request) {
   // 잔액 0 이하 법인 잡은 paused 로 분리(타 법인 영향 차단), 충전된 법인은 queued 로 재개.
   await reconcileBalanceHolds();
 
-  while (stats.processed < MAX_JOBS_PER_RUN) {
-    // 동시성 N — 한 번에 N 개 점유 시도, 모두 no_job 이면 종료
-    const batch = await Promise.all(
-      Array.from({ length: DEFAULT_CONCURRENCY }, () => processOne(workerId))
-    );
-    const anyClaimed = batch.some((r) => r !== "no_job");
-    if (!anyClaimed) break;
-    for (const r of batch) {
-      if (r === "no_job") continue;
+  // 롤링 워커 풀 — N 개의 워커가 각자 끝나는 즉시 다음 잡을 가져간다.
+  // (이전: Promise.all 로 N 개를 띄우고 N 개가 *모두* 끝나야 다음 N 개를 점유 →
+  //  배치 내 최장 1건이 나머지 슬롯을 놀리며 다음 배치를 막음. 사용자 체감 "3개씩 멈춤".)
+  // 각 워커는 no_job(더 가져올 잡 없음)을 만나면 종료. atomicClaimNext 가 전역·법인별
+  // cap 을 지키므로, 슬롯을 막 비운 워커가 곧바로 다음 잡을 채워 항상 N 개가 돈다.
+  async function workerLoop() {
+    while (stats.processed < MAX_JOBS_PER_RUN) {
+      const r = await processOne(workerId);
+      if (r === "no_job") return;
       stats.processed++;
       if (r === "success") stats.succeeded++;
       else if (r.permanent) stats.failed_permanent++;
       else stats.failed_transient++;
     }
   }
+  await Promise.all(
+    Array.from({ length: DEFAULT_CONCURRENCY }, () => workerLoop())
+  );
 
   // 남은 queued 있으면 self-chain.
   // 단, 이번 실행이 한 건도 처리 못했으면(전역 슬롯 만석 등) 체인 안 함 —

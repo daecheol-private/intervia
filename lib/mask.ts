@@ -284,8 +284,11 @@ export function findUniversitiesInText(
   const taken: Array<[number, number]> = []; // 이미 잡힌 구간 (겹침 방지)
   for (const u of _universities ?? []) {
     if (u.length < 2) continue;
+    // trailing 경계는 두지 않음 — PDF 추출이 공백을 잃어 "서울대학교IT융합학과" 처럼
+    // 학교명 뒤에 전공이 붙어도 학교를 식별해야 함. leading 경계 + 긴이름 우선 +
+    // taken 구간으로 부분/중복 매칭(예: "동서울대학교" 속 "서울대학교")은 차단된다.
     const re = new RegExp(
-      `(?<![가-힣A-Za-z0-9])${escapeRe(u)}(?![가-힣A-Za-z0-9])`,
+      `(?<![가-힣A-Za-z0-9])${escapeRe(u)}`,
       "g"
     );
     let m: RegExpExecArray | null;

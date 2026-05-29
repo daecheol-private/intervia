@@ -80,6 +80,49 @@ function isTransient(err: unknown): boolean {
   return TRANSIENT_PATTERNS.test(msg);
 }
 
+/**
+ * LLM 응답 텍스트를 JSON 으로 파싱. 실패 시 *실제 원인* 을 메시지에 담아 throw.
+ *
+ * 기존엔 빈 응답이면 `JSON.parse("")` 가 "Unexpected end of JSON input" 만 던져
+ * 진짜 원인(안전성 차단 / thinking 토큰 소진으로 인한 MAX_TOKENS / 빈 후보)이 가려졌다.
+ * finishReason·blockReason·원문 일부를 메시지에 실어 로그·UI 에서 바로 식별 가능하게 한다.
+ */
+function parseJsonResponse<T>(result: {
+  text?: string;
+  candidates?: Array<{ finishReason?: string }>;
+  promptFeedback?: { blockReason?: string };
+}): T {
+  const finish = result.candidates?.[0]?.finishReason;
+  const block = result.promptFeedback?.blockReason;
+  const raw = (result.text ?? "").trim();
+
+  if (!raw) {
+    throw new Error(
+      `LLM 빈 응답 (finishReason=${finish ?? "?"}${
+        block ? `, blockReason=${block}` : ""
+      }). ` +
+        (finish === "MAX_TOKENS"
+          ? "출력 토큰 한도 초과 — thinking 이 토큰을 소진했을 수 있음."
+          : finish === "SAFETY" || finish === "RECITATION" || block
+            ? "안전성/저작권 필터에 의해 차단됨."
+            : "응답 본문 없음.")
+    );
+  }
+
+  // 코드펜스(```json ... ```) 방어적 제거 — responseMimeType=json 이면 보통 없지만 안전망.
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    throw new Error(
+      `LLM JSON 파싱 실패 (finishReason=${finish ?? "?"}): ${cleaned.slice(0, 300)}`
+    );
+  }
+}
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   ctx: { op: string; task: LlmTask }
@@ -128,8 +171,7 @@ export async function generateJSON<T>(
           ReturnType<typeof clientFor>["models"]["generateContent"]
         >[0]["config"],
       });
-      const text = result.text ?? "";
-      return JSON.parse(text) as T;
+      return parseJsonResponse<T>(result);
     },
     { op: "generateJSON", task }
   );
@@ -153,8 +195,7 @@ export async function generateJSONMultimodal<T>(
           temperature: 0.2,
         },
       });
-      const text = result.text ?? "";
-      return JSON.parse(text) as T;
+      return parseJsonResponse<T>(result);
     },
     { op: "generateJSONMultimodal", task }
   );

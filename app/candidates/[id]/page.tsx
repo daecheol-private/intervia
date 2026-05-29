@@ -2254,18 +2254,34 @@ function InterviewEvaluationRetry({
         `/api/interview-sessions/${sessionId}/reevaluate`,
         { method: "POST" }
       );
-      const data = (await res.json().catch(() => null)) as {
-        ok?: boolean;
-        error?: string;
-      } | null;
+      // 본문은 성공/LLM실패 시 JSON, 가드 거부(404/403/409 등) 시 평문 — 둘 다 처리.
+      const raw = await res.text();
+      let data: { ok?: boolean; error?: string; detail?: string } | null = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = null;
+      }
       if (res.ok && data?.ok) {
         setMsg({ kind: "ok", text: "재평가 성공. 잠시 후 결과가 반영됩니다." });
         onSuccess();
-      } else {
+      } else if (res.status === 409) {
+        // 409 = 이미 평가됨 또는 미종료 — 화면 상태가 DB 와 어긋난 것. 새로고침으로 해소.
         setMsg({
           kind: "err",
-          text:
-            data?.error ?? `재평가 실패 (HTTP ${res.status}). 잠시 후 다시 시도해 주세요.`,
+          text: `${raw || "재평가할 수 없는 상태입니다."}\n화면을 새로고침합니다.`,
+        });
+        onSuccess();
+      } else {
+        // JSON 이면 error/detail, 평문이면 raw 본문을 사유로 노출.
+        const base =
+          data?.error ??
+          raw ??
+          `재평가 실패 (HTTP ${res.status}). 잠시 후 다시 시도해 주세요.`;
+        setMsg({
+          kind: "err",
+          // detail = 실제 LLM 실패 원인 (빈 응답·차단·파싱 실패 등). 진단용으로 함께 노출.
+          text: data?.detail ? `${base}\n(원인: ${data.detail})` : base,
         });
       }
     } catch (e) {
@@ -2306,7 +2322,7 @@ function InterviewEvaluationRetry({
       </div>
       {msg && (
         <div
-          className={`text-xs px-3 py-2 rounded-lg border ${
+          className={`text-xs px-3 py-2 rounded-lg border whitespace-pre-wrap ${
             msg.kind === "ok"
               ? "bg-primary-soft border-primary/30 text-primary-deep"
               : "bg-danger-soft border-danger/30 text-danger"
@@ -3453,6 +3469,15 @@ function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
 
+  // 인라인 수정 — editingId 인 메모만 폼으로 전환.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [eSkill, setESkill] = useState("");
+  const [eExperience, setEExperience] = useState("");
+  const [eCollaboration, setECollaboration] = useState("");
+  const [eFit, setEFit] = useState("");
+  const [eNote, setENote] = useState("");
+  const [eErr, setEErr] = useState("");
+
   const load = async () => {
     const [meR, listR] = await Promise.all([
       fetch("/api/auth/status").then((r) => r.json()),
@@ -3512,6 +3537,45 @@ function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
     });
     setBusy(false);
     if (r.ok) void load();
+  };
+
+  const startEdit = (n: InterviewerNote) => {
+    setEditingId(n.id);
+    setESkill(n.scores?.skill != null ? String(n.scores.skill) : "");
+    setEExperience(
+      n.scores?.experience != null ? String(n.scores.experience) : ""
+    );
+    setECollaboration(
+      n.scores?.collaboration != null ? String(n.scores.collaboration) : ""
+    );
+    setEFit(n.scores?.fit != null ? String(n.scores.fit) : "");
+    setENote(n.note ?? "");
+    setEErr("");
+  };
+
+  const saveEdit = async (nid: number) => {
+    setBusy(true);
+    setEErr("");
+    const r = await fetch(`/api/candidates/${candidateId}/notes/${nid}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scores: {
+          skill: parseScore(eSkill),
+          experience: parseScore(eExperience),
+          collaboration: parseScore(eCollaboration),
+          fit: parseScore(eFit),
+        },
+        note: eNote,
+      }),
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setEErr(await r.text());
+      return;
+    }
+    setEditingId(null);
+    void load();
   };
 
   const avg = (n: InterviewerNote): number | null => {
@@ -3641,27 +3705,86 @@ function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
                   <span className="text-[11px] text-slate-400">
                     {formatKstDateTime(n.createdAt)}
                   </span>
-                  {isMine && (
-                    <button
-                      onClick={() => remove(n.id)}
-                      className="ml-auto text-[11px] text-danger hover:underline"
-                    >
-                      삭제
-                    </button>
+                  {n.updatedAt !== n.createdAt && (
+                    <span className="text-[11px] text-slate-400">(수정됨)</span>
+                  )}
+                  {isMine && editingId !== n.id && (
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        onClick={() => startEdit(n)}
+                        className="text-[11px] text-primary hover:underline"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={() => remove(n.id)}
+                        className="text-[11px] text-danger hover:underline"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   )}
                 </div>
-                {n.scores && (
-                  <div className="grid grid-cols-4 gap-2 mt-2 text-center text-xs">
-                    <ScoreCell label="기술" value={n.scores.skill} />
-                    <ScoreCell label="경험" value={n.scores.experience} />
-                    <ScoreCell label="협업" value={n.scores.collaboration} />
-                    <ScoreCell label="적합" value={n.scores.fit} />
+                {editingId === n.id ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <ScoreInput label="기술역량" value={eSkill} onChange={setESkill} />
+                      <ScoreInput
+                        label="실무경험"
+                        value={eExperience}
+                        onChange={setEExperience}
+                      />
+                      <ScoreInput
+                        label="협업"
+                        value={eCollaboration}
+                        onChange={setECollaboration}
+                      />
+                      <ScoreInput label="직무적합성" value={eFit} onChange={setEFit} />
+                    </div>
+                    <textarea
+                      value={eNote}
+                      onChange={(e) => setENote(e.target.value)}
+                      rows={3}
+                      placeholder="자유 메모 (5000자 이내)"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                    />
+                    {eErr && (
+                      <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
+                        {eErr}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => saveEdit(n.id)}
+                        disabled={busy}
+                        className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+                      >
+                        {busy ? "저장 중..." : "저장"}
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+                      >
+                        취소
+                      </button>
+                    </div>
                   </div>
-                )}
-                {n.note && (
-                  <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                    {n.note}
-                  </p>
+                ) : (
+                  <>
+                    {n.scores && (
+                      <div className="grid grid-cols-4 gap-2 mt-2 text-center text-xs">
+                        <ScoreCell label="기술" value={n.scores.skill} />
+                        <ScoreCell label="경험" value={n.scores.experience} />
+                        <ScoreCell label="협업" value={n.scores.collaboration} />
+                        <ScoreCell label="적합" value={n.scores.fit} />
+                      </div>
+                    )}
+                    {n.note && (
+                      <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                        {n.note}
+                      </p>
+                    )}
+                  </>
                 )}
               </li>
             );
@@ -3876,6 +3999,9 @@ function EditCandidateButton({
   const [name, setName] = useState(candidate.name);
   const [email, setEmail] = useState(candidate.email ?? "");
   const [phone, setPhone] = useState(candidate.phone ?? "");
+  const [eduSchool, setEduSchool] = useState(candidate.educationSchool ?? "");
+  const [eduMajor, setEduMajor] = useState(candidate.educationMajor ?? "");
+  const [eduLevel, setEduLevel] = useState(candidate.educationLevel ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -3889,6 +4015,9 @@ function EditCandidateButton({
         name: name.trim(),
         email: email.trim() || null,
         phone: phone.trim() || null,
+        educationSchool: eduSchool.trim() || null,
+        educationMajor: eduMajor.trim() || null,
+        educationLevel: eduLevel.trim() || null,
       }),
     });
     setBusy(false);
@@ -3905,7 +4034,7 @@ function EditCandidateButton({
       <button
         onClick={() => setOpen(true)}
         className="text-[11px] px-2 py-0.5 rounded-md border border-slate-300 hover:bg-slate-100 text-slate-600"
-        title="이름·이메일·연락처 수정"
+        title="이름·이메일·연락처·최종학력 수정"
       >
         ✎ 정보 수정
       </button>
@@ -3928,6 +4057,16 @@ function EditCandidateButton({
                 type="email"
               />
               <Field label="연락처" value={phone} onChange={setPhone} />
+              <div className="pt-1 border-t border-slate-100">
+                <span className="text-xs font-medium text-slate-500">최종학력</span>
+              </div>
+              <Field label="학교" value={eduSchool} onChange={setEduSchool} />
+              <Field label="전공/학과" value={eduMajor} onChange={setEduMajor} />
+              <Field
+                label="학력 (예: 학사 졸업, 석사)"
+                value={eduLevel}
+                onChange={setEduLevel}
+              />
             </div>
             {err && (
               <div className="text-xs text-danger mt-2">{err}</div>
