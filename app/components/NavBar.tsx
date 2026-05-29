@@ -52,7 +52,12 @@ export function NavBar({
     <header className="sticky top-0 z-40 bg-card/85 backdrop-blur border-b border-border-default">
       <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 shrink-0">
-          <Link href="/" className="flex items-center gap-2 group">
+          <Link
+            href="/"
+            aria-label="Intervia 대시보드"
+            title="대시보드"
+            className="flex items-center gap-2 group"
+          >
             <LogoMark size={32} />
             <span className="font-semibold text-ink group-hover:text-primary transition-colors tracking-tight">
               Intervia
@@ -179,6 +184,8 @@ function Dropdown({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label={`${label} 메뉴 열기`}
+        title={`${label} 메뉴`}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-ink-soft hover:text-ink hover:bg-surface-alt transition-colors"
       >
         <Icon className="w-4 h-4" />

@@ -4,6 +4,154 @@ import { eq, and, isNotNull, ne } from "drizzle-orm";
 import { buildScreeningPrompt } from "./prompts";
 import { generateJSON } from "./gemini";
 import { refundFeature } from "./tokens";
+import { extractTextFromBuffer } from "./parsers";
+import { extractPII } from "./pii-extract";
+import { extractEducation } from "./education-extract";
+import { maskText } from "./mask";
+import { sanitizeResumeText } from "./prompt-safety";
+import { readStoredFile } from "./storage";
+import { looksLikeKoreanName } from "./file-classify";
+import { log } from "./logger";
+
+const TEXT_EXTRACTABLE = new Set(["pdf", "docx", "txt", "md", "html", "htm"]);
+function extOf(name: string): string {
+  return (name.split(".").pop() ?? "").toLowerCase();
+}
+
+/**
+ * 후보자 이력서·첨부 파싱 + 마스킹 (비동기 1단계).
+ *
+ * 업로드 시 후보자는 "껍데기"(파일명 기반 이름 + 파싱 전)로 즉시 생성되고,
+ * 무거운 텍스트 추출·PII/학력 추출·마스킹은 워커가 평가 직전에 수행한다.
+ * → 100MB ZIP 업로드 시 POST 가 파싱을 기다리지 않아 카드가 즉시 뜬다.
+ *
+ * 멱등 — resumeMaskedText 가 이미 채워져 있으면 즉시 반환(재시도 시 중복 파싱 방지).
+ *
+ * @throws ScreeningError(transient=false) — 파일 파싱 실패/스캔 PDF (영구 → 환불)
+ * @throws ScreeningError(transient=true)  — 저장소 일시 오류 (재시도)
+ */
+export async function ensureParsed(candidateId: number): Promise<void> {
+  const [c] = await db
+    .select()
+    .from(candidates)
+    .where(eq(candidates.id, candidateId));
+  if (!c) throw new ScreeningError(`candidate ${candidateId} 없음`, false);
+  if (c.resumeMaskedText && c.resumeMaskedText.length >= 30) return; // 이미 파싱됨
+
+  // 메인 이력서 첨부(kind=resume) — 파일 경로·원본명.
+  const [resumeAtt] = await db
+    .select({
+      filePath: candidateAttachments.filePath,
+      originalName: candidateAttachments.originalName,
+    })
+    .from(candidateAttachments)
+    .where(
+      and(
+        eq(candidateAttachments.candidateId, candidateId),
+        eq(candidateAttachments.kind, "resume")
+      )
+    )
+    .limit(1);
+  const filePath = resumeAtt?.filePath ?? c.resumeFilePath;
+  const originalName = resumeAtt?.originalName ?? "resume.pdf";
+  if (!filePath) throw new ScreeningError("이력서 파일 경로 없음", false);
+
+  const buf = await readStoredFile(filePath);
+  if (!buf)
+    throw new ScreeningError("저장된 이력서 파일을 읽지 못했습니다.", true);
+
+  let resumeText = "";
+  try {
+    resumeText = await extractTextFromBuffer(buf, originalName);
+  } catch (e) {
+    throw new ScreeningError(
+      `파일 파싱 오류: ${e instanceof Error ? e.message : String(e)}`,
+      false
+    );
+  }
+  if (resumeText.length < 30)
+    throw new ScreeningError(
+      "이력서 텍스트 추출 실패 (스캔 PDF 또는 빈 파일).",
+      false
+    );
+
+  const pii = extractPII(resumeText, {
+    // 파일명/수동입력으로 이미 사람 이름이 잡혔으면 그걸 힌트로.
+    providedName:
+      c.name && c.name !== "(이름 미상)" && looksLikeKoreanName(c.name)
+        ? c.name
+        : null,
+    providedEmail: c.email,
+  });
+  const education = extractEducation(resumeText);
+
+  // 이름 승격 — 껍데기 이름이 "(이름 미상)" 일 때만 파싱 이름 사용.
+  // (파일명/수동입력 이름은 파싱 이름보다 우선이라 그대로 유지.)
+  const finalName = c.name === "(이름 미상)" && pii.name ? pii.name : c.name;
+
+  const masked = maskText(resumeText, {
+    level: "standard",
+    known: {
+      name: finalName,
+      emails: [pii.email, c.email].filter(Boolean) as string[],
+      phones: [pii.phone].filter(Boolean) as string[],
+      companies: pii.companies,
+    },
+  });
+  const sanitized = sanitizeResumeText(masked);
+  if (sanitized.injectionAttempt) {
+    log.warn("resume_injection_attempt", { candidateId, filename: originalName });
+  }
+
+  await db
+    .update(candidates)
+    .set({
+      name: finalName,
+      email: c.email || pii.email || null,
+      phone: c.phone || pii.phone,
+      age: c.age ?? pii.age,
+      educationLevel: education.level,
+      educationSchool: education.school,
+      educationMajor: education.major,
+      resumeMaskedText: sanitized.text,
+    })
+    .where(eq(candidates.id, candidateId));
+
+  // 첨부(포트폴리오·자소서 등) 파싱+마스킹 — 텍스트 추출 가능 + 아직 미마스킹만.
+  const atts = await db
+    .select({
+      id: candidateAttachments.id,
+      filePath: candidateAttachments.filePath,
+      originalName: candidateAttachments.originalName,
+      kind: candidateAttachments.kind,
+      maskedText: candidateAttachments.maskedText,
+    })
+    .from(candidateAttachments)
+    .where(eq(candidateAttachments.candidateId, candidateId));
+  for (const a of atts) {
+    if (a.kind === "resume") continue;
+    if (a.maskedText) continue;
+    if (!TEXT_EXTRACTABLE.has(extOf(a.originalName))) continue;
+    const abuf = await readStoredFile(a.filePath);
+    if (!abuf) continue;
+    try {
+      const raw = await extractTextFromBuffer(abuf, a.originalName);
+      if (raw.trim().length > 0) {
+        const s = sanitizeResumeText(maskText(raw));
+        await db
+          .update(candidateAttachments)
+          .set({ maskedText: s.text })
+          .where(eq(candidateAttachments.id, a.id));
+      }
+    } catch (e) {
+      log.warn("attachment_parse_failed", {
+        candidateId,
+        filename: a.originalName,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+}
 
 type ScreeningResult = {
   score: number;
@@ -45,6 +193,9 @@ export class ScreeningError extends Error {
  * @throws ScreeningError(transient=false) — 영구 (마스킹 텍스트 없음, JSON 파싱 실패 등)
  */
 export async function runScreeningOnce(candidateId: number): Promise<void> {
+  // 1단계 — 아직 파싱 안 됐으면 여기서 파싱+마스킹 (업로드 시 껍데기로만 생성됨).
+  await ensureParsed(candidateId);
+
   const [candidate] = await db
     .select()
     .from(candidates)
@@ -99,10 +250,13 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
           responsibilities: job.responsibilities,
           requirements: job.requirements,
           idealProfile: job.idealProfile,
+          evaluationFocus: job.evaluationFocus,
           tone: job.tone,
         },
         masked,
-        attachmentsForPrompt
+        attachmentsForPrompt,
+        // 학력 수준·전공만 — 출신 학교명은 전달 안 함(학벌 차별 방지, 블라인드 유지)
+        { level: candidate.educationLevel, major: candidate.educationMajor }
       ),
       { task: "screening" }
     );

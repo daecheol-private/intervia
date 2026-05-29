@@ -1,0 +1,1 @@
+ALTER TABLE `job_postings` ADD `evaluation_focus` text DEFAULT '' NOT NULL;

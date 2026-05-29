@@ -16,9 +16,10 @@ const STATUS_URL =
   "https://api.odcloud.kr/api/nts-businessman/v1/status";
 
 export type BusinessStatus = {
+  registered: boolean; // 국세청에 등록된 번호인지 (b_stt_cd 가 비어있으면 미등록)
   // 1: 계속사업자, 2: 휴업, 3: 폐업
   active: boolean;
-  status: string; // 원문 (계속사업자 / 휴업자 / 폐업자)
+  status: string; // 원문 (계속사업자 / 휴업자 / 폐업자 / 미등록)
   taxType: string | null; // 과세유형
   closedAt?: string | null; // 폐업일자
 };
@@ -75,9 +76,11 @@ export async function lookupBusinessStatus(
   if (!row) return null;
   // b_stt_cd: 01=계속사업자, 02=휴업자, 03=폐업자, "" = 미등록
   const code = row.b_stt_cd ?? "";
+  const registered = code !== "";
   return {
+    registered,
     active: code === "01",
-    status: row.b_stt ?? "알 수 없음",
+    status: registered ? (row.b_stt ?? "알 수 없음") : "미등록",
     taxType: row.tax_type ?? null,
     closedAt: row.end_dt && row.end_dt !== "" ? row.end_dt : null,
   };

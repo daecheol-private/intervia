@@ -80,7 +80,12 @@ export async function POST(req: Request) {
   // 사업자번호 — 정규화 후 같은 번호로 이미 등록된 법인 있으면 차단.
   // 공용도메인(gmail/naver/...) 으로 등록하는 경우는 도메인 기반 검증이 불가하므로
   // 사업자번호를 **필수** 로 강제 (법인 사칭 방지 — PIPA·이용약관 §5 사전 보호).
-  const { normalizeBizNo, formatBizNo } = await import("@/lib/business-registry");
+  const {
+    normalizeBizNo,
+    formatBizNo,
+    isBusinessRegistryConfigured,
+    lookupBusinessStatus,
+  } = await import("@/lib/business-registry");
   const { findDartCorpByBizno } = await import("@/lib/dart-corps");
   let canonicalBizNo: string | null = null;
   const isPublicDomainSignup = emailDomain == null;
@@ -104,6 +109,29 @@ export async function POST(req: Request) {
         `사업자번호 ${canonicalBizNo} 는 이미 '${bizTaken.name}' 법인으로 등록되어 있습니다. 검색하여 합류 요청을 보내거나, 운영자에게 권한 부여를 요청하세요.`,
         { status: 409 }
       );
+
+    // 국세청 진위확인 — 실제 등록 + 영업중(계속사업자)인지 검증.
+    // API 키 미설정이면 검증 불가 → 그냥 통과 (사업자번호는 선택 입력값이므로).
+    // 외부 API 장애(throw)도 가입을 막지 않음 — 일시 장애로 가입을 차단하지 않기 위함.
+    if (isBusinessRegistryConfigured()) {
+      try {
+        const status = await lookupBusinessStatus(norm);
+        if (!status || !status.registered) {
+          return new Response(
+            `사업자번호 ${canonicalBizNo} 는 국세청에 등록되지 않은 번호입니다. 실제 사업자등록번호를 입력하거나, 사업자번호 없이 회사 도메인 이메일로 가입해주세요.`,
+            { status: 400 }
+          );
+        }
+        if (!status.active) {
+          return new Response(
+            `사업자번호 ${canonicalBizNo} 는 영업중이 아닙니다 (상태: ${status.status}). 영업중인 사업자만 등록할 수 있습니다.`,
+            { status: 400 }
+          );
+        }
+      } catch (e) {
+        console.error("business registry lookup failed (skipping check)", e);
+      }
+    }
   }
 
   // 검증 상태 결정:

@@ -95,13 +95,9 @@ export async function POST(
   if (lastJob?.status === "queued" || lastJob?.status === "processing") {
     return new Response("이미 진행 중인 후보입니다.", { status: 409 });
   }
-  const textForLLM = candidate.resumeMaskedText ?? "";
-  if (textForLLM.length < 30) {
-    return new Response(
-      "마스킹된 이력서 텍스트가 없습니다. 재업로드 해주세요.",
-      { status: 400 }
-    );
-  }
+  // NOTE: resumeMaskedText 가 비어 있어도 차단하지 않는다 — 파싱은 워커가
+  // 평가 직전에 수행(ensureParsed)하므로, 미파싱/파싱실패 후보의 재시도도 여기서 enqueue.
+  // 진짜 추출 불가(스캔 PDF)면 워커가 실패 사유를 job.lastError 로 남긴다.
 
   // 토큰 차감 (멱등). 실패 시 큐 최종 실패 단계에서 자동환불.
   if (candidate.orgId) {

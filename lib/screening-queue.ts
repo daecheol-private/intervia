@@ -30,14 +30,14 @@ export async function enqueueScreening(
   candidateId: number,
   enqueuedByUserId: number | null
 ): Promise<EnqueueResult> {
-  // 활성 job 이 이미 있나? (queued/processing)
+  // 활성 job 이 이미 있나? (queued/processing/paused — paused 는 충전 시 재개되므로 중복 생성 금지)
   const [existing] = await db
     .select({ id: screeningJobs.id, status: screeningJobs.status })
     .from(screeningJobs)
     .where(
       and(
         eq(screeningJobs.candidateId, candidateId),
-        inArray(screeningJobs.status, ["queued", "processing"])
+        inArray(screeningJobs.status, ["queued", "processing", "paused"])
       )
     );
   if (existing) {
@@ -54,32 +54,56 @@ export async function enqueueScreening(
 }
 
 /**
- * 큐에서 다음 job 1건 점유 (atomic).
- * SQLite 는 SELECT FOR UPDATE 없음 — 조건부 UPDATE ... RETURNING 으로 대체.
- * 동시 워커가 같은 row 를 잡지 못함.
+ * 큐에서 다음 job 1건 점유 (atomic) — **법인별 공정 분배** 적용.
+ *
+ * 동시에 여러 법인이 업로드하면 한 법인의 대량 업로드가 다른 법인을 굶기지 않도록,
+ * 슬롯(maxConcurrency)을 "현재 활성 법인 수" 로 나눠 분배한다.
+ *   활성 법인 = 지금 claim 가능한 queued 또는 processing job 을 가진 distinct org.
+ *   perOrgCap = ceil(maxConcurrency / 활성법인수)
+ *   예) max=8 →  1법인:8 · 2법인:4·4 · 3법인:3·3·2 (전역 cap 8 이 합을 8 로 제한).
+ *   한 법인이 끝나 활성 수가 줄면 다음 claim 부터 cap 이 다시 커진다(동적).
+ *
+ * 동시성 안전:
+ *   - SQLite/libsql 단일 writer → 조건부 UPDATE 가 직렬화됨.
+ *   - claim UPDATE 의 WHERE 에 [전역 in-flight < max] + [법인 in-flight < cap] 서브쿼리를
+ *     박아, 동시 claim 들도 cap 을 정확히 지킨다. (스냅샷은 선택 최적화용일 뿐, 정합성 보장은 UPDATE)
+ *   - M2: 소속 법인 잔액 0 이하면 일시정지(스킵). 충전 후 자연 재개.
+ *
+ * @param maxConcurrency 전역 동시 처리 슬롯 수 (워커 동시성과 동일).
  */
-export async function atomicClaimNext(workerId: string): Promise<{
+export async function atomicClaimNext(
+  workerId: string,
+  maxConcurrency = 8
+): Promise<{
   jobId: number;
   candidateId: number;
   attempts: number;
 } | null> {
   const now = new Date().toISOString();
-  // race-loss 시 그 다음 id 로 진행. 같은 호출에서 최대 20회 시도.
-  // M2 — 후보자 소속 법인의 잔액이 0 이하면 워커가 일시정지 (해당 job 스킵).
-  // 충전 후 자연스럽게 재개. candidates JOIN + LEFT JOIN tokenWallets 로 검사.
-  let afterId = 0;
-  for (let i = 0; i < 20; i++) {
-    const [candidate] = await db
-      .select({ id: screeningJobs.id })
-      .from(screeningJobs)
-      .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
-      .leftJoin(tokenWallets, eq(tokenWallets.orgId, candidates.orgId))
-      .where(
+  const orgExpr = sql<number>`COALESCE(${candidates.orgId}, 0)`;
+
+  // --- 스냅샷: 법인별 처리중 수 + 전역 처리중 수 ---
+  const procRows = await db
+    .select({ org: orgExpr, c: sql<number>`COUNT(*)` })
+    .from(screeningJobs)
+    .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
+    .where(eq(screeningJobs.status, "processing"))
+    .groupBy(orgExpr);
+  const globalInFlight = procRows.reduce((s, r) => s + Number(r.c), 0);
+  if (globalInFlight >= maxConcurrency) return null; // 전역 슬롯 만석
+
+  // --- 활성 법인 수 (claim 가능 queued 또는 processing 보유 org) ---
+  const activeRows = await db
+    .select({ org: orgExpr })
+    .from(screeningJobs)
+    .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
+    .leftJoin(tokenWallets, eq(tokenWallets.orgId, candidates.orgId))
+    .where(
+      or(
+        eq(screeningJobs.status, "processing"),
         and(
           eq(screeningJobs.status, "queued"),
           or(isNull(screeningJobs.notBefore), lte(screeningJobs.notBefore, now)),
-          gt(screeningJobs.id, afterId),
-          // orgId 미설정(legacy) 또는 잔액 > 0 만 처리. 음수면 일시정지.
           or(
             isNull(candidates.orgId),
             isNull(tokenWallets.balance),
@@ -87,9 +111,48 @@ export async function atomicClaimNext(workerId: string): Promise<{
           )
         )
       )
+    )
+    .groupBy(orgExpr);
+  const activeOrgs = Math.max(1, activeRows.length);
+  const perOrgCap = Math.max(1, Math.ceil(maxConcurrency / activeOrgs));
+
+  // 이미 cap 이상 처리중인 법인은 이번 claim 에서 제외 (head-of-line 방지 + 선형스캔 회피).
+  const skip = new Set<number>(
+    procRows.filter((r) => Number(r.c) >= perOrgCap).map((r) => Number(r.org))
+  );
+
+  // race-loss 시 그 다음 id 로, cap 도달 법인은 skip 에 넣어 건너뛴다.
+  let afterId = 0;
+  for (let i = 0; i < activeOrgs + 50; i++) {
+    const conds = [
+      eq(screeningJobs.status, "queued"),
+      or(isNull(screeningJobs.notBefore), lte(screeningJobs.notBefore, now)),
+      gt(screeningJobs.id, afterId),
+      or(
+        isNull(candidates.orgId),
+        isNull(tokenWallets.balance),
+        gte(tokenWallets.balance, 1)
+      ),
+    ];
+    if (skip.size > 0) {
+      conds.push(
+        sql`COALESCE(${candidates.orgId}, 0) NOT IN (${sql.join(
+          [...skip].map((o) => sql`${o}`),
+          sql`, `
+        )})`
+      );
+    }
+    const [cand] = await db
+      .select({ id: screeningJobs.id, org: orgExpr })
+      .from(screeningJobs)
+      .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
+      .leftJoin(tokenWallets, eq(tokenWallets.orgId, candidates.orgId))
+      .where(and(...conds))
       .orderBy(screeningJobs.id)
       .limit(1);
-    if (!candidate) return null;
+    if (!cand) return null;
+
+    // 원자적 claim — UPDATE 시점에 전역·법인 cap 재확인 (동시 claim 정합성 보장).
     const updated = await db
       .update(screeningJobs)
       .set({
@@ -101,8 +164,10 @@ export async function atomicClaimNext(workerId: string): Promise<{
       })
       .where(
         and(
-          eq(screeningJobs.id, candidate.id),
-          eq(screeningJobs.status, "queued")
+          eq(screeningJobs.id, cand.id),
+          eq(screeningJobs.status, "queued"),
+          sql`(SELECT COUNT(*) FROM screening_jobs WHERE status = 'processing') < ${maxConcurrency}`,
+          sql`(SELECT COUNT(*) FROM screening_jobs sj JOIN candidates c ON c.id = sj.candidate_id WHERE sj.status = 'processing' AND COALESCE(c.org_id, 0) = ${cand.org}) < ${perOrgCap}`
         )
       )
       .returning({
@@ -118,8 +183,16 @@ export async function atomicClaimNext(workerId: string): Promise<{
         attempts: row.attempts,
       };
     }
-    // 동시에 다른 워커가 채감 — 그 다음 id 로 진행
-    afterId = candidate.id;
+    // claim 실패 — race(다른 워커가 가져감) vs cap(서브쿼리 차단) 구분.
+    //   여전히 queued → cap 으로 막힌 것 → 이 법인 제외(skip)하고 다음 법인.
+    //   아니면 → race → 다음 id 로 진행 (같은 법인 OK).
+    const [still] = await db
+      .select({ s: screeningJobs.status })
+      .from(screeningJobs)
+      .where(eq(screeningJobs.id, cand.id))
+      .limit(1);
+    if (still?.s === "queued") skip.add(Number(cand.org));
+    else afterId = cand.id;
   }
   return null;
 }
@@ -174,6 +247,48 @@ export async function markFailedOrRetry(
     })
     .where(eq(screeningJobs.id, jobId));
   return { permanent: false };
+}
+
+/**
+ * 잔액 기반 일시정지 reconcile — 워커 실행마다 1회 (cleanupStuck 직후).
+ *
+ * - 잔액 0 이하 법인의 queued 잡 → paused (활성 큐에서 분리 → 타 법인 영향 차단).
+ * - 잔액 0 초과 법인의 paused 잡 → queued (충전 후 자동 재개).
+ *
+ * cron 이 매분 워커를 깨우므로 충전 후 ~1분 내 자동 복원. (즉시성 필요 시 충전 라우트에서
+ * 별도 triggerWorker 가능하나, 여기 reconcile 가 단일 진실원천.)
+ *
+ * @returns { paused, resumed } 전환 건수
+ */
+export async function reconcileBalanceHolds(): Promise<{
+  paused: number;
+  resumed: number;
+}> {
+  // 소속 법인 잔액 <= 0 → paused. (지갑 없으면 잔액 무제한으로 간주, 건드리지 않음)
+  const pausedRows = await db
+    .update(screeningJobs)
+    .set({ status: "paused", lockedAt: null, lockedBy: null })
+    .where(
+      and(
+        eq(screeningJobs.status, "queued"),
+        sql`(SELECT w.balance FROM candidates c JOIN token_wallets w ON w.org_id = c.org_id WHERE c.id = ${screeningJobs.candidateId}) <= 0`
+      )
+    )
+    .returning({ id: screeningJobs.id });
+
+  // 잔액 > 0 으로 회복된 법인의 paused → queued (재개).
+  const resumedRows = await db
+    .update(screeningJobs)
+    .set({ status: "queued", notBefore: null })
+    .where(
+      and(
+        eq(screeningJobs.status, "paused"),
+        sql`(SELECT w.balance FROM candidates c JOIN token_wallets w ON w.org_id = c.org_id WHERE c.id = ${screeningJobs.candidateId}) > 0`
+      )
+    )
+    .returning({ id: screeningJobs.id });
+
+  return { paused: pausedRows.length, resumed: resumedRows.length };
 }
 
 /** 5분 이상 잠긴 채 멈춘 processing job 들을 queued 로 복구 (워커 죽음 케이스). */

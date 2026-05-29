@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import {
   atomicClaimNext,
   cleanupStuck,
+  reconcileBalanceHolds,
   markDone,
   markFailedOrRetry,
   MAX_ATTEMPTS,
@@ -56,7 +57,8 @@ async function processOne(workerId: string): Promise<
   | "success"
   | { error: "transient" | "permanent"; permanent: boolean }
 > {
-  const claim = await atomicClaimNext(workerId);
+  // 전역 동시성 = DEFAULT_CONCURRENCY. atomicClaimNext 가 법인별로 슬롯을 공정 분배.
+  const claim = await atomicClaimNext(workerId, DEFAULT_CONCURRENCY);
   if (!claim) return "no_job";
   try {
     await runScreeningOnce(claim.candidateId);
@@ -111,6 +113,8 @@ export async function POST(req: Request) {
   };
 
   stats.stuck_recovered = await cleanupStuck();
+  // 잔액 0 이하 법인 잡은 paused 로 분리(타 법인 영향 차단), 충전된 법인은 queued 로 재개.
+  await reconcileBalanceHolds();
 
   while (stats.processed < MAX_JOBS_PER_RUN) {
     // 동시성 N — 한 번에 N 개 점유 시도, 모두 no_job 이면 종료
@@ -128,11 +132,13 @@ export async function POST(req: Request) {
     }
   }
 
-  // 남은 queued 있으면 self-chain
+  // 남은 queued 있으면 self-chain.
+  // 단, 이번 실행이 한 건도 처리 못했으면(전역 슬롯 만석 등) 체인 안 함 —
+  // 슬롯을 점유 중인 다른 실행이 끝나며 체인하고, cron 이 안전망. (즉시 재호출 busy-spin 방지)
   const { getQueueStats } = await import("@/lib/screening-queue");
   const q = await getQueueStats();
   stats.remaining = q.queued;
-  if (q.queued > 0) {
+  if (q.queued > 0 && stats.processed > 0) {
     stats.chained = true;
     chainSelf(req);
   }

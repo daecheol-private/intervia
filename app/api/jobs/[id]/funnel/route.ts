@@ -44,6 +44,20 @@ export async function GET(
     .where(eq(candidates.jobId, jobId))
     .groupBy(candidates.stage);
 
+  // 진행 중(outcome IS NULL) 만 카운트 — "오늘 결정할 일" 액션 아이템 계산용.
+  // stages 는 종결된 후보도 포함(파이프라인 시각화에 필요)하지만,
+  // pendingByStage 는 결정되지 않은 후보만 → HR 액션이 필요한 진짜 잔여 건수.
+  const pendingRows = await db
+    .select({
+      stage: candidates.stage,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(candidates)
+    .where(and(eq(candidates.jobId, jobId), sql`${candidates.outcome} IS NULL`))
+    .groupBy(candidates.stage);
+  const pendingByStage: Record<string, number> = {};
+  for (const r of pendingRows) pendingByStage[r.stage] = Number(r.count);
+
   const stages = {
     applied: 0,
     screened: 0,
@@ -154,6 +168,7 @@ export async function GET(
 
   return Response.json({
     stages,
+    pendingByStage,
     total: totalCount,
     avgScreeningScore:
       stats?.avgScreen != null

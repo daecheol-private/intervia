@@ -135,6 +135,7 @@ export async function POST(req: Request) {
       orgId: user.orgId,
       isAdmin: false,
       status: "active",
+      mustChangePassword: false,
       sessionToken,
     },
     action: "user.status_change" as const,

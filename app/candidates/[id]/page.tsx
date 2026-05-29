@@ -10,6 +10,7 @@ import {
 } from "@/lib/utils";
 import { STAGE_LABELS as STAGE_LABELS_SHARED } from "@/lib/stage-meta";
 import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
+import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 
 type Candidate = {
   id: number;
@@ -20,6 +21,9 @@ type Candidate = {
   age: number | null;
   careerYears: number | null;
   careerSummary: string | null;
+  educationLevel: string | null;
+  educationSchool: string | null;
+  educationMajor: string | null;
   resumeFilePath: string;
   resumeMaskedText: string | null;
   screeningScore: number | null;
@@ -75,6 +79,12 @@ type InterviewEvaluation = {
   concerns: string[];
   followup_questions: string[];
   llm_assist_note?: string;
+  ai_authorship?: {
+    likelihood: "낮음" | "보통" | "높음";
+    score: number;
+    signals: string[];
+    note: string;
+  };
 };
 
 type Session = {
@@ -421,6 +431,22 @@ export default function CandidateDetailPage() {
                 value={
                   candidate.careerYears != null
                     ? `${candidate.careerYears}년`
+                    : null
+                }
+              />
+              <InfoCell
+                label="최종학력"
+                value={
+                  candidate.educationLevel ||
+                  candidate.educationSchool ||
+                  candidate.educationMajor
+                    ? [
+                        candidate.educationSchool,
+                        candidate.educationMajor,
+                        candidate.educationLevel,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
                     : null
                 }
               />
@@ -810,6 +836,7 @@ export default function CandidateDetailPage() {
         </Section>
       )}
 
+      <InterviewQuestionsPanel candidateId={candidate.id} />
       <AttachmentsPanel candidateId={candidate.id} />
       <InterviewerNotesPanel candidateId={candidate.id} />
       <AppealsPanel candidateId={candidate.id} />
@@ -848,6 +875,267 @@ type Attachment = {
   sizeBytes: number;
   createdAt: string;
 };
+
+// ── 1차 대면 면접 질문지 ──────────────────────────────────────────
+// 1차 면접 일정 확정 후 면접관 누구나 생성. 이후 팝업으로 열람.
+type QuestionSheet = {
+  strategy: string;
+  sections: Array<{
+    title: string;
+    focus: string;
+    questions: Array<{
+      question: string;
+      intent: string;
+      followups?: string[];
+      basis?: string;
+    }>;
+  }>;
+  red_flags?: string[];
+};
+type QuestionSheetResp = {
+  scheduleConfirmed: boolean;
+  sheet: {
+    questions: QuestionSheet;
+    basedOnScreening: boolean;
+    basedOnInterview: boolean;
+    generatedByName: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+};
+
+function InterviewQuestionsPanel({ candidateId }: { candidateId: number }) {
+  const [data, setData] = useState<QuestionSheetResp | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+
+  const load = async () => {
+    const r = await fetch(`/api/candidates/${candidateId}/interview-questions`);
+    if (r.ok) setData(await r.json());
+  };
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateId]);
+
+  const generate = async () => {
+    setGenerating(true);
+    setErr(null);
+    try {
+      const r = await fetch(
+        `/api/candidates/${candidateId}/interview-questions`,
+        { method: "POST" }
+      );
+      if (!r.ok) {
+        setErr(await r.text());
+        return;
+      }
+      const body = (await r.json()) as { sheet: QuestionSheetResp["sheet"] };
+      setData((prev) => ({
+        scheduleConfirmed: prev?.scheduleConfirmed ?? true,
+        sheet: body.sheet,
+      }));
+      setOpen(true);
+    } catch {
+      setErr("네트워크 오류가 발생했습니다.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const sheet = data?.sheet ?? null;
+  const confirmed = data?.scheduleConfirmed ?? false;
+
+  return (
+    <Section
+      title="면접 문제 (1차)"
+      defaultOpen={false}
+      summary={
+        sheet ? (
+          <span className="text-primary-deep">생성됨 · 클릭하여 열람</span>
+        ) : confirmed ? (
+          <span className="text-slate-500">생성 가능</span>
+        ) : (
+          <span className="text-slate-400">1차 일정 확정 후 활성화</span>
+        )
+      }
+    >
+      {!confirmed && !sheet && (
+        <div className="text-center py-6">
+          <div className="text-3xl mb-3">📝</div>
+          <p className="text-sm text-slate-600 mb-1">
+            1차 면접 일정이 확정되면 면접 문제를 생성할 수 있습니다.
+          </p>
+          <p className="text-xs text-slate-500">
+            이력서 · 서류평가 · AI 면접 평가를 종합해 맞춤 질문지를 만듭니다.
+          </p>
+        </div>
+      )}
+
+      {(confirmed || sheet) && (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            이력서 · 서류평가 · AI 면접 평가를 종합해 1차 대면 면접용 맞춤
+            질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다.
+          </p>
+
+          {sheet && (
+            <div className="flex items-center gap-2 flex-wrap text-[11px]">
+              <span className="px-2 py-0.5 rounded-md border bg-primary-soft text-primary-deep border-primary/30">
+                {sheet.basedOnScreening ? "서류평가 반영" : "서류평가 없음"}
+              </span>
+              <span className="px-2 py-0.5 rounded-md border bg-accent-soft text-accent-deep border-accent/30">
+                {sheet.basedOnInterview ? "AI면접 평가 반영" : "AI면접 평가 없음"}
+              </span>
+              <span className="text-slate-400">
+                {sheet.generatedByName ? `${sheet.generatedByName} · ` : ""}
+                {formatKstDateTime(sheet.updatedAt)} 생성
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {sheet && (
+              <button
+                onClick={() => setOpen(true)}
+                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium shadow-sm"
+              >
+                면접 문제 보기
+              </button>
+            )}
+            <button
+              onClick={generate}
+              disabled={generating}
+              className={`px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${
+                sheet
+                  ? "border border-slate-300 text-slate-700 hover:bg-slate-50"
+                  : "bg-primary hover:bg-primary-deep text-white shadow-sm"
+              }`}
+            >
+              {generating
+                ? "생성 중... (최대 1분)"
+                : sheet
+                  ? "다시 생성"
+                  : "면접 문제 생성"}
+            </button>
+          </div>
+
+          {err && <p className="text-sm text-danger">{err}</p>}
+        </div>
+      )}
+
+      {open && sheet && (
+        <QuestionSheetModal
+          sheet={sheet.questions}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </Section>
+  );
+}
+
+function QuestionSheetModal({
+  sheet,
+  onClose,
+}: {
+  sheet: QuestionSheet;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/40 flex items-start justify-center overflow-y-auto p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl max-w-2xl w-full my-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl">
+          <h3 className="text-base font-bold text-slate-900">
+            1차 면접 질문지
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-700 text-xl leading-none"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-6">
+          {sheet.strategy && (
+            <div className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-sm text-slate-800 leading-relaxed">
+              <div className="text-[11px] font-semibold text-primary-deep uppercase tracking-wider mb-1">
+                면접 전략
+              </div>
+              <HL text={sheet.strategy} />
+            </div>
+          )}
+
+          {sheet.sections.map((sec, si) => (
+            <div key={si}>
+              <h4 className="text-sm font-bold text-slate-900">
+                {si + 1}. {sec.title}
+              </h4>
+              {sec.focus && (
+                <p className="text-xs text-slate-500 mt-0.5 mb-3">
+                  <HL text={sec.focus} />
+                </p>
+              )}
+              <ol className="space-y-3">
+                {sec.questions.map((q, qi) => (
+                  <li
+                    key={qi}
+                    className="rounded-lg border border-slate-200 px-4 py-3"
+                  >
+                    <p className="text-sm text-slate-800 font-medium">
+                      <HL text={q.question} />
+                    </p>
+                    {q.intent && (
+                      <p className="text-xs text-slate-500 mt-1.5">
+                        🎯 <HL text={q.intent} />
+                      </p>
+                    )}
+                    {q.followups && q.followups.length > 0 && (
+                      <ul className="mt-2 space-y-1 pl-3 border-l-2 border-slate-100">
+                        {q.followups.map((f, fi) => (
+                          <li key={fi} className="text-xs text-slate-600">
+                            ↳ <HL text={f} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {q.basis && (
+                      <p className="text-[11px] text-slate-400 mt-2">
+                        근거: {q.basis}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+
+          {sheet.red_flags && sheet.red_flags.length > 0 && (
+            <div className="rounded-lg border border-danger/30 bg-danger-soft/40 px-4 py-3">
+              <div className="text-[11px] font-semibold text-danger uppercase tracking-wider mb-2">
+                반드시 확인할 우려 신호
+              </div>
+              <ul className="space-y-1">
+                {sheet.red_flags.map((r, ri) => (
+                  <li key={ri} className="text-sm text-slate-700">
+                    ⚠️ <HL text={r} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AttachmentsPanel({ candidateId }: { candidateId: number }) {
   const [list, setList] = useState<Attachment[] | null>(null);
@@ -2098,8 +2386,55 @@ function InterviewResult({
             <HL text={ev.llm_assist_note} />
           </div>
           <div className="text-[11px] text-amber-700 mt-2">
-            ※ 객관 입력 패턴(붙여넣기 비율) 기반 추정입니다. 단정 금물 — 정당
-            사용 가능성도 있으니 다음 면접에서 본인 발언으로 재확인 권장.
+            ※ 객관 입력 패턴(붙여넣기 비율·탭 이탈·복사 시도) 기반 추정입니다.
+            단정 금물 — 정당 사용 가능성도 있으니 다음 면접에서 본인 발언으로 재확인 권장.
+          </div>
+        </div>
+      )}
+
+      {ev.ai_authorship && (
+        <div
+          className={`rounded-xl border px-4 py-3 mt-3 ${
+            ev.ai_authorship.likelihood === "높음"
+              ? "border-rose-200 bg-rose-50"
+              : ev.ai_authorship.likelihood === "보통"
+                ? "border-amber-200 bg-amber-50"
+                : "border-slate-200 bg-slate-50"
+          }`}
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+              AI 답변 자동 판별 (문체 분석)
+            </div>
+            <span
+              className={`text-xs font-bold px-2 py-0.5 rounded-md border ${
+                ev.ai_authorship.likelihood === "높음"
+                  ? "border-rose-300 bg-rose-100 text-rose-800"
+                  : ev.ai_authorship.likelihood === "보통"
+                    ? "border-amber-300 bg-amber-100 text-amber-800"
+                    : "border-slate-300 bg-slate-100 text-slate-700"
+              }`}
+            >
+              가능성 {ev.ai_authorship.likelihood} · {ev.ai_authorship.score}/100
+            </span>
+          </div>
+          {ev.ai_authorship.signals?.length > 0 && (
+            <ul className="list-disc pl-5 mt-2 space-y-0.5 text-sm text-slate-700">
+              {ev.ai_authorship.signals.map((s, i) => (
+                <li key={i}>
+                  <HL text={s} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {ev.ai_authorship.note && (
+            <div className="text-sm text-slate-800 mt-2 leading-relaxed">
+              <HL text={ev.ai_authorship.note} />
+            </div>
+          )}
+          <div className="text-[11px] text-slate-500 mt-2">
+            ※ 답변 텍스트의 문체만 본 LLM 추정입니다. 행동 신호(위)와 별개 —
+            단정 금물, 면접 자리에서 본인 발언으로 재확인 권장.
           </div>
         </div>
       )}
@@ -2361,11 +2696,13 @@ const STAGE_TRANSITIONS_MAP: Record<string, StageOption[]> = {
     { stage: "round2_passed", label: "1차 면접 스킵하고 2차 합격으로", variant: "secondary" },
   ],
   round1_candidate: [
-    { stage: "round1_scheduling", label: "1차 일정 조율 중", variant: "primary" },
+    { stage: "round1_scheduling", label: "📅 1차 면접 일정 제안 (슬롯·메일 발송)", variant: "primary" },
     { stage: "round1_passed", label: "1차 면접 합격으로 (스킵)", variant: "secondary" },
   ],
   round1_scheduling: [
     { stage: "round1_waiting", label: "1차 면접 응시 대기", variant: "primary" },
+    { stage: "round1_scheduling", label: "📅 일정 다시 제안", variant: "secondary" },
+    { stage: "round1_candidate", label: "일정 취소 — 1차 후보로 되돌리기", variant: "secondary" },
     { stage: "round1_passed", label: "1차 면접 합격", variant: "secondary" },
   ],
   round1_waiting: [
@@ -2507,7 +2844,9 @@ function StagePanel({
   setShowFullResume: (v: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState<null | "decide" | "stage" | "notify">(null);
+  const [open, setOpen] = useState<
+    null | "decide" | "stage" | "notify" | "schedule"
+  >(null);
   const [decision, setDecision] = useState<"hired" | "rejected">("rejected");
   const [reason, setReason] = useState<string>("");
   const [note, setNote] = useState("");
@@ -2583,6 +2922,14 @@ function StagePanel({
   }, [decision, reason, reasonsAvail]);
 
   const move = async (newStage: string) => {
+    // round1_scheduling 진입은 단순 상태 변경이 아니라 "일정 제안" 이라는 실제 행위가
+    // 필요하다. 슬롯·면접방식 입력 + 후보자 메일 발송을 하는 schedule-propose 가 정식
+    // 진입점이고, 그 API 가 성공 시 stage 를 round1_scheduling 으로 전환한다.
+    // 여기서 plain PATCH 로 stage 만 바꾸면 일정 없는 "조율 중" 상태에 갇힌다 (버그).
+    if (newStage === "round1_scheduling") {
+      setOpen("schedule");
+      return;
+    }
     setBusy(true);
     setMsg(null);
     const r = await fetch(`/api/candidates/${candidate.id}/stage`, {
@@ -2825,6 +3172,20 @@ function StagePanel({
             onMove={(s) => void move(s)}
           />
         </Modal>
+      )}
+
+      {open === "schedule" && (
+        <ScheduleProposeModal
+          jobId={candidate.jobId}
+          candidateIds={[candidate.id]}
+          nameById={{ [candidate.id]: candidate.name }}
+          open
+          onClose={() => setOpen(null)}
+          onDone={() => {
+            setOpen(null);
+            onChanged();
+          }}
+        />
       )}
 
       {open === "decide" && (

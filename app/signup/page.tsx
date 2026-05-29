@@ -266,7 +266,7 @@ export default function SignupPage() {
             </div>
           ) : (
             <>
-          <Field label="이메일">
+          <Field label="이메일" required>
             <div className="flex gap-2">
               <input
                 className={inputCls}
@@ -298,14 +298,14 @@ export default function SignupPage() {
                 org={stage.org}
                 admins={stage.admins}
               />
-              <Field label="이름">
+              <Field label="이름" required>
                 <input
                   className={inputCls}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
               </Field>
-              <Field label="비밀번호">
+              <Field label="비밀번호" required>
                 <PasswordInput
                   className={inputCls}
                   placeholder="10자 이상, 3종 이상 조합"
@@ -454,14 +454,14 @@ export default function SignupPage() {
                   enterJoinFromSearch({ id: o.id, name: o.name })
                 }
               />
-              <Field label="이름">
+              <Field label="이름" required>
                 <input
                   className={inputCls}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
               </Field>
-              <Field label="비밀번호">
+              <Field label="비밀번호" required>
                 <PasswordInput
                   className={inputCls}
                   placeholder="10자 이상, 3종 이상 조합"
@@ -563,11 +563,24 @@ const primaryBtn =
 const secondaryBtn =
   "px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium py-2.5 rounded-lg border border-slate-300";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <label className="block text-sm font-medium text-slate-700 mb-1.5">
         {label}
+        {required && (
+          <span className="text-danger ml-0.5" aria-hidden="true">
+            *
+          </span>
+        )}
       </label>
       {children}
     </div>
@@ -766,7 +779,7 @@ function DartCorpCombobox({
   };
 
   return (
-    <Field label="법인명">
+    <Field label="법인명" required>
       <div className="relative">
         <input
           className={inputCls}

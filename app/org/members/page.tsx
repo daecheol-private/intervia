@@ -60,10 +60,28 @@ export default function OrgMembersPage() {
         <Link href="/" className="text-xs text-slate-500 hover:underline">
           ← 대시보드
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">법인 멤버 관리</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          멤버 권한을 부여하거나 비활성화할 수 있습니다.
-        </p>
+        <div className="mt-2 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">법인 멤버 관리</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              멤버 권한을 부여하거나 비활성화할 수 있습니다.
+            </p>
+          </div>
+          <Link
+            href="/org/join-requests"
+            className="text-xs px-3 py-2 rounded-lg border border-primary/30 text-primary-deep bg-primary-soft hover:bg-primary-soft/70 transition-colors font-medium"
+          >
+            합류 요청 보기 →
+          </Link>
+        </div>
+        <div className="mt-4 rounded-lg border border-border-default bg-surface-alt/60 px-4 py-3 text-xs text-ink-soft leading-relaxed">
+          <div className="font-semibold text-ink mb-1">동료를 합류시키려면?</div>
+          <ol className="list-decimal list-inside space-y-0.5">
+            <li>동료가 회사 이메일로 <Link href="/signup" className="text-primary underline">회원가입</Link></li>
+            <li>같은 도메인이면 자동으로 본 법인에 합류 요청이 생성됩니다</li>
+            <li>관리자가 <Link href="/org/join-requests" className="text-primary underline">합류 요청</Link> 페이지에서 승인</li>
+          </ol>
+        </div>
       </div>
 
       {err && (
@@ -100,7 +118,15 @@ export default function OrgMembersPage() {
             )}
             {rows.map((m) => (
               <tr key={m.id}>
-                <td className="px-4 py-3 font-medium text-slate-900">{m.name}</td>
+                <td className="px-4 py-3 font-medium text-slate-900">
+                  {m.name && m.name.trim() ? (
+                    m.name
+                  ) : (
+                    <span className="text-slate-400 italic font-normal">
+                      이름 미등록
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-slate-600">{m.email}</td>
                 <td className="px-4 py-3">
                   <RoleBadge role={m.role} />

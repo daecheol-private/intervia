@@ -30,6 +30,7 @@
 | role | TEXT NOT NULL DEFAULT 'member' | `system_admin` / `org_admin` / `member` |
 | status | TEXT NOT NULL DEFAULT 'active' | `active` / `pending` / `disabled`. pending은 합류 승인 대기 |
 | email_verified_at | TEXT NULL | 인증 완료 시각. NULL 이면 로그인 차단. 기존 사용자는 마이그레이션으로 created_at 으로 백필 |
+| must_change_password | INTEGER NOT NULL DEFAULT 0 | 임시 비밀번호 계정(부트스트랩 관리자 등). true 면 로그인 후 전역 오버레이(`ForcePasswordChange`)로 차단, 비밀번호 변경 시 자동 해제 |
 | terms_accepted_at / terms_version / terms_accepted_ip / terms_accepted_ua | TEXT NULL | 이용약관 동의 시각·버전·IP·UA (분쟁 입증) |
 | privacy_accepted_at / privacy_version / privacy_accepted_ip / privacy_accepted_ua | TEXT NULL | 처리방침 동의 시각·버전·IP·UA (분쟁 입증) |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
@@ -102,6 +103,7 @@
 | uploaded_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
 | resume_hash | TEXT NULL | SHA-256 |
 | name / email / phone / age / career_years / career_summary | … | 정규식 + LLM 추출 |
+| education_level / education_school / education_major | TEXT NULL | 최종학력(수준/학교명/전공). 업로드 시 원문에서 결정적 추출 (`lib/education-extract.ts`). 셋 다 화면 표시. **AI 평가에는 학력 수준·전공만 전달(학교명 제외 — 학벌 차별 방지)** |
 | stage | TEXT NOT NULL DEFAULT 'applied' | applied/screened/interview_1/interview_2/offer/hired/rejected/hold/withdrawn |
 | decided_at | TEXT NULL | 단말 단계 (hired/rejected/withdrawn) 진입 시각 |
 | decided_by_user_id | INTEGER NULL FK users | 결정한 채용담당자 |
@@ -278,6 +280,28 @@
 
 워커: `POST /api/internal/process-screenings` (동시성 N, 최대 M건/실행, 남으면 self-chain).
 Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 처리.
+
+## interview_question_sheets
+
+1차 대면 면접 질문지. **후보자당 1건** (`candidate_id` UNIQUE — 재생성 시 덮어쓰기).
+
+1차 면접 일정 확정(`interview_schedules` round1 · status='selected') 후 면접관 누구나 생성.
+이력서(마스킹) + 서류평가(`screeningReport`) + AI 면접 평가(`interviewSessions.evaluation`, 있으면)를
+종합해 LLM(task=`questionGen`)이 생성. **토큰 과금 없음(무료)**.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| candidate_id | INTEGER NOT NULL UNIQUE FK candidates(id) ON DELETE CASCADE | 후보자당 1건 |
+| job_id | INTEGER NOT NULL FK job_postings(id) ON DELETE CASCADE | |
+| org_id | INTEGER NULL FK organizations(id) ON DELETE CASCADE | |
+| based_on_screening | INTEGER NOT NULL DEFAULT 0 | 생성 시 서류평가 반영 여부 (boolean) |
+| based_on_interview | INTEGER NOT NULL DEFAULT 0 | 생성 시 AI면접 평가 반영 여부 (boolean) |
+| questions | JSON NOT NULL | `InterviewQuestionSheet` — `{strategy, sections[], red_flags?}`. 섹션별 `{title, focus, questions[{question, intent, followups?, basis?}]}` |
+| generated_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 마지막 생성자 |
+| created_at / updated_at | TEXT NOT NULL | |
+
+타입: `InterviewQuestionSheet`(questions JSON 형상), `InterviewQuestionSheetRow`(row) — `lib/schema.ts`.
 
 ## org_smtp_configs
 

@@ -31,7 +31,7 @@ import {
 import { sendMail, buildInterviewEmail, isSmtpAvailable } from "@/lib/mailer";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
-import { MAX_INTERVIEW_EMAILS_PER_CANDIDATE } from "@/lib/job-lifecycle";
+import { MAX_INTERVIEW_EMAILS_PER_CANDIDATE, isJobExpired } from "@/lib/job-lifecycle";
 
 export const runtime = "nodejs";
 
@@ -76,6 +76,15 @@ export async function POST(
   if (job.status === "closed")
     return Response.json(
       { code: "job_closed", message: "종결된 공고입니다." },
+      { status: 409 }
+    );
+  if (isJobExpired(job))
+    return Response.json(
+      {
+        code: "job_expired",
+        message:
+          "공고 종결 예정일이 지났습니다. 공고를 연장하거나 종결한 후 다시 시도해 주세요.",
+      },
       { status: 409 }
     );
 

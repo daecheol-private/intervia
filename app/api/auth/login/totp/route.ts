@@ -83,6 +83,7 @@ export async function POST(req: Request) {
       orgId: user.orgId,
       role: user.role,
       status: user.status,
+      mustChangePassword: !!user.mustChangePassword,
       sessionToken: token,
     },
     action: "login.success",

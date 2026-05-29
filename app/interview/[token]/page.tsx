@@ -55,12 +55,16 @@ export default function InterviewPage() {
     typedChars: number;
     firstInputAt: number | null;
     lastPasteAt: number | null;
+    blurCount: number;
+    copyAttempts: number;
   }>({
     pasteCount: 0,
     pastedChars: 0,
     typedChars: 0,
     firstInputAt: null,
     lastPasteAt: null,
+    blurCount: 0,
+    copyAttempts: 0,
   });
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -106,6 +110,19 @@ export default function InterviewPage() {
     });
   }, [messages, streaming]);
 
+  // LLM 보조 신호 — 답변 중 탭 전환·창 이탈(다른 앱/창으로 이동) 횟수 집계.
+  // 면접 종료 후엔 무의미하므로 ended 면 미부착. turn 단위로 sendMessage 에서 리셋됨.
+  useEffect(() => {
+    if (ended) return;
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") {
+        turnSignals.current.blurCount += 1;
+      }
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    return () => document.removeEventListener("visibilitychange", onHidden);
+  }, [ended]);
+
   async function sendMessage(text: string) {
     setStreaming(true);
     const userMsg: Message = { role: "user", content: text };
@@ -123,6 +140,8 @@ export default function InterviewPage() {
       msSinceLastPaste: sig.lastPasteAt
         ? Date.now() - sig.lastPasteAt
         : null,
+      blurCount: sig.blurCount,
+      copyAttempts: sig.copyAttempts,
     };
     // 리셋
     turnSignals.current = {
@@ -131,6 +150,8 @@ export default function InterviewPage() {
       typedChars: 0,
       firstInputAt: null,
       lastPasteAt: null,
+      blurCount: 0,
+      copyAttempts: 0,
     };
 
     try {
@@ -292,6 +313,17 @@ export default function InterviewPage() {
           aria-live="polite"
           aria-label="면접 대화"
           className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4 bg-gradient-to-b from-slate-50/50 to-white"
+          // 복사 방지 — 질문을 외부 LLM 으로 옮기는 행위 억제 + 시도 횟수 기록.
+          // 차단해도 스크린샷 등 우회는 가능 → 억제·신호 수집 목적.
+          onCopy={(e) => {
+            e.preventDefault();
+            turnSignals.current.copyAttempts += 1;
+          }}
+          onCut={(e) => {
+            e.preventDefault();
+            turnSignals.current.copyAttempts += 1;
+          }}
+          onContextMenu={(e) => e.preventDefault()}
         >
           {messages
             .filter((m, i) => !(i === 0 && m.role === "user"))
@@ -484,7 +516,8 @@ function ChatBubble({
   return (
     <div className="flex justify-start gap-2" role="article" aria-label="면접관 질문">
       <LogoMark size={32} className="shrink-0 rounded-full" />
-      <div className="max-w-[85%] sm:max-w-[80%] bg-slate-100 text-slate-900 rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap break-words">
+      {/* select-none — 질문 텍스트 선택/복사 방지 (외부 LLM 전달 억제) */}
+      <div className="max-w-[85%] sm:max-w-[80%] bg-slate-100 text-slate-900 rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap break-words select-none">
         {content ? <InlineMd text={content} /> : <TypingDots />}
       </div>
     </div>

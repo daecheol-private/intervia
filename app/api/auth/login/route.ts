@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth-attempts";
 import { logAudit } from "@/lib/audit";
 import { issueLoginChallenge } from "@/lib/login-challenge";
+import { ensureSystemAdmin } from "@/lib/bootstrap-admin";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,10 @@ export async function POST(req: Request) {
 
   if (!email || !password)
     return new Response("이메일/비밀번호 필수", { status: 400 });
+
+  // 환경변수 기반 system_admin 부트스트랩 — 첫 로그인 시도 시 계정이 없으면 생성.
+  // (status 라우트를 거치지 않고 직접 로그인하는 경우 대비) 미설정/이미 존재 시 no-op.
+  await ensureSystemAdmin();
 
   const ip = extractIp(req);
   const userAgent = req.headers.get("user-agent");
@@ -138,6 +143,7 @@ export async function POST(req: Request) {
       orgId: user.orgId,
       role: user.role,
       status: user.status,
+      mustChangePassword: !!user.mustChangePassword,
       sessionToken: token,
     },
     action: "login.success",

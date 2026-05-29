@@ -69,6 +69,8 @@ export type CurrentUser = {
   orgId: number | null;
   role: "system_admin" | "org_admin" | "member";
   status: "active" | "pending" | "disabled";
+  /** 임시 비밀번호로 생성됨 — 변경 전까지 전역 오버레이로 차단 */
+  mustChangePassword: boolean;
   sessionToken: string; // 현재 세션 식별용 (UI 에서 "현재 디바이스" 표시)
 };
 
@@ -88,6 +90,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       orgId: users.orgId,
       role: users.role,
       status: users.status,
+      mustChangePassword: users.mustChangePassword,
       orgSuspendedAt: organizations.suspendedAt,
     })
     .from(sessions)
@@ -127,6 +130,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     orgId: row.orgId ?? null,
     role: row.role,
     status: row.status,
+    mustChangePassword: !!row.mustChangePassword,
     sessionToken: token,
   };
 }

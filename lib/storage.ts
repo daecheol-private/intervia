@@ -83,6 +83,25 @@ export async function deleteFile(
 }
 
 /**
+ * 저장된 파일을 다시 buffer 로 읽는다 — 워커가 비동기 파싱 시 사용.
+ * key 가 http(s) URL(Blob)이면 fetch, 아니면 로컬 ./uploads/ 에서 읽음.
+ * 못 읽으면 null.
+ */
+export async function readStoredFile(key: string): Promise<Buffer | null> {
+  if (/^https?:\/\//i.test(key)) {
+    try {
+      const r = await fetch(key);
+      if (!r.ok) return null;
+      return Buffer.from(await r.arrayBuffer());
+    } catch {
+      return null;
+    }
+  }
+  const local = await readLocalFile(key);
+  return local?.data ?? null;
+}
+
+/**
  * 로컬 다운로드 핸들러용: 파일 buffer + content-type 반환
  */
 export async function readLocalFile(

@@ -202,7 +202,7 @@ export default function OptionBPage() {
               className="w-full px-4 py-3 rounded-lg text-sm focus:outline-none transition-colors"
               style={{ background: C.surface, border: `1.5px solid ${C.border}`, color: C.ink }}
               placeholder="회사 이메일"
-              defaultValue="kang@expernet.co.kr"
+              defaultValue="kang@sample.co.kr"
             />
             <div className="mt-3 p-4 rounded-lg" style={{ background: C.surfaceAlt, border: `1px solid ${C.border}` }}>
               <div className="flex items-baseline justify-between">

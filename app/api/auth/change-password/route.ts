@@ -45,7 +45,8 @@ export async function POST(req: Request) {
   const newHash = await hashPassword(newPassword);
   await db
     .update(users)
-    .set({ passwordHash: newHash })
+    // 변경 완료 시 강제 변경 플래그 해제 (부트스트랩 임시 비번 계정 등).
+    .set({ passwordHash: newHash, mustChangePassword: false })
     .where(eq(users.id, me.id));
 
   return new Response(null, { status: 204 });

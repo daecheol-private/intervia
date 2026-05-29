@@ -50,6 +50,12 @@ export const users = sqliteTable("users", {
     .notNull()
     .default("active"),
   emailVerifiedAt: text("email_verified_at"),
+  // 강제 비밀번호 변경 플래그. 부트스트랩 관리자(초기 비번 "changeme") 처럼 임시
+  // 비밀번호로 생성된 계정은 true → 로그인 후 변경 전까지 전역 오버레이로 차단.
+  // 비밀번호 변경 성공 시 false 로 클리어.
+  mustChangePassword: integer("must_change_password", { mode: "boolean" })
+    .notNull()
+    .default(false),
   // 가입자 약관·처리방침 동의 (PIPA 분쟁 시 입증).
   // IP/UA 도 함께 보존 — "동의 안 받았다"는 주장에 대한 기술적 입증.
   termsAcceptedAt: text("terms_accepted_at"),
@@ -143,6 +149,11 @@ export const jobPostings = sqliteTable("job_postings", {
   requirements: text("requirements").notNull(),
   // 선호 인재상 — 평가·면접 시 추가 컨텍스트. 빈 문자열 허용.
   idealProfile: text("ideal_profile").notNull().default(""),
+  // AI 평가 중점 사항 — **HR 내부용. 후보자에게 비공개**.
+  // 채용 담당자가 AI 평가 가중치를 직접 코멘트 ("보안 경력 최우선" 등).
+  // 서류평가/면접 진행/면접 평가 프롬프트에 별도 가이드 블록으로 주입됨.
+  // 차별 금지 항목(성별·나이·출신지·종교 등) 입력은 정책상 금지.
+  evaluationFocus: text("evaluation_focus").notNull().default(""),
   tone: text("tone", { enum: ["친절한", "중립적인", "엄격한"] })
     .notNull()
     .default("중립적인"),
@@ -263,6 +274,11 @@ export const candidates = sqliteTable("candidates", {
   age: integer("age"),
   careerYears: integer("career_years"),
   careerSummary: text("career_summary"),
+  // 최종학력 — 업로드 시 원문에서 결정적 추출 (lib/education-extract.ts). 화면 표시 전용.
+  // level: 고졸 / 전문학사 / 학사 / 석사 / 박사 (+ 졸업상태 suffix 가능). school: 최종 학교명.
+  educationLevel: text("education_level"),
+  educationSchool: text("education_school"),
+  educationMajor: text("education_major"),
   resumeFilePath: text("resume_file_path").notNull(),
   resumeText: text("resume_text").notNull(),
   resumeMaskedText: text("resume_masked_text"),
@@ -408,8 +424,10 @@ export const screeningJobs = sqliteTable("screening_jobs", {
   candidateId: integer("candidate_id")
     .notNull()
     .references(() => candidates.id, { onDelete: "cascade" }),
+  // paused = 소속 법인 잔액 0 이하로 일시정지 (활성 큐에서 분리 — 타 법인 영향 차단).
+  //          충전되면 워커가 reconcile 단계에서 queued 로 자동 복원.
   status: text("status", {
-    enum: ["queued", "processing", "done", "failed"],
+    enum: ["queued", "processing", "done", "failed", "paused"],
   })
     .notNull()
     .default("queued"),
@@ -433,13 +451,17 @@ export const screeningJobs = sqliteTable("screening_jobs", {
 export type InterviewMessage = {
   role: "user" | "model";
   content: string;
-  /** 사용자 턴에만 — LLM 보조 탐지용 입력 신호 (붙여넣기/타이핑/체류시간) */
+  /** 사용자 턴에만 — LLM 보조 탐지용 입력 신호 (붙여넣기/타이핑/체류시간/이탈/복사) */
   inputSignals?: {
     pasteCount: number;
     pastedChars: number;
     typedChars: number;
     msFromFirstInput: number | null;
     msSinceLastPaste: number | null;
+    /** 이 턴 동안 탭 전환·창 포커스 이탈(다른 앱/창으로 이동) 횟수 */
+    blurCount?: number;
+    /** 이 턴 동안 면접관 질문 텍스트 복사/잘라내기 시도 횟수 (차단됨) */
+    copyAttempts?: number;
   };
 };
 
@@ -453,6 +475,18 @@ export type InterviewEvaluation = {
   followup_questions: string[];
   /** LLM 보조 의심 신호에 대한 평가자 노트 — 단정 금지·중립 톤. */
   llm_assist_note?: string;
+  /**
+   * 답변 텍스트 자체의 외부 LLM(ChatGPT/Claude 등) 생성 가능성 분석 (C).
+   * 행동 신호(붙여넣기/탭전환)와 독립적으로 문체만 보고 추정. 단정 금지·중립 톤.
+   */
+  ai_authorship?: {
+    likelihood: "낮음" | "보통" | "높음";
+    /** 0~100, AI 생성 가능성 점수 */
+    score: number;
+    /** 판단 근거 2~4개 */
+    signals: string[];
+    note: string;
+  };
 };
 
 /**
@@ -710,6 +744,78 @@ export const interviewSchedules = sqliteTable("interview_schedules", {
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
 
+/**
+ * LLM 이 생성하는 면접 질문지 구조.
+ *
+ * "다양한 형태" — 섹션별로 검증 목적이 다른 질문 묶음:
+ *   기술/직무 역량 · 경험·성과 심층 · 서류/AI면접에서 드러난 우려 검증 ·
+ *   인성·컬처핏 · 상황/케이스 등. 섹션 제목·개수는 후보자에 맞춰 LLM 이 결정.
+ */
+export type InterviewQuestionSheet = {
+  /** 이 후보자를 1차 면접에서 어떻게 검증할지 — 면접관용 한 문단 전략. */
+  strategy: string;
+  sections: Array<{
+    title: string;
+    /** 이 섹션으로 무엇을 확인하는지 (평가 포인트). */
+    focus: string;
+    questions: Array<{
+      question: string;
+      /** 질문 의도 — 무엇을 보려는 질문인지. */
+      intent: string;
+      /** 1~2개 꼬리질문 (선택). */
+      followups?: string[];
+      /** 근거: 이력서/서류평가/AI면접 중 어디서 도출됐는지 짧게. */
+      basis?: string;
+    }>;
+  }>;
+  /** 반드시 확인해야 할 우려 신호 (선택). */
+  red_flags?: string[];
+};
+
+/**
+ * 면접 문제(질문지) 한 벌 — 후보자당 1건.
+ *
+ * 1차 면접 일정이 확정(interview_schedules.status='selected', round='round1')된 후
+ * 면접관 중 누구나 "면접 문제 생성"을 누르면 LLM 이 이력서·서류평가·AI면접 평가를
+ * 종합해 다양한 형태의 질문지를 만들어 여기에 저장한다. 이후 면접관이 팝업으로 열람.
+ *
+ * 후보자당 1건(candidate_id UNIQUE) — 재생성 시 같은 row 를 덮어쓴다(이력 미보관).
+ */
+export const interviewQuestionSheets = sqliteTable("interview_question_sheets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  candidateId: integer("candidate_id")
+    .notNull()
+    .unique()
+    .references(() => candidates.id, { onDelete: "cascade" }),
+  jobId: integer("job_id")
+    .notNull()
+    .references(() => jobPostings.id, { onDelete: "cascade" }),
+  orgId: integer("org_id").references(() => organizations.id, {
+    onDelete: "cascade",
+  }),
+  // 생성 시점에 어떤 입력이 반영됐는지 — UI 안내용.
+  // (서류평가 있었나 / AI면접 평가 있었나)
+  basedOnScreening: integer("based_on_screening", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  basedOnInterview: integer("based_on_interview", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  questions: text("questions", { mode: "json" })
+    .$type<InterviewQuestionSheet>()
+    .notNull(),
+  generatedByUserId: integer("generated_by_user_id").references(
+    () => users.id,
+    { onDelete: "set null" }
+  ),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 export const orgSmtpConfigs = sqliteTable("org_smtp_configs", {
   orgId: integer("org_id")
     .primaryKey()
@@ -885,6 +991,8 @@ export type JobInterviewer = typeof jobInterviewers.$inferSelect;
 export type NewJobInterviewer = typeof jobInterviewers.$inferInsert;
 export type InterviewSchedule = typeof interviewSchedules.$inferSelect;
 export type NewInterviewSchedule = typeof interviewSchedules.$inferInsert;
+export type InterviewQuestionSheetRow = typeof interviewQuestionSheets.$inferSelect;
+export type NewInterviewQuestionSheetRow = typeof interviewQuestionSheets.$inferInsert;
 
 export type PasswordReset = typeof passwordResets.$inferSelect;
 export type NewPasswordReset = typeof passwordResets.$inferInsert;

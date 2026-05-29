@@ -23,6 +23,7 @@ import { isJobUnlocked } from "@/lib/job-lock";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateJSON } from "@/lib/gemini";
 import { buildSummaryPrompt } from "@/lib/prompts";
+import { computeTranscriptStats } from "@/lib/interview-signals";
 import { chargeFeature, refundFeature } from "@/lib/tokens";
 import {
   requirePositiveBalance,
@@ -127,27 +128,8 @@ export async function POST(
     .map((m) => `${m.role === "user" ? "후보자" : "면접관"}: ${m.content}`)
     .join("\n\n");
 
-  const userMsgs = session.messages.filter((m) => m.role === "user");
-  const candidateChars = userMsgs.reduce(
-    (sum, m) => sum + m.content.trim().length,
-    0
-  );
-  const stats = {
-    totalTurns: session.messages.length,
-    candidateTurns: userMsgs.length,
-    candidateChars,
-    candidateAvgChars: userMsgs.length
-      ? Math.round(candidateChars / userMsgs.length)
-      : 0,
-    interviewerTurns: session.messages.length - userMsgs.length,
-    llmAssistSignal: {
-      pasteEvents: 0,
-      pastedChars: 0,
-      typedChars: candidateChars,
-      pasteRatio: 0,
-      suspicious: false,
-    },
-  };
+  // 재평가도 동일 신호 로직 — 저장된 messages.inputSignals 에서 집계.
+  const stats = computeTranscriptStats(session.messages);
 
   try {
     const evaluation = await generateJSON<InterviewEvaluation>(

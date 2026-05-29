@@ -14,6 +14,8 @@ export const MODELS = {
   screening: "gemini-2.5-flash",
   interview: "gemini-2.5-flash",
   interviewEval: "gemini-2.5-flash",
+  // 1차 면접 질문지 생성 — 이력서·서류평가·AI면접 평가 종합. 동기 호출(버튼 클릭).
+  questionGen: "gemini-2.5-flash",
 } as const;
 
 export type LlmTask = keyof typeof MODELS;
@@ -67,6 +69,7 @@ const THINKING_BUDGET: Record<LlmTask, number | undefined> = {
   screening: undefined,
   interview: 128,
   interviewEval: undefined,
+  questionGen: undefined,
 };
 
 const TRANSIENT_PATTERNS =

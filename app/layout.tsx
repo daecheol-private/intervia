@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getCurrentUser } from "@/lib/auth";
 import { NavBar } from "./components/NavBar";
 import { Footer } from "./components/Footer";
+import { ForcePasswordChange } from "./components/ForcePasswordChange";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -55,6 +56,9 @@ export default async function RootLayout({
         />
         <div className="flex-1 flex flex-col">{children}</div>
         <Footer />
+        {user?.mustChangePassword && (
+          <ForcePasswordChange email={user.email} />
+        )}
       </body>
     </html>
   );

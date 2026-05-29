@@ -18,15 +18,24 @@ import {
   consentLogs,
   tokenWallets,
   tokenLedger,
+  interviewSessions as sessions,
+  interviewSchedules as schedules,
 } from "./schema";
 import { and, count, eq, lt, sql } from "drizzle-orm";
 import { deleteFile } from "./storage";
 import { getBalance, getPricing } from "./tokens";
+import { buildDecisionEmail, purgeOnDecision } from "./candidate-stage";
+import { sendMail } from "./mailer";
 
 export const DEFAULT_JOB_DURATION_DAYS = 30;
 export const EXTENSION_DAYS = 30;
 export const PDF_PURGE_DAYS_AFTER_CLOSE = 7;
 export const PII_PURGE_DAYS_AFTER_CLOSE = 14;
+/**
+ * 만료(closesAt 지남) 후에도 HR 이 연장·종결 결정을 미루면
+ * 이 일수 후에 공고 자체를 자동 삭제 (cascade 로 후보자 포함).
+ */
+export const UNRESOLVED_EXPIRED_DELETE_DAYS = 14;
 
 /** 연장 버튼 노출 시점 — 종결 D-14 이내일 때만. */
 export const EXTEND_VISIBLE_WITHIN_DAYS = 14;
@@ -156,28 +165,217 @@ export async function extendJob(args: {
   };
 }
 
-/** 만료된 active 공고를 closed 로 전환. */
+/**
+ * 자동 종결 정책 변경 (2026-05-28):
+ * closesAt 도래해도 자동으로 status='closed' 로 전환하지 않는다.
+ * 만료된 active 공고는 그대로 둔다 — HR 이 공고 상세 진입 시 모달로
+ * "연장 / 종결" 을 직접 선택. 종결은 closeJob() 으로만 일어남.
+ *
+ * 이 함수는 호환을 위해 남겨두되 항상 0 반환.
+ */
 export async function closeExpiredJobs(): Promise<number> {
-  const rows = await db
-    .select({ id: jobPostings.id })
-    .from(jobPostings)
+  return 0;
+}
+
+/**
+ * 공고가 만료됐는지 — closesAt 이 지났고 아직 active 인 상태.
+ * 이 상태에선 HR 추가 행위는 차단되고, 후보자의 진행(AI 면접 응시 등) 은 계속 허용.
+ */
+export function isJobExpired(job: {
+  status: "active" | "closed";
+  closesAt: string | null;
+}): boolean {
+  if (job.status !== "active") return false;
+  if (!job.closesAt) return false;
+  return new Date(job.closesAt).getTime() < Date.now();
+}
+
+/**
+ * 종결 사전 체크 — "지원자 대기 중" 상태이면서 링크가 아직 유효한 후보자가 있으면 차단.
+ * 차단 사유:
+ *   - AI 면접 발급됨(status=pending|in_progress) + expiresAt > now
+ *   - 1차 면접 스케쥴 제시(status=pending|counter_proposed) + expiresAt > now
+ *
+ * 차단 후보가 없으면 종결 가능. 진행 중인 일반 후보(서류평가, ai_evaluated 등)는
+ * 종결 시 일괄 불합격 처리되므로 차단 사유는 아님.
+ */
+export async function checkCloseable(jobId: number): Promise<{
+  ok: boolean;
+  blockers: Array<{
+    candidateId: number;
+    candidateName: string;
+    reason: "ai_interview_pending" | "schedule_pending";
+    expiresAt: string;
+  }>;
+  pendingDecisionCount: number;
+}> {
+  const now = sql`CURRENT_TIMESTAMP`;
+
+  // AI 면접 링크 — pending/in_progress + 유효
+  const aiBlockers = await db
+    .select({
+      candidateId: candidates.id,
+      candidateName: candidates.name,
+      expiresAt: sessions.expiresAt,
+    })
+    .from(sessions)
+    .innerJoin(candidates, eq(candidates.id, sessions.candidateId))
     .where(
       and(
-        eq(jobPostings.status, "active"),
-        lt(jobPostings.closesAt, sql`CURRENT_TIMESTAMP`)
+        eq(candidates.jobId, jobId),
+        sql`${sessions.status} IN ('pending','in_progress')`,
+        sql`${sessions.expiresAt} > ${now}`
       )
     );
-  if (rows.length === 0) return 0;
+
+  // 1차 면접 스케쥴 링크 — pending/counter_proposed + 유효
+  const scheduleBlockers = await db
+    .select({
+      candidateId: candidates.id,
+      candidateName: candidates.name,
+      expiresAt: schedules.expiresAt,
+    })
+    .from(schedules)
+    .innerJoin(candidates, eq(candidates.id, schedules.candidateId))
+    .where(
+      and(
+        eq(schedules.jobId, jobId),
+        sql`${schedules.status} IN ('pending','counter_proposed')`,
+        sql`${schedules.expiresAt} > ${now}`
+      )
+    );
+
+  const blockers = [
+    ...aiBlockers.map((b) => ({
+      candidateId: b.candidateId,
+      candidateName: b.candidateName,
+      reason: "ai_interview_pending" as const,
+      expiresAt: b.expiresAt,
+    })),
+    ...scheduleBlockers.map((b) => ({
+      candidateId: b.candidateId,
+      candidateName: b.candidateName,
+      reason: "schedule_pending" as const,
+      expiresAt: b.expiresAt,
+    })),
+  ];
+
+  // 일괄 불합격 대상 — outcome 미결정 후보 수 (참고용)
+  const [pending] = await db
+    .select({ n: count() })
+    .from(candidates)
+    .where(and(eq(candidates.jobId, jobId), sql`${candidates.outcome} IS NULL`));
+
+  return {
+    ok: blockers.length === 0,
+    blockers,
+    pendingDecisionCount: Number(pending?.n ?? 0),
+  };
+}
+
+/**
+ * 공고 종결 — 진행 중(outcome=null) 후보자를 일괄 불합격 처리하고 status='closed' 로 전환.
+ * - decisionFromStage 기록 (통계용)
+ * - purgeOnDecision 호출 (단건 결정과 PIPA 정책 일관)
+ * - sendNotification=true 면 결과 통보 메일 발송
+ *
+ * 호출 전에 checkCloseable() 로 차단 사유 없는지 반드시 확인.
+ */
+export async function closeJob(args: {
+  jobId: number;
+  userId: number;
+  sendNotification?: boolean;
+}): Promise<{
+  closedAt: string;
+  rejectedCount: number;
+  mailsSent: number;
+  mailsFailed: number;
+}> {
+  const closedAt = new Date().toISOString();
+
+  // 대상 후보자(진행 중) 미리 조회 — stage 등 보존, 메일 발송에도 사용
+  const targets = await db
+    .select({
+      id: candidates.id,
+      name: candidates.name,
+      email: candidates.email,
+      stage: candidates.stage,
+      orgId: candidates.orgId,
+    })
+    .from(candidates)
+    .where(and(eq(candidates.jobId, args.jobId), sql`${candidates.outcome} IS NULL`));
+
+  // 일괄 불합격 + decisionFromStage 보존 (행별 stage 가 다르므로 행별 UPDATE)
+  for (const t of targets) {
+    await db
+      .update(candidates)
+      .set({
+        outcome: "rejected",
+        outcomeReason: "job_closed_bulk",
+        decidedAt: closedAt,
+        decidedByUserId: args.userId,
+        decisionFromStage: t.stage,
+        decisionNote: "공고 종결 시 미결정 후보 일괄 처리",
+      })
+      .where(eq(candidates.id, t.id));
+  }
+
+  // PIPA 정책 일관 — 단건 결정과 동일하게 즉시 본문/파일 폐기
+  for (const t of targets) {
+    await purgeOnDecision(t.id).catch((e) =>
+      console.error(`closeJob: purgeOnDecision failed (cid=${t.id})`, e)
+    );
+  }
+
+  // 공고 상태 전환
+  const [job] = await db
+    .select({ title: jobPostings.title, orgId: jobPostings.orgId })
+    .from(jobPostings)
+    .where(eq(jobPostings.id, args.jobId));
   await db
     .update(jobPostings)
-    .set({ status: "closed", closedAt: sql`CURRENT_TIMESTAMP` })
-    .where(
-      and(
-        eq(jobPostings.status, "active"),
-        lt(jobPostings.closesAt, sql`CURRENT_TIMESTAMP`)
-      )
-    );
-  return rows.length;
+    .set({ status: "closed", closedAt })
+    .where(eq(jobPostings.id, args.jobId));
+
+  // 결과 통보 메일 (옵션)
+  let mailsSent = 0;
+  let mailsFailed = 0;
+  if (args.sendNotification && job) {
+    for (const t of targets) {
+      if (!t.email) continue;
+      try {
+        const { subject, html, text } = buildDecisionEmail({
+          candidateName: t.name,
+          jobTitle: job.title,
+          decision: "rejected",
+        });
+        await sendMail({
+          to: t.email,
+          subject,
+          html,
+          text,
+          orgId: job.orgId,
+          audience: "candidate",
+        });
+        // 결정 통보 메일 카운트 증가
+        await db
+          .update(candidates)
+          .set({
+            decisionEmailCount: sql`${candidates.decisionEmailCount} + 1`,
+          })
+          .where(eq(candidates.id, t.id));
+        mailsSent++;
+      } catch (e) {
+        console.error(
+          `closeJob: notification mail failed (cid=${t.id})`,
+          e
+        );
+        mailsFailed++;
+      }
+    }
+  }
+
+  return { closedAt, rejectedCount: targets.length, mailsSent, mailsFailed };
 }
 
 /** 종결 +7일 경과 공고의 candidates PDF + attachments 파일을 삭제. */
@@ -188,13 +386,19 @@ export async function purgePdfsAfterClose(): Promise<{
 }> {
   const cutoff = sql`datetime('now', '-${sql.raw(String(PDF_PURGE_DAYS_AFTER_CLOSE))} days')`;
   const targets = await db
-    .select({ id: candidates.id, filePath: candidates.resumeFilePath })
+    .select({
+      id: candidates.id,
+      filePath: candidates.resumeFilePath,
+      outcome: candidates.outcome,
+    })
     .from(candidates)
     .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
     .where(
       and(
         eq(jobPostings.status, "closed"),
-        lt(jobPostings.closedAt, cutoff)
+        lt(jobPostings.closedAt, cutoff),
+        // 합격자는 입사 절차상 보존 — purge 제외
+        sql`${candidates.outcome} IS NULL OR ${candidates.outcome} != 'hired'`
       )
     );
   let purgedFiles = 0;
@@ -251,6 +455,9 @@ export async function purgePdfsAfterClose(): Promise<{
  *
  * 익명화 + score 보존은 의미 없음 — 후보자 특정 불가능한 점수는 통계 가치 X.
  * 결정 시점 ~ +14일은 운영 마무리 안전 버퍼, 그 뒤엔 완전 소거.
+ *
+ * 단, **합격자(outcome='hired') 는 영구 보존** — 입사 절차 및 인사 기록 유지 목적.
+ * HR 이 명시적으로 삭제할 때까지 candidates row 유지.
  */
 export async function purgePiiAfterClose(): Promise<{
   deletedCandidates: number;
@@ -263,7 +470,9 @@ export async function purgePiiAfterClose(): Promise<{
     .where(
       and(
         eq(jobPostings.status, "closed"),
-        lt(jobPostings.closedAt, cutoff)
+        lt(jobPostings.closedAt, cutoff),
+        // 합격자는 보존
+        sql`${candidates.outcome} IS NULL OR ${candidates.outcome} != 'hired'`
       )
     );
 
@@ -285,14 +494,63 @@ export async function purgePiiAfterClose(): Promise<{
   return { deletedCandidates: targets.length };
 }
 
-/** 한 사이클 — close → purge pdf → purge pii. */
+/**
+ * 만료 후 UNRESOLVED_EXPIRED_DELETE_DAYS 일 동안 HR 이 연장·종결 결정을 안 하면
+ * 공고를 통째 삭제. cascade 로 candidates / interview_sessions / schedules /
+ * screening_jobs / attachments 모두 정리됨.
+ * appeal/consent 로그만 PII 마스킹 후 보존 (감사용).
+ */
+export async function deleteUnresolvedExpiredJobs(): Promise<{
+  deletedJobs: number;
+}> {
+  const cutoff = sql`datetime('now', '-${sql.raw(String(UNRESOLVED_EXPIRED_DELETE_DAYS))} days')`;
+  // active 상태 + closesAt 이 (now - 14d) 보다 이전 + 합격자가 한 명도 없는 공고만 대상.
+  // 합격자가 있는 공고는 입사 절차를 위해 자동 삭제 대상에서 제외.
+  const targets = await db
+    .select({ id: jobPostings.id })
+    .from(jobPostings)
+    .where(
+      and(
+        eq(jobPostings.status, "active"),
+        lt(jobPostings.closesAt, cutoff),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${candidates}
+          WHERE ${candidates.jobId} = ${jobPostings.id}
+            AND ${candidates.outcome} = 'hired'
+        )`
+      )
+    );
+  for (const t of targets) {
+    // 해당 공고의 후보자에 대한 appeal/consent 로그 마스킹 (감사 보존)
+    const cands = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(eq(candidates.jobId, t.id));
+    for (const c of cands) {
+      await db
+        .update(appealLogs)
+        .set({ email: "[purged]", ip: null, userAgent: null })
+        .where(eq(appealLogs.candidateId, c.id));
+      await db
+        .update(consentLogs)
+        .set({ ip: null, userAgent: null })
+        .where(eq(consentLogs.candidateId, c.id));
+    }
+    await db.delete(jobPostings).where(eq(jobPostings.id, t.id));
+  }
+  return { deletedJobs: targets.length };
+}
+
+/** 한 사이클 — close(no-op) → purge pdf → purge pii → 만료 미해결 공고 삭제. */
 export async function runLifecycleSweep(): Promise<{
   closed: number;
   pdfPurge: Awaited<ReturnType<typeof purgePdfsAfterClose>>;
   piiPurge: Awaited<ReturnType<typeof purgePiiAfterClose>>;
+  unresolvedDeleted: Awaited<ReturnType<typeof deleteUnresolvedExpiredJobs>>;
 }> {
   const closed = await closeExpiredJobs();
   const pdfPurge = await purgePdfsAfterClose();
   const piiPurge = await purgePiiAfterClose();
-  return { closed, pdfPurge, piiPurge };
+  const unresolvedDeleted = await deleteUnresolvedExpiredJobs();
+  return { closed, pdfPurge, piiPurge, unresolvedDeleted };
 }

@@ -15,6 +15,7 @@ import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { isJobUnlocked } from "@/lib/job-lock";
 import { FavoriteStar } from "./components/FavoriteStar";
 import { ChatPreview } from "./components/ChatPreview";
+import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
 import {
   getAllPricing,
   WELCOME_BONUS_TOKENS,
@@ -45,6 +46,7 @@ export default async function HomePage() {
 }
 
 const TOKEN_KRW = 100; // 100원 = 1 토큰
+const LOW_BALANCE_THRESHOLD = 50; // 멤버 충전 요청 버튼 노출 임계값 (≈ 5,000원)
 
 // ---------------------------------------------------------------------------
 // 로그인 후 대시보드
@@ -124,6 +126,17 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     tokenBalance = Number(w?.b ?? 0);
   }
 
+  // 토큰 잔액으로 가능한 액션 수 환산 — KPI 카드 보조 문구
+  const pricing = await getAllPricing();
+  const tokenEquivResumes =
+    tokenBalance != null && tokenBalance > 0
+      ? Math.floor(tokenBalance / pricing.resume_upload)
+      : 0;
+  const tokenEquivInterviews =
+    tokenBalance != null && tokenBalance > 0
+      ? Math.floor(tokenBalance / pricing.interview)
+      : 0;
+
   // 본인 즐겨찾기 ID — 정렬 + UI 표시. jobsWithActions 쿼리의 .then sort 가 참조하므로 먼저 선언.
   const myFavorites = await db
     .select({ jobId: userJobFavorites.jobId })
@@ -163,6 +176,9 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       needsInterviewDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'screened' THEN 1 ELSE 0 END)`,
       awaitingInterview: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_pending' THEN 1 ELSE 0 END)`,
       needsFinalDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_evaluated' THEN 1 ELSE 0 END)`,
+      needsRound1Schedule: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+      needsRound2Decision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+      needsFinalOffer: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
     })
     .from(jobPostings)
     .leftJoin(candidates, eq(candidates.jobId, jobPostings.id))
@@ -357,11 +373,27 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         />
         <KpiCard
           label={me.role === "system_admin" ? "전체 토큰 잔액" : "토큰 잔액"}
-          value={tokenBalance ?? "-"}
-          sub={tokenBalance != null && tokenBalance < 0 ? "마이너스 — 충전 필요" : undefined}
-          href={me.role === "system_admin" ? "/admin/orgs" : "/org/tokens"}
+          value={tokenBalance != null ? tokenBalance.toLocaleString() : "-"}
+          sub={
+            tokenBalance != null && tokenBalance < 0
+              ? "마이너스 — 충전 필요"
+              : tokenBalance != null && tokenBalance > 0
+                ? `이력서 ${tokenEquivResumes.toLocaleString()}건 · 면접 ${tokenEquivInterviews.toLocaleString()}회 가능`
+                : undefined
+          }
+          href={
+            me.role === "system_admin"
+              ? "/admin/orgs"
+              : me.role === "org_admin"
+                ? "/org/tokens"
+                : undefined
+          }
           accent={tokenBalance != null && tokenBalance < 0 ? "rose" : "emerald"}
-        />
+        >
+          {me.role === "member" &&
+            tokenBalance != null &&
+            tokenBalance <= LOW_BALANCE_THRESHOLD && <TokenChargeRequestButton />}
+        </KpiCard>
       </div>
 
       {/* 알림 — 면접관으로 지정된 공고에서 처리 대기 중인 항목 */}
@@ -488,12 +520,14 @@ function KpiCard({
   sub,
   href,
   accent,
+  children,
 }: {
   label: string;
   value: number | string;
   sub?: string;
   href?: string;
   accent: "blue" | "indigo" | "amber" | "emerald" | "rose" | "slate";
+  children?: React.ReactNode;
 }) {
   const accentMap: Record<string, string> = {
     blue: "text-primary border-primary/20",
@@ -504,10 +538,19 @@ function KpiCard({
     slate: "text-ink-soft border-border-default",
   };
   const inner = (
-    <div className={`bg-card border rounded-2xl p-4 shadow-sm h-full transition-shadow ${accentMap[accent]} ${href ? "hover:shadow-md" : ""}`}>
-      <div className="text-xs text-ink-soft font-medium">{label}</div>
+    <div className={`group bg-card border rounded-2xl p-4 shadow-sm h-full transition-all ${accentMap[accent]} ${href ? "hover:shadow-md hover:-translate-y-0.5 hover:border-primary/40" : ""}`}>
+      <div className="flex items-center justify-between gap-1">
+        <div className="text-xs text-ink-soft font-medium">{label}</div>
+        {href && (
+          <ArrowRight
+            className="w-3.5 h-3.5 text-ink-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all"
+            strokeWidth={2.5}
+          />
+        )}
+      </div>
       <div className="mt-2 text-2xl font-bold text-ink tabular-nums">{value}</div>
       {sub && <div className="text-[11px] text-ink-soft mt-1">{sub}</div>}
+      {children}
     </div>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;
@@ -536,6 +579,9 @@ function JobCard({
     needsInterviewDecision: number;
     awaitingInterview: number;
     needsFinalDecision: number;
+    needsRound1Schedule: number;
+    needsRound2Decision: number;
+    needsFinalOffer: number;
   };
   isLocked: boolean;
   favorited: boolean;
@@ -561,9 +607,19 @@ function JobCard({
           ? "bg-warning-soft text-warning border border-warning/30"
           : "bg-primary-soft text-primary-deep border border-primary/25";
 
+  const needsInterviewDecision = Number(job.needsInterviewDecision);
+  const awaitingInterview = Number(job.awaitingInterview);
+  const needsFinalDecision = Number(job.needsFinalDecision);
+  const needsRound1Schedule = Number(job.needsRound1Schedule);
+  const needsRound2Decision = Number(job.needsRound2Decision);
+  const needsFinalOffer = Number(job.needsFinalOffer);
+
   const actionTotal =
-    Number(job.needsInterviewDecision) +
-    Number(job.needsFinalDecision);
+    needsInterviewDecision +
+    needsFinalDecision +
+    needsRound1Schedule +
+    needsRound2Decision +
+    needsFinalOffer;
 
   return (
     <div
@@ -651,34 +707,75 @@ function JobCard({
             🔒 비밀번호 입력 후 액션 카운트 확인
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
-            <ActionCount
-              jobId={job.id}
-              stage="screened"
-              value={Number(job.needsInterviewDecision)}
-              title="서류평가 완료"
-              subtitle="면접 결정 대기"
-              tone="blue"
-              actor="인사담당"
-            />
-            <ActionCount
-              jobId={job.id}
-              stage="ai_pending"
-              value={Number(job.awaitingInterview)}
-              title="AI 면접 대기"
-              subtitle="응시 대기"
-              tone="sky"
-              actor="지원자"
-            />
-            <ActionCount
-              jobId={job.id}
-              stage="ai_evaluated"
-              value={Number(job.needsFinalDecision)}
-              title="AI 면접 완료"
-              subtitle="합·불 결정 대기"
-              tone="indigo"
-              actor="인사담당"
-            />
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              <ActionCount
+                jobId={job.id}
+                stage="screened"
+                value={needsInterviewDecision}
+                title="서류평가 완료"
+                subtitle="면접 결정 대기"
+                tone="blue"
+                actor="인사담당"
+              />
+              <ActionCount
+                jobId={job.id}
+                stage="ai_pending"
+                value={awaitingInterview}
+                title="AI 면접 대기"
+                subtitle="응시 대기"
+                tone="sky"
+                actor="지원자"
+              />
+              <ActionCount
+                jobId={job.id}
+                stage="ai_evaluated"
+                value={needsFinalDecision}
+                title="AI 면접 완료"
+                subtitle="합·불 결정 대기"
+                tone="indigo"
+                actor="인사담당"
+              />
+            </div>
+            {(needsRound1Schedule > 0 ||
+              needsRound2Decision > 0 ||
+              needsFinalOffer > 0) && (
+              <div className="grid grid-cols-3 gap-2">
+                {needsRound1Schedule > 0 && (
+                  <ActionCount
+                    jobId={job.id}
+                    stage="round1_candidate"
+                    value={needsRound1Schedule}
+                    title="1차 면접"
+                    subtitle="스케쥴 제시 대기"
+                    tone="blue"
+                    actor="인사담당"
+                  />
+                )}
+                {needsRound2Decision > 0 && (
+                  <ActionCount
+                    jobId={job.id}
+                    stage="round1_passed"
+                    value={needsRound2Decision}
+                    title="1차 합격"
+                    subtitle="2차 진행 결정 대기"
+                    tone="indigo"
+                    actor="인사담당"
+                  />
+                )}
+                {needsFinalOffer > 0 && (
+                  <ActionCount
+                    jobId={job.id}
+                    stage="round2_passed"
+                    value={needsFinalOffer}
+                    title="2차 합격"
+                    subtitle="최종합격 결정 대기"
+                    tone="indigo"
+                    actor="인사담당"
+                  />
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -923,7 +1020,7 @@ async function Landing() {
               body="법인별 데이터 격리, 도메인 자동 매칭 가입, 관리자 승인제. 시스템관리자의 모든 데이터 접근은 감사 로그로 추적."
               visual={
                 <div className="space-y-1.5">
-                  <OrgRow name="엑스퍼넷" domain="expernet.co.kr" balance="1,247" />
+                  <OrgRow name="샘플컴퍼니" domain="sample.co.kr" balance="1,247" />
                   <OrgRow name="네이버" domain="navercorp.com" balance="8,910" />
                   <OrgRow name="카카오" domain="kakaocorp.com" balance="3,402" muted />
                 </div>
@@ -948,7 +1045,7 @@ async function Landing() {
               visual={
                 <div className="rounded-lg bg-card border border-border-default p-3 font-mono text-[11px]">
                   <div className="text-ink-soft">
-                    From: <span className="text-ink">recruit@expernet.co.kr</span>
+                    From: <span className="text-ink">recruit@sample.co.kr</span>
                   </div>
                   <div className="mt-2 flex gap-1.5 flex-wrap">
                     <PassChip>SPF · pass</PassChip>

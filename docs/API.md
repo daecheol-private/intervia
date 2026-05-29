@@ -72,6 +72,8 @@
 | GET | `/api/candidates/[id]` | 🔑 |
 | DELETE | `/api/candidates/[id]` | 후보자 + 파일 삭제 |
 | POST | `/api/candidates/[id]/interview-link` | **`interview` 차감**. 새 면접 세션 + 토큰 발급 |
+| GET | `/api/candidates/[id]/interview-questions` | 저장된 1차 면접 질문지 + `scheduleConfirmed`(1차 일정 확정 여부) 반환. 없으면 `sheet:null` |
+| POST | `/api/candidates/[id]/interview-questions` | 1차 면접 질문지 **생성/재생성**(무료). 게이트: round1 일정 `selected` 아니면 409. 이력서+서류평가+AI면접 평가 종합 LLM(task=questionGen) → 후보자당 1건 upsert. 감사 `interview_questions.generate` |
 
 ## 면접 (외부 — 후보자용)
 

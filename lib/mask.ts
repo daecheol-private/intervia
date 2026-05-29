@@ -271,6 +271,36 @@ export function maskText(
   return out;
 }
 
+/**
+ * 텍스트에 등장하는 대학(사전 등재) 목록을 등장 위치 순으로 반환.
+ * 학력 추출(lib/education-extract.ts) 에서 학교명 식별에 재활용 — 마스킹 사전과 단일 출처 유지.
+ * 긴 이름이 먼저 매칭되도록 정렬되어 있어 "서울대학교" 가 "서울" 보다 우선.
+ */
+export function findUniversitiesInText(
+  text: string
+): { name: string; index: number }[] {
+  ensureDicts();
+  const found: { name: string; index: number }[] = [];
+  const taken: Array<[number, number]> = []; // 이미 잡힌 구간 (겹침 방지)
+  for (const u of _universities ?? []) {
+    if (u.length < 2) continue;
+    const re = new RegExp(
+      `(?<![가-힣A-Za-z0-9])${escapeRe(u)}(?![가-힣A-Za-z0-9])`,
+      "g"
+    );
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const start = m.index;
+      const end = start + u.length;
+      // 더 긴 이름이 이미 차지한 구간이면 skip (예: "서울대학교" 잡힌 자리에 "서울" 재매칭 방지)
+      if (taken.some(([s, e]) => start >= s && end <= e)) continue;
+      taken.push([start, end]);
+      found.push({ name: u, index: start });
+    }
+  }
+  return found.sort((a, b) => a.index - b.index);
+}
+
 // 디버그용 — 어떤 패턴이 매칭됐는지 통계
 export function maskStats(text: string): Record<string, number> {
   const counts: Record<string, number> = {};

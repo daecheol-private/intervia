@@ -9,7 +9,7 @@
  */
 import { db } from "./db";
 import { notifications, users, jobInterviewers, jobPostings } from "./schema";
-import { and, desc, eq, isNull, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { sendMail, isSmtpAvailable, wrapEmailCard } from "./mailer";
 
 export type NotificationType =
@@ -196,10 +196,10 @@ export async function notifySystemAdmins(
   );
 }
 
-/** 내 알림 목록 — 미읽음 먼저, 최신순. 기본 20개. */
+/** 내 알림 목록 — 미읽음 전체(최신순) + 최근 읽음 5건. limit 인자는 호환용. */
 export async function listMyNotifications(
   userId: number,
-  limit = 20
+  _limit = 20
 ): Promise<
   Array<{
     id: number;
@@ -210,23 +210,28 @@ export async function listMyNotifications(
     createdAt: string;
   }>
 > {
-  const rows = await db
-    .select({
-      id: notifications.id,
-      type: notifications.type,
-      title: notifications.title,
-      href: notifications.href,
-      readAt: notifications.readAt,
-      createdAt: notifications.createdAt,
-    })
-    .from(notifications)
-    .where(eq(notifications.userId, userId))
-    .orderBy(
-      sql`CASE WHEN ${notifications.readAt} IS NULL THEN 0 ELSE 1 END`,
-      desc(notifications.createdAt)
-    )
-    .limit(limit);
-  return rows as Array<{
+  const cols = {
+    id: notifications.id,
+    type: notifications.type,
+    title: notifications.title,
+    href: notifications.href,
+    readAt: notifications.readAt,
+    createdAt: notifications.createdAt,
+  };
+  const [unread, recentRead] = await Promise.all([
+    db
+      .select(cols)
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)))
+      .orderBy(desc(notifications.createdAt)),
+    db
+      .select(cols)
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), isNotNull(notifications.readAt)))
+      .orderBy(desc(notifications.createdAt))
+      .limit(5),
+  ]);
+  return [...unread, ...recentRead] as Array<{
     id: number;
     type: NotificationType;
     title: string;

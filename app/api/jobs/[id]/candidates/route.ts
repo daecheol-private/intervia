@@ -8,14 +8,11 @@ import {
   userCandidateFavorites,
 } from "@/lib/schema";
 import { eq, desc, inArray, and, sql } from "drizzle-orm";
-import { extractTextFromBuffer } from "@/lib/parsers";
 import { isJobUnlocked } from "@/lib/job-lock";
+import { isJobExpired } from "@/lib/job-lifecycle";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { saveFile } from "@/lib/storage";
-import { maskText } from "@/lib/mask";
-import { extractPII } from "@/lib/pii-extract";
-import { sanitizeResumeText } from "@/lib/prompt-safety";
 import { log } from "@/lib/logger";
 import { createHash } from "node:crypto";
 import type { CurrentUser } from "@/lib/auth";
@@ -76,7 +73,12 @@ export async function GET(
       age: candidates.age,
       careerYears: candidates.careerYears,
       careerSummary: candidates.careerSummary,
+      educationLevel: candidates.educationLevel,
+      educationSchool: candidates.educationSchool,
+      educationMajor: candidates.educationMajor,
       resumeFilePath: candidates.resumeFilePath,
+      // 파싱 완료 여부 판별용 — 마스킹 텍스트 길이 (본문은 전송 안 함).
+      maskedLen: sql<number>`COALESCE(LENGTH(${candidates.resumeMaskedText}), 0)`,
       screeningScore: candidates.screeningScore,
       screeningReport: candidates.screeningReport,
       stage: candidates.stage,
@@ -168,8 +170,11 @@ export async function GET(
     const s = latestByCandidate.get(r.id);
     const j = jobByCandidate.get(r.id);
     const isActive = j?.status === "queued" || j?.status === "processing";
+    const { maskedLen, ...rest } = r;
     return {
-      ...r,
+      ...rest,
+      // 파싱(텍스트 추출+마스킹) 완료 여부 — UI 가 '분석 중' vs '평가 중' 구분.
+      parsed: (maskedLen ?? 0) >= 30,
       favorited: favoritedSet.has(r.id),
       latestInterviewStatus: s?.status ?? null,
       latestInterviewScore:
@@ -251,6 +256,16 @@ export async function POST(
         code: "job_closed",
         message:
           "이미 종결된 공고입니다. 추가 이력서를 받으려면 공고를 연장해 주세요.",
+      },
+      { status: 409 }
+    );
+  }
+  if (isJobExpired(job)) {
+    return Response.json(
+      {
+        code: "job_expired",
+        message:
+          "공고 종결 예정일이 지났습니다. 공고를 연장하거나 종결한 후 다시 시도해 주세요.",
       },
       { status: 409 }
     );
@@ -570,25 +585,8 @@ async function processGroup(args: {
   const magicErr = verifyMagic(resumeFile.name, resumeFile.buf);
   if (magicErr) return { ok: false, group: group.candidateName, reason: magicErr };
 
-  // 텍스트 추출
-  let resumeText = "";
-  try {
-    resumeText = await extractTextFromBuffer(resumeFile.buf, resumeFile.name);
-  } catch (err) {
-    return {
-      ok: false,
-      group: group.candidateName,
-      reason: `파일 파싱 오류: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
-  if (resumeText.length < 30)
-    return {
-      ok: false,
-      group: group.candidateName,
-      reason: "이력서 텍스트 추출 실패 (스캔 PDF 또는 빈 파일).",
-    };
-
-  // SHA-256 중복 체크 — 같은 공고 안에서 동일 파일은 1건만 허용 (업로더 무관)
+  // SHA-256 중복 체크 — 같은 공고 안에서 동일 파일은 1건만 허용 (업로더 무관).
+  // 파싱 전에 버퍼 해시로 즉시 판정 → 중복 업로드는 카드 생성 없이 바로 거부.
   const resumeHash = createHash("sha256").update(resumeFile.buf).digest("hex");
   const [dup] = await db
     .select({ id: candidates.id, name: candidates.name })
@@ -606,21 +604,14 @@ async function processGroup(args: {
   // 한 번의 업로드 안에서는 mergeGroupsByName 으로 이미 합쳐졌고,
   // 이후 추가 업로드에서 같은 이름·다른 파일이 들어오면 새 사람으로 등록되는 게 의도.
 
-  // 이름 추정 우선순위 (사용자 합의 2026-05-17):
+  // 이름 — 파싱 없이 파일명/수동입력/폴더명만으로 결정 (즉시 카드 표시용).
   //   1) 수동 입력 (providedName)
-  //   2) 파일명에 명확한 한국어 이름이 보이면 (홍길동_이력서.pdf 등) → 파일명 우선
-  //   3) LLM/정규식 추출 (extractPII)
-  //   4) 그룹 폴더명 / 파일명 stem
+  //   2) 파일명 한국어 이름 (홍길동_이력서.pdf 등)
+  //   3) 그룹 폴더명 / 파일명 stem
+  // LLM/정규식 추출 이름(extractPII)은 워커가 파싱 후, 이름이 "(이름 미상)" 일 때만 승격.
   const filenameKoreanName =
     extractKoreanNameFromFilename(resumeFile.name) ||
     (looksLikeKoreanName(group.candidateName) ? group.candidateName : null);
-  const nameHint = providedName || filenameKoreanName || group.candidateName;
-  const pii = extractPII(resumeText, {
-    providedName: nameHint || null,
-    providedEmail: providedEmail || null,
-  });
-  // 5) 모든 후보가 비어있을 때만 파일명 stem 사용 — 단, 'resume'/'이력서'/'sample' 같은
-  //    generic 토큰뿐이면 "(이름 미상)" 으로 폴백 (HR 가 ✎ 정보 수정으로 직접 입력 유도).
   const filenameStem = resumeFile.name
     .replace(/\.[^/.]+$/, "")
     .replace(/[_\-]+/g, " ")
@@ -633,34 +624,15 @@ async function processGroup(args: {
   const candidateName =
     providedName ||
     filenameKoreanName ||
-    pii.name ||
     group.candidateName ||
     (stemLooksGeneric ? "(이름 미상)" : filenameStem);
-
-  // 마스킹 + sanitize
-  const maskedRaw = maskText(resumeText, {
-    level: "standard",
-    known: {
-      name: candidateName,
-      emails: [pii.email, providedEmail].filter(Boolean) as string[],
-      phones: [pii.phone].filter(Boolean) as string[],
-      companies: pii.companies,
-    },
-  });
-  const sanitized = sanitizeResumeText(maskedRaw);
-  if (sanitized.injectionAttempt) {
-    log.warn("resume_injection_attempt", {
-      uploadedBy: me.id,
-      jobId,
-      filename: resumeFile.name,
-    });
-  }
 
   // 메인 이력서 파일 저장 — 클라이언트가 이미 Blob 에 올린 경우 그대로 사용
   const storedResumeKey =
     resumeFile.storedKey ?? (await saveFile(resumeFile.name, resumeFile.buf, undefined));
 
-  // candidate row insert
+  // 후보자 "껍데기" 생성 — 파싱·PII·학력·마스킹은 워커가 평가 직전에 채운다.
+  // resumeMaskedText=null = "아직 파싱 안 됨" 표식 (UI 가 '분석 중' 으로 표시).
   const [inserted] = await db
     .insert(candidates)
     .values({
@@ -669,18 +641,21 @@ async function processGroup(args: {
       uploadedByUserId: me.id,
       resumeHash,
       name: candidateName,
-      email: pii.email || providedEmail || null,
-      phone: pii.phone,
-      age: pii.age,
+      email: providedEmail || null,
+      phone: null,
+      age: null,
+      educationLevel: null,
+      educationSchool: null,
+      educationMajor: null,
       resumeFilePath: storedResumeKey,
       resumeText: "",
-      resumeMaskedText: sanitized.text,
+      resumeMaskedText: null,
       applicantConsentConfirmedAt: new Date().toISOString(),
       applicantConsentConfirmedByUserId: me.id,
     })
     .returning();
 
-  // 메인 이력서 자체도 attachments 에 kind=resume 으로 기록 (다운로드 통일)
+  // 메인 이력서 자체도 attachments 에 kind=resume 으로 기록 (다운로드 통일 + 워커 재파싱용)
   await db.insert(candidateAttachments).values({
     candidateId: inserted.id,
     kind: "resume",
@@ -690,10 +665,7 @@ async function processGroup(args: {
     sizeBytes: resumeFile.buf.length,
   });
 
-  // 텍스트 추출 + 마스킹 가능한 확장자 (이미지·xlsx·pptx 등은 skip)
-  const TEXT_EXTRACTABLE = new Set(["pdf", "docx", "txt", "md", "html", "htm"]);
-
-  // 첨부 (포트폴리오/자소서/기타) 저장. 텍스트 추출 가능 형식은 마스킹까지.
+  // 첨부 (포트폴리오/자소서/기타) 저장 — 파싱·마스킹은 워커가 수행 (maskedText=null).
   let attachmentCount = 0;
   for (const att of group.attachments) {
     if (att.file.buf.length === 0) continue;
@@ -702,25 +674,6 @@ async function processGroup(args: {
     try {
       const key =
         att.file.storedKey ?? (await saveFile(att.file.name, att.file.buf, undefined));
-
-      // 텍스트 추출 가능하면 마스킹 → DB 저장 (LLM 서류평가에 사용)
-      let attMasked: string | null = null;
-      if (TEXT_EXTRACTABLE.has(ae)) {
-        try {
-          const raw = await extractTextFromBuffer(att.file.buf, att.file.name);
-          if (raw.trim().length > 0) {
-            const sanitized = sanitizeResumeText(maskText(raw));
-            attMasked = sanitized.text;
-          }
-        } catch (parseErr) {
-          log.warn("attachment_parse_failed", {
-            candidateId: inserted.id,
-            filename: att.file.name,
-            error: parseErr instanceof Error ? parseErr.message : String(parseErr),
-          });
-        }
-      }
-
       await db.insert(candidateAttachments).values({
         candidateId: inserted.id,
         kind: att.kind === "resume" ? "other" : att.kind,
@@ -728,7 +681,7 @@ async function processGroup(args: {
         originalName: att.file.name,
         mime: null,
         sizeBytes: att.file.buf.length,
-        maskedText: attMasked,
+        maskedText: null,
       });
       attachmentCount++;
     } catch (err) {
@@ -740,13 +693,12 @@ async function processGroup(args: {
     }
   }
 
-  // 업로드 직후 서류평가 큐 자동 등록 — HR 한 스텝 축소 (별도 "평가" 버튼 클릭 불필요).
-  //   1) resume_upload 토큰 차감 (멱등). 실패 시 큐 final fail 단계에서 자동환불.
+  // 서류평가 큐 자동 등록 — 워커가 [파싱+마스킹 → LLM 평가] 를 한 job 으로 처리.
+  //   1) resume_upload 토큰 차감 (멱등). 실패(파싱 실패 포함) 시 큐 final fail 에서 자동환불.
   //   2) screening_jobs 에 enqueue.
-  //   3) 실제 LLM 호출은 워커가 비동기 처리 (POST 응답 후 triggerWorker 가 즉시 깨움 + cron 안전망).
+  //   3) POST 응답 후 triggerWorker 가 즉시 워커를 깨움 (+ cron 안전망).
   //
-  // 차감/enqueue 단계가 실패해도 업로드 자체는 성공 처리 — 사용자가 후보자 상세에서
-  // "평가" 버튼으로 수동 재시도 가능 (POST /api/candidates/[id]/screen).
+  // 차감/enqueue 단계가 실패해도 업로드 자체는 성공 처리 — 후보자 상세에서 "평가" 재시도 가능.
   let enqueued = false;
   try {
     if (job.orgId) {

@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
+import { isJobExpired } from "@/lib/job-lifecycle";
 import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
@@ -42,6 +43,10 @@ export async function POST(req: Request) {
         if (!job) throw new Error("공고를 찾을 수 없습니다.");
         if (!ownsOrg(me!, job.orgId)) throw new Error("권한 없음");
         if (job.status === "closed") throw new Error("종결된 공고입니다.");
+        if (isJobExpired(job))
+          throw new Error(
+            "공고 종결 예정일이 지났습니다. 공고를 연장하거나 종결한 후 다시 시도해 주세요."
+          );
         if (
           me!.role !== "system_admin" &&
           job.passwordHash &&

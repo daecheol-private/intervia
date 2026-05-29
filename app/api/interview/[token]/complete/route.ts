@@ -12,6 +12,7 @@ import { buildSummaryPrompt } from "@/lib/prompts";
 import { hasValidConsent } from "@/lib/consent";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { refundFeature } from "@/lib/tokens";
+import { computeTranscriptStats } from "@/lib/interview-signals";
 
 export const runtime = "nodejs";
 
@@ -60,42 +61,8 @@ export async function POST(
     .map((m) => `${m.role === "user" ? "후보자" : "면접관"}: ${m.content}`)
     .join("\n\n");
 
-  // 후보자 발언 통계 — 면접관 질문이 점수에 섞이지 않도록 LLM 에 객관 수치 전달.
-  const userMsgs = session.messages.filter((m) => m.role === "user");
-  const candidateChars = userMsgs.reduce(
-    (sum, m) => sum + m.content.trim().length,
-    0
-  );
-  // LLM 보조(붙여넣기) 신호 집계.
-  let totalPastedChars = 0;
-  let totalTypedChars = 0;
-  let pasteEvents = 0;
-  for (const m of userMsgs) {
-    const s = m.inputSignals;
-    if (!s) continue;
-    totalPastedChars += s.pastedChars;
-    totalTypedChars += s.typedChars;
-    pasteEvents += s.pasteCount;
-  }
-  const totalInputChars = totalPastedChars + totalTypedChars;
-  const pasteRatio = totalInputChars > 0 ? totalPastedChars / totalInputChars : 0;
-  const llmAssistSignal = {
-    pasteEvents,
-    pastedChars: totalPastedChars,
-    typedChars: totalTypedChars,
-    pasteRatio: Math.round(pasteRatio * 100) / 100,
-    suspicious: pasteRatio >= 0.6 && totalPastedChars >= 200,
-  };
-  const stats = {
-    totalTurns: session.messages.length,
-    candidateTurns: userMsgs.length,
-    candidateChars,
-    candidateAvgChars: userMsgs.length
-      ? Math.round(candidateChars / userMsgs.length)
-      : 0,
-    interviewerTurns: session.messages.length - userMsgs.length,
-    llmAssistSignal,
-  };
+  // 후보자 발언 통계 + 외부 LLM 보조 의심 신호 — complete·reevaluate 공용 헬퍼.
+  const stats = computeTranscriptStats(session.messages);
 
   // 1) 세션 상태부터 completed 로 마킹. LLM 평가가 실패해도 면접 자체는 종결로 유지.
   await db

@@ -12,6 +12,7 @@ type Form = {
   responsibilities: string;
   requirements: string;
   idealProfile: string;
+  evaluationFocus: string;
   tone: "친절한" | "중립적인" | "엄격한";
   interviewDurationMinutes: number;
   hasPassword: boolean;
@@ -38,6 +39,7 @@ export default function EditJobPage() {
           responsibilities: j.responsibilities,
           requirements: j.requirements,
           idealProfile: j.idealProfile ?? "",
+          evaluationFocus: j.evaluationFocus ?? "",
           tone: j.tone,
           interviewDurationMinutes: j.interviewDurationMinutes ?? 20,
           hasPassword: !!j.hasPassword,
@@ -180,6 +182,20 @@ export default function EditJobPage() {
               setForm({ ...form, idealProfile: e.target.value })
             }
           />
+        </Field>
+        <Field label="🤖 AI 평가 중점 사항 (HR 전용)">
+          <textarea
+            className={inputCls + " h-28 resize-y"}
+            placeholder={`후보자에게는 공개되지 않습니다. AI 평가 가중치를 직접 코멘트하세요.\n예) 보안 도메인 경력 최우선, Python 미사용 후보 감점`}
+            value={form.evaluationFocus}
+            onChange={(e) =>
+              setForm({ ...form, evaluationFocus: e.target.value })
+            }
+          />
+          <p className="text-[11px] text-warning mt-1">
+            ⚠️ 차별 금지 항목(성별·나이·출신지·학교·종교·결혼 여부 등)은
+            기재해도 AI 가 무시하며, 분쟁 발생 시 입력자가 책임을 집니다.
+          </p>
         </Field>
         <Field label="공고 비밀번호">
           <div className="space-y-2">

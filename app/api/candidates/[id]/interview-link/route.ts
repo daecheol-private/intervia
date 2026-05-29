@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { candidates, interviewSessions, jobPostings, screeningJobs } from "@/lib/schema";
+import { isJobExpired } from "@/lib/job-lifecycle";
 import { eq, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
@@ -39,14 +40,23 @@ export async function POST(
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);
 
-  // 종결 공고는 새 면접 불가
+  // 종결·만료 공고는 새 면접 발급 불가
   const [job] = await db
-    .select({ status: jobPostings.status })
+    .select({ status: jobPostings.status, closesAt: jobPostings.closesAt })
     .from(jobPostings)
     .where(eq(jobPostings.id, candidate.jobId));
   if (job?.status === "closed")
     return Response.json(
       { code: "job_closed", message: "종결된 공고입니다. 연장 후 다시 시도해 주세요." },
+      { status: 409 }
+    );
+  if (job && isJobExpired(job))
+    return Response.json(
+      {
+        code: "job_expired",
+        message:
+          "공고 종결 예정일이 지났습니다. 공고를 연장하거나 종결한 후 다시 시도해 주세요.",
+      },
       { status: 409 }
     );
 

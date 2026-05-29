@@ -6,10 +6,11 @@ import { useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { FavoriteStar } from "@/app/components/FavoriteStar";
 import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
-import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
+import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 import { JobExpiredDecisionModal } from "@/app/components/JobExpiredDecisionModal";
 import Link from "next/link";
 import { compositeScore, formatKstDateTime, formatLocalDate } from "@/lib/utils";
+import { isEncryptedZipFile } from "@/lib/zip-encrypted-client";
 import {
   STAGE_META as STAGE_META_SHARED,
   STAGE_RANK as STAGE_RANK_SHARED,
@@ -42,6 +43,9 @@ type Candidate = {
   age: number | null;
   careerYears: number | null;
   careerSummary: string | null;
+  educationLevel: string | null;
+  educationSchool: string | null;
+  educationMajor: string | null;
   resumeFilePath: string;
   screeningScore: number | null;
   screeningReport: {
@@ -75,7 +79,9 @@ type Candidate = {
   queuePosition: number | null;
   queueAttempts: number;
   lastError: string | null;
-  lastJobStatus: "queued" | "processing" | "done" | "failed" | null;
+  lastJobStatus: "queued" | "processing" | "done" | "failed" | "paused" | null;
+  // 파싱(텍스트 추출+마스킹) 완료 여부 — false = '분석 중', true = 평가 단계.
+  parsed: boolean;
   favorited: boolean;
 };
 
@@ -87,6 +93,13 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [candidatesList, setCandidatesList] = useState<Candidate[]>([]);
   const [uploading, setUploading] = useState(false);
+  // 업로드 진행 상태 — null=비활성. phase: 'uploading'(파일 전송) → 'processing'(서버 등록).
+  const [uploadProgress, setUploadProgress] = useState<{
+    phase: "uploading" | "processing";
+    pct: number;
+    done: number;
+    total: number;
+  } | null>(null);
   const [tab, setTab] = useState<"all" | "screened" | "interviewed">("all");
   const [dragOver, setDragOver] = useState(false);
   const [locked, setLocked] = useState<{ title: string } | null>(null);
@@ -116,6 +129,8 @@ export default function JobDetailPage() {
   const [consentBusy, setConsentBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  // 업로드 진행 중 재진입 방지 — state 는 비동기 반영이라 빠른 연속 드롭을 못 막아 ref 로 동기 가드
+  const uploadingRef = useRef(false);
 
   const loadJob = async () => {
     try {
@@ -230,6 +245,8 @@ export default function JobDetailPage() {
   const uploadAll = async (
     entries: { file: File; relativePath: string }[]
   ) => {
+    // 이미 업로드 진행 중이면 무시 (드래그앤드롭 등으로 인한 중복 업로드 방지)
+    if (uploadingRef.current) return;
     // 지원자 동의 확인 가드 — 서버에서도 게이트하지만 UX 위해 사전 차단
     if (!consentConfirmed) {
       alert(
@@ -267,16 +284,38 @@ export default function JobDetailPage() {
       return;
     }
 
+    // 암호 걸린 ZIP 사전 차단 — 업로드 전 헤더만 읽어 즉시 판정.
+    // (fflate 가 암호화 ZIP 미지원 → 그냥 올리면 서버에서 한참 뒤 실패)
+    const encryptedZips: string[] = [];
+    for (const { file, relativePath } of entries) {
+      if (!relativePath.toLowerCase().endsWith(".zip")) continue;
+      if (await isEncryptedZipFile(file)) encryptedZips.push(relativePath);
+    }
+    if (encryptedZips.length > 0) {
+      alert(
+        `🔒 암호가 걸린 압축 파일은 지원하지 않습니다.\n\n${encryptedZips
+          .map((n) => `· ${n}`)
+          .join("\n")}\n\n압축 비밀번호를 해제한 뒤 다시 업로드해 주세요.`
+      );
+      return;
+    }
+
+    uploadingRef.current = true;
     setUploading(true);
     // Vercel 서버 함수 본문 한도(4.5MB) 회피 — 브라우저에서 Vercel Blob 으로 직접 업로드 후
     // 서버에는 manifest(JSON) 만 전송. 100MB 까지 가능.
     // dev/blob 미설정 환경에서는 NEXT_PUBLIC_BLOB_CLIENT_UPLOAD!=1 → 기존 FormData 경로.
     const useBlobUpload = process.env.NEXT_PUBLIC_BLOB_CLIENT_UPLOAD === "1";
     const lines: string[] = [];
+    setUploadProgress({ phase: "uploading", pct: 0, done: 0, total: entries.length });
     try {
       let res: Response;
       if (useBlobUpload) {
         const blobs: { url: string; pathname: string; size: number }[] = [];
+        // 전체 바이트 대비 진행률 — 파일별 onUploadProgress 를 누적해 표시.
+        const totalBytes = entries.reduce((s, e) => s + e.file.size, 0) || 1;
+        let uploadedBytes = 0;
+        let doneCount = 0;
         for (const { file, relativePath } of entries) {
           // pathname 의 경로 구분자를 살려 서버가 relativePath 로 재구성 가능하게 함.
           // 한글/공백은 upload() 내부에서 인코딩.
@@ -285,6 +324,26 @@ export default function JobDetailPage() {
             handleUploadUrl: "/api/blob/upload",
             clientPayload: JSON.stringify({ jobId }),
             multipart: file.size > 8 * 1024 * 1024,
+            onUploadProgress: (p) => {
+              const pct = Math.min(
+                99,
+                Math.round(((uploadedBytes + p.loaded) / totalBytes) * 100)
+              );
+              setUploadProgress({
+                phase: "uploading",
+                pct,
+                done: doneCount,
+                total: entries.length,
+              });
+            },
+          });
+          uploadedBytes += file.size;
+          doneCount += 1;
+          setUploadProgress({
+            phase: "uploading",
+            pct: Math.min(99, Math.round((uploadedBytes / totalBytes) * 100)),
+            done: doneCount,
+            total: entries.length,
           });
           blobs.push({
             url: result.url,
@@ -292,12 +351,25 @@ export default function JobDetailPage() {
             size: file.size,
           });
         }
+        // 파일 전송 끝 — 서버가 후보자 등록(껍데기 생성)하는 동안 '처리 중' 표시.
+        setUploadProgress({
+          phase: "processing",
+          pct: 100,
+          done: entries.length,
+          total: entries.length,
+        });
         res = await fetch(`/api/jobs/${jobId}/candidates`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ blobs, applicantConsentConfirmed: true }),
         });
       } else {
+        setUploadProgress({
+          phase: "processing",
+          pct: 100,
+          done: entries.length,
+          total: entries.length,
+        });
         const fd = new FormData();
         for (const { file, relativePath } of entries) {
           fd.append("file", file, relativePath);
@@ -386,7 +458,9 @@ export default function JobDetailPage() {
     } catch (e) {
       lines.push(`⚠️ 네트워크 오류: ${e instanceof Error ? e.message : String(e)}`);
     }
+    uploadingRef.current = false;
     setUploading(false);
+    setUploadProgress(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (lines.length > 0) alert(lines.join("\n"));
     void loadCandidates();
@@ -946,7 +1020,9 @@ export default function JobDetailPage() {
         className={`mt-3 rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
           isExpired
             ? "border-slate-200 bg-slate-50 opacity-50 pointer-events-none"
-            : !consentConfirmed
+            : uploading
+              ? "border-slate-200 bg-slate-50 opacity-60 pointer-events-none"
+              : !consentConfirmed
               ? "border-slate-200 bg-slate-50 opacity-60"
               : dragOver
                 ? "border-primary bg-primary-soft"
@@ -1012,6 +1088,32 @@ export default function JobDetailPage() {
             </span>
           </li>
         </ul>
+
+        {uploadProgress && (
+          <div className="mt-4 max-w-md mx-auto text-left">
+            <div className="flex items-center justify-between text-xs font-medium text-slate-600 mb-1">
+              <span>
+                {uploadProgress.phase === "uploading"
+                  ? `업로드 중… ${uploadProgress.done}/${uploadProgress.total} 파일`
+                  : "후보자 등록 중… (분석은 백그라운드에서 계속됩니다)"}
+              </span>
+              <span className="tabular-nums">{uploadProgress.pct}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-200 ${
+                  uploadProgress.phase === "processing"
+                    ? "bg-primary animate-pulse"
+                    : "bg-primary"
+                }`}
+                style={{ width: `${uploadProgress.pct}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1.5">
+              업로드가 끝나면 카드가 바로 생기고, 이름·평가는 순차로 채워집니다. 창을 닫아도 분석은 계속됩니다.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -1147,6 +1249,19 @@ export default function JobDetailPage() {
                             <span>경력 {c.careerYears}년</span>
                           )}
                           {c.age != null && <span>{c.age}세</span>}
+                          {(c.educationLevel ||
+                            c.educationSchool ||
+                            c.educationMajor) && (
+                            <span className="text-slate-600">
+                              {[
+                                c.educationSchool,
+                                c.educationMajor,
+                                c.educationLevel,
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            </span>
+                          )}
                           {c.phone && <span>{c.phone}</span>}
                           {c.email && <span>{c.email}</span>}
                         </div>
@@ -1234,6 +1349,19 @@ export default function JobDetailPage() {
                             <span>경력 {c.careerYears}년</span>
                           )}
                           {c.age != null && <span>{c.age}세</span>}
+                          {(c.educationLevel ||
+                            c.educationSchool ||
+                            c.educationMajor) && (
+                            <span className="text-slate-600">
+                              {[
+                                c.educationSchool,
+                                c.educationMajor,
+                                c.educationLevel,
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            </span>
+                          )}
                           {c.phone && <span>{c.phone}</span>}
                           {c.email && <span>{c.email}</span>}
                         </div>
@@ -1437,6 +1565,19 @@ export default function JobDetailPage() {
                             <span>경력 {c.careerYears}년</span>
                           )}
                           {c.age != null && <span>{c.age}세</span>}
+                          {(c.educationLevel ||
+                            c.educationSchool ||
+                            c.educationMajor) && (
+                            <span className="text-slate-600">
+                              {[
+                                c.educationSchool,
+                                c.educationMajor,
+                                c.educationLevel,
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            </span>
+                          )}
                           {c.phone && <span>{c.phone}</span>}
                           {c.email && <span>{c.email}</span>}
                         </div>
@@ -1736,6 +1877,19 @@ function CandidateScores({
   c: Candidate;
   onRetry: (cid: number) => void | Promise<void>;
 }) {
+  // 파싱 전(분석 중) — 활성 큐인데 아직 텍스트 추출·마스킹이 안 끝난 상태.
+  // 업로드 직후 껍데기 카드가 이 상태로 뜬다 (이름은 파일명 기반).
+  if (
+    (c.queueStatus === "queued" || c.queueStatus === "processing") &&
+    !c.parsed
+  ) {
+    return (
+      <div className="shrink-0 px-2.5 py-1 rounded-md bg-sky-50 text-sky-700 border border-sky-200 text-xs font-medium flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
+        분석 중
+      </div>
+    );
+  }
   if (c.queueStatus === "queued") {
     // 백오프(재시도 대기 중)면 직전 오류 사유 표시
     const isBackoff = c.queueAttempts >= 1 && !!c.lastError;
@@ -1756,9 +1910,7 @@ function CandidateScores({
               (isBackoff ? "bg-orange-500" : "bg-amber-500")
             }
           />
-          {isBackoff
-            ? `재시도 대기 (${c.queueAttempts}회 시도)`
-            : `대기중${c.queuePosition ? ` (${c.queuePosition}번째)` : ""}`}
+          {isBackoff ? `재시도 대기 (${c.queueAttempts}회 시도)` : "대기중"}
         </div>
         {isBackoff && (
           <span className="text-[10px] text-orange-600 max-w-[180px] truncate">
@@ -1773,6 +1925,17 @@ function CandidateScores({
       <div className="shrink-0 px-2.5 py-1 rounded-md bg-primary-soft text-primary-deep text-xs font-medium flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
         평가중
+      </div>
+    );
+  }
+  // 잔액 0 이하로 일시정지 — 충전되면 워커가 자동 재개 (재시도 버튼 불필요).
+  if (c.lastJobStatus === "paused") {
+    return (
+      <div
+        className="shrink-0 px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium flex items-center gap-1.5"
+        title="토큰 잔액이 부족해 평가가 보류되었습니다. 충전하면 자동으로 재개됩니다."
+      >
+        💳 충전 대기
       </div>
     );
   }
@@ -1977,76 +2140,6 @@ function SchedulePropose({
   onDone: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [slots, setSlots] = useState<Array<{ start: string; end: string }>>([]);
-  const [modeOnline, setModeOnline] = useState(true);
-  const [address, setAddress] = useState("");
-  const [addressDetail, setAddressDetail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const [results, setResults] = useState<
-    | {
-        results: {
-          candidateId: number;
-          status: "sent" | "skipped" | "failed";
-          reason?: string;
-        }[];
-      }
-    | null
-  >(null);
-
-  // 모달 열릴 때 org 주소 미리 채움
-  useEffect(() => {
-    if (!open) return;
-    void fetch(`/api/orgs/me`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.officeAddress) setAddress(d.officeAddress);
-        if (d?.officeAddressDetail) setAddressDetail(d.officeAddressDetail);
-      })
-      .catch(() => {});
-  }, [open]);
-
-  const submit = async () => {
-    setBusy(true);
-    setErr("");
-    setResults(null);
-    if (slots.length === 0) {
-      setErr("최소 1개 시간을 추가해 주세요.");
-      setBusy(false);
-      return;
-    }
-    if (!modeOnline && !address.trim()) {
-      setErr("오프라인 면접은 주소가 필요합니다.");
-      setBusy(false);
-      return;
-    }
-    const r = await fetch(`/api/jobs/${jobId}/schedule-propose`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        candidateIds: selectedIds,
-        slots,
-        modeOnline,
-        address: modeOnline ? null : address.trim(),
-        addressDetail: modeOnline ? null : addressDetail.trim(),
-      }),
-    });
-    setBusy(false);
-    if (!r.ok) {
-      setErr(await r.text());
-      return;
-    }
-    const data = await r.json();
-    setResults({ results: data.results });
-  };
-
-  const close = () => {
-    setOpen(false);
-    setErr("");
-    setResults(null);
-    setSlots([]);
-  };
-
   const disabled = selectedIds.length === 0;
 
   return (
@@ -2059,145 +2152,13 @@ function SchedulePropose({
       >
         📅 면접 스케쥴 제시 ({selectedIds.length})
       </button>
-      {open && (
-        <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-          onClick={close}
-        >
-          <div
-            className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-bold text-slate-900">1차 면접 스케쥴 제시</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              선택한 {selectedIds.length}명에게 메일로 시간 선택 링크를 발송합니다.
-            </p>
-
-            {!results ? (
-              <>
-                <div className="mt-4 space-y-4 text-sm">
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 mb-2 block">
-                      면접 가능 시간 (1~10개)
-                    </label>
-                    <SlotCalendarPicker value={slots} onChange={setSlots} />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-slate-700 mb-1 block">
-                      면접 방식
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setModeOnline(true)}
-                        className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
-                          modeOnline
-                            ? "bg-primary-soft border-primary/40 text-primary-deep"
-                            : "bg-white border-slate-200 text-slate-500"
-                        }`}
-                      >
-                        💻 온라인
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setModeOnline(false)}
-                        className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
-                          !modeOnline
-                            ? "bg-primary-soft border-primary/40 text-primary-deep"
-                            : "bg-white border-slate-200 text-slate-500"
-                        }`}
-                      >
-                        🏢 오프라인
-                      </button>
-                    </div>
-                  </div>
-
-                  {!modeOnline && (
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-slate-700 block">
-                        회사 주소
-                      </label>
-                      <input
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        placeholder="예: 서울시 강남구 테헤란로 123"
-                        className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2"
-                      />
-                      <input
-                        value={addressDetail}
-                        onChange={(e) => setAddressDetail(e.target.value)}
-                        placeholder="상세 (호수·층 등, 선택)"
-                        className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2"
-                      />
-                      <p className="text-[11px] text-slate-500">
-                        법인 설정에 주소가 없으면 자동 저장됩니다.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {err && (
-                  <div className="mt-3 text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg p-2 whitespace-pre-wrap">
-                    {err}
-                  </div>
-                )}
-
-                <div className="flex gap-2 mt-5">
-                  <button
-                    onClick={close}
-                    className="flex-1 px-4 py-2 rounded-lg border border-border-strong text-sm hover:bg-surface-alt transition-colors"
-                  >
-                    취소
-                  </button>
-                  <button
-                    onClick={submit}
-                    disabled={busy}
-                    className="flex-1 px-4 py-2 rounded-lg bg-accent-deep hover:bg-accent text-surface text-sm font-medium disabled:opacity-50 transition-colors"
-                  >
-                    {busy ? "발송 중..." : "메일 발송"}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="mt-4 space-y-2 max-h-[40vh] overflow-y-auto text-xs">
-                  {results.results.map((r) => (
-                    <div
-                      key={r.candidateId}
-                      className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border ${
-                        r.status === "sent"
-                          ? "bg-primary-soft border-primary/30 text-primary-deep"
-                          : r.status === "skipped"
-                            ? "bg-warning-soft border-warning/30 text-warning"
-                            : "bg-danger-soft border-danger/30 text-danger"
-                      }`}
-                    >
-                      <span>후보자 #{r.candidateId}</span>
-                      <span className="font-medium">
-                        {r.status === "sent"
-                          ? "✓ 발송"
-                          : r.status === "skipped"
-                            ? `건너뜀 (${r.reason})`
-                            : `✗ 실패`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  onClick={() => {
-                    close();
-                    onDone();
-                  }}
-                  className="w-full mt-4 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
-                >
-                  닫기
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <ScheduleProposeModal
+        jobId={jobId}
+        candidateIds={selectedIds}
+        open={open}
+        onClose={() => setOpen(false)}
+        onDone={onDone}
+      />
     </>
   );
 }

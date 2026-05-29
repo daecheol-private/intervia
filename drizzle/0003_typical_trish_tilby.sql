@@ -1,0 +1,1 @@
+ALTER TABLE `candidates` ADD `education_major` text;

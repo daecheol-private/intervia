@@ -59,15 +59,14 @@ export async function POST(req: Request) {
       });
   }
 
-  // 평가 가능: 리포트 없음 + 마스킹 텍스트 충분 + 동의 확인됨 (legacy row 면제).
+  // 평가 가능: 리포트 없음 + 동의 확인됨 (legacy row 면제).
+  // NOTE: 마스킹 텍스트가 비어 있어도 제외하지 않는다 — 파싱은 워커(ensureParsed)가
+  // 평가 직전에 수행하므로 미파싱/파싱실패 후보도 enqueue 대상.
   const CONSENT_REQUIRED_FROM = new Date("2026-05-22");
   const isConsentMissing = (r: { consentAt: string | null; createdAt: string }) =>
     !r.consentAt && new Date(r.createdAt) >= CONSENT_REQUIRED_FROM;
   const eligible = rows.filter(
-    (r) =>
-      r.screeningReport == null &&
-      (r.maskedLen?.length ?? 0) >= 30 &&
-      !isConsentMissing(r)
+    (r) => r.screeningReport == null && !isConsentMissing(r)
   );
 
   const enqueued: { candidateId: number; jobId: number }[] = [];
@@ -79,9 +78,7 @@ export async function POST(req: Request) {
         candidateId: r.id,
         reason: isConsentMissing(r)
           ? "지원자 동의 확인 누락 (재업로드 필요)"
-          : (r.maskedLen?.length ?? 0) < 30
-            ? "마스킹 텍스트 없음"
-            : "이미 평가 완료됨",
+          : "이미 평가 완료됨",
       });
       continue;
     }

@@ -16,6 +16,7 @@ export default function NewJobPage() {
     responsibilities: "",
     requirements: "",
     idealProfile: "",
+    evaluationFocus: "",
     tone: "중립적인" as "친절한" | "중립적인" | "엄격한",
     interviewDurationMinutes: 20,
     password: "",
@@ -56,16 +57,28 @@ export default function NewJobPage() {
       confidence: number;
       meta: { usedImageFallback: boolean; imageCount: number; siteHint?: string };
     };
+    // 불러오기 할 때마다 추출 필드를 새 값으로 전체 교체.
+    // 추출 안 된 필드는 빈 값/기본값으로 초기화 (이전 공고 내용 잔류 방지).
+    const LEVELS = [
+      "신입 (0년)",
+      "1~2년차 (주니어)",
+      "3~5년차 (중급)",
+      "6~9년차 (시니어)",
+      "10년 이상 (리드)",
+    ];
+    const EMPLOYMENT = ["정규직", "계약직", "인턴", "프리랜서"];
     setForm((f) => ({
       ...f,
-      // 빈 필드만 채움 — 사용자가 이미 입력한 내용은 보존
-      title: f.title || d.title,
-      position: f.position || d.position,
-      level: f.level || d.level || f.level,
-      employmentType: f.employmentType || d.employmentType || f.employmentType,
-      responsibilities: f.responsibilities || d.responsibilities,
-      requirements: f.requirements || d.requirements,
-      idealProfile: f.idealProfile || d.idealProfile,
+      title: d.title,
+      position: d.position,
+      // 자유 텍스트로 추출되면 select 옵션에 없어 드롭다운이 깨지므로 기본값 유지
+      level: LEVELS.includes(d.level) ? d.level : "3~5년차 (중급)",
+      employmentType: EMPLOYMENT.includes(d.employmentType)
+        ? d.employmentType
+        : "정규직",
+      responsibilities: d.responsibilities,
+      requirements: d.requirements,
+      idealProfile: d.idealProfile,
     }));
     const bits = [
       `${d.meta.siteHint ?? "외부 사이트"}에서 추출`,
@@ -210,20 +223,30 @@ export default function NewJobPage() {
           </Field>
         </div>
 
-        <Field label="담당 업무" required>
+        <Field
+          label="담당 업무"
+          required
+          hint="구체적으로 적을수록 AI 면접관의 질문 품질이 올라갑니다. 100자 이상 권장."
+        >
           <Textarea
-            placeholder="이 직무가 수행할 업무를 구체적으로 작성하세요."
+            placeholder={`예) - 신규 보안 솔루션의 백엔드 API 설계·개발\n      - 이기종 보안 시스템(SOAR, VPN, NFVO) 연동 모듈 구현\n      - 운영 자동화 스크립트 작성 (Python)`}
             value={form.responsibilities}
             onChange={(v) => setForm({ ...form, responsibilities: v })}
           />
+          <LengthHint value={form.responsibilities} min={100} />
         </Field>
 
-        <Field label="자격 요건 / 세부 내용" required>
+        <Field
+          label="자격 요건 / 세부 내용"
+          required
+          hint="필수 기술·경험·학력을 명확하게. 너무 짧으면 AI가 적합도 평가에 어려움을 겪습니다."
+        >
           <Textarea
-            placeholder="필요한 기술, 경험, 학력 등"
+            placeholder={`예) - Python 백엔드 개발 경력 3년 이상\n      - REST API 설계 및 운영 경험\n      - Docker / Linux 환경 익숙`}
             value={form.requirements}
             onChange={(v) => setForm({ ...form, requirements: v })}
           />
+          <LengthHint value={form.requirements} min={80} />
         </Field>
 
         <Field label="우대사항">
@@ -234,6 +257,21 @@ export default function NewJobPage() {
           />
           <p className="text-xs text-slate-500 mt-1">
             AI 서류 평가 및 면접 평가 시 함께 반영됩니다. 차별 금지 항목(성별·나이·출신지·종교 등)은 적지 마세요.
+          </p>
+        </Field>
+
+        <Field
+          label="🤖 AI 평가 중점 사항 (HR 전용)"
+          hint="후보자에게는 공개되지 않습니다. AI 서류·면접 평가에서 가중치를 두고 싶은 포인트를 자유롭게 작성하세요. 예: 보안 솔루션 연동 경력 최우선, Python 미사용 후보 감점, SOAR 경험자 가산점."
+        >
+          <Textarea
+            placeholder={`예) 보안 도메인(SOAR/SIEM) 실무 경험을 다른 어떤 기술보다 우선적으로 평가해 주세요.\n     - Python 백엔드 경험 부족하면 감점\n     - 이기종 보안 시스템 연동 경험은 강력 가산`}
+            value={form.evaluationFocus}
+            onChange={(v) => setForm({ ...form, evaluationFocus: v })}
+          />
+          <p className="text-[11px] text-warning mt-1">
+            ⚠️ 차별 금지 항목(성별·나이·출신지·학교·종교·결혼 여부 등)은
+            기재해도 AI 가 무시하며, 분쟁 발생 시 입력자가 책임을 집니다.
           </p>
         </Field>
 
@@ -300,10 +338,12 @@ export default function NewJobPage() {
 function Field({
   label,
   required,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -312,8 +352,37 @@ function Field({
         {label}
         {required && <span className="text-danger ml-1">*</span>}
       </label>
+      {hint && (
+        <p className="text-[11px] text-slate-500 mb-1.5 leading-relaxed">
+          {hint}
+        </p>
+      )}
       {children}
     </div>
+  );
+}
+
+function LengthHint({ value, min }: { value: string; min: number }) {
+  const len = value.trim().length;
+  if (len === 0) {
+    return (
+      <p className="text-[11px] text-slate-400 mt-1 tabular-nums">
+        0 / {min}자 권장
+      </p>
+    );
+  }
+  const ok = len >= min;
+  return (
+    <p
+      className={`text-[11px] mt-1 tabular-nums ${
+        ok ? "text-primary" : "text-warning"
+      }`}
+    >
+      {ok ? "👍 충분합니다" : "⚠️ 더 구체적으로 작성해 주세요"} ·{" "}
+      <span className="font-mono">
+        {len} / {min}자
+      </span>
+    </p>
   );
 }
 

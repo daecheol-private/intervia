@@ -44,6 +44,7 @@ export async function GET(
     );
   }
 
+
   const sessions = await db
     .select()
     .from(interviewSessions)

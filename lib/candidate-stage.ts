@@ -171,13 +171,24 @@ export const OUTCOME_REASONS_BY_OUTCOME: Record<Outcome, OutcomeReason[]> = {
  * 최종 결정 시점 이력서 본문·파일 즉시 폐기 (PIPA 보유기간 정책).
  * 평가 결과(screeningReport / interviewSessions.evaluation) 는 일시 보존 —
  * 공고 종결 +14일 라이프사이클 cron 이 candidate row 통째 삭제.
+ *
+ * 단, **outcome='hired'(최종 합격) 후보는 폐기하지 않음** — 입사 절차상
+ * 이력서/포트폴리오 원본이 필요하고, 본인 동의 하에 보관 정당성 확보.
+ * (PIPA §15·§22 — 채용 이후 단계에서는 별도 동의/근거 하에 보관 가능)
  */
 export async function purgeOnDecision(candidateId: number): Promise<void> {
   const [c] = await db
-    .select({ resumeFilePath: candidates.resumeFilePath })
+    .select({
+      resumeFilePath: candidates.resumeFilePath,
+      outcome: candidates.outcome,
+    })
     .from(candidates)
     .where(eq(candidates.id, candidateId));
   if (!c) return;
+  if (c.outcome === "hired") {
+    // 합격자는 이력서·첨부 그대로 보존
+    return;
+  }
   if (c.resumeFilePath) {
     try {
       await deleteFile(c.resumeFilePath);

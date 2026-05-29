@@ -8,6 +8,11 @@ export async function GET(req: Request) {
   const me = await getCurrentUser();
   const guard = requireUser(me);
   if (guard) return guard;
+  if (me!.role !== "org_admin" && me!.role !== "system_admin")
+    return new Response(
+      "권한 없음 — 법인 관리자만 토큰 잔액·사용내역을 볼 수 있습니다.",
+      { status: 403 }
+    );
 
   const url = new URL(req.url);
   const orgIdParam = url.searchParams.get("orgId");

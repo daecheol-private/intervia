@@ -6,6 +6,11 @@ export type JobInfo = {
   responsibilities: string;
   requirements: string;
   idealProfile?: string;
+  /**
+   * HR 내부용 AI 평가 가이드 — 후보자에게 비공개.
+   * "보안 경력 최우선", "Python 미사용 후보 감점" 같은 가중치 힌트.
+   */
+  evaluationFocus?: string;
   tone?: "친절한" | "엄격한" | "중립적인";
   interviewDurationMinutes?: number;
 };
@@ -31,6 +36,23 @@ export type ScreeningContext = {
 function idealProfileSection(p?: string): string {
   if (!p || !p.trim()) return "";
   return `\n- 선호 인재상: ${p.trim()}`;
+}
+
+/**
+ * 채용 담당자의 AI 평가 가이드 — 별도 강조 블록으로 노출.
+ * 차별 금지 항목(성별·나이·출신지·종교 등) 은 정책상 입력 금지지만,
+ * 만에 하나 들어오더라도 LLM 이 무시하도록 명시.
+ */
+function evaluationFocusSection(f?: string): string {
+  if (!f || !f.trim()) return "";
+  return `
+
+## 채용 담당자의 평가 가이드 (HR 코멘트 — 후보자 비공개)
+다음은 본 공고 채용 담당자가 평가 시 중점을 두라고 명시한 항목이다. 점수·코멘트 결정에 우선 반영하라.
+단, 성별·나이·출신지·학교·종교·결혼 여부 등 차별 금지 항목이 포함돼 있다면 그 부분은 무시하라.
+"""
+${f.trim()}
+"""`;
 }
 
 function durationPlan(minutes: number): {
@@ -95,8 +117,22 @@ function kindLabel(k: string): string {
 export function buildScreeningPrompt(
   job: JobInfo,
   resume: string,
-  attachments: Array<{ kind: string; originalName: string; maskedText: string }> = []
+  attachments: Array<{ kind: string; originalName: string; maskedText: string }> = [],
+  // 최종학력 — 학교명은 의도적으로 제외(학벌 차별 방지). 학력 수준·전공만 JD 매칭에 사용.
+  education?: { level?: string | null; major?: string | null }
 ): string {
+  const eduParts: string[] = [];
+  if (education?.level) eduParts.push(`학력: ${education.level}`);
+  if (education?.major) eduParts.push(`전공: ${education.major}`);
+  const educationSection =
+    eduParts.length === 0
+      ? ""
+      : `
+
+## 후보자 최종학력 (학력 수준·전공만 — 출신 학교명은 평가 금지)
+${eduParts.join(" / ")}
+→ **JD 의 학력·전공 요건과 부합하는지** role_match·tech_fit 에 반영하라. 단, JD 가 특정 학력/전공을 요구할 때만 (합리적 직무 관련성). JD 와 무관하면 가점·감점 금지.
+→ 출신 학교명·학교 서열은 어떤 경우에도 평가·언급 금지.`;
   const attachmentSection =
     attachments.length === 0
       ? ""
@@ -147,7 +183,7 @@ ${attachments
 - 직급/연차: ${job.level}
 - 근무형태: ${job.employmentType}
 - 주요 업무: ${job.responsibilities}
-- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}${educationSection}
 
 ## 후보자 이력서 (개인정보 마스킹됨 — [이름]/[전화]/[이메일]/[학교]/[지역] 등)
 ${resume}${attachmentSection}
@@ -330,7 +366,7 @@ export function buildSystemPrompt(
 - 직급/연차: ${job.level}
 - 근무형태: ${job.employmentType}
 - 주요 업무: ${job.responsibilities}
-- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}
 - 예상 면접 소요 시간: 약 ${minutes}분
 
 ## 후보자 이력서 (개인정보 마스킹됨)
@@ -395,12 +431,16 @@ export type TranscriptStats = {
   candidateChars: number;
   candidateAvgChars: number;
   interviewerTurns: number;
-  /** 외부 LLM 보조 의심 신호 — 붙여넣기/타이핑 비율. */
+  /** 외부 LLM 보조 의심 신호 — 붙여넣기/타이핑 비율 + 탭이탈/복사시도. */
   llmAssistSignal?: {
     pasteEvents: number;
     pastedChars: number;
     typedChars: number;
     pasteRatio: number;
+    /** 탭 전환·창 포커스 이탈 횟수 (전체 면접 합산) */
+    blurEvents: number;
+    /** 질문 복사 시도 횟수 (전체 면접 합산) */
+    copyAttempts: number;
     suspicious: boolean;
   };
 };
@@ -417,10 +457,12 @@ export function buildSummaryPrompt(
     ? `\n## 외부 LLM 보조 의심 신호 (객관 수치 — 단정은 금물, 종합 판단 근거로만 사용)
 - 붙여넣기 이벤트: ${stats.llmAssistSignal.pasteEvents}회
 - 붙여넣은 글자: ${stats.llmAssistSignal.pastedChars}자 / 타이핑한 글자: ${stats.llmAssistSignal.typedChars}자
-- **붙여넣기 비율: ${(stats.llmAssistSignal.pasteRatio * 100).toFixed(0)}%**${
+- **붙여넣기 비율: ${(stats.llmAssistSignal.pasteRatio * 100).toFixed(0)}%**
+- 탭 전환·창 이탈: ${stats.llmAssistSignal.blurEvents}회 (답변 중 다른 창/앱으로 이동한 횟수 — 외부 도구 참조 정황 가능)
+- 질문 복사 시도(차단됨): ${stats.llmAssistSignal.copyAttempts}회 (질문을 외부로 복사하려 한 정황 가능)${
         stats.llmAssistSignal.suspicious
-          ? "\n- ⚠️ **답변의 60% 이상이 외부에서 붙여넣은 텍스트입니다.** 후보자가 ChatGPT/Claude 등 외부 LLM 의 답변을 그대로 옮겼을 가능성이 있습니다. **단정 금지 — 노트북 메모/이력서 발췌 등 정당 사용도 가능**. 이를 면접 리포트의 \"llm_assist_note\" 필드에 \"붙여넣기 비율 X% — LLM 보조 가능성 있음, 면접 자리에서 본인 발언 확인 권장\" 식으로 기록하라."
-          : "\n- 정상 범위 (대부분 직접 타이핑). llm_assist_note 는 \"특이 신호 없음\" 으로 기록."
+          ? "\n- ⚠️ **외부 LLM 보조 정황이 관측됩니다** (붙여넣기 비율 과다 또는 탭 이탈·복사 시도 반복). 후보자가 ChatGPT/Claude 등 외부 LLM 을 참고했을 가능성이 있습니다. **단정 금지 — 노트북 메모/이력서 발췌 등 정당 사용도 가능**. 이를 면접 리포트의 \"llm_assist_note\" 필드에 \"붙여넣기 X% · 탭이탈 Y회 · 복사시도 Z회 — LLM 보조 가능성 있음, 면접 자리에서 본인 발언 확인 권장\" 식으로 구체 수치와 함께 기록하라."
+          : "\n- 정상 범위 (대부분 직접 타이핑·이탈 적음). llm_assist_note 는 \"특이 신호 없음\" 으로 기록."
       }
 `
     : "";
@@ -464,7 +506,7 @@ ${llmAssistLine}`
 - 직급/연차: ${job.level}
 - 근무형태: ${job.employmentType}
 - 주요 업무: ${job.responsibilities}
-- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}
 
 ## 후보자 이력서 (마스킹됨 — 보조 참고용. 점수는 면접 발언 기반.)
 ${resume}
@@ -510,6 +552,13 @@ ${transcript}
 - 채용절차법 §4의2 항목(성별·나이·출신지·학교·가족·종교·신체 등) 인용·평가 금지.
 - 마스킹 토큰([학교]/[회사] 등)을 정보로 취급 금지.
 
+## 답변 AI 생성 가능성 분석 (텍스트 문체 기준 — 위 행동 신호와 독립적으로 판단)
+"후보자:" 발언의 **문체 자체**를 분석해, 외부 LLM(ChatGPT/Claude 등)으로 생성했을 가능성을 추정하라. **단정 금지 — 가능성 추정만.**
+- AI 생성 의심 신호(있을수록 높음): 지나치게 매끄럽고 균일한 문어체(구어체·머뭇거림·말줄임 없음) / 서론-본론-결론·불릿 나열식 교과서 구조가 즉답 맥락에 부자연스러움 / 구체적 개인 경험·고유명사·수치 없이 일반론·정의 위주 / 질문과 미묘하게 어긋나는 포괄적 답변 / 턴마다 분량·톤이 비현실적으로 일정.
+- AI 생성 가능성이 낮은 신호(있을수록 낮음): 개인 경험·구체 사례·고유 디테일 / 자연스러운 구어체·불완전 문장·머뭇거림 / 질문에 정확히 들어맞는 맥락 의존적 답변 / 오타·비격식 표현.
+- 행동 신호(붙여넣기/탭이탈/복사시도)와 종합하면 신뢰도가 올라가지만, 이 필드는 **텍스트만 보고** 판정하라.
+- 결과를 ai_authorship 필드에 기록. likelihood/score 는 일관되게 (낮음 0~33 / 보통 34~66 / 높음 67~100).
+
 ## 출력 형식 (아래 JSON 만. 마크다운/설명/코드블록 금지)
 {
   "overall_score": 0~100 정수,
@@ -524,11 +573,111 @@ ${transcript}
   "strengths": ["면접에서 확인된 강점 3~5개 + (대화 인용 20자 이내)"],
   "concerns": ["면접에서 드러난 우려 2~4개 + (대화 인용 또는 구체 사례)"],
   "followup_questions": ["면접에서 다 못 본 부분 — 다음 단계에서 검증할 질문 2~3개"],
-  "llm_assist_note": "위 'LLM 보조 의심 신호' 섹션 기반 한 줄 평. suspicious=true 면 '붙여넣기 비율 X% — 외부 LLM 보조 가능성 있음, 본인 발언 재확인 권장' 식. 정상이면 '특이 신호 없음'. 단정 금지·중립적 톤."
+  "llm_assist_note": "위 'LLM 보조 의심 신호' 섹션 기반 한 줄 평. suspicious=true 면 '붙여넣기 X% · 탭이탈 Y회 · 복사시도 Z회 — 외부 LLM 보조 가능성 있음, 본인 발언 재확인 권장' 식. 정상이면 '특이 신호 없음'. 단정 금지·중립적 톤.",
+  "ai_authorship": {
+    "likelihood": "낮음" | "보통" | "높음",
+    "score": 0~100 정수 (AI 생성 가능성),
+    "signals": ["판단 근거 2~4개 — 문체 특징 + 대화 인용 가능하면 인용"],
+    "note": "한 줄 중립 평. 예: '문체 균일·개인 경험 부족 — AI 생성 가능성 보통, 면접 자리에서 본인 발언 재확인 권장'. 단정 금지."
+  }
 }
 
 ## 강조 표기 (UI 가독성)
 - summary / strengths / concerns / followup_questions / scores.comment 안에서 **핵심 사실**은 \`**...**\` (markdown bold) 로 감싸라. 각 줄 1~2개.
 - 후보자 발언 인용 자체는 큰따옴표만, 그 안의 결정적 단어/숫자만 추가로 \`**...**\`.
 - 점수 차원의 comment 안에서도 점수에 직접 영향을 준 결정적 사실은 강조.`;
+}
+
+/** 면접 질문지 생성에 넘기는 AI 면접 평가 요약 (lib/schema.ts InterviewEvaluation 일부). */
+export type InterviewEvalContext = {
+  overall_score?: number;
+  recommendation?: "강력추천" | "추천" | "보류" | "비추천";
+  summary?: string;
+  strengths?: string[];
+  concerns?: string[];
+  followup_questions?: string[];
+};
+
+function interviewEvalBlock(e?: InterviewEvalContext | null): string {
+  if (!e) {
+    return `
+## AI 면접 평가
+- (AI 면접 미실시 또는 평가 없음) → 서류 단계 정보만으로 질문을 설계하라.
+`;
+  }
+  return `
+## AI 면접 평가 (이미 진행된 1차 사전 AI 면접 결과 — 1차 대면 면접의 출발점)
+- 종합 점수: ${e.overall_score ?? "?"} / 추천 등급: ${e.recommendation ?? "?"}
+- 한줄 평: ${e.summary ?? "(없음)"}
+- AI 면접 강점 (대면에서 깊이 재확인 대상):
+${bulletList(e.strengths)}
+- AI 면접 우려 (대면에서 반드시 해소·재검증):
+${bulletList(e.concerns)}
+- AI 가 남긴 후속 질문 (대면 면접에서 우선 활용):
+${bulletList(e.followup_questions, 8)}
+`;
+}
+
+/**
+ * 1차 대면 면접 질문지 생성 프롬프트.
+ *
+ * 입력: JD + 이력서(마스킹) + 서류평가 + AI 면접 평가(있으면).
+ * 출력: lib/schema.ts 의 InterviewQuestionSheet 구조 JSON.
+ *
+ * 목적 — 사람 면접관이 1차 대면 면접에서 그대로 쓸 수 있는 "다양한 형태"의
+ * 질문지를 만든다. 서류·AI면접에서 이미 검증된 건 반복하지 말고, 미확인·우려
+ * 항목을 깊게 파고드는 질문에 집중한다.
+ */
+export function buildInterviewQuestionsPrompt(
+  job: JobInfo,
+  resume: string,
+  screening?: ScreeningContext | null,
+  interviewEval?: InterviewEvalContext | null
+): string {
+  return `너는 ${job.company ?? "한 기업"}의 채용 책임자이자 **${job.position} 직무를 오래 해 본 시니어 실무자**다.
+아래 후보자의 **1차 대면 면접**에서 사람 면접관이 그대로 사용할 질문지를 설계하라.
+
+## 설계 원칙
+- 서류평가·AI 면접에서 **이미 충분히 검증된 것은 반복하지 말 것.** 미확인·부분검증·우려 항목을 깊게 파고드는 질문에 집중한다.
+- 추상적 질문("협업이 중요한 이유는?") 금지. 이 후보자의 **이력서·평가 내용에 근거한 구체적·맞춤형 질문**을 만든다.
+- "다양한 형태"로 구성: 직무·기술 역량 검증 / 경험·성과 심층(STAR) / 서류·AI면접 우려 검증 / 인성·컬처핏 / 상황·케이스(가상 시나리오) 등. 후보자에 맞춰 섹션을 취사선택·재구성하라.
+- 각 질문에는 면접관이 무엇을 보려는지(intent)와, 답변에 따라 더 캘 꼬리질문(followups)을 붙인다.
+- 차별 금지(채용절차법 §4의2): 성별·나이·출신지·학교·가족·종교·신체 등을 묻거나 평가하는 질문 금지. 마스킹 토큰([학교]/[회사] 등)을 사실로 취급 금지.
+
+## 직무 정보 (JD)
+- 직무: ${job.position}
+- 직급/연차: ${job.level}
+- 근무형태: ${job.employmentType}
+- 주요 업무: ${job.responsibilities}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}
+
+## 후보자 이력서 (마스킹됨)
+${resume}
+${screeningBlock(screening)}${interviewEvalBlock(interviewEval)}
+## 출력 형식 (아래 JSON 만. 마크다운/설명/코드블록 금지)
+{
+  "strategy": "이 후보자를 1차 대면에서 어떻게 검증할지 — 면접관용 2~4줄 전략. 서류·AI면접 대비 가장 먼저 파야 할 지점 명시.",
+  "sections": [
+    {
+      "title": "섹션 제목 (예: 기술 역량 심층 검증 / 경험·성과 / 우려 사항 검증 / 컬처핏 / 상황 대처)",
+      "focus": "이 섹션으로 확인하려는 핵심 (한 줄)",
+      "questions": [
+        {
+          "question": "후보자 맞춤 구체 질문",
+          "intent": "이 질문으로 무엇을 보려는지 (평가 포인트)",
+          "followups": ["답변에 따라 더 캘 꼬리질문 1~2개"],
+          "basis": "근거 출처 짧게 — 예: '서류평가 우려: ...', 'AI면접 미확인: ...', '이력서: ...'"
+        }
+      ]
+    }
+  ],
+  "red_flags": ["대면에서 반드시 확인해야 할 우려 신호 2~4개 (선택)"]
+}
+
+## 분량 가이드
+- 섹션 3~5개, 섹션당 질문 2~4개. 총 12~16개 내외. 면접관이 40~60분 안에 쓸 수 있는 분량.
+- followups 는 핵심 질문에만 (전부 달 필요 없음). basis 는 가능한 한 채운다.
+
+## 강조 표기 (UI 가독성)
+- strategy / focus / question / intent 안에서 핵심 키워드는 \`**...**\` (markdown bold) 로 감싸라. 각 항목 1~2개.`;
 }

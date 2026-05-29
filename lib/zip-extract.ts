@@ -90,7 +90,53 @@ function tryDecode(name: Uint8Array | string): string {
   return recoverKoreanFilename(raw);
 }
 
+/**
+ * ZIP 이 암호(비밀번호)로 보호되어 있는지 빠르게 판별.
+ *
+ * fflate 는 암호화 ZIP 을 지원하지 않아, 암호 걸린 파일을 그대로 넘기면
+ * 쓰레기 데이터 압축 해제·다운스트림 파싱에서 한참 뒤 실패한다.
+ * 추출 *전에* 중앙 디렉토리(Central Directory) 엔트리의
+ * general purpose bit flag(bit 0 = 암호화)만 읽어 즉시 걸러낸다.
+ *
+ * 판단 불가(EOCD 미발견 등)면 false 반환 — 기존 fflate 경로로 위임(무회귀).
+ */
+export function isEncryptedZip(buf: Buffer): boolean {
+  const EOCD_SIG = 0x06054b50; // End Of Central Directory
+  const CDH_SIG = 0x02014b50; // Central Directory File Header
+  // EOCD 는 파일 끝에서 최대 22 + 64KB(주석) 이내.
+  const maxBack = Math.min(buf.length, 22 + 0xffff);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= buf.length - maxBack && i >= 0; i--) {
+    if (buf.readUInt32LE(i) === EOCD_SIG) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) return false;
+  const cdOffset = buf.readUInt32LE(eocd + 16);
+  const cdSize = buf.readUInt32LE(eocd + 12);
+  const end = Math.min(cdOffset + cdSize, buf.length);
+  let p = cdOffset;
+  while (p + 46 <= end) {
+    if (buf.readUInt32LE(p) !== CDH_SIG) break;
+    const flag = buf.readUInt16LE(p + 8);
+    if (flag & 0x0001) return true; // bit 0 = 암호화
+    const nameLen = buf.readUInt16LE(p + 28);
+    const extraLen = buf.readUInt16LE(p + 30);
+    const commentLen = buf.readUInt16LE(p + 32);
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return false;
+}
+
 export function extractZip(buf: Buffer): ZipEntry[] {
+  if (isEncryptedZip(buf)) {
+    throw new ZipExtractError(
+      "encrypted_zip",
+      "암호가 걸린 압축 파일은 지원하지 않습니다. 압축 비밀번호를 해제한 뒤 다시 업로드해 주세요."
+    );
+  }
+
   let entries: Record<string, Uint8Array>;
   try {
     entries = unzipSync(new Uint8Array(buf));

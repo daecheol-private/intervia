@@ -181,12 +181,17 @@ interviewer/
     └─ 토큰 N회 차감 + N개 enqueue + 워커 1회 트리거 (이후 self-chain)
 
 [4] 워커 (lib/screening-queue.ts + /api/internal/process-screenings)
-    ├─ atomicClaimNext() — status=queued AND not_before<=now 중 가장 오래된 1건 점유
-    ├─ runScreeningOnce() — LLM 에 마스킹 텍스트 전달, 결과로 candidates 업데이트
+    ├─ cleanupStuck() + reconcileBalanceHolds() — 실행 시작마다.
+    │    reconcile: 잔액 0 이하 법인 queued→paused(활성 큐 분리), 충전된 법인 paused→queued(자동 재개).
+    │    → 잔액 소진 법인이 타 법인 큐에 영향 없음. cron 매분 실행이라 충전 후 ~1분 내 재개.
+    ├─ atomicClaimNext() — queued 중 점유. **법인별 공정 분배**: 슬롯(max)을 활성 법인 수로
+    │    나눠 cap = ceil(max/활성법인수). 한 법인의 대량 업로드가 타 법인을 굶기지 않음.
+    │    (전역 cap + 법인 cap 을 claim UPDATE 서브쿼리로 원자 보장)
+    ├─ runScreeningOnce() — ensureParsed(파싱+마스킹, 미파싱이면) → LLM 평가 → candidates 업데이트
     ├─ 성공: status='done', candidate.status='screened'
-    ├─ transient 실패 (429/timeout/503): attempts++ + backoff (30s/2m/5m) 재큐
-    ├─ permanent 실패 (마스킹 없음/JSON 파싱 실패): 즉시 final fail + 환불
-    └─ 동시성 3 (env 조절). 1 회 호출당 최대 30건 처리, 잔여시 self-chain.
+    ├─ transient 실패 (429/timeout/503/저장소): attempts++ + backoff (30s/2m/5m) 재큐
+    ├─ permanent 실패 (파싱 실패/스캔 PDF/JSON 파싱 실패): 즉시 final fail + 환불
+    └─ 동시성 8 (env 조절). 1 회 호출당 최대 40건 처리, 잔여시 self-chain(처리 0 건이면 생략).
 
 [4-cron] 매분 /api/cron/process-screenings (Vercel Cron)
     ├─ stuck (lockedAt < now-5min, status=processing) 복구 → queued
@@ -278,4 +283,14 @@ interviewer/
 
 - `buildSystemPrompt`: 면접관 톤/시간 따른 질문 개수/꼬리질문 규칙/프롬프트 인젝션 방어/종료 토큰
 - `buildScreeningPrompt`: 서류 평가 + 개인정보 추출 (이름/전화/이메일/나이/경력연수/요약)
-- `buildSummaryPrompt`: 면접 평가 (4개 영역 + 강점/우려/추가 질문)
+- `buildSummaryPrompt`: 면접 평가 (4개 영역 + 강점/우려/추가 질문 + 외부 LLM 보조 의심 신호 노트 + 답변 AI 생성 가능성 판별 `ai_authorship`)
+
+### 부정행위(외부 LLM 보조) 탐지/억제
+
+후보자가 ChatGPT/Claude 등으로 답변을 대신 생성하는 것을 억제·탐지하는 다층 방어:
+- **복사 방지** (`app/interview/[token]/page.tsx`): 대화 로그 `onCopy/onCut/onContextMenu` 차단 + AI 질문 버블 `select-none`. 차단되지만 스크린샷 등 우회는 가능 → 억제 + 신호 수집 목적.
+- **행동 신호 수집** (턴별 `InterviewMessage.inputSignals`): 붙여넣기 횟수·글자수, 타이핑 글자수, 첫 입력까지 지연, 탭 전환·창 이탈(`visibilitychange`) 횟수, 질문 복사 시도 횟수.
+- **집계** (`lib/interview-signals.ts` `computeTranscriptStats`): complete·reevaluate 공용. 붙여넣기 비율/탭이탈/복사시도 임계 초과 시 `suspicious`. 평가 프롬프트에 객관 수치로 전달 → `llm_assist_note`.
+- **AI 자동 판별** (C): 평가 LLM 이 답변 텍스트 **문체만** 분석해 `ai_authorship`(likelihood/score/signals/note) 산출. 행동 신호와 독립적, 추가 LLM 호출 없음.
+- 모든 신호는 **단정 금지·중립 톤** — 정당 사용 가능성 명시, 후보자 상세 리포트에 표시.
+- `buildInterviewQuestionsPrompt`: 1차 대면 면접 질문지 (이력서+서류평가+AI면접 평가 종합 → 섹션별 맞춤 질문지). 1차 일정 확정 후 면접관이 생성, `interview_question_sheets` 에 저장.
