@@ -15,8 +15,10 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
-// 최대 실행 시간 (Vercel Pro = 300s). Hobby 는 60s.
-export const maxDuration = 60;
+// 최대 실행 시간. Vercel Pro = 300s (Hobby 는 60s 가 상한).
+// 길수록 한 함수 인스턴스가 살아있는 동안 더 많은 LLM in-flight(동시성 16)를
+// 끝까지 처리 → self-chain 재호출 오버헤드 감소, 슬롯이 16 에 더 가깝게 참.
+export const maxDuration = 300;
 
 // 동시성 = LLM in-flight 슬롯 수. LLM 호출은 논블로킹 I/O(응답 대기 ~35s 동안 CPU
 // 미점유)라 CPU 코어 수와 무관하게 올릴 수 있다. 병목은 코어가 아니라 "동시 대기 수".
