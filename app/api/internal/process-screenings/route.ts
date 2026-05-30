@@ -15,10 +15,12 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
-// 최대 실행 시간. Vercel Pro = 300s (Hobby 는 60s 가 상한).
-// 길수록 한 함수 인스턴스가 살아있는 동안 더 많은 LLM in-flight(동시성 16)를
-// 끝까지 처리 → self-chain 재호출 오버헤드 감소, 슬롯이 16 에 더 가깝게 참.
-export const maxDuration = 300;
+// 최대 실행 시간 60s. ⚠️ cleanupStuck 의 LOCK_STALE_SECONDS(300) 보다 작아야 함.
+// maxDuration 을 300 으로 올렸더니 (1) 정상 워커가 stuck 으로 오인되고
+// (2) 강제 종료 시 self-chain 코드에 도달 못해 체인이 끊겨 큐가 멈췄음.
+// 한 함수가 더 오래 처리하게 하려면 maxDuration 이 아니라 self-chain 으로
+// 다음 워커를 잇는 게 정답 (이미 그렇게 동작). 키울 거면 LOCK_STALE 도 같이.
+export const maxDuration = 60;
 
 // 동시성 = LLM in-flight 슬롯 수. LLM 호출은 논블로킹 I/O(응답 대기 ~35s 동안 CPU
 // 미점유)라 CPU 코어 수와 무관하게 올릴 수 있다. 병목은 코어가 아니라 "동시 대기 수".
