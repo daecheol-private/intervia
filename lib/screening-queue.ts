@@ -291,7 +291,17 @@ export async function reconcileBalanceHolds(): Promise<{
   return { paused: pausedRows.length, resumed: resumedRows.length };
 }
 
-/** 5분 이상 잠긴 채 멈춘 processing job 들을 queued 로 복구 (워커 죽음 케이스). */
+/**
+ * 멈춘 processing job 을 queued 로 복구 (워커 죽음 케이스). cron 이 매분 호출.
+ *
+ * 두 종류를 모두 잡는다:
+ *   1) lockedAt 이 5분 이상 과거 — 정상 claim 됐으나 워커가 처리 중 죽음
+ *   2) lockedAt 이 NULL — claim 직후/타임아웃 등으로 락 타임스탬프가 누락된 좀비.
+ *      `lt(lockedAt, staleAt)` 는 NULL 을 못 잡으므로 (SQL: NULL < x = false)
+ *      isNull 조건을 OR 로 추가해야 영구 정체를 방지한다.
+ *      (정상 워커는 claim 시 항상 lockedAt 을 기록하므로, NULL processing 은
+ *       비정상 상태 → 복구해도 정상 작업을 건드릴 위험 없음.)
+ */
 export async function cleanupStuck(): Promise<number> {
   const staleAt = new Date(Date.now() - LOCK_STALE_SECONDS * 1000).toISOString();
   const r = await db
@@ -304,7 +314,7 @@ export async function cleanupStuck(): Promise<number> {
     .where(
       and(
         eq(screeningJobs.status, "processing"),
-        lt(screeningJobs.lockedAt, staleAt)
+        or(lt(screeningJobs.lockedAt, staleAt), isNull(screeningJobs.lockedAt))
       )
     )
     .returning({ id: screeningJobs.id });
