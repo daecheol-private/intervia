@@ -20,7 +20,6 @@ import {
   groupFiles,
   mergeGroupsByName,
   extractKoreanNameFromFilename,
-  looksLikeKoreanName,
   type AcceptedFile,
   type FileGroup,
 } from "@/lib/file-classify";
@@ -604,28 +603,25 @@ async function processGroup(args: {
   // 한 번의 업로드 안에서는 mergeGroupsByName 으로 이미 합쳐졌고,
   // 이후 추가 업로드에서 같은 이름·다른 파일이 들어오면 새 사람으로 등록되는 게 의도.
 
-  // 이름 — 파싱 없이 파일명/수동입력/폴더명만으로 결정 (즉시 카드 표시용).
+  // 이름 — 파싱 없이 수동입력/그룹분석/파일명만으로 결정 (즉시 카드 표시용).
   //   1) 수동 입력 (providedName)
-  //   2) 파일명 한국어 이름 (홍길동_이력서.pdf 등)
-  //   3) 그룹 폴더명 / 파일명 stem
+  //   2) 그룹 분석 결과 (group.candidateName) — groupFiles 가 배치 공통 직무 토큰을
+  //      걸러 사람 이름을 골라낸 값. 제네릭(resume/이력서 등) 이면 건너뜀.
+  //   3) 파일명 한국어 이름 / 파일명 stem
   // LLM/정규식 추출 이름(extractPII)은 워커가 파싱 후, 이름이 "(이름 미상)" 일 때만 승격.
-  const filenameKoreanName =
-    extractKoreanNameFromFilename(resumeFile.name) ||
-    (looksLikeKoreanName(group.candidateName) ? group.candidateName : null);
   const filenameStem = resumeFile.name
     .replace(/\.[^/.]+$/, "")
     .replace(/[_\-]+/g, " ")
     .trim();
-  const stemLooksGeneric =
-    !filenameStem ||
-    /^(resume|cv|이력서|sample|test|untitled|file|noname|document|doc)\b/i.test(
-      filenameStem
-    );
+  const isGeneric = (s: string) =>
+    !s ||
+    /^(resume|cv|이력서|sample|test|untitled|file|noname|document|doc)\b/i.test(s);
+  const groupName = isGeneric(group.candidateName) ? null : group.candidateName;
   const candidateName =
     providedName ||
-    filenameKoreanName ||
-    group.candidateName ||
-    (stemLooksGeneric ? "(이름 미상)" : filenameStem);
+    groupName ||
+    extractKoreanNameFromFilename(resumeFile.name) ||
+    (isGeneric(filenameStem) ? "(이름 미상)" : filenameStem);
 
   // 메인 이력서 파일 저장 — 클라이언트가 이미 Blob 에 올린 경우 그대로 사용
   const storedResumeKey =

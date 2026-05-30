@@ -25,6 +25,15 @@ const NON_PERSON_TOKENS = new Set([
   "이력서들", "지원자들", "후보자들", "면접자", "지원",
 ]);
 
+/**
+ * 사람 이름이 아닌데 파일명에 자주 섞이는 한글 토큰 (날짜·버전·상태 라벨 등).
+ * 이름 추출/토큰화에서 모두 제외.
+ */
+const NAME_NOISE = new Set([
+  "최종", "수정", "최종본", "초안", "정리", "면접",
+  "복사본", "사본", "버전", "백업", "임시", "회사", "지원서",
+]);
+
 // 길이 긴 키워드부터 매칭 (cover_letter > letter 등 부분 매칭 회피)
 const KIND_KEYWORDS: ReadonlyArray<{ kind: FileKind; patterns: RegExp[] }> = [
   {
@@ -63,30 +72,6 @@ export function classifyKind(filename: string, parentFolder?: string): FileKind 
     }
   }
   return "other";
-}
-
-/**
- * 같은 응시자 식별용 그룹 키.
- *
- * 우선순위 (사용자 합의 2026-05-26):
- *   1) 파일명에 한국 인명 토큰이 있으면 그것으로 그룹화. 같은 폴더 안에 여러 사람의 이력서가
- *      평면으로 들어있는 경우 (예: "팀폴더/개발SM_강준수.pdf", "팀폴더/개발SM_김태경.pdf") 분리.
- *   2) 파일명에서 인명을 못 찾으면 부모 폴더명으로 그룹화 (예: "홍길동/이력서.pdf",
- *      "홍길동/포트폴리오.pdf" — 파일명 단독으로 사람을 식별 못함).
- *   3) 둘 다 없으면 파일명 stem 정규화.
- *
- *   "홍길동_이력서.pdf"            → "홍길동" (1)
- *   "개발SM_강준수_20260522.pdf"   → "강준수" (1, "개발" 은 NON_PERSON_TOKENS 로 거름)
- *   "홍길동/이력서.pdf"            → "홍길동" (2)
- *   "applicants/홍길동/이력서.pdf" → "홍길동" (2)
- *   "Hong Gildong - Resume.pdf"    → "honggildong" (3, 한글 토큰 없음)
- */
-export function groupKey(filename: string, path?: string): string {
-  const filenameName = extractKoreanNameFromFilename(filename);
-  if (filenameName) return normalizeName(filenameName);
-  const folder = parentApplicantFolder(filename, path);
-  if (folder) return normalizeName(folder);
-  return normalizeName(filename.replace(/\.[^./\\]+$/, ""));
 }
 
 function normalizeName(raw: string): string {
@@ -246,42 +231,94 @@ export function mergeGroupsByName(groups: FileGroup[]): FileGroup[] {
   return out;
 }
 
+/**
+ * 파일명에서 "사람 이름 후보" 토큰들을 추출.
+ *   - 종류 키워드(이력서/포폴/자소서) 제거
+ *   - 숫자(날짜·일련번호) 제거
+ *   - NAME_NOISE(최종/수정/사본 등) + NON_PERSON_TOKENS(직무/직급/카테고리) 제거
+ *   - 남은 한글(2~4자) + 라틴(2자+) 토큰 반환
+ * 배치(여러 파일)로 모아 "공통 토큰 = 직무/카테고리" 판별에 사용.
+ *   "기술지원_임채주_20260530_0100001.pdf" → ["임채주"]  ("기술지원" 은 배치 공통이라 제거됨)
+ */
+export function nameTokens(filename: string): string[] {
+  let s = filename.replace(/\.[^./\\]+$/, "");
+  for (const { patterns } of KIND_KEYWORDS)
+    for (const re of patterns) s = s.replace(re, " ");
+  s = s.replace(/\d+/g, " "); // 날짜·일련번호
+  const ko = s.match(/[가-힣]{2,4}/g) ?? [];
+  const la = s.match(/[A-Za-z]{2,}/g) ?? [];
+  return [...ko, ...la].filter(
+    (t) => !NAME_NOISE.has(t) && !NON_PERSON_TOKENS.has(t)
+  );
+}
+
+/** 토큰 풀에서 표시용 이름 선택 — 한글 인명 우선, 없으면 첫 토큰. 풀 비면 null. */
+function pickPersonName(pool: string[]): string | null {
+  return pool.find((t) => /^[가-힣]{2,4}$/.test(t)) ?? pool[0] ?? null;
+}
+
+/**
+ * 여러 파일을 응시자별로 그룹화 (배치 인지).
+ *
+ * 플랫 폴더에 여러 명의 이력서가 "직무_이름_날짜_번호.pdf" 형태로 평면 적재된 경우
+ * (사람인/잡코리아 등 채용포털 다운로드 묶음) — 파일마다 공유하는 직무·카테고리 토큰을
+ * 배치 빈도로 찾아 제거하고, 파일마다 달라지는 토큰을 사람 이름으로 분리한다.
+ *
+ *   1패스: 파일별 nameTokens + 배치 전체 토큰 빈도 → "공통(직무/카테고리) 토큰" 판별
+ *   2패스: 사람 이름 = (토큰 − 공통토큰). 다 지워지면(공통 토큰이 곧 이름인
+ *          "한 명 다(多)문서" 케이스) 원래 토큰으로 복귀. 토큰이 없으면 폴더명(사람별
+ *          하위폴더 zip) → 파일 stem 으로 fallback.
+ */
 export function groupFiles(files: AcceptedFile[]): FileGroup[] {
-  const map = new Map<string, AcceptedFile[]>();
+  const parentFolderOf = (f: AcceptedFile) =>
+    f.path ? f.path.split("/").slice(0, -1).pop() : undefined;
+
+  // 1패스: 토큰 + 배치 빈도
+  const tokensByFile = new Map<AcceptedFile, string[]>();
+  const freq = new Map<string, number>();
   for (const f of files) {
-    const k = groupKey(f.name, f.path);
-    if (!map.has(k)) map.set(k, []);
-    map.get(k)!.push(f);
+    const toks = nameTokens(f.name);
+    tokensByFile.set(f, toks);
+    for (const t of new Set(toks)) freq.set(t, (freq.get(t) ?? 0) + 1);
   }
+  // 공통(직무/카테고리) 토큰: 파일 2개 이상이고 60% 이상에 등장 → 사람 이름 아님.
+  const N = files.length;
+  const contextual = new Set<string>();
+  if (N >= 2)
+    for (const [t, c] of freq)
+      if (c >= 2 && c >= Math.ceil(N * 0.6)) contextual.add(t);
+
+  // 2패스: 사람별 그룹화
+  const map = new Map<string, AcceptedFile[]>();
+  const displayByKey = new Map<string, string>();
+  for (const f of files) {
+    const toks = tokensByFile.get(f)!;
+    const nonCtx = toks.filter((t) => !contextual.has(t));
+    const display =
+      pickPersonName(nonCtx.length ? nonCtx : toks) ??
+      parentApplicantFolder(f.name, f.path) ??
+      extractNameFromFilename(f.name);
+    const key = normalizeName(display);
+    if (!map.has(key)) {
+      map.set(key, []);
+      displayByKey.set(key, display);
+    }
+    map.get(key)!.push(f);
+  }
+
+  // 그룹 구성: 메인 이력서 선정 + 첨부 분류
   const groups: FileGroup[] = [];
   for (const [key, members] of map) {
-    const parentFolderOf = (f: AcceptedFile) =>
-      f.path ? f.path.split("/").slice(0, -1).pop() : undefined;
-
-    // 점수 기반 정렬 — 가장 높은 점수가 메인 이력서
-    const scored = members.map((m) => ({
-      file: m,
-      score: resumeScore(m.name, parentFolderOf(m)),
-    }));
-    scored.sort((a, b) => b.score - a.score);
+    const scored = members
+      .map((m) => ({ file: m, score: resumeScore(m.name, parentFolderOf(m)) }))
+      .sort((a, b) => b.score - a.score);
     const resume = scored[0].file;
-
     const attachments = members
       .filter((m) => m !== resume)
       .map((file) => ({ file, kind: classifyKind(file.name, parentFolderOf(file)) }));
-
-    // 후보자 이름: 그룹키가 폴더에서 온 경우 폴더명을 우선, 아니면 파일명에서 추정.
-    // kind 키워드 폴더(이력서/포트폴리오 등) + 부서·직무 폴더(개발/기획 등)는 건너뜀.
-    const folderName = members
-      .map((m) => (m.path ? m.path.split("/").slice(0, -1) : []))
-      .flat()
-      .find((d) => d && !isKindKeywordFolder(d) && !NON_PERSON_TOKENS.has(d));
-    const candidateName = folderName
-      ? folderName
-      : extractNameFromFilename(resume.name);
     groups.push({
       key,
-      candidateName,
+      candidateName: displayByKey.get(key)!,
       resume,
       attachments,
     });
@@ -331,13 +368,8 @@ export function extractKoreanNameFromFilename(filename: string): string | null {
   }
   // 한글 토큰 후보 모두 추출
   const matches = s.match(/[가-힣]{2,4}/g) ?? [];
-  // 직무·일반어 노이즈 제거 (이력서 키워드 외 자주 등장하는 토큰)
-  const NOISE = new Set([
-    "최종", "수정", "최종본", "초안", "정리", "면접",
-    "복사본", "사본", "버전", "백업", "임시", "회사", "지원서",
-  ]);
   for (const m of matches) {
-    if (NOISE.has(m)) continue;
+    if (NAME_NOISE.has(m)) continue;
     if (NON_PERSON_TOKENS.has(m)) continue;
     return m;
   }
