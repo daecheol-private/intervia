@@ -108,7 +108,21 @@ function detectMajor(line: string): string | null {
     const c = cleanMajor(eng[1]);
     if (c) return c;
   }
-  return null;
+  // 4) 단독 학과명 — "디지털전자과" 처럼 학과/학부/전공 접미사 없이 "○○과" 로
+  //    끝나는 전문대 학과명. 채용포털 양식은 학과를 학력 섹션 별도 줄로 분리한다.
+  return detectStandaloneDept(line);
+}
+
+// "○○과" 로 끝나는 학과명이 줄 전체일 때만 인정 (산문의 결과/통과/성과 등 오탐 방지).
+const DEPT_NON_MAJOR = new Set([
+  "결과", "통과", "경과", "성과", "효과", "사과", "결과물", "과정", "과목",
+]);
+function detectStandaloneDept(line: string): string | null {
+  const t = line.trim();
+  const m = t.match(/^([가-힣]{2,10}과)$/); // 줄 전체가 한글 2~10자 + "과"
+  if (!m) return null;
+  if (DEPT_NON_MAJOR.has(m[1])) return null;
+  return cleanMajor(m[1]);
 }
 
 /** 사전 미등재 학교 fallback — "○○대학교/대학원" 일반 패턴. 공백 없이 전공이 붙어도 학교명만 잡음. */
@@ -227,6 +241,17 @@ export function extractEducation(rawText: string): Education {
   let major: string | null = majorAt(found.lineIdx);
   for (let d = 1; d <= 2 && !major; d++) {
     major = majorAt(found.lineIdx - d) ?? majorAt(found.lineIdx + d);
+  }
+  // 인접에서 못 찾으면 — 채용포털 양식은 학과를 학력 섹션 내 별도 줄로 분리하므로
+  // 전체에서 "단독 학과명 줄"(예: "디지털전자과")을 fallback 스캔.
+  if (!major) {
+    for (const l of lines) {
+      const d = detectStandaloneDept(l.trim());
+      if (d) {
+        major = d;
+        break;
+      }
+    }
   }
 
   return { level, school, major };
