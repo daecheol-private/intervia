@@ -8,7 +8,7 @@
     },
     {
       "path": "/api/cron/process-screenings",
-      "schedule": "0 4 * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/interview-reminders",

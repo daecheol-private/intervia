@@ -253,10 +253,13 @@ Vercel Hobby 는 daily cron 만 지원하므로, 분당/시간당 cron 은 외�
 
 #### 5-3. (선택) 원본 폐기 — Vercel cron 이 daily 로 동작하므로 중복이라 추천 X.
 
-### Vercel 자체 cron (Hobby 한도 2개)
-`vercel.json` 의 daily cron 2개는 **cron-job.org 가 죽을 때 안전망** 역할:
+### Vercel 자체 cron (Pro)
+`vercel.json` cron — Pro 전환 후 분당 cron 가능:
 - `purge-original` — 매일 03:30 (데이터 폐기, PIPA)
-- `process-screenings` — 매일 04:00 (큐 fallback, stuck 일자 단위 복구)
+- `process-screenings` — **매분 (`* * * * *`)** 큐 워커 안전망. self-chain 이
+  끊겨도 1분 내 복구. (과거 `0 4 * * *` 하루 1회였으나, 큐 정체 시 다음날까지
+  멈추는 문제로 매분으로 변경 — 2026-05-31)
+- `interview-reminders` — 매시간 (`0 * * * *`)
 
 ### 검증
 - cron-job.org 대시보드에서 각 cronjob 의 history → 200 응답 확인
