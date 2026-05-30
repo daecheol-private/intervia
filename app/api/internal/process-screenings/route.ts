@@ -18,8 +18,12 @@ export const runtime = "nodejs";
 // 최대 실행 시간 (Vercel Pro = 300s). Hobby 는 60s.
 export const maxDuration = 60;
 
+// 동시성 = LLM in-flight 슬롯 수. LLM 호출은 논블로킹 I/O(응답 대기 ~35s 동안 CPU
+// 미점유)라 CPU 코어 수와 무관하게 올릴 수 있다. 병목은 코어가 아니라 "동시 대기 수".
+// 파싱(CPU)은 건당 ~2s 로 짧아 동시 16 에서도 평균 ~1건만 겹쳐 2코어로 충분.
+// (429 미발생 = Vertex 쿼터 여유 확인됨. env 로 상향 조정 가능.)
 const DEFAULT_CONCURRENCY = Number(
-  process.env.SCREENING_WORKER_CONCURRENCY ?? 8
+  process.env.SCREENING_WORKER_CONCURRENCY ?? 16
 );
 // 한 번의 워커 실행에서 최대 처리량. 초과 시 self-chain 으로 다음 워커 호출.
 const MAX_JOBS_PER_RUN = Number(process.env.SCREENING_WORKER_MAX_JOBS ?? 40);

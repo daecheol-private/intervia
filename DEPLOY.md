@@ -151,8 +151,8 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `CRON_SECRET` | 32바이트 hex (`.env.local` 값 재사용 또는 신규 생성) |
 | `INTERNAL_API_SECRET` | 32바이트 hex |
 | `MASTER_ENCRYPTION_KEY` | 32바이트 hex (SMTP 비밀번호 등 암호화 키) |
-| `SCREENING_WORKER_CONCURRENCY` | `3` |
-| `SCREENING_WORKER_MAX_JOBS` | `30` |
+| `SCREENING_WORKER_CONCURRENCY` | `16` (LLM 대기는 논블로킹 I/O — CPU 코어 수 무관. 코드 기본값도 16. Vertex 쿼터 여유 시 상향 가능) |
+| `SCREENING_WORKER_MAX_JOBS` | `40` |
 | `NEXT_PUBLIC_BLOB_CLIENT_UPLOAD` | `1` (이력서 100MB 직접 업로드 활성화 — 프로덕션에서만 `1`) |
 
 ---
