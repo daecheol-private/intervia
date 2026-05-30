@@ -40,7 +40,9 @@ function detectLevel(line: string): Rank | null {
     /전문\s*학사/.test(line) ||
     /전문\s*대학?/.test(line) ||
     /associate'?s?\b/.test(t) ||
-    /[23]\s*년\s*제/.test(line)
+    /[23]\s*년\s*제/.test(line) ||
+    // 채용포털(사람인/잡코리아) 학력 표기: "대학(2,3년)" / "대학(2년)" / "대학 (2~3년)"
+    /대학\s*\(\s*[23](?:\s*[,~\-]\s*3)?\s*년\s*\)?/.test(line)
   )
     return 2;
   if (
@@ -48,6 +50,8 @@ function detectLevel(line: string): Rank | null {
     /bachelor'?s?\b/.test(t) ||
     /\bb\.?\s*(?:s|a|sc|ba|eng)\b/.test(t) ||
     /4\s*년\s*제/.test(line) ||
+    // 채용포털 학력 표기: "대학교(4년)" / "대학(4년)"
+    /대학(?:교)?\s*\(\s*4\s*년\s*\)?/.test(line) ||
     /학\s*부/.test(line)
   )
     return 3;
