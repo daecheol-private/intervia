@@ -1515,7 +1515,7 @@ export default function JobDetailPage() {
                           </p>
                         )}
                         <div className="text-[11px] text-slate-400 mt-2">
-                          {c.resumeFilePath} · {formatKstDateTime(c.createdAt)} 업로드
+                          {formatKstDateTime(c.createdAt)} 업로드
                         </div>
                       </div>
                       <CandidateScores c={c} onRetry={retryScreening} />
@@ -1624,8 +1624,7 @@ export default function JobDetailPage() {
                           </p>
                         )}
                         <div className="text-[11px] text-slate-400 mt-2">
-                          {c.resumeFilePath} · {formatKstDateTime(c.createdAt)}{" "}
-                          업로드
+                          {formatKstDateTime(c.createdAt)} 업로드
                         </div>
                       </div>
                       <CandidateScores c={c} onRetry={retryScreening} />
@@ -1753,7 +1752,7 @@ export default function JobDetailPage() {
                           </p>
                         )}
                         <div className="text-[11px] text-slate-400 mt-2">
-                          {c.resumeFilePath} · {formatKstDateTime(c.createdAt)} 업로드
+                          {formatKstDateTime(c.createdAt)} 업로드
                         </div>
                       </div>
                       <CandidateScores c={c} onRetry={retryScreening} />
