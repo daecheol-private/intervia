@@ -15,12 +15,11 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
-// 최대 실행 시간 60s. ⚠️ cleanupStuck 의 LOCK_STALE_SECONDS(300) 보다 작아야 함.
-// maxDuration 을 300 으로 올렸더니 (1) 정상 워커가 stuck 으로 오인되고
-// (2) 강제 종료 시 self-chain 코드에 도달 못해 체인이 끊겨 큐가 멈췄음.
-// 한 함수가 더 오래 처리하게 하려면 maxDuration 이 아니라 self-chain 으로
-// 다음 워커를 잇는 게 정답 (이미 그렇게 동작). 키울 거면 LOCK_STALE 도 같이.
-export const maxDuration = 60;
+// 최대 실행 시간 120s. 제약: LOCK_STALE_SECONDS(300) 보다 작아야 정상 워커가
+// stuck 으로 오인되지 않음. 동시에 MAX_JOBS_PER_RUN 1라운드(~50s)보다 충분히 커야
+// self-chain 코드(함수 끝)에 도달함 — 여기 도달 못 하면 체인이 끊겨 큐가 멈춘다.
+// (300 으로 올렸다가 LOCK_STALE 와 충돌 + 대량 in-flight 락으로 큐가 정지했었음.)
+export const maxDuration = 120;
 
 // 동시성 = LLM in-flight 슬롯 수. LLM 호출은 논블로킹 I/O(응답 대기 ~35s 동안 CPU
 // 미점유)라 CPU 코어 수와 무관하게 올릴 수 있다. 병목은 코어가 아니라 "동시 대기 수".
@@ -29,8 +28,15 @@ export const maxDuration = 60;
 const DEFAULT_CONCURRENCY = Number(
   process.env.SCREENING_WORKER_CONCURRENCY ?? 16
 );
-// 한 번의 워커 실행에서 최대 처리량. 초과 시 self-chain 으로 다음 워커 호출.
-const MAX_JOBS_PER_RUN = Number(process.env.SCREENING_WORKER_MAX_JOBS ?? 40);
+// 한 실행의 처리량 = 동시성(기본 1라운드). 이래야 한 번의 실행이 maxDuration 안에
+// 끝나 self-chain 이 확실히 발동 → 다음 워커로 연속 이어짐. 과거 40 은 동시성 대비
+// 너무 커서(3라운드 ~150s) 함수가 self-chain 전에 죽고 cleanupStuck(5분)에만
+// 의존 → "5분씩 멈췄다 찔끔" 정체의 근본 원인이었음.
+// ⚠️ env SCREENING_WORKER_MAX_JOBS 가 설정돼 있으면 이 기본값을 덮어쓴다 —
+//    동시성과 어긋난 값(예: 40)이 박혀 있으면 삭제할 것.
+const MAX_JOBS_PER_RUN = Number(
+  process.env.SCREENING_WORKER_MAX_JOBS ?? DEFAULT_CONCURRENCY
+);
 
 /**
  * 큐 워커. 동시성 N, 최대 M 건 처리 후 종료.
