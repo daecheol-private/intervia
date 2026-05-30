@@ -1,0 +1,1 @@
+ALTER TABLE `interview_schedules` ADD `interviewer_reminder_sent_at` text;

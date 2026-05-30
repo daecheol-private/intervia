@@ -10,7 +10,6 @@ import {
   ChevronDown,
   Coins,
   Users,
-  UserPlus,
   Mail,
   Users2,
   DollarSign,
@@ -81,7 +80,6 @@ export function NavBar({
                 items={[
                   { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
                   { href: "/org/members", label: "멤버", Icon: Users },
-                  { href: "/org/join-requests", label: "합류 요청", Icon: UserPlus },
                   { href: "/org/smtp", label: "메일 서버", Icon: Mail },
                 ]}
               />

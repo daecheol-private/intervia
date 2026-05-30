@@ -4,7 +4,6 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { upload } from "@vercel/blob/client";
-import { FavoriteStar } from "@/app/components/FavoriteStar";
 import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 import { JobExpiredDecisionModal } from "@/app/components/JobExpiredDecisionModal";
@@ -32,7 +31,6 @@ type Job = {
   closesAt?: string;
   closedAt?: string | null;
   extensionCount?: number;
-  favorited?: boolean;
   evaluationFocus?: string;
 };
 
@@ -137,6 +135,8 @@ export default function JobDetailPage() {
   // 1차 면접 확정 일정 팝업 — null=닫힘, 배열=열림(시간순 정렬된 목록).
   const [round1Schedule, setRound1Schedule] = useState<Round1ScheduleItem[] | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  // 펀널 단계 박스 클릭 시 후보자 목록으로 스크롤할 기준점.
+  const listTopRef = useRef<HTMLDivElement>(null);
   // 채용기업이 "지원자가 AI 평가 적용에 동의했음" 을 확인했는가.
   // 미체크 시 업로드 차단 (서버도 게이트 — PIPA 책임 전가 메커니즘).
   // 공고 단위 DB 영구 저장 — job.applicantConsentConfirmedAt 으로 부터 복원.
@@ -607,7 +607,14 @@ export default function JobDetailPage() {
 
   const q = search.trim().toLowerCase();
   const filteredRaw = byTab.filter((c) => {
-    if (stageFilter !== "all" && c.stage !== stageFilter) return false;
+    // "최종 합격"은 stage 가 아니라 outcome 기준 (합격자는 stage 가 round2_passed 등으로 남고
+    // outcome 만 "hired"). 특정 단계 필터에서는 hired 후보를 제외 — 펀널이 hired 를 해당 단계에서
+    // 빼서 "최종 합격" 박스로 옮겨 표시하므로, 박스 숫자와 목록이 정확히 일치하게 한다.
+    if (stageFilter === "hired") {
+      if (c.outcome !== "hired") return false;
+    } else if (stageFilter !== "all") {
+      if (c.stage !== stageFilter || c.outcome === "hired") return false;
+    }
     if (outcomeFilter === "in_progress" && c.outcome != null) return false;
     if (
       outcomeFilter !== "all" &&
@@ -729,6 +736,18 @@ export default function JobDetailPage() {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+  // 핀 섹션(즐겨찾기·1차 면접 후보) 전용 일괄 선택 토글.
+  const toggleSection = (ids: number[]) => {
+    const all = ids.length > 0 && ids.every((id) => selected.has(id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (all) next.delete(id);
+        else next.add(id);
+      }
       return next;
     });
   };
@@ -1084,7 +1103,6 @@ export default function JobDetailPage() {
             </div>
           </div>
           <div className="flex gap-2 shrink-0 items-center">
-            <FavoriteStar jobId={Number(jobId)} initial={job.favorited ?? false} size="md" />
             <ShareButton jobId={Number(jobId)} jobTitle={job.title} />
             {(() => {
               const waitingCount = candidatesList.filter(
@@ -1141,11 +1159,26 @@ export default function JobDetailPage() {
             </p>
           </div>
         )}
-        <LifecyclePanel job={job} onChanged={() => void loadJob()} />
+        <LifecyclePanel
+          job={job}
+          onChanged={() => void loadJob()}
+          rightSlot={<InterviewersInline jobId={Number(jobId)} />}
+        />
       </div>
 
-      <FunnelPanel jobId={jobId} refreshKey={funnelKey} />
-      <InterviewersPanel jobId={Number(jobId)} />
+      <FunnelPanel
+        jobId={jobId}
+        refreshKey={funnelKey}
+        activeStage={stageFilter}
+        onStageSelect={(s) => {
+          setStageFilter(s as typeof stageFilter);
+          // 단계 박스 클릭 시 결과 필터는 초기화 — 해당 단계 후보가 결과 필터에 가려지지 않게.
+          setOutcomeFilter("all");
+          // 목록이 펀널보다 한참 아래라 클릭 효과가 보이도록 스크롤.
+          if (s !== "all")
+            listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+      />
 
       {/* 지원자 동의 확인 게이트 — 업로드 전 필수 (PIPA §15·§26·§28의8·§37의2)
          체크 시 모달로 명시 재확인을 요구해 "무심코 체크" 차단. */}
@@ -1307,7 +1340,7 @@ export default function JobDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mt-8 border-b border-slate-200">
+      <div ref={listTopRef} className="flex gap-1 mt-8 border-b border-slate-200 scroll-mt-4">
         {[
           { k: "all", label: "전체", count: counts.all },
           { k: "screened", label: "평가완료", count: counts.screened },
@@ -1358,6 +1391,7 @@ export default function JobDetailPage() {
           <option value="round1_waiting">1차 면접 · 대기</option>
           <option value="round1_passed">1차 합격</option>
           <option value="round2_passed">2차 합격</option>
+          <option value="hired">최종 합격</option>
         </select>
         <select
           value={outcomeFilter}
@@ -1391,6 +1425,15 @@ export default function JobDetailPage() {
           {favoriteCandidates.length > 0 && (
             <div className="mt-3 mb-4 bg-amber-50/60 border border-amber-300/60 rounded-2xl p-3">
               <div className="flex items-center gap-2 mb-2 px-1 flex-wrap">
+                <input
+                  type="checkbox"
+                  checked={favoriteCandidates.every((c) => selected.has(c.id))}
+                  onChange={() =>
+                    toggleSection(favoriteCandidates.map((c) => c.id))
+                  }
+                  className="rounded border-slate-300"
+                  title="전체 선택"
+                />
                 <span className="text-sm font-semibold text-amber-700">
                   ★ 즐겨찾기
                 </span>
@@ -1484,7 +1527,16 @@ export default function JobDetailPage() {
           )}
           {round1Candidates.length > 0 && (
             <div className="mt-3 mb-4 bg-accent-soft/50 border border-accent/40 rounded-2xl p-3">
-              <div className="flex items-baseline gap-2 mb-2 px-1 flex-wrap">
+              <div className="flex items-center gap-2 mb-2 px-1 flex-wrap">
+                <input
+                  type="checkbox"
+                  checked={round1Candidates.every((c) => selected.has(c.id))}
+                  onChange={() =>
+                    toggleSection(round1Candidates.map((c) => c.id))
+                  }
+                  className="rounded border-slate-300"
+                  title="전체 선택"
+                />
                 <span className="text-sm font-semibold text-accent-deep">
                   ⭐ 1차 면접 후보
                 </span>
@@ -1782,53 +1834,69 @@ export default function JobDetailPage() {
               </p>
             ) : (
               <ol className="mt-4 space-y-2 overflow-y-auto">
-                {round1Schedule.map((s, i) => (
+                {groupRound1Schedule(round1Schedule).map((g, i) => (
                   <li
-                    key={s.candidateId}
+                    key={g.key}
                     className="flex items-start gap-3 border border-slate-200 rounded-xl p-3"
                   >
                     <span className="shrink-0 w-6 h-6 rounded-full bg-primary-soft text-primary-deep text-xs font-bold flex items-center justify-center mt-0.5">
                       {i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-slate-900 tabular-nums">
-                        {fmtSlotRange(s.selectedSlot)}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-slate-600">
-                        <span className="font-medium text-slate-800">{s.name}</span>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="text-sm font-semibold text-slate-900 tabular-nums">
+                          {fmtSlotRange(g.selectedSlot)}
+                        </span>
                         <span
-                          className={`px-1.5 py-0.5 rounded ${
-                            s.modeOnline
+                          className={`text-xs px-1.5 py-0.5 rounded ${
+                            g.modeOnline
                               ? "bg-sky-100 text-sky-700"
                               : "bg-amber-100 text-amber-700"
                           }`}
                         >
-                          {s.modeOnline ? "온라인" : "오프라인"}
+                          {g.modeOnline ? "온라인" : "오프라인"}
                         </span>
-                        {!s.modeOnline && s.address && (
-                          <span className="text-slate-500">
-                            {s.address}
-                            {s.addressDetail ? ` ${s.addressDetail}` : ""}
+                        {g.members.length > 1 && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                            {g.members.length}명
                           </span>
                         )}
-                        {s.modeOnline && s.onlineMeetingUrl && (
-                          <a
-                            href={s.onlineMeetingUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary-deep underline break-all"
-                          >
-                            미팅 링크
-                          </a>
+                        {!g.modeOnline && g.address && (
+                          <span className="text-xs text-slate-500">
+                            {g.address}
+                            {g.addressDetail ? ` ${g.addressDetail}` : ""}
+                          </span>
                         )}
                       </div>
+                      <ul className="mt-1.5 space-y-1">
+                        {g.members.map((m) => (
+                          <li
+                            key={m.candidateId}
+                            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600"
+                          >
+                            <span className="font-medium text-slate-800">
+                              {m.name}
+                            </span>
+                            {g.modeOnline && m.onlineMeetingUrl && (
+                              <a
+                                href={m.onlineMeetingUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary-deep underline break-all"
+                              >
+                                미팅 링크
+                              </a>
+                            )}
+                            <Link
+                              href={`/candidates/${m.candidateId}`}
+                              className="text-slate-400 hover:text-primary-deep"
+                            >
+                              상세 →
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                    <Link
-                      href={`/candidates/${s.candidateId}`}
-                      className="shrink-0 text-xs text-slate-400 hover:text-primary-deep mt-0.5"
-                    >
-                      상세 →
-                    </Link>
                   </li>
                 ))}
               </ol>
@@ -1844,6 +1912,46 @@ export default function JobDetailPage() {
       )}
     </main>
   );
+}
+
+/** 같은 시각·같은 방식(온/오프라인)·같은 장소의 일정을 하나로 묶음. */
+type Round1ScheduleGroup = {
+  key: string;
+  selectedSlot: { start: string; end: string };
+  modeOnline: boolean;
+  address: string | null;
+  addressDetail: string | null;
+  members: Round1ScheduleItem[];
+};
+
+function groupRound1Schedule(
+  items: Round1ScheduleItem[]
+): Round1ScheduleGroup[] {
+  const map = new Map<string, Round1ScheduleGroup>();
+  for (const s of items) {
+    const key = [
+      s.selectedSlot.start,
+      s.selectedSlot.end,
+      s.modeOnline ? "on" : "off",
+      s.address ?? "",
+      s.addressDetail ?? "",
+    ].join("|");
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        selectedSlot: s.selectedSlot,
+        modeOnline: s.modeOnline,
+        address: s.address,
+        addressDetail: s.addressDetail,
+        members: [],
+      };
+      map.set(key, g);
+    }
+    g.members.push(s);
+  }
+  // items 가 이미 시간순 → Map 삽입순(시간순) 유지.
+  return Array.from(map.values());
 }
 
 /** 팝업용 슬롯 포맷 — "2026. 06. 03. (수) 13:30 ~ 14:30" (KST). */
@@ -2706,7 +2814,15 @@ function ShareButton({
   );
 }
 
-function LifecyclePanel({ job, onChanged }: { job: Job; onChanged: () => void }) {
+function LifecyclePanel({
+  job,
+  onChanged,
+  rightSlot,
+}: {
+  job: Job;
+  onChanged: () => void;
+  rightSlot?: React.ReactNode;
+}) {
   const [showExtend, setShowExtend] = useState(false);
   const [info, setInfo] = useState<{
     candidateCount: number;
@@ -2796,14 +2912,17 @@ function LifecyclePanel({ job, onChanged }: { job: Job; onChanged: () => void })
             </>
           )}
         </div>
-        {status === "active" && dLeft != null && dLeft <= 14 && (
-          <button
-            onClick={openExtend}
-            className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm"
-          >
-            공고 연장
-          </button>
-        )}
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          {status === "active" && dLeft != null && dLeft <= 14 && (
+            <button
+              onClick={openExtend}
+              className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm"
+            >
+              공고 연장
+            </button>
+          )}
+          {rightSlot}
+        </div>
       </div>
 
       {showExtend && (
@@ -2874,7 +2993,8 @@ function LifecyclePanel({ job, onChanged }: { job: Job; onChanged: () => void })
   );
 }
 
-function InterviewersPanel({ jobId }: { jobId: number }) {
+/** 헤더 우측 하단 컴팩트 면접관 표시 — 이름 칩 + "면접관 지정"(나를 추가) 버튼. */
+function InterviewersInline({ jobId }: { jobId: number }) {
   type Row = {
     userId: number;
     name: string;
@@ -2886,7 +3006,6 @@ function InterviewersPanel({ jobId }: { jobId: number }) {
     me: { isInterviewer: boolean };
   } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
 
   const load = async () => {
     const r = await fetch(`/api/jobs/${jobId}/interviewers`);
@@ -2899,19 +3018,18 @@ function InterviewersPanel({ jobId }: { jobId: number }) {
 
   const selfAssign = async () => {
     setBusy(true);
-    setErr("");
     const r = await fetch(`/api/jobs/${jobId}/interviewers`, { method: "POST" });
     setBusy(false);
     if (!r.ok) {
-      setErr(await r.text());
+      notify(await r.text(), { tone: "danger", title: "면접관 지정 실패" });
       return;
     }
     void load();
   };
 
-  const remove = async (userId: number) => {
+  const remove = async (userId: number, name: string) => {
     if (
-      !(await confirmDialog("면접관에서 제외할까요?", {
+      !(await confirmDialog(`${name} 님을 면접관에서 제외할까요?`, {
         tone: "danger",
         title: "면접관 제외",
         confirmText: "제외",
@@ -2919,13 +3037,12 @@ function InterviewersPanel({ jobId }: { jobId: number }) {
     )
       return;
     setBusy(true);
-    const r = await fetch(
-      `/api/jobs/${jobId}/interviewers?userId=${userId}`,
-      { method: "DELETE" }
-    );
+    const r = await fetch(`/api/jobs/${jobId}/interviewers?userId=${userId}`, {
+      method: "DELETE",
+    });
     setBusy(false);
     if (!r.ok) {
-      setErr(await r.text());
+      notify(await r.text(), { tone: "danger", title: "제외 실패" });
       return;
     }
     void load();
@@ -2934,57 +3051,38 @@ function InterviewersPanel({ jobId }: { jobId: number }) {
   if (!data) return null;
 
   return (
-    <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-      <div className="flex items-baseline justify-between mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">
-          공고 면접관{" "}
-          <span className="text-xs text-slate-500 font-normal">
-            ({data.interviewers.length}명)
-          </span>
-        </h3>
-        {!data.me.isInterviewer && (
-          <button
-            onClick={selfAssign}
-            disabled={busy}
-            className="text-xs px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-white font-medium disabled:opacity-50"
-          >
-            {busy ? "처리 중..." : "면접관 지정"}
-          </button>
-        )}
-      </div>
-      {err && (
-        <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg p-2 mb-3">
-          {err}
-        </div>
-      )}
+    <div className="flex items-center flex-wrap justify-end gap-1.5 text-xs">
+      <span className="text-slate-400">면접관</span>
       {data.interviewers.length === 0 ? (
-        <p className="text-xs text-slate-500 italic">
-          아직 지정된 면접관이 없습니다.
-        </p>
+        <span className="text-slate-400">미지정</span>
       ) : (
-        <ul className="space-y-1.5">
-          {data.interviewers.map((r) => (
-            <li
-              key={r.userId}
-              className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200"
+        data.interviewers.map((r) => (
+          <span
+            key={r.userId}
+            title={r.email}
+            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-slate-100 text-slate-700"
+          >
+            {r.name}
+            <button
+              onClick={() => remove(r.userId, r.name)}
+              disabled={busy}
+              className="text-slate-400 hover:text-danger disabled:opacity-50 leading-none"
+              title="면접관에서 제외"
             >
-              <div className="min-w-0">
-                <span className="text-sm font-medium text-slate-900">
-                  {r.name}
-                </span>
-                <span className="text-xs text-slate-500 ml-2">{r.email}</span>
-              </div>
-              <button
-                onClick={() => remove(r.userId)}
-                disabled={busy}
-                className="text-[11px] text-ink-soft hover:text-danger disabled:opacity-50 transition-colors"
-                title="면접관에서 제외"
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
+              ✕
+            </button>
+          </span>
+        ))
+      )}
+      {!data.me.isInterviewer && (
+        <button
+          onClick={selfAssign}
+          disabled={busy}
+          className="px-2 py-0.5 rounded-full border border-primary/40 text-primary-deep hover:bg-primary-soft font-medium disabled:opacity-50"
+          title="나를 이 공고의 면접관으로 지정"
+        >
+          {busy ? "처리 중…" : "+ 면접관 지정"}
+        </button>
       )}
     </div>
   );
@@ -2993,9 +3091,13 @@ function InterviewersPanel({ jobId }: { jobId: number }) {
 function FunnelPanel({
   jobId,
   refreshKey,
+  activeStage,
+  onStageSelect,
 }: {
   jobId: string;
   refreshKey: number;
+  activeStage?: string;
+  onStageSelect?: (stage: string) => void;
 }) {
   const [data, setData] = useState<Funnel | null>(null);
 
@@ -3202,9 +3304,24 @@ function FunnelPanel({
               key={cell.stage}
               className="flex items-center gap-0.5 flex-1 min-w-0"
             >
-              <div
-                className={`rounded-md border-2 px-1 py-1.5 text-center flex-1 min-w-0 ${
+              <button
+                type="button"
+                onClick={() =>
+                  onStageSelect?.(
+                    activeStage === cell.stage ? "all" : cell.stage
+                  )
+                }
+                title={
+                  activeStage === cell.stage
+                    ? `${cell.label} 필터 해제`
+                    : `${cell.label} 단계만 보기`
+                }
+                className={`rounded-md text-center flex-1 min-w-0 cursor-pointer transition hover:shadow-sm hover:brightness-95 ${
                   n > 0 ? cell.active : cell.empty
+                } ${
+                  activeStage === cell.stage
+                    ? "border-4 px-0.5 py-1"
+                    : "border-2 px-1 py-1.5"
                 }`}
               >
                 <div className="text-[10px] tracking-wider opacity-80 truncate">
@@ -3213,7 +3330,7 @@ function FunnelPanel({
                 <div className="text-base font-bold mt-0.5 tabular-nums">
                   {n}
                 </div>
-              </div>
+              </button>
               {i < pipelineCells.length - 1 && (
                 <span
                   className={`text-[10px] shrink-0 ${

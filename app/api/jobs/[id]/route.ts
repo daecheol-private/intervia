@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { jobPostings, candidates, userJobFavorites } from "@/lib/schema";
-import { and, eq } from "drizzle-orm";
+import { jobPostings, candidates } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
@@ -43,23 +43,12 @@ export async function GET(
     );
   }
 
-  const [fav] = await db
-    .select({ jobId: userJobFavorites.jobId })
-    .from(userJobFavorites)
-    .where(
-      and(
-        eq(userJobFavorites.userId, me!.id),
-        eq(userJobFavorites.jobId, jobId)
-      )
-    );
-
   const { passwordHash, ...rest } = row;
   void passwordHash;
   return Response.json({
     ...rest,
     hasPassword,
     locked: false,
-    favorited: !!fav,
   });
 }
 

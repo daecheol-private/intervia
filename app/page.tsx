@@ -6,14 +6,12 @@ import {
   organizations,
   tokenWallets,
   screeningJobs,
-  userJobFavorites,
   jobInterviewers,
   interviewSchedules,
 } from "@/lib/schema";
 import { desc, eq, count, sql, and } from "drizzle-orm";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { isJobUnlocked } from "@/lib/job-lock";
-import { FavoriteStar } from "./components/FavoriteStar";
 import { ChatPreview } from "./components/ChatPreview";
 import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
 import {
@@ -140,14 +138,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       ? Math.floor(tokenBalance / pricing.interview)
       : 0;
 
-  // 본인 즐겨찾기 ID — 정렬 + UI 표시. jobsWithActions 쿼리의 .then sort 가 참조하므로 먼저 선언.
-  const myFavorites = await db
-    .select({ jobId: userJobFavorites.jobId })
-    .from(userJobFavorites)
-    .where(eq(userJobFavorites.userId, me.id));
-  const favSet = new Set(myFavorites.map((r) => r.jobId));
-
-  // 내가 면접관인 공고 id — 정렬 2순위
+  // 내가 면접관인 공고 id — 목록 정렬 1순위 (로그인 계정이 면접관인 공고를 위로)
   const myInterviewerRows = await db
     .select({ jobId: jobInterviewers.jobId })
     .from(jobInterviewers)
@@ -188,21 +179,17 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     .where(orgFilter ?? sql`1=1`)
     .groupBy(jobPostings.id)
     .orderBy(
-      // active 먼저, 그 안에서 최신순. 즐겨찾기 우선 정렬은 JS 에서 다시 적용.
+      // active 먼저, 그 안에서 최신순. 면접관 우선 정렬은 JS 에서 다시 적용.
       sql`CASE WHEN ${jobPostings.status} = 'active' THEN 0 ELSE 1 END`,
       desc(jobPostings.createdAt)
     )
     .then((rows) =>
       rows.sort((a, b) => {
-        // 1순위: 즐겨찾기
-        const af = favSet.has(a.id) ? 1 : 0;
-        const bf = favSet.has(b.id) ? 1 : 0;
-        if (af !== bf) return bf - af;
-        // 2순위: 내가 면접관인 공고
+        // 1순위: 내가 면접관인 공고
         const ai = interviewerSet.has(a.id) ? 1 : 0;
         const bi = interviewerSet.has(b.id) ? 1 : 0;
         if (ai !== bi) return bi - ai;
-        // 3순위: SQL orderBy 결과 유지 (active 먼저, created desc)
+        // 2순위: SQL orderBy 결과 유지 (active 먼저, created desc)
         return 0;
       })
     );
@@ -355,12 +342,22 @@ async function Dashboard({ me }: { me: CurrentUser }) {
 
       {/* 상단 KPI 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        <KpiCard
-          label={me.role === "system_admin" ? "전체 공고" : "내 법인 공고"}
-          value={totalJobs}
-          href="/jobs"
-          accent="blue"
-        />
+        {me.role === "system_admin" ? (
+          <KpiCard
+            label="전체 공고"
+            value={totalJobs}
+            href="/jobs"
+            accent="blue"
+          />
+        ) : (
+          <KpiCard
+            label="내가 면접관인 공고"
+            value={interviewerSet.size}
+            sub={`전체 ${totalJobs}건 중`}
+            href="/jobs?mine=1"
+            accent="blue"
+          />
+        )}
         <KpiCard
           label="후보자"
           value={totalCand}
@@ -503,7 +500,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
                 key={j.id}
                 job={j}
                 isLocked={lockedJobIdsAtJobs.has(j.id)}
-                favorited={favSet.has(j.id)}
               />
             ))}
           </div>
@@ -562,7 +558,6 @@ function KpiCard({
 function JobCard({
   job,
   isLocked,
-  favorited,
 }: {
   job: {
     id: number;
@@ -587,7 +582,6 @@ function JobCard({
     needsFinalOffer: number;
   };
   isLocked: boolean;
-  favorited: boolean;
 }) {
   const isClosed = job.status === "closed";
   const total = Number(job.candidateCount);
@@ -638,7 +632,6 @@ function JobCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <FavoriteStar jobId={job.id} initial={favorited} size="md" />
               {isLocked && (
                 <span className="text-warning" title="비밀번호 보호">
                   🔒

@@ -138,6 +138,7 @@
 |---|---|---|---|
 | GET/POST | `/api/cron/expire-interviews` | 🌐 (CRON_SECRET) 또는 👑 | 만료된 면접 세션 → `expired` 처리 + 미시작 분만 환불. Vercel Cron schedule = `0 * * * *` (시간당) |
 | GET/POST | `/api/cron/purge-original` | 🌐 (CRON_SECRET) 또는 👑 | 평가 완료 + N일 경과 후보자의 `resume_text` 와 파일 삭제 (PIPA 가명처리). `?days=N` 으로 오버라이드. Vercel Cron schedule = `30 3 * * *` (매일 03:30). 디폴트 `PURGE_AFTER_DAYS=30` |
+| GET/POST | `/api/cron/interview-reminders` | 🌐 (CRON_SECRET) 또는 👑 | 확정 면접(`status='selected'`) 24시간 전 면접관 전원에게 리마인더 메일 1회 발송 후 `interview_schedules.interviewer_reminder_sent_at` 기록(중복 방지). Vercel Cron schedule = `0 * * * *` (시간당) |
 
 인증: `Authorization: Bearer ${CRON_SECRET}` 헤더 또는 system_admin 로그인. Vercel Cron은 `x-vercel-cron: 1` 헤더로 자동 호출.
 

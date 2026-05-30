@@ -192,9 +192,9 @@ export default function AdminUsersPage() {
                 <td className="px-4 py-3 text-xs">
                   {u.status === "pending" ? (
                     <Link
-                      href="/org/join-requests"
+                      href="/org/members?tab=requests"
                       className="inline-flex items-center gap-1 text-warning hover:text-warning/80 hover:underline"
-                      title="합류 요청 페이지로 이동 — 정식 승인 권장"
+                      title="합류 요청 탭으로 이동 — 정식 승인 권장"
                     >
                       pending
                       <span aria-hidden>↗</span>
@@ -294,7 +294,7 @@ export default function AdminUsersPage() {
                             confirm(
                               `'${u.name}' (${u.email}) 를 활성 상태로 전환합니다.\n${
                                 u.status === "pending"
-                                  ? "이 사용자는 합류 승인 대기 중입니다 — 일반적으로는 /org/join-requests 에서 승인하는 것이 권장됩니다."
+                                  ? "이 사용자는 합류 승인 대기 중입니다 — 일반적으로는 멤버 관리 > 합류 요청 탭에서 승인하는 것이 권장됩니다."
                                   : "재로그인이 가능해집니다."
                               }`
                             )

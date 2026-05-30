@@ -263,8 +263,8 @@ interviewer/
 | `/jobs/[id]` | client | 필요 | PIN 가드 (system_admin 우회) |
 | `/jobs/[id]/edit` | client | 필요 | PIN 가드 |
 | `/candidates/[id]` | client | 필요 | 부모 공고 PIN 가드 |
-| `/org/members` | client | 🛡️ | - |
-| `/org/join-requests` | client | 🛡️ | - |
+| `/org/members` | client | 🛡️ | 탭: 멤버 / 합류 요청(`?tab=requests`) |
+| `/org/join-requests` | server | 🛡️ | `/org/members?tab=requests` 로 영구 리다이렉트 (호환용) |
 | `/org/tokens` | client | 필요 | - |
 | `/admin/orgs` | client | 👑 | - |
 | `/admin/users` | client | 👑 | - |

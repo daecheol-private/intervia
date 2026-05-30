@@ -188,7 +188,9 @@ export const jobPostings = sqliteTable("job_postings", {
 
 /**
  * 사용자별 공고 즐겨찾기. 개인 별표 — 같은 법인이라도 멤버마다 별표 상태 다름.
- * 즐겨찾기 한 공고가 목록 최상단.
+ *
+ * @deprecated 공고 즐겨찾기 기능 제거됨(2026-05). 공고 목록은 "내가 면접관인 공고" 우선 정렬로 대체.
+ *   데이터 보존을 위해 테이블은 유지하되 더 이상 읽거나 쓰지 않는다.
  */
 export const userJobFavorites = sqliteTable(
   "user_job_favorites",
@@ -718,6 +720,8 @@ export const interviewSchedules = sqliteTable("interview_schedules", {
     () => users.id,
     { onDelete: "set null" }
   ),
+  // 면접관 리마인더 메일 발송 시각 — 확정 면접 24시간 전 cron 이 1회 발송 후 기록(중복 방지).
+  interviewerReminderSentAt: text("interviewer_reminder_sent_at"),
   // 지원자가 선택한 슬롯
   selectedSlot: text("selected_slot", { mode: "json" })
     .$type<{ start: string; end: string } | null>(),

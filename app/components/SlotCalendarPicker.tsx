@@ -74,9 +74,15 @@ export function SlotCalendarPicker({
     d.setDate(d.getDate() + maxDaysAhead);
     return d;
   }, [today, maxDaysAhead]);
+  // 초기 선택일은 '내일' (가장 흔한 케이스 — 당일 면접은 거의 없음).
+  const tomorrow = useMemo(() => {
+    const d = startOfDay(today);
+    d.setDate(d.getDate() + 1);
+    return d;
+  }, [today]);
 
-  const [view, setView] = useState<Date>(today);
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [view, setView] = useState<Date>(tomorrow);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(tomorrow);
   // 같은 날 여러 시간 동시 선택 — "HH:MM" 문자열 집합
   const [selectedTimes, setSelectedTimes] = useState<Set<string>>(new Set());
 

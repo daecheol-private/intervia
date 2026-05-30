@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/process-screenings",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/interview-reminders",
+      "schedule": "0 * * * *"
     }
   ]
 }

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { jobPostings, candidates } from "@/lib/schema";
-import { desc, eq, count, sql, and } from "drizzle-orm";
+import { jobPostings, candidates, jobInterviewers } from "@/lib/schema";
+import { desc, eq, count, sql, and, inArray } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { jobOrgFilter } from "@/lib/tenant";
 import JobsList from "../jobs-list";
@@ -8,9 +8,28 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function JobsListPage() {
+export default async function JobsListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mine?: string }>;
+}) {
   const me = await getCurrentUser();
-  const where = me ? jobOrgFilter(me) : eq(jobPostings.id, -1);
+  const { mine } = await searchParams;
+  // mine=1 → 로그인 계정이 면접관으로 지정된 공고만.
+  const mineOnly = mine === "1";
+
+  const orgWhere = me ? jobOrgFilter(me) : eq(jobPostings.id, -1);
+  let where = orgWhere;
+  if (mineOnly && me) {
+    const myJobs = await db
+      .select({ jobId: jobInterviewers.jobId })
+      .from(jobInterviewers)
+      .where(eq(jobInterviewers.userId, me.id));
+    const ids = myJobs.map((r) => r.jobId);
+    // 면접관인 공고가 없으면 빈 결과가 되도록 불가능 조건.
+    where = and(orgWhere, inArray(jobPostings.id, ids.length > 0 ? ids : [-1]))!;
+  }
+
   const jobs = await db
     .select({
       id: jobPostings.id,
@@ -48,9 +67,13 @@ export default async function JobsListPage() {
           <Link href="/" className="text-xs text-slate-500 hover:text-slate-900">
             ← 대시보드
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">공고 관리</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mt-1">
+            {mineOnly ? "내가 면접관인 공고" : "공고 관리"}
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
-            등록된 채용 공고 {serialized.length}건
+            {mineOnly
+              ? `내가 면접관으로 지정된 공고 ${serialized.length}건`
+              : `등록된 채용 공고 ${serialized.length}건`}
           </p>
         </div>
         <Link

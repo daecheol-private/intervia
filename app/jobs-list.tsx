@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { formatKstDateTime, formatLocalDate } from "@/lib/utils";
-import { FavoriteStar } from "./components/FavoriteStar";
 
 type Job = {
   id: number;
@@ -23,7 +22,6 @@ type Job = {
   closesAt?: string;
   closedAt?: string | null;
   extensionCount?: number;
-  favorited?: boolean;
 };
 
 function daysLeft(closesAt?: string): number | null {
@@ -100,12 +98,9 @@ export default function JobsList({
             key={j.id}
             href={`/jobs/${j.id}`}
             onClick={(e) => handleClick(j, e)}
-            className="card-hover bg-white border border-slate-200 rounded-xl p-5 block relative"
+            className="card-hover bg-white border border-slate-200 rounded-xl p-5 block"
           >
-            <div className="absolute top-3 right-3">
-              <FavoriteStar jobId={j.id} initial={j.favorited ?? false} size="md" />
-            </div>
-            <div className="flex justify-between items-start gap-3 pr-8">
+            <div className="flex justify-between items-start gap-3">
               <h2 className="font-semibold text-slate-900 leading-snug line-clamp-2 flex items-center gap-1.5">
                 {j.hasPassword && (
                   <span className="text-amber-600" title="비밀번호 보호됨">

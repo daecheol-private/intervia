@@ -2,7 +2,6 @@ import { db } from "@/lib/db";
 import {
   jobPostings,
   candidates,
-  userJobFavorites,
   jobInterviewers,
 } from "@/lib/schema";
 import { desc, eq, count, sql, and } from "drizzle-orm";
@@ -19,14 +18,7 @@ export async function GET() {
   const guard = requireUser(me);
   if (guard) return guard;
 
-  // 본인 즐겨찾기 ID 모음 (정렬 1순위 + 응답에 favorited 포함)
-  const favRows = await db
-    .select({ jobId: userJobFavorites.jobId })
-    .from(userJobFavorites)
-    .where(eq(userJobFavorites.userId, me!.id));
-  const favSet = new Set(favRows.map((r) => r.jobId));
-
-  // 내가 면접관인 공고 ID — 정렬 2순위
+  // 내가 면접관인 공고 ID — 정렬 1순위 (로그인 계정이 면접관인 공고를 위로)
   const interviewerRows = await db
     .select({ jobId: jobInterviewers.jobId })
     .from(jobInterviewers)
@@ -57,11 +49,8 @@ export async function GET() {
     .groupBy(jobPostings.id)
     .orderBy(desc(jobPostings.createdAt));
 
-  // 정렬: 즐겨찾기(1) → 내가 면접관(2) → 최신 등록순(SQL desc 유지)
+  // 정렬: 내가 면접관(1) → 최신 등록순(SQL desc 유지)
   const sorted = [...rows].sort((a, b) => {
-    const af = favSet.has(a.id) ? 1 : 0;
-    const bf = favSet.has(b.id) ? 1 : 0;
-    if (af !== bf) return bf - af;
     const ai = interviewerSet.has(a.id) ? 1 : 0;
     const bi = interviewerSet.has(b.id) ? 1 : 0;
     if (ai !== bi) return bi - ai;
@@ -72,7 +61,6 @@ export async function GET() {
     sorted.map(({ passwordHash, ...r }) => ({
       ...r,
       hasPassword: passwordHash != null,
-      favorited: favSet.has(r.id),
     }))
   );
 }
