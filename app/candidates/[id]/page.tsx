@@ -3059,23 +3059,6 @@ function StagePanel({
     onChanged();
   };
 
-  const remask = async () => {
-    if (
-      !confirm("원본 파일에서 다시 텍스트 추출 + 마스킹을 수행합니다. 진행할까요?")
-    )
-      return;
-    const r = await fetch(`/api/candidates/${candidate.id}/remask`, {
-      method: "POST",
-    });
-    if (!r.ok) {
-      alert("재처리 실패: " + (await r.text()));
-      return;
-    }
-    const d = await r.json();
-    alert(`재처리 완료. 마스킹 텍스트 ${d.oldLength}자 → ${d.newLength}자`);
-    onChanged();
-  };
-
   return (
     <>
       <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 flex-wrap text-sm">
@@ -3100,14 +3083,6 @@ function StagePanel({
             className="text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600"
           >
             {showFullResume ? "마스킹 접기" : "마스킹 보기"}
-          </button>
-        )}
-        {candidate.resumeFilePath && (
-          <button
-            onClick={remask}
-            className="text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600"
-          >
-            🔄 재처리
           </button>
         )}
         {!candidate.resumeFilePath && !candidate.resumeMaskedText && (

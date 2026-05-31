@@ -33,6 +33,8 @@ type SessionInfo = {
     interviewDurationMinutes?: number;
   };
   expired: boolean;
+  withdrawn?: boolean;
+  terminated?: boolean;
   consentRequired?: boolean;
   consentVersion?: string;
   consentItems?: ConsentItem[];
@@ -246,6 +248,34 @@ export default function InterviewPage() {
     return (
       <main className="p-6 text-slate-500 text-center mt-20">불러오는 중...</main>
     );
+
+  // 지원취소된 후보 — 토큰이 살아있어도 재진입 시 동의 화면 대신 안내.
+  if (info.withdrawn) {
+    return (
+      <CenteredCard>
+        <div className="text-3xl mb-3">🗑️</div>
+        <h1 className="text-xl font-bold text-slate-900">지원이 취소되었습니다</h1>
+        <p className="text-slate-600 mt-2 leading-relaxed">
+          이 지원은 지원자 요청으로 취소되어 면접을 진행할 수 없습니다.
+          <br />
+          관심 가져주셔서 감사합니다.
+        </p>
+      </CenteredCard>
+    );
+  }
+
+  // 그 외 종결(합격·불합격 등) 후보 — 면접 재진입 차단.
+  if (info.terminated) {
+    return (
+      <CenteredCard>
+        <div className="text-3xl mb-3">✅</div>
+        <h1 className="text-xl font-bold text-slate-900">종료된 전형입니다</h1>
+        <p className="text-slate-600 mt-2 leading-relaxed">
+          이 전형은 이미 종결되어 면접을 진행할 수 없습니다.
+        </p>
+      </CenteredCard>
+    );
+  }
 
   if (info.expired) {
     return (
@@ -670,6 +700,28 @@ function ConsentGate({
   const [err, setErr] = useState("");
   // H5 — 본인 확인용 이메일 (지원 시 등록한 메일과 일치 여부 서버 검증)
   const [email, setEmail] = useState("");
+  const [withdrawn, setWithdrawn] = useState(false);
+
+  // 지원취소 — 자의로 지원 철회 시 outcome=withdrawn + 본문 즉시 폐기.
+  const withdraw = async () => {
+    if (
+      !confirm(
+        "지원을 취소하시면 면접에 참여할 수 없으며, 제출하신 이력서 정보는 즉시 폐기됩니다. 계속하시겠습니까?"
+      )
+    )
+      return;
+    setBusy(true);
+    setErr("");
+    const res = await fetch(`/api/interview/${token}/withdraw`, {
+      method: "POST",
+    });
+    setBusy(false);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    setWithdrawn(true);
+  };
 
   const allRequiredChecked = items
     .filter((i) => i.required)
@@ -698,6 +750,20 @@ function ConsentGate({
     }
     onAccepted();
   };
+
+  if (withdrawn) {
+    return (
+      <CenteredCard>
+        <div className="text-3xl mb-3">🗑️</div>
+        <h1 className="text-xl font-bold text-slate-900">지원 취소 완료</h1>
+        <p className="text-slate-600 mt-2 leading-relaxed">
+          지원이 취소되었으며, 제출하신 이력서 정보는 폐기되었습니다.
+          <br />
+          관심 가져주셔서 감사합니다.
+        </p>
+      </CenteredCard>
+    );
+  }
 
   return (
     <main className="max-w-3xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0">
@@ -773,7 +839,7 @@ function ConsentGate({
             </p>
           </div>
           <p className="text-[11px] text-slate-500 leading-relaxed mb-3">
-            동의 거부 시 면접 절차에 참여할 수 없습니다. 자동화 의사결정 결과에
+            동의하지 않거나 지원을 취소하면 면접 절차에 참여할 수 없습니다. 자동화 의사결정 결과에
             대해서는 본인 식별 후 설명 요청 및 이의제기 권리가 있습니다 (PIPA
             §37의2). 자세한 사항은 채용 담당자 또는{" "}
             <a
@@ -800,10 +866,11 @@ function ConsentGate({
               {busy ? "처리 중..." : "동의하고 면접 시작"}
             </button>
             <button
-              onClick={() => window.close()}
-              className="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 text-sm"
+              onClick={withdraw}
+              disabled={busy}
+              className="px-4 py-2.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-sm disabled:opacity-50"
             >
-              거부
+              지원취소
             </button>
           </div>
         </div>

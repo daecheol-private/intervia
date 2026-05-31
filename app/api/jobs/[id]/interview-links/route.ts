@@ -23,7 +23,6 @@ import { sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { generateToken, addDays, formatKstDateTime } from "@/lib/utils";
-import { chargeFeature } from "@/lib/tokens";
 import {
   requirePositiveBalance,
   insufficientTokensResponse,
@@ -162,14 +161,7 @@ export async function POST(
       })
       .returning();
 
-    await chargeFeature({
-      orgId: job.orgId,
-      feature: "interview",
-      refType: "interview_session",
-      refId: session.id,
-      userId: me!.id,
-      memo: c.name,
-    });
+    // 토큰 차감은 지원자가 면접을 실제 시작할 때 수행 (consent). 링크 발급은 무료.
 
     const url = `${base}/interview/${token}`;
     const mail = buildInterviewEmail({

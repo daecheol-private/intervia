@@ -378,6 +378,43 @@ export async function closeJob(args: {
   return { closedAt, rejectedCount: targets.length, mailsSent, mailsFailed };
 }
 
+/**
+ * 자동 종결 — 공고의 모든 지원자가 종결(outcome != null: 합격/불합격/지원취소)되면
+ * 공고를 status='closed' 로 전환. 후보자가 1명 이상 있어야 하고, 미결정(outcome=null)
+ * 후보가 한 명이라도 있으면 종결하지 않는다.
+ *
+ * closeJob() 과 달리 일괄 불합격 처리를 하지 않는다 — 호출 시점에 이미 전원 종결 상태이므로
+ * 공고 상태만 닫으면 된다. 합·불·지원취소가 결정되는 모든 경로(단건/일괄 결정, AI면접·1차면접
+ * 지원취소)에서 결정 직후 fire-and-forget 으로 호출.
+ *
+ * 멱등: 이미 closed 면 no-op.
+ */
+export async function maybeAutoCloseJob(jobId: number): Promise<boolean> {
+  const [job] = await db
+    .select({ status: jobPostings.status })
+    .from(jobPostings)
+    .where(eq(jobPostings.id, jobId));
+  if (!job || job.status !== "active") return false;
+
+  const [agg] = await db
+    .select({
+      total: count(),
+      pending: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+    })
+    .from(candidates)
+    .where(eq(candidates.jobId, jobId));
+  const total = Number(agg?.total ?? 0);
+  const pending = Number(agg?.pending ?? 0);
+  // 후보자 0명이면 종결하지 않음 (빈 공고를 자동으로 닫지 않음).
+  if (total === 0 || pending > 0) return false;
+
+  await db
+    .update(jobPostings)
+    .set({ status: "closed", closedAt: new Date().toISOString() })
+    .where(eq(jobPostings.id, jobId));
+  return true;
+}
+
 /** 종결 +7일 경과 공고의 candidates PDF + attachments 파일을 삭제. */
 export async function purgePdfsAfterClose(): Promise<{
   purgedFiles: number;

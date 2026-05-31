@@ -23,7 +23,7 @@ import { logAudit } from "@/lib/audit";
 import {
   requirePositiveBalance,
 } from "@/lib/wallet-guard";
-import { MAX_DECISION_EMAILS_PER_CANDIDATE } from "@/lib/job-lifecycle";
+import { MAX_DECISION_EMAILS_PER_CANDIDATE, maybeAutoCloseJob } from "@/lib/job-lifecycle";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { sql } from "drizzle-orm";
 
@@ -250,6 +250,13 @@ export async function PATCH(
       console.error("purgeOnDecision failed", e)
     );
     purged = true;
+  }
+
+  // 모든 지원자가 종결(합격/불합격/지원취소)되면 공고 자동 종결.
+  if (becameTerminal) {
+    await maybeAutoCloseJob(candidate.jobId).catch((e) =>
+      console.error("maybeAutoCloseJob failed", e)
+    );
   }
 
   const finalStage = stageRequested ?? prevStage;

@@ -58,6 +58,16 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const orgFilter = orgScope == null ? undefined : eq(jobPostings.orgId, orgScope);
   const candFilter = orgScope == null ? undefined : eq(candidates.orgId, orgScope);
 
+  // 인사말에 표시할 법인명 — orgId 있는 경우만 조회.
+  let orgName: string | null = null;
+  if (me.orgId) {
+    const [org] = await db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, me.orgId));
+    orgName = org?.name ?? null;
+  }
+
   // -- 공고 통계 ----------------------------------------------------------
   const [jobsAgg] = await db
     .select({ total: count() })
@@ -333,7 +343,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       {/* 환영 헤더 */}
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-ink">
-          안녕하세요, {me.name} 님
+          안녕하세요, {orgName ? `${orgName} ` : ""}{me.name} 님
         </h1>
         <p className="text-sm text-ink-soft mt-1">
           오늘의 채용 현황을 한눈에 확인하세요.

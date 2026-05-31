@@ -8,7 +8,7 @@ type Pricing = { job_post: number; resume_upload: number; interview: number };
 const LABELS: { key: keyof Pricing; label: string; desc: string }[] = [
   { key: "job_post", label: "공고 등록", desc: "공고 1건 생성 시 차감" },
   { key: "resume_upload", label: "이력서 업로드", desc: "이력서 1건 업로드 시 차감" },
-  { key: "interview", label: "면접 1건", desc: "면접 링크 발급 시 차감" },
+  { key: "interview", label: "면접 1건", desc: "지원자가 동의 후 면접 시작 시 차감" },
 ];
 
 export default function PricingPage() {

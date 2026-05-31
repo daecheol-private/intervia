@@ -592,6 +592,12 @@ function StackBar({
             <span className={`w-2.5 h-2.5 rounded-sm ${s.color}`} />
             <span className="text-slate-600">
               {s.label} <strong className="text-slate-900">{s.count}</strong>
+              {total > 0 && (
+                <span className="text-slate-400">
+                  {" "}
+                  ({Math.round((s.count / total) * 1000) / 10}%)
+                </span>
+              )}
             </span>
           </span>
         ))}

@@ -131,6 +131,11 @@ export default function JobDetailPage() {
   >("all");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // 합·불 일괄 처리 모달 — 사유 + 통보 메일 옵션을 받기 위해 confirm 대신 모달 사용.
+  const [bulkDecisionState, setBulkDecisionState] = useState<{
+    decision: "hired" | "rejected";
+    ids: number[];
+  } | null>(null);
   const [decideIds, setDecideIds] = useState<number[] | null>(null);
   // 1차 면접 확정 일정 팝업 — null=닫힘, 배열=열림(시간순 정렬된 목록).
   const [round1Schedule, setRound1Schedule] = useState<Round1ScheduleItem[] | null>(null);
@@ -826,36 +831,65 @@ export default function JobDetailPage() {
     void loadCandidates();
   };
 
-  const bulkDecide = async (decision: "hired" | "rejected", targetIds: number[]) => {
+  // 합·불 일괄 처리 — 사유·통보 메일 옵션을 받기 위해 모달을 연다 (confirm 대신).
+  const bulkDecide = (decision: "hired" | "rejected", targetIds: number[]) => {
     if (targetIds.length === 0) return;
-    const label = decision === "hired" ? "최종합격" : "불합격";
-    const reason = decision === "hired" ? "passed_final" : "other";
-    const warn = `\n\n⚠️ 종결 결정입니다.\n이력서 원본·첨부 파일은 즉시 폐기되고, 공고 종결 +14일 후 후보자 정보 전체가 자동 삭제됩니다. 메일 발송은 진행되지 않습니다 (개별 결정 메뉴에서 메일 옵션 사용).`;
-    if (
-      !(await confirmDialog(
-        `선택된 ${targetIds.length}명을 "${label}" 으로 일괄 처리할까요?${warn}`,
-        { tone: "danger", title: `${label} 일괄 처리`, confirmText: label }
-      ))
-    )
-      return;
+    setBulkDecisionState({ decision, ids: targetIds });
+  };
+
+  // 모달 확정 시 실제 처리 — 후보자별 outcome + 사유 설정, sendMail 시 통보 메일도 발송.
+  // stage PATCH 가 sendNotification/customMessage 를 직접 처리 (별도 메일 호출 불필요).
+  const runBulkDecision = async (opts: {
+    reason: string;
+    sendMail: boolean;
+    customMessage: string;
+  }) => {
+    const st = bulkDecisionState;
+    if (!st) return;
+    const label = st.decision === "hired" ? "최종합격" : "불합격";
     setBulkBusy(true);
-    const ids = targetIds;
     let ok = 0;
     let fail = 0;
-    for (const id of ids) {
+    let mailOk = 0;
+    let mailFail = 0;
+    for (const id of st.ids) {
+      const cand = candidatesList.find((c) => c.id === id);
+      // {이름} 토큰을 각 지원자 이름으로 치환. 본문이 비어 있으면 서버 기본 템플릿 사용.
+      const personalized = opts.customMessage
+        ? opts.customMessage.split("{이름}").join(cand?.name ?? "")
+        : undefined;
       const res = await fetch(`/api/candidates/${id}/stage`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outcome: decision, outcomeReason: reason, sendNotification: false }),
+        body: JSON.stringify({
+          outcome: st.decision,
+          outcomeReason: opts.reason || undefined,
+          sendNotification: opts.sendMail,
+          customMessage: personalized,
+        }),
       });
-      if (res.ok) ok++;
-      else fail++;
+      if (!res.ok) {
+        fail++;
+        continue;
+      }
+      ok++;
+      if (opts.sendMail) {
+        const data = (await res.json().catch(() => null)) as {
+          mail?: { sent?: boolean };
+        } | null;
+        if (data?.mail?.sent) mailOk++;
+        else mailFail++;
+      }
     }
     setBulkBusy(false);
-    notify(`${label} 처리: 성공 ${ok}건${fail > 0 ? ` / 실패 ${fail}건` : ""}`, {
-      tone: fail > 0 ? "warn" : "success",
-      title: `${label} 처리 완료`,
-    });
+    setBulkDecisionState(null);
+    notify(
+      `${label} 처리: 성공 ${ok}건${fail > 0 ? ` / 실패 ${fail}건` : ""}` +
+        (opts.sendMail
+          ? ` · 메일 ${mailOk}건 발송${mailFail > 0 ? ` / ${mailFail}건 미발송` : ""}`
+          : ""),
+      { tone: fail > 0 || mailFail > 0 ? "warn" : "success", title: `${label} 처리 완료` }
+    );
     setSelected(new Set());
     void loadCandidates();
   };
@@ -864,7 +898,7 @@ export default function JobDetailPage() {
     if (targetIds.length === 0) return;
     if (
       !(await confirmDialog(
-        `선택된 ${targetIds.length}명에게 AI 면접 링크를 일괄 발송할까요?\n\n토큰이 각 후보자당 차감되며, 메일이 발송됩니다.`,
+        `선택된 ${targetIds.length}명에게 AI 면접 링크를 일괄 발송할까요?\n\n메일이 발송되며, 토큰은 각 지원자가 동의 후 면접을 시작할 때 차감됩니다 (미응답 링크는 무료).`,
         { title: "AI 면접 링크 발송", confirmText: "발송" }
       ))
     )
@@ -1810,6 +1844,20 @@ export default function JobDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {bulkDecisionState && (
+        <BulkDecisionModal
+          decision={bulkDecisionState.decision}
+          count={bulkDecisionState.ids.length}
+          stages={candidatesList
+            .filter((c) => bulkDecisionState.ids.includes(c.id))
+            .map((c) => c.stage)}
+          jobTitle={job?.title ?? "공고"}
+          busy={bulkBusy}
+          onCancel={() => setBulkDecisionState(null)}
+          onConfirm={(opts) => void runBulkDecision(opts)}
+        />
       )}
 
       {round1Schedule && (
@@ -3083,6 +3131,173 @@ function InterviewersInline({ jobId }: { jobId: number }) {
           {busy ? "처리 중…" : "+ 면접관 지정"}
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * 합·불 일괄 처리 모달 — 사유(선택) + 통보 메일 발송 여부 + 맞춤 메시지.
+ * 개별 결정(DecisionMenu)과 동일한 입력을 일괄 처리에도 제공한다.
+ * 사유 라벨은 서버 전용 모듈(candidate-stage) 의존을 피하려 로컬에 둔다.
+ */
+function BulkDecisionModal({
+  decision,
+  count,
+  stages,
+  jobTitle,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  decision: "hired" | "rejected";
+  count: number;
+  stages: string[];
+  jobTitle: string;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (opts: {
+    reason: string;
+    sendMail: boolean;
+    customMessage: string;
+  }) => void;
+}) {
+  const label = decision === "hired" ? "최종합격" : "불합격";
+  const isReject = decision === "rejected";
+  const reasonOptions = isReject
+    ? [
+        { value: "resume_unfit", label: "서류 부적합" },
+        { value: "ai_interview_unfit", label: "AI면접 평가 부적합" },
+        { value: "round1_unfit", label: "1차 면접 부적합" },
+        { value: "round2_unfit", label: "2차 면접 부적합" },
+        { value: "offer_declined", label: "처우협의 결렬" },
+        { value: "other", label: "기타" },
+      ]
+    : [{ value: "passed_final", label: "최종 합격 결정" }];
+  // 전형(stage)별 기본 불합격 사유 — 선택 후보들의 stage 중 가장 많은 단계 기준 자동 선택.
+  const reasonForStage = (s: string): string =>
+    s === "applied" || s === "screened"
+      ? "resume_unfit"
+      : s === "ai_pending" || s === "ai_evaluated"
+      ? "ai_interview_unfit"
+      : s.startsWith("round1")
+      ? "round1_unfit"
+      : s === "round2_passed"
+      ? "round2_unfit"
+      : "other";
+  const autoReason = (() => {
+    if (!isReject) return "passed_final";
+    const counts: Record<string, number> = {};
+    for (const s of stages) {
+      const r = reasonForStage(s);
+      counts[r] = (counts[r] ?? 0) + 1;
+    }
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return top ? top[0] : "";
+  })();
+  // 기본 통보 메일 템플릿 — {이름} 은 발송 시 각 지원자 이름으로 치환된다.
+  // (lib/candidate-stage.ts 의 buildDecisionEmail 기본 본문과 동일하게 유지)
+  const defaultBody =
+    decision === "hired"
+      ? `{이름}님, ${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
+      : `{이름}님, ${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`;
+  const [reason, setReason] = useState<string>(autoReason);
+  const [sendMail, setSendMail] = useState(false);
+  const [customMessage, setCustomMessage] = useState(defaultBody);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+      onClick={busy ? undefined : onCancel}
+    >
+      <div
+        className="bg-card rounded-xl shadow-xl border border-border-default w-full max-w-md p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-semibold text-ink mb-1">{label} 일괄 처리</h3>
+        <p className="text-sm text-ink-soft">
+          선택된 <strong className="text-ink">{count}</strong>명을 "{label}"으로
+          일괄 처리합니다.
+        </p>
+
+        <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+          {isReject
+            ? "⚠️ 종결 결정입니다. 이력서 원본·첨부 파일은 즉시 폐기되고, 공고 종결 +14일 후 후보자 정보 전체가 자동 삭제됩니다."
+            : "⚠️ 종결 결정입니다. 최종합격으로 처리되며, 이력서·첨부 파일은 입사 절차를 위해 보존됩니다."}
+        </div>
+
+        <div className="mt-4">
+          <label className="block text-xs font-semibold text-ink-soft mb-1.5">
+            {label} 사유 (선택)
+          </label>
+          <select
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            disabled={busy}
+            className="w-full px-3 py-2 text-sm border border-border-default rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+          >
+            {isReject && <option value="">선택 안 함</option>}
+            {reasonOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <label className="mt-4 flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={sendMail}
+            onChange={(e) => setSendMail(e.target.checked)}
+            disabled={busy}
+            className="mt-0.5 w-4 h-4 rounded border-border-default"
+          />
+          <span className="text-sm text-ink">
+            {label} 통보 메일 발송
+            <span className="block text-[11px] text-ink-soft">
+              이메일이 등록된 후보자에게만 발송됩니다.
+            </span>
+          </span>
+        </label>
+        {sendMail && (
+          <div className="mt-2">
+            <p className="text-[11px] text-ink-soft mb-1">
+              아래 내용으로 발송됩니다.{" "}
+              <code className="px-1 rounded bg-surface-alt">{"{이름}"}</code> 자리에
+              각 지원자 이름이 자동으로 들어갑니다. 직접 수정할 수 있어요.
+            </p>
+            <textarea
+              value={customMessage}
+              onChange={(e) => setCustomMessage(e.target.value)}
+              rows={8}
+              disabled={busy}
+              placeholder="통보 메일 본문"
+              className="w-full px-3 py-2 text-sm border border-border-default rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+            />
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="px-4 py-2 rounded-lg border border-border-default text-sm text-ink-soft hover:bg-surface-alt disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={() => onConfirm({ reason, sendMail, customMessage })}
+            disabled={busy}
+            className={`px-4 py-2 rounded-lg text-sm font-medium text-surface disabled:opacity-50 ${
+              isReject
+                ? "bg-danger hover:bg-danger/90"
+                : "bg-primary hover:bg-primary-deep"
+            }`}
+          >
+            {busy ? "처리 중..." : `${label} 처리`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

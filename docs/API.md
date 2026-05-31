@@ -72,7 +72,7 @@
 | POST | `/api/candidates/[id]/screen` | 사용자 확인 후 수동 트리거. **`resume_upload` 차감** + 백그라운드 LLM 평가. 실패 시 자동 환불. status: uploaded/failed 일 때만 동작. **지원자 동의 확인 누락(2026-05-22 이후 row) 시 400** |
 | GET | `/api/candidates/[id]` | 🔑 |
 | DELETE | `/api/candidates/[id]` | 후보자 + 파일 삭제 |
-| POST | `/api/candidates/[id]/interview-link` | **`interview` 차감**. 새 면접 세션 + 토큰 발급 |
+| POST | `/api/candidates/[id]/interview-link` | 새 면접 세션 + 링크 발급 (차감 없음 — 지원자 면접 시작 시 과금) |
 | GET | `/api/candidates/[id]/interview-questions` | 저장된 1차 면접 질문지 + `scheduleConfirmed`(1차 일정 확정 여부) 반환. 없으면 `sheet:null` |
 | POST | `/api/candidates/[id]/interview-questions` | 1차 면접 질문지 **생성/재생성**(무료). 게이트: round1 일정 `selected` 아니면 409. 이력서+서류평가+AI면접 평가 종합 LLM(task=questionGen) → 후보자당 1건 upsert. 감사 `interview_questions.generate` |
 
@@ -82,7 +82,7 @@
 |---|---|---|---|
 | GET | `/api/interview/[token]` | 🎫 | 세션 + 후보자 + 공고 |
 | GET | `/api/interview/[token]` | 🎫 | 세션 정보. 미동의 시 `consentRequired:true` + `consentItems[]` |
-| POST | `/api/interview/[token]/consent` | 🎫 | 후보자 동의 기록. 필수 항목 누락 시 400 `{code:"consent_missing", missing}`. IP/UA/version 자동 기록 |
+| POST | `/api/interview/[token]/consent` | 🎫 | 후보자 동의 기록 + **`interview` 차감** (면접 실제 시작 시점, 멱등). 필수 항목 누락 시 400 `{code:"consent_missing", missing}`. IP/UA/version 자동 기록 |
 | POST | `/api/interview/[token]/chat` | 🎫 | 스트리밍 응답. **동의 없으면 403 `{code:"consent_required"}`** |
 | POST | `/api/interview/[token]/complete` | 🎫 | 평가 LLM + 저장. **동의 없으면 403** |
 | POST | `/api/interview/[token]/appeal` | 🎫 | 자동화 의사결정 이의제기. body: `{email, reason}`. 본인 이메일 매칭 + 사유 10~5000자. DPO 알림 메일 (실패해도 제출 성공). Rate limit IP 3/분 |

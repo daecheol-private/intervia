@@ -26,6 +26,21 @@ export async function GET(
     .where(eq(candidates.id, session.candidateId));
   if (!candidate) return new Response("후보자 없음", { status: 404 });
 
+  // 지원자가 지원취소했거나 종결된 후보 — 토큰이 살아있어도 재진입 차단.
+  // (AI면접 지원취소는 세션도 expired 처리하지만, 1차면접 스케쥴 지원취소는
+  //  세션을 건드리지 않으므로 outcome 으로 일관되게 판별.)
+  if (candidate.outcome) {
+    return Response.json(
+      {
+        session,
+        withdrawn: candidate.outcome === "withdrawn",
+        terminated: true,
+        expired: false,
+      },
+      { status: 200 }
+    );
+  }
+
   const [job] = await db
     .select()
     .from(jobPostings)

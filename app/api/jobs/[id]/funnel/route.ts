@@ -101,18 +101,18 @@ export async function GET(
   //   - 따라서 hired 를 빼기 전 원본 카운트로 계산해야 정확함.
   const stagesRaw = { ...stages };
 
-  // 최종합격 후보는 stage 가 round2_passed (또는 그 이전) 으로 남지만,
-  // 파이프라인 UI 에서는 "최종 합격" 셀로 옮겨 표시해야 사용자 멘탈모델과 일치.
-  //   - 불합격/지원취소: 어느 단계에서 멈췄는지가 의미 있으므로 stage 카운트에 그대로 유지.
-  //   - 최종합격: 전형이 완전히 끝났으므로 이전 stage 에서 빼고 "hired" 로 이동.
-  let hiredTotal = 0;
+  // 종결된 후보(최종합격/불합격/지원취소)는 진행 단계 카운트에서 빼고 각자의 종결 셀로 이동.
+  //   → "전형단계 현황" 숫자가 실제 진행 중 인원과 일치 (불합격·지원취소가 'AI면접-대기' 등에
+  //      남아 헷갈리는 문제 해소).
+  //   → 어느 단계에서 종결됐는지는 decisionBreakdown 에 보존되어 리포트 통계에 사용.
+  //   → legacy: stage 가 이미 종결값(hired/rejected/withdrawn)이면 rows 에서 이미 종결 셀에
+  //      집계됐으므로 중복 방지 위해 건너뜀.
   for (const r of decisionBreakdown) {
-    if (r.outcome !== "hired") continue;
+    if (r.outcome == null || r.fromStage === r.outcome) continue;
     const n = Number(r.n);
-    stages[r.fromStage] = Math.max(0, Number(stages[r.fromStage]) - n);
-    hiredTotal += n;
+    stages[r.fromStage] = Math.max(0, Number(stages[r.fromStage] ?? 0) - n);
+    stages[r.outcome] = Number(stages[r.outcome] ?? 0) + n;
   }
-  stages.hired = hiredTotal;
 
   // KPI: 평균 처리 시간(일), 단계별 응답률
   const [timing] = await db

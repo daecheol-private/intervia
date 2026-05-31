@@ -5,7 +5,6 @@ import { eq, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { generateToken, addDays } from "@/lib/utils";
-import { chargeFeature } from "@/lib/tokens";
 import {
   requirePositiveBalance,
   insufficientTokensResponse,
@@ -93,16 +92,8 @@ export async function POST(
     })
     .returning();
 
-  if (candidate.orgId) {
-    await chargeFeature({
-      orgId: candidate.orgId,
-      feature: "interview",
-      refType: "interview_session",
-      refId: session.id,
-      userId: me!.id,
-      memo: candidate.name,
-    });
-  }
+  // 토큰 차감은 지원자가 링크로 들어와 동의 후 면접을 실제 시작할 때 수행
+  // (app/api/interview/[token]/consent). 링크 발급/재발급은 무료.
 
   // 면접 링크 발급 시점에 전형 단계 자동 전환 — 아직 결정 단계 전이면 AI면접·대기로.
   if (
