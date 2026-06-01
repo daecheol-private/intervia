@@ -2952,7 +2952,8 @@ function StagePanel({
       stage === "round1_passed"
     )
       return "round1_unfit";
-    if (stage === "round2_passed") return "round2_unfit";
+    // 2차 합격은 이미 2차 면접을 통과한 상태 → 이후 불합격은 처우협의 결렬이 기본.
+    if (stage === "round2_passed") return "offer_declined";
     return "resume_unfit";
   };
   const reasonsAvail = REASONS_BY_OUTCOME[decision];

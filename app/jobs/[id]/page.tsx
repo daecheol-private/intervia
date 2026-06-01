@@ -3190,7 +3190,7 @@ function BulkDecisionModal({
       : s.startsWith("round1")
       ? "round1_unfit"
       : s === "round2_passed"
-      ? "round2_unfit"
+      ? "offer_declined" // 2차 면접 통과 후 불합격 → 처우협의 결렬이 기본
       : "other";
   const autoReason = (() => {
     if (!isReject) return "passed_final";

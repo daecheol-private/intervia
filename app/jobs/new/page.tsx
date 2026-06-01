@@ -290,7 +290,7 @@ export default function NewJobPage() {
 
         <Field label="공고 비밀번호 (선택)">
           <input
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-widest placeholder:font-sans placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             placeholder="4자리 숫자 (예: 1234)"
             type="password"
             autoComplete="new-password"

@@ -102,6 +102,7 @@ export async function POST(req: Request) {
       responsibilities: body.responsibilities,
       requirements: body.requirements,
       idealProfile: (body.idealProfile ?? "").toString().slice(0, 3000),
+      evaluationFocus: (body.evaluationFocus ?? "").toString().slice(0, 3000),
       tone: body.tone ?? "중립적인",
       interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
       passwordHash,

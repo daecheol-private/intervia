@@ -258,7 +258,7 @@ export function SlotCalendarPicker({
                 : "여러 개 선택 가능"}
             </span>
           </div>
-          <div className="grid grid-cols-5 sm:grid-cols-6 gap-1 max-h-32 overflow-y-auto pr-1">
+          <div className="grid grid-cols-5 sm:grid-cols-6 gap-1">
             {TIME_SLOTS.map((t) => {
               const [hh, mm] = t.split(":").map(Number);
               const start = new Date(selectedDay);

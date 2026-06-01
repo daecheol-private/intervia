@@ -94,6 +94,7 @@ export async function PUT(
     responsibilities: body.responsibilities,
     requirements: body.requirements,
     idealProfile: typeof body.idealProfile === "string" ? body.idealProfile.slice(0, 3000) : "",
+    evaluationFocus: typeof body.evaluationFocus === "string" ? body.evaluationFocus.slice(0, 3000) : "",
     tone: body.tone,
     interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
   };
