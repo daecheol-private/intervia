@@ -86,6 +86,7 @@ export async function GET(
       createdAt: candidates.createdAt,
       interviewEmailCount: candidates.interviewEmailCount,
       lastInterviewEmailSentAt: candidates.lastInterviewEmailSentAt,
+      decisionEmailCount: candidates.decisionEmailCount,
     })
     .from(candidates)
     .where(eq(candidates.jobId, Number(id)))

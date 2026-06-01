@@ -50,6 +50,13 @@
       "when": 1780325899031,
       "tag": "0006_first_red_shift",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1780331713067,
+      "tag": "0007_strong_stephen_strange",
+      "breakpoints": true
     }
   ]
 }

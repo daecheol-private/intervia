@@ -29,6 +29,7 @@ import {
   isValidMeetingUrl,
   buildMeetingLinkEmail,
   buildIcsInvite,
+  roundLabel,
   type Slot,
 } from "@/lib/schedules";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
@@ -112,12 +113,13 @@ export async function POST(
     : null;
 
   // ICS 본문
-  const icsTitle = `[${org?.name ?? "Intervia"}] ${job?.title ?? "면접"} 1차 면접`;
+  const rl = roundLabel(sched.round);
+  const icsTitle = `[${org?.name ?? "Intervia"}] ${job?.title ?? "면접"} ${rl} 면접`;
   const ics = buildIcsInvite({
     uid: `intervia-sched-${sched.id}@intervia`,
     slot: selected,
     title: icsTitle,
-    description: `${cand?.name ?? "후보자"} 님 1차 면접\n미팅: ${url}${note ? "\n\n" + note : ""}`,
+    description: `${cand?.name ?? "후보자"} 님 ${rl} 면접\n미팅: ${url}${note ? "\n\n" + note : ""}`,
     location: url,
   });
   const icsAttachment = {
@@ -138,6 +140,7 @@ export async function POST(
           meetingUrl: url,
           note,
           forInterviewer: false,
+          round: sched.round,
         });
         await sendMail({
           to: cand.email,
@@ -165,6 +168,7 @@ export async function POST(
             meetingUrl: url,
             note,
             forInterviewer: true,
+            round: sched.round,
           });
           await sendMail({
             to: interviewer.email,

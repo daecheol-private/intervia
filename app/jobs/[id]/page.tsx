@@ -71,6 +71,7 @@ type Candidate = {
     | "withdrawn";
   outcome: "hired" | "rejected" | "withdrawn" | null;
   outcomeReason: string | null;
+  decisionEmailCount: number;
   createdAt: string;
   latestInterviewStatus: "pending" | "in_progress" | "completed" | "expired" | null;
   latestInterviewScore: number | null;
@@ -910,6 +911,46 @@ export default function JobDetailPage() {
     void loadCandidates();
   };
 
+  // 불합격인데 결과 통보 메일이 아직 안 나간 후보자에게 일괄 발송.
+  // decision-mail 라우트를 후보자별로 6-worker 동시 호출 (서버리스·SMTP 폭주 방지).
+  const bulkDecisionMail = async (targetIds: number[]) => {
+    if (targetIds.length === 0) return;
+    if (
+      !(await confirmDialog(
+        `불합격 통보 메일을 아직 받지 못한 ${targetIds.length}명에게 결과 통보 메일을 발송할까요?\n\n각 후보자에게 기본 불합격 안내 메일이 발송됩니다.`,
+        { title: "불합격 통보 일괄 발송", confirmText: "발송" }
+      ))
+    )
+      return;
+    setBulkBusy(true);
+    let ok = 0;
+    let fail = 0;
+    const queue = [...targetIds];
+    const runWorker = async () => {
+      for (;;) {
+        const id = queue.shift();
+        if (id === undefined) return;
+        const res = await fetch(`/api/candidates/${id}/decision-mail`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (res.ok) ok++;
+        else fail++;
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(6, targetIds.length) }, runWorker)
+    );
+    setBulkBusy(false);
+    notify(
+      `불합격 통보 발송: 성공 ${ok}건${fail > 0 ? ` / 실패 ${fail}건` : ""}`,
+      { tone: fail > 0 ? "warn" : "success", title: "통보 메일 발송 결과" }
+    );
+    setSelected(new Set());
+    void loadCandidates();
+  };
+
   const bulkInterviewSend = async (targetIds: number[]) => {
     if (targetIds.length === 0) return;
     if (
@@ -1469,6 +1510,34 @@ export default function JobDetailPage() {
         </a>
       </div>
 
+      {/* 불합격 통보 미발송 일괄 처리 배너 */}
+      {(() => {
+        const unnotified = candidatesList.filter(
+          (c) => c.outcome === "rejected" && c.decisionEmailCount === 0 && !!c.email
+        );
+        if (unnotified.length === 0) return null;
+        return (
+          <div className="mt-3 flex items-center gap-3 bg-warning-soft border border-warning/30 rounded-xl px-4 py-3 flex-wrap">
+            <span className="text-sm text-warning font-medium">
+              📭 불합격 통보 메일 미발송 {unnotified.length}명
+            </span>
+            <button
+              onClick={() => void setOutcomeFilter("rejected")}
+              className="text-xs px-2.5 py-1 rounded-md border border-warning/40 text-warning hover:bg-warning/10"
+            >
+              불합격만 보기
+            </button>
+            <button
+              onClick={() => void bulkDecisionMail(unnotified.map((c) => c.id))}
+              disabled={bulkBusy}
+              className="ml-auto text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50"
+            >
+              {bulkBusy ? "발송 중..." : "일괄 통보 발송"}
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Candidate list */}
       {filtered.length === 0 ? (
         <div className="text-center text-slate-500 py-16 bg-white border border-slate-200 rounded-2xl mt-4">
@@ -1533,6 +1602,13 @@ export default function JobDetailPage() {
                           ) : (
                             <WaitBadge stage={c.stage} />
                           )}
+                          {c.outcome === "rejected" &&
+                            c.decisionEmailCount === 0 &&
+                            c.email && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/30 font-medium">
+                                📭 통보 미발송
+                              </span>
+                            )}
                           {c.screeningReport && (
                             <RecBadge rec={c.screeningReport.recommendation} />
                           )}
@@ -1770,6 +1846,13 @@ export default function JobDetailPage() {
                           ) : (
                             <WaitBadge stage={c.stage} />
                           )}
+                          {c.outcome === "rejected" &&
+                            c.decisionEmailCount === 0 &&
+                            c.email && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/30 font-medium">
+                                📭 통보 미발송
+                              </span>
+                            )}
                           {c.screeningReport && (
                             <RecBadge rec={c.screeningReport.recommendation} />
                           )}

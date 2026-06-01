@@ -25,6 +25,7 @@ type Info = {
     | "counter_proposed"
     | "withdrawn"
     | "cancelled";
+  round?: "round1" | "round2";
   proposedSlots: Slot[];
   modeOnline: boolean;
   address: string | null;
@@ -223,7 +224,7 @@ export default function SchedulePage() {
         <header className="text-center pb-5 border-b border-slate-100">
           <div className="text-3xl mb-2">📅</div>
           <h1 className="text-lg font-bold text-slate-900">
-            {info.orgName} 1차 면접 일정 선택
+            {info.orgName} {info.round === "round2" ? "2차" : "1차"} 면접 일정 선택
           </h1>
           <p className="text-xs text-slate-500 mt-1">{info.jobTitle}</p>
           <p className="text-[11px] text-slate-400 mt-1">

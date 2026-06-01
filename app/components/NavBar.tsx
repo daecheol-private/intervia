@@ -58,6 +58,7 @@ function buildSections(role: Role): NavSection[] {
     sections.push({
       label: "법인",
       items: [
+        { href: "/org/dashboard", label: "채용 현황", Icon: BarChart3 },
         { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
         { href: "/org/members", label: "멤버", Icon: Users },
         // 메일 서버 설정은 데스크톱 전용 — 모바일 메뉴에서 숨김
@@ -141,6 +142,7 @@ export function NavBar({
                   label="법인"
                   Icon={Building2}
                   items={[
+                    { href: "/org/dashboard", label: "채용 현황", Icon: BarChart3 },
                     { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
                     { href: "/org/members", label: "멤버", Icon: Users },
                     { href: "/org/smtp", label: "메일 서버", Icon: Mail },

@@ -25,6 +25,7 @@ export function ScheduleProposeModal({
   onClose,
   onDone,
   nameById,
+  round = "round1",
 }: {
   jobId: number;
   candidateIds: number[];
@@ -34,7 +35,10 @@ export function ScheduleProposeModal({
   onDone: () => void;
   /** 결과 표시에 후보자 이름을 쓰고 싶을 때 (선택). 없으면 #id 로 표시. */
   nameById?: Record<number, string>;
+  /** 면접 차수. round2 는 1차 합격 후보에게만(서버 가드). 기본 round1. */
+  round?: "round1" | "round2";
 }) {
+  const roundLbl = round === "round2" ? "2차" : "1차";
   const [slots, setSlots] = useState<Array<{ start: string; end: string }>>([]);
   const [modeOnline, setModeOnline] = useState(true);
   const [address, setAddress] = useState("");
@@ -82,6 +86,7 @@ export function ScheduleProposeModal({
         modeOnline,
         address: modeOnline ? null : address.trim(),
         addressDetail: modeOnline ? null : addressDetail.trim(),
+        round,
       }),
     });
     setBusy(false);
@@ -118,7 +123,7 @@ export function ScheduleProposeModal({
       >
         {/* 헤더 — 고정 */}
         <div className="px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
-          <h3 className="font-bold text-slate-900">1차 면접 스케쥴 제시</h3>
+          <h3 className="font-bold text-slate-900">{roundLbl} 면접 스케쥴 제시</h3>
           <p className="text-xs text-slate-500 mt-1">
             선택한 {candidateIds.length}명에게 메일로 시간 선택 링크를 발송합니다.
           </p>

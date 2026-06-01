@@ -64,8 +64,14 @@ export async function POST(
     modeOnline?: boolean;
     address?: string;
     addressDetail?: string;
+    round?: string;
   } | null;
   if (!body) return new Response("바디 필요", { status: 400 });
+
+  // 면접 차수 — round2 는 "1차 합격(round1_passed)" 후보에게만 제시 가능.
+  // round2 는 별도 세부 단계를 만들지 않으므로 stage 는 round1_passed 로 유지된다(2차 합격 결정 시 수동 전환).
+  const round: "round1" | "round2" =
+    body.round === "round2" ? "round2" : "round1";
 
   const [job] = await db
     .select()
@@ -136,6 +142,16 @@ export async function POST(
   if (targets.length === 0)
     return new Response("유효한 후보자 없음", { status: 400 });
 
+  // round2 가드 — 1차 합격 후보만 2차 일정 제시 가능.
+  if (round === "round2") {
+    const invalid = targets.filter((c) => c.stage !== "round1_passed");
+    if (invalid.length > 0)
+      return new Response(
+        "2차 면접 일정은 1차 합격 상태의 후보자에게만 제시할 수 있습니다.",
+        { status: 400 }
+      );
+  }
+
   // SMTP 사전 체크
   if (!(await isSmtpAvailable(job.orgId))) {
     return Response.json(
@@ -164,13 +180,14 @@ export async function POST(
       });
       continue;
     }
-    // 이전 active 스케쥴 cancel
+    // 같은 차수의 이전 active 스케쥴 cancel (다른 차수는 건드리지 않음)
     await db
       .update(interviewSchedules)
       .set({ status: "cancelled", updatedAt: new Date().toISOString() })
       .where(
         and(
           eq(interviewSchedules.candidateId, cand.id),
+          eq(interviewSchedules.round, round),
           or(
             eq(interviewSchedules.status, "pending"),
             eq(interviewSchedules.status, "counter_proposed")
@@ -186,7 +203,7 @@ export async function POST(
         candidateId: cand.id,
         jobId,
         orgId: job.orgId,
-        round: "round1",
+        round,
         accessToken: token,
         proposedSlots: slotCheck.slots,
         modeOnline,
@@ -198,11 +215,13 @@ export async function POST(
       })
       .returning();
 
-    // 후보자 stage 전환 → round1_scheduling
-    await db
-      .update(candidates)
-      .set({ stage: "round1_scheduling" })
-      .where(eq(candidates.id, cand.id));
+    // 후보자 stage 전환 — round1 만 round1_scheduling 으로. round2 는 stage 변경 없음(round1_passed 유지).
+    if (round === "round1") {
+      await db
+        .update(candidates)
+        .set({ stage: "round1_scheduling" })
+        .where(eq(candidates.id, cand.id));
+    }
 
     const url = `${base}/schedule/${token}`;
     const mail = buildScheduleProposalEmail({
@@ -214,6 +233,7 @@ export async function POST(
       slots: slotCheck.slots,
       modeOnline,
       address,
+      round,
     });
 
     try {
@@ -238,6 +258,7 @@ export async function POST(
     orgId: job.orgId,
     metadata: {
       kind: "schedule_propose",
+      round,
       sent: results.filter((r) => r.status === "sent").length,
       skipped: results.filter((r) => r.status === "skipped").length,
       failed: results.filter((r) => r.status === "failed").length,

@@ -143,6 +143,7 @@
 | candidate_id | INTEGER NOT NULL FK candidates(id) ON DELETE CASCADE | |
 | author_user_id | INTEGER NOT NULL FK users(id) | 본인만 수정·삭제 |
 | interview_session_id | INTEGER NULL | (선택) 어느 면접 세션에 대한 메모인지 |
+| round | TEXT NULL | `round1`/`round2` — 1차/2차 면접 스코어카드 구분. 작성 시 stage 에서 자동 추론 + 사용자 선택. null=레거시 |
 | scores | TEXT NULL (JSON) | `{skill?, experience?, collaboration?, fit?}` 각 0-100 |
 | note | TEXT NOT NULL DEFAULT '' | 자유 메모 5000자 이내 |
 | created_at / updated_at | TEXT NOT NULL | |

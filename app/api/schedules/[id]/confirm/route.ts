@@ -28,7 +28,7 @@ import {
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
-import { buildScheduleConfirmedEmail, type Slot } from "@/lib/schedules";
+import { buildScheduleConfirmedEmail, roundLabel, type Slot } from "@/lib/schedules";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import {
   createNotification,
@@ -96,11 +96,13 @@ export async function POST(
     })
     .where(eq(interviewSchedules.id, sched.id));
 
-  // 후보자 stage 전환
-  await db
-    .update(candidates)
-    .set({ stage: "round1_waiting" })
-    .where(eq(candidates.id, sched.candidateId));
+  // 후보자 stage 전환 — round1 만 round1_waiting 으로. round2 는 stage 변경 없음(round1_passed 유지).
+  if (sched.round === "round1") {
+    await db
+      .update(candidates)
+      .set({ stage: "round1_waiting" })
+      .where(eq(candidates.id, sched.candidateId));
+  }
 
   // 후보자 + 면접관 메일 발송
   const [cand] = await db
@@ -140,6 +142,7 @@ export async function POST(
           modeOnline: sched.modeOnline,
           address: sched.address,
           forInterviewer: false,
+          round: sched.round,
         });
         await sendMail({
           to: cand.email,
@@ -167,6 +170,7 @@ export async function POST(
             modeOnline: sched.modeOnline,
             address: sched.address,
             forInterviewer: true,
+            round: sched.round,
           });
           await sendMail({
             to: interviewer.email,
@@ -182,7 +186,7 @@ export async function POST(
   }
 
   // 인앱 알림
-  const notifTitle = `${cand?.name ?? "후보자"} 님의 1차 면접 시간이 확정되었습니다`;
+  const notifTitle = `${cand?.name ?? "후보자"} 님의 ${roundLabel(sched.round)} 면접 시간이 확정되었습니다`;
   const notifHref = `/candidates/${sched.candidateId}`;
   if (sched.proposedByUserId && sched.proposedByUserId !== me!.id) {
     try {

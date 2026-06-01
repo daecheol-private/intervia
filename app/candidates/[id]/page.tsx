@@ -389,13 +389,16 @@ export default function CandidateDetailPage() {
   const aiStagePassed =
     !!candidate.outcome ||
     STAGE_RANK[candidate.stage as Stage] > STAGE_RANK.ai_evaluated;
+  // active 일정이 여러 개(예: 1차 selected + 2차 pending)면 가장 최근(id 큰) 것을 표시.
   const activeSchedule =
-    (schedules ?? []).find(
-      (s) =>
-        s.status === "selected" ||
-        s.status === "pending" ||
-        s.status === "counter_proposed"
-    ) ?? null;
+    (schedules ?? [])
+      .filter(
+        (s) =>
+          s.status === "selected" ||
+          s.status === "pending" ||
+          s.status === "counter_proposed"
+      )
+      .sort((a, b) => b.id - a.id)[0] ?? null;
   const completedSession = sessions.find((s) => s.status === "completed");
   const interviewScore = completedSession?.evaluation?.overall_score ?? null;
   const composite = compositeScore(candidate.screeningScore, interviewScore);
@@ -820,7 +823,7 @@ export default function CandidateDetailPage() {
 
       {activeSchedule && (
         <Section
-          title="1차 면접 일정"
+          title={`${activeSchedule.round === "round2" ? "2차" : "1차"} 면접 일정`}
           collapsible={false}
           summary={
             activeSchedule.status === "selected" && activeSchedule.selectedSlot ? (
@@ -852,7 +855,7 @@ export default function CandidateDetailPage() {
 
       <InterviewQuestionsPanel candidateId={candidate.id} />
       <AttachmentsPanel candidateId={candidate.id} />
-      <InterviewerNotesPanel candidateId={candidate.id} />
+      <InterviewerNotesPanel candidateId={candidate.id} currentStage={candidate.stage} />
       <AppealsPanel candidateId={candidate.id} />
 
       {showTranscript && completedSession && (
@@ -2891,7 +2894,7 @@ function StagePanel({
 }) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<
-    null | "decide" | "stage" | "notify" | "schedule"
+    null | "decide" | "stage" | "notify" | "schedule" | "schedule2"
   >(null);
   const [decision, setDecision] = useState<"hired" | "rejected">("rejected");
   const [reason, setReason] = useState<string>("");
@@ -3133,6 +3136,16 @@ function StagePanel({
                 ⭐ 1차 면접 후보로 지정
               </button>
             )}
+            {candidate.stage === "round1_passed" && (
+              <button
+                onClick={() => setOpen("schedule2")}
+                disabled={busy}
+                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-50 transition-colors"
+                title="1차 합격 후보에게 2차 면접 일정을 제시합니다"
+              >
+                📅 2차 일정 제시
+              </button>
+            )}
             {STAGE_NEXT_MAP[candidate.stage] && (
               <button
                 onClick={() => setOpen("stage")}
@@ -3201,6 +3214,21 @@ function StagePanel({
           jobId={candidate.jobId}
           candidateIds={[candidate.id]}
           nameById={{ [candidate.id]: candidate.name }}
+          open
+          onClose={() => setOpen(null)}
+          onDone={() => {
+            setOpen(null);
+            onChanged();
+          }}
+        />
+      )}
+
+      {open === "schedule2" && (
+        <ScheduleProposeModal
+          jobId={candidate.jobId}
+          candidateIds={[candidate.id]}
+          nameById={{ [candidate.id]: candidate.name }}
+          round="round2"
           open
           onClose={() => setOpen(null)}
           onDone={() => {
@@ -3453,6 +3481,7 @@ type InterviewerNote = {
   candidateId: number;
   authorUserId: number;
   authorName: string | null;
+  round: "round1" | "round2" | null;
   scores: {
     skill?: number | null;
     experience?: number | null;
@@ -3464,11 +3493,21 @@ type InterviewerNote = {
   updatedAt: string;
 };
 
-function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
+function InterviewerNotesPanel({
+  candidateId,
+  currentStage,
+}: {
+  candidateId: number;
+  currentStage: string;
+}) {
+  // 후보자 현재 단계에서 면접 차수 기본값 추론 (2차합격이면 2차, 그 외 1차).
+  const defaultRound: "round1" | "round2" =
+    currentStage === "round2_passed" ? "round2" : "round1";
   const [me, setMe] = useState<{ id: number; name: string } | null>(null);
   const [list, setList] = useState<InterviewerNote[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [round, setRound] = useState<"round1" | "round2">(defaultRound);
   const [skill, setSkill] = useState("");
   const [experience, setExperience] = useState("");
   const [collaboration, setCollaboration] = useState("");
@@ -3513,6 +3552,7 @@ function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        round,
         scores: {
           skill: parseScore(skill),
           experience: parseScore(experience),
@@ -3527,6 +3567,7 @@ function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
       setErr(await r.text());
       return;
     }
+    setRound(defaultRound);
     setSkill("");
     setExperience("");
     setCollaboration("");
@@ -3604,9 +3645,14 @@ function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
         ? Math.round(avgs.reduce((a, b) => a + b, 0) / avgs.length)
         : null;
     const authors = new Set(list.map((n) => n.authorUserId));
+    const r1 = list.filter((n) => n.round === "round1").length;
+    const r2 = list.filter((n) => n.round === "round2").length;
     return (
       <span className="flex items-center gap-2">
         <span className="text-slate-700">{list.length}건</span>
+        {r2 > 0 && (
+          <span className="text-slate-400">· 1차 {r1} · 2차 {r2}</span>
+        )}
         <span className="text-slate-400">· {authors.size}명 작성</span>
         {overallAvg != null && (
           <>
@@ -3640,6 +3686,25 @@ function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
 
       {showForm && (
         <div className="bg-primary-soft border border-primary/30 rounded-xl p-4 mb-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">면접 차수</span>
+            <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-xs">
+              {(["round1", "round2"] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRound(r)}
+                  className={`px-3 py-1.5 font-medium ${
+                    round === r
+                      ? "bg-primary text-white"
+                      : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {r === "round1" ? "1차" : "2차"}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <ScoreInput label="기술역량" value={skill} onChange={setSkill} />
             <ScoreInput
@@ -3701,6 +3766,17 @@ function InterviewerNotesPanel({ candidateId }: { candidateId: number }) {
                 className="bg-white border border-slate-200 rounded-xl p-4"
               >
                 <div className="flex items-center gap-2 flex-wrap">
+                  {n.round && (
+                    <span
+                      className={`text-[11px] px-1.5 py-0.5 rounded font-semibold ${
+                        n.round === "round2"
+                          ? "bg-indigo-100 text-indigo-700"
+                          : "bg-violet-100 text-violet-700"
+                      }`}
+                    >
+                      {n.round === "round2" ? "2차" : "1차"}
+                    </span>
+                  )}
                   <span className="text-sm font-semibold text-slate-900">
                     {n.authorName ?? `User #${n.authorUserId}`}
                   </span>

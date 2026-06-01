@@ -58,8 +58,8 @@
 - [x] **A-8**: 시스템관리자 데이터 접근 → **항상 가능** (2026-05-16 결정. 단, 모든 접근은 감사 로그 기록)
 
 ### B. Phase 2 전에 결정
-- [ ] **B-1**: 채용 단계(Stage) 표준 — 서류→1차면접→2차면접→처우→입사? 법인별 커스텀?
-- [ ] **B-2**: 합·불 통보 메일 템플릿 — 기본 문구를 우리가 정할지, 법인이 직접 작성할지
+- [x] **B-1**: 채용 단계(Stage) 표준 (2026-06-02 결정) — **고정 12-stage 모델 유지, 차수는 1·2차만**. 2차는 별도 세부 단계(후보/스케줄/대기)를 만들지 않고 `round1_passed` 후보에게 **2차 일정 조율만** 제공(stage 변경 없음, 2차합격은 수동 전환). 설정형 N차/법인별 커스텀은 고정 enum·funnel·UI 전면 리팩터 부담으로 보류.
+- [x] **B-2**: 합·불 통보 메일 템플릿 (2026-06-02 결정) — **현재 기본 템플릿 유지**(`buildDecisionEmail`). 결정 시 커스텀 본문 입력 가능. 법인별 템플릿 저장 기능은 미도입.
 
 ### C. Phase 3 전에 결정
 - [ ] **C-1**: 에러 모니터링 서비스 — Sentry (무료 5k events/월) / Logtail / 자체
@@ -581,3 +581,8 @@
   - **신규 페이지 `/legal/applicant-consent-template`**: 한국어·영어 표준 동의 문구 + 처리위탁 표 + FAQ. 사람인/잡코리아 "추가 동의 항목" 에 복붙 사용. 비로그인 공개.
   - **이용약관 §5 전면 개정**: "지원자 동의 취득 책임" 7개 항목으로 명문화 — Intervia 는 수탁자 지위, 동의 취득 책임은 채용기업, 미취득 시 채용기업이 단독 부담, 회사는 면책. TERMS_VERSION 1.1.0 으로 bump.
   - 감사 액션 `candidate.upload_with_consent` 신규 등록. proxy.ts `/legal/*` public allowlist 추가.
+- 2026-06-02 — **HR 워크플로우 보강 4건 묶음 완료** (B-1·B-2 결정 반영).
+  - **2차 면접 일정 조율**: `interview_schedules.round` 의 round2 를 실배선. `schedule-propose` 가 `round` 파라미터 수신(round2 는 `round1_passed` 후보 가드, stage 변경 없음). `select`/`confirm`/`meeting-link` 라우트 + 일정/확정/미팅링크 메일·ICS·알림 문구를 차수 인지(1차/2차)로. 후보 상세에 `round1_passed` 일 때 "📅 2차 일정 제시" 진입점(`ScheduleProposeModal round="round2"`). 후보자 일정 페이지 헤딩 차수 인지. **스키마 변경 없음**(round2 enum 기존재).
+  - **스코어카드 차수 태그**: `interviewer_notes.round` 컬럼 추가(마이그레이션 `0007`). notes POST 가 round 저장(미지정 시 stage 에서 추론), GET 반환. `InterviewerNotesPanel` 에 1차/2차 토글 + 메모별 차수 배지 + 요약 차수별 건수.
+  - **불합격 미통보 일괄 발송**: 후보 목록 API 에 `decisionEmailCount` 노출. jobs/[id] 목록에 "📭 통보 미발송" 배지 + 상단 배너(미발송 N명 + 불합격 필터 + 일괄 발송). `decision-mail` 라우트 6-worker 루프.
+  - **법인 채용 현황 대시보드**: `GET /api/org/funnel` (outcome 분리 집계 — 진행 stage 분포 + 결정 outcome 분포 + 총계·최근·활성공고·평균점수). 신규 `/org/dashboard` (KPI + 파이프라인 바 + 결정 현황). NavBar org_admin 메뉴에 "채용 현황" 추가.

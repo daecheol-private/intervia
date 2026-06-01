@@ -20,6 +20,11 @@ function validScore(n: unknown): number | null {
   return Math.round(n);
 }
 
+/** 후보자 stage 에서 기본 면접 차수 추론 — 사용자가 명시 안 했을 때 fallback. */
+function inferRound(stage: string | null): "round1" | "round2" {
+  return stage === "round2_passed" ? "round2" : "round1";
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -44,6 +49,7 @@ export async function GET(
       candidateId: interviewerNotes.candidateId,
       authorUserId: interviewerNotes.authorUserId,
       authorName: users.name,
+      round: interviewerNotes.round,
       scores: interviewerNotes.scores,
       note: interviewerNotes.note,
       createdAt: interviewerNotes.createdAt,
@@ -67,7 +73,7 @@ export async function POST(
   const { id } = await params;
   const cid = Number(id);
   const [candidate] = await db
-    .select({ orgId: candidates.orgId })
+    .select({ orgId: candidates.orgId, stage: candidates.stage })
     .from(candidates)
     .where(eq(candidates.id, cid));
   if (!candidate) return new Response("Not found", { status: 404 });
@@ -78,7 +84,13 @@ export async function POST(
     scores?: Record<string, unknown>;
     note?: string;
     interviewSessionId?: number | null;
+    round?: string | null;
   } | null;
+
+  const round: "round1" | "round2" =
+    body?.round === "round1" || body?.round === "round2"
+      ? body.round
+      : inferRound(candidate.stage);
 
   const note = body?.note?.toString().slice(0, 5000) ?? "";
   const scoresIn = body?.scores ?? {};
@@ -106,6 +118,7 @@ export async function POST(
       candidateId: cid,
       authorUserId: me!.id,
       interviewSessionId: body?.interviewSessionId ?? null,
+      round,
       scores: anyScore ? scoresObj : null,
       note,
     })

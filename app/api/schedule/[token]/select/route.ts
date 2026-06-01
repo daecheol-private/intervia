@@ -13,6 +13,7 @@ import {
 import { eq } from "drizzle-orm";
 import {
   buildScheduleConfirmedEmail,
+  roundLabel,
   type Slot,
 } from "@/lib/schedules";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
@@ -61,11 +62,13 @@ export async function POST(
     })
     .where(eq(interviewSchedules.id, sched.id));
 
-  // 후보자 stage 전환 → round1_waiting (1차 면접 대기)
-  await db
-    .update(candidates)
-    .set({ stage: "round1_waiting" })
-    .where(eq(candidates.id, sched.candidateId));
+  // 후보자 stage 전환 — round1 만 round1_waiting 으로. round2 는 stage 변경 없음(round1_passed 유지).
+  if (sched.round === "round1") {
+    await db
+      .update(candidates)
+      .set({ stage: "round1_waiting" })
+      .where(eq(candidates.id, sched.candidateId));
+  }
 
   // 확정 메일 발송 (후보자 + 면접관)
   const [cand] = await db
@@ -106,6 +109,7 @@ export async function POST(
           modeOnline: sched.modeOnline,
           address: sched.address,
           forInterviewer: false,
+          round: sched.round,
         });
         await sendMail({ to: cand.email, ...mail, orgId: sched.orgId, audience: "candidate" });
       } catch (e) {
@@ -128,6 +132,7 @@ export async function POST(
             modeOnline: sched.modeOnline,
             address: sched.address,
             forInterviewer: true,
+            round: sched.round,
           });
           await sendMail({
             to: interviewer.email,
@@ -143,7 +148,7 @@ export async function POST(
   }
 
   // 인앱 알림 — 제시한 면접관 + 공고 면접관 전원에게 (중복 시 fanout 에서 두 번 들어가도 무해)
-  const notifTitle = `${cand?.name ?? "후보자"} 님이 1차 면접 시간을 확정했습니다`;
+  const notifTitle = `${cand?.name ?? "후보자"} 님이 ${roundLabel(sched.round)} 면접 시간을 확정했습니다`;
   const notifHref = `/candidates/${sched.candidateId}`;
   if (sched.proposedByUserId) {
     try {

@@ -506,6 +506,9 @@ export const interviewerNotes = sqliteTable("interviewer_notes", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   interviewSessionId: integer("interview_session_id"),
+  // 어느 차수 면접에 대한 평가인지 — 1차/2차 스코어카드를 화면에서 분리 표시.
+  // null = 차수 미지정(레거시 메모). 작성 시 후보자 stage 에서 자동 추론 + 사용자 선택 가능.
+  round: text("round", { enum: ["round1", "round2"] }),
   scores: text("scores", { mode: "json" }).$type<{
     skill?: number;
     experience?: number;

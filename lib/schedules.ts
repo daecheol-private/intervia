@@ -18,6 +18,13 @@ export function scheduleExpiresAt(from = new Date()): string {
 
 export type Slot = { start: string; end: string };
 
+export type ScheduleRound = "round1" | "round2";
+
+/** 차수 → UI/메일 라벨 ("1차"/"2차"). */
+export function roundLabel(round: ScheduleRound | null | undefined): string {
+  return round === "round2" ? "2차" : "1차";
+}
+
 /** 슬롯 검증 — 시작이 미래, end > start, 최대 30일 후까지. */
 export function validateSlots(slots: unknown): {
   ok: true;
@@ -94,15 +101,17 @@ export function buildScheduleProposalEmail(opts: {
   slots: Slot[];
   modeOnline: boolean;
   address?: string | null;
+  round?: ScheduleRound;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, url, expiresAt, slots, modeOnline, address } =
     opts;
+  const rl = roundLabel(opts.round);
   const expDate = new Date(expiresAt).toLocaleDateString("ko-KR");
   const slotLines = slots.map((s) => `· ${formatSlotKst(s)}`).join("\n");
-  const subject = `[Intervia] ${jobTitle} 1차 면접 일정 안내 — 시간 선택 부탁드립니다`;
+  const subject = `[Intervia] ${jobTitle} ${rl} 면접 일정 안내 — 시간 선택 부탁드립니다`;
   const text = `${candidateName}님,
 
-${orgName}의 ${jobTitle} 포지션 1차 면접 일정 안내드립니다.
+${orgName}의 ${jobTitle} 포지션 ${rl} 면접 일정 안내드립니다.
 
 다음 시간 중 가능하신 시간을 선택해 주세요:
 ${slotLines}
@@ -123,9 +132,9 @@ Intervia 채용팀`;
     .join("");
   const html = wrapEmailCard({
     innerHtml: `
-      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">1차 면접 일정 안내</h1>
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${rl} 면접 일정 안내</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">
-        ${esc(candidateName)}님, <strong style="color:#0f172a;">${esc(orgName)}</strong>의 <strong style="color:#0f172a;">${esc(jobTitle)}</strong> 포지션 1차 면접 일정 안내드립니다.<br>
+        ${esc(candidateName)}님, <strong style="color:#0f172a;">${esc(orgName)}</strong>의 <strong style="color:#0f172a;">${esc(jobTitle)}</strong> 포지션 ${rl} 면접 일정 안내드립니다.<br>
         아래 후보 시간 중 가능한 시간을 선택해 주세요.
       </p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:0 0 20px;">
@@ -217,16 +226,18 @@ export function buildMeetingLinkEmail(opts: {
   meetingUrl: string;
   note?: string | null;
   forInterviewer?: boolean;
+  round?: ScheduleRound;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, slot, meetingUrl, note, forInterviewer } =
     opts;
+  const rl = roundLabel(opts.round);
   const slotStr = formatSlotKst(slot);
   const subject = forInterviewer
     ? `[Intervia] ${candidateName} 후보자 온라인 면접 링크 안내`
-    : `[Intervia] ${jobTitle} 1차 면접 — 온라인 미팅 링크`;
+    : `[Intervia] ${jobTitle} ${rl} 면접 — 온라인 미팅 링크`;
   const greeting = forInterviewer
     ? `${candidateName} 후보자에게 안내된 온라인 미팅 링크입니다.`
-    : `${candidateName}님, ${orgName}의 ${jobTitle} 포지션 1차 면접 온라인 미팅 정보입니다.`;
+    : `${candidateName}님, ${orgName}의 ${jobTitle} 포지션 ${rl} 면접 온라인 미팅 정보입니다.`;
   const noteText = note?.trim() ? `\n\n· 추가 안내:\n${note.trim()}` : "";
   const text = `${greeting}
 
@@ -276,15 +287,17 @@ export function buildScheduleConfirmedEmail(opts: {
   modeOnline: boolean;
   address?: string | null;
   forInterviewer?: boolean;
+  round?: ScheduleRound;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, slot, modeOnline, address, forInterviewer } = opts;
+  const rl = roundLabel(opts.round);
   const slotStr = formatSlotKst(slot);
   const subject = forInterviewer
-    ? `[Intervia] ${candidateName} 후보자 1차 면접 시간 확정`
-    : `[Intervia] ${jobTitle} 1차 면접 시간 확정`;
+    ? `[Intervia] ${candidateName} 후보자 ${rl} 면접 시간 확정`
+    : `[Intervia] ${jobTitle} ${rl} 면접 시간 확정`;
   const greeting = forInterviewer
-    ? `${candidateName} 후보자가 ${jobTitle} 1차 면접 시간을 다음과 같이 선택했습니다.`
-    : `${candidateName}님, ${orgName}의 ${jobTitle} 포지션 1차 면접 시간이 확정되었습니다.`;
+    ? `${candidateName} 후보자가 ${jobTitle} ${rl} 면접 시간을 다음과 같이 선택했습니다.`
+    : `${candidateName}님, ${orgName}의 ${jobTitle} 포지션 ${rl} 면접 시간이 확정되었습니다.`;
   const text = `${greeting}
 
 · 일시: ${slotStr}
@@ -295,7 +308,7 @@ Intervia 채용팀`;
     s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
   const html = wrapEmailCard({
     innerHtml: `
-      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">✅ 1차 면접 시간 확정</h1>
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">✅ ${rl} 면접 시간 확정</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">${esc(greeting)}</p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:0 0 8px;">
         <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">일시</p>
