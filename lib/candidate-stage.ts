@@ -189,24 +189,27 @@ export async function purgeOnDecision(candidateId: number): Promise<void> {
     // 합격자는 이력서·첨부 그대로 보존
     return;
   }
-  if (c.resumeFilePath) {
-    try {
-      await deleteFile(c.resumeFilePath);
-    } catch (e) {
-      console.error(`purgeOnDecision: file delete failed (cid=${candidateId})`, e);
-    }
-  }
   const atts = await db
     .select({ id: candidateAttachments.id, filePath: candidateAttachments.filePath })
     .from(candidateAttachments)
     .where(eq(candidateAttachments.candidateId, candidateId));
-  for (const a of atts) {
-    try {
-      if (a.filePath) await deleteFile(a.filePath);
-    } catch (e) {
-      console.error(`purgeOnDecision: attachment delete failed (aid=${a.id})`, e);
-    }
-  }
+  // 이력서 + 첨부 파일을 병렬 삭제 — 각 deleteFile 은 Blob 네트워크 왕복이라
+  // 직렬로 하면 파일 수만큼 느려진다(일괄 종결 시 특히). deleteFile 은 내부에서
+  // 예외를 삼키므로 Promise.all 이 안전하나, 만약을 위해 .catch 로 한 번 더 감싼다.
+  await Promise.all([
+    c.resumeFilePath
+      ? deleteFile(c.resumeFilePath).catch((e) =>
+          console.error(`purgeOnDecision: file delete failed (cid=${candidateId})`, e)
+        )
+      : Promise.resolve(),
+    ...atts.map((a) =>
+      a.filePath
+        ? deleteFile(a.filePath).catch((e) =>
+            console.error(`purgeOnDecision: attachment delete failed (aid=${a.id})`, e)
+          )
+        : Promise.resolve()
+    ),
+  ]);
   await db.delete(candidateAttachments).where(eq(candidateAttachments.candidateId, candidateId));
   await db
     .update(candidates)

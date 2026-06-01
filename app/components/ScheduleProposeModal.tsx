@@ -113,17 +113,21 @@ export function ScheduleProposeModal({
       onClick={close}
     >
       <div
-        className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="font-bold text-slate-900">1차 면접 스케쥴 제시</h3>
-        <p className="text-xs text-slate-500 mt-1">
-          선택한 {candidateIds.length}명에게 메일로 시간 선택 링크를 발송합니다.
-        </p>
+        {/* 헤더 — 고정 */}
+        <div className="px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
+          <h3 className="font-bold text-slate-900">1차 면접 스케쥴 제시</h3>
+          <p className="text-xs text-slate-500 mt-1">
+            선택한 {candidateIds.length}명에게 메일로 시간 선택 링크를 발송합니다.
+          </p>
+        </div>
 
-        {!results ? (
-          <>
-            <div className="mt-4 space-y-4 text-sm">
+        {/* 본문 — 스크롤 */}
+        <div className="px-6 py-4 overflow-y-auto flex-1">
+          {!results ? (
+            <div className="space-y-4 text-sm">
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-2 block">
                   면접 가능 시간 (1~10개)
@@ -184,32 +188,8 @@ export function ScheduleProposeModal({
                 </div>
               )}
             </div>
-
-            {err && (
-              <div className="mt-3 text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg p-2 whitespace-pre-wrap">
-                {err}
-              </div>
-            )}
-
-            <div className="flex gap-2 mt-5">
-              <button
-                onClick={close}
-                className="flex-1 px-4 py-2 rounded-lg border border-border-strong text-sm hover:bg-surface-alt transition-colors"
-              >
-                취소
-              </button>
-              <button
-                onClick={submit}
-                disabled={busy}
-                className="flex-1 px-4 py-2 rounded-lg bg-accent-deep hover:bg-accent text-surface text-sm font-medium disabled:opacity-50 transition-colors"
-              >
-                {busy ? "발송 중..." : "메일 발송"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="mt-4 space-y-2 max-h-[40vh] overflow-y-auto text-xs">
+          ) : (
+            <div className="space-y-2 text-xs">
               {results.results.map((r) => (
                 <div
                   key={r.candidateId}
@@ -232,17 +212,46 @@ export function ScheduleProposeModal({
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* 푸터 — 고정 */}
+        <div className="px-6 py-4 border-t border-slate-100 shrink-0">
+          {!results ? (
+            <>
+              {err && (
+                <div className="mb-3 text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg p-2 whitespace-pre-wrap">
+                  {err}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={close}
+                  className="flex-1 px-4 py-2 rounded-lg border border-border-strong text-sm hover:bg-surface-alt transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={submit}
+                  disabled={busy}
+                  className="flex-1 px-4 py-2 rounded-lg bg-accent-deep hover:bg-accent text-surface text-sm font-medium disabled:opacity-50 transition-colors"
+                >
+                  {busy ? "발송 중..." : "메일 발송"}
+                </button>
+              </div>
+            </>
+          ) : (
             <button
               onClick={() => {
                 close();
                 onDone();
               }}
-              className="w-full mt-4 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
+              className="w-full px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
             >
               닫기
             </button>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

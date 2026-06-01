@@ -853,7 +853,9 @@ export default function JobDetailPage() {
     let fail = 0;
     let mailOk = 0;
     let mailFail = 0;
-    for (const id of st.ids) {
+    const processOne = async (
+      id: number
+    ): Promise<{ ok: boolean; mail?: "ok" | "fail" }> => {
       const cand = candidatesList.find((c) => c.id === id);
       // {이름} 토큰을 각 지원자 이름으로 치환. 본문이 비어 있으면 서버 기본 템플릿 사용.
       const personalized = opts.customMessage
@@ -869,19 +871,32 @@ export default function JobDetailPage() {
           customMessage: personalized,
         }),
       });
-      if (!res.ok) {
-        fail++;
-        continue;
-      }
-      ok++;
+      if (!res.ok) return { ok: false };
       if (opts.sendMail) {
         const data = (await res.json().catch(() => null)) as {
           mail?: { sent?: boolean };
         } | null;
-        if (data?.mail?.sent) mailOk++;
-        else mailFail++;
+        return { ok: true, mail: data?.mail?.sent ? "ok" : "fail" };
       }
-    }
+      return { ok: true };
+    };
+    // 동시 처리 — 직렬이면 16명 × 파일삭제가 줄줄이 느려진다. 동시성은
+    // 서버리스·SMTP 폭주 방지를 위해 6으로 제한 (큐에서 하나씩 꺼내 실행).
+    const queue = [...st.ids];
+    const runWorker = async () => {
+      for (;;) {
+        const id = queue.shift();
+        if (id === undefined) return;
+        const r = await processOne(id);
+        if (r.ok) ok++;
+        else fail++;
+        if (r.mail === "ok") mailOk++;
+        else if (r.mail === "fail") mailFail++;
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(6, st.ids.length) }, runWorker)
+    );
     setBulkBusy(false);
     setBulkDecisionState(null);
     notify(
