@@ -168,12 +168,96 @@ type ScreeningResult = {
     stability?: { score: number; reason: string };
     growth_attitude?: { score: number; reason: string };
   };
+  level_match?: {
+    fit?: "under" | "over" | "fit";
+    years?: number | null;
+    penalty?: number;
+    reason?: string;
+  };
+  focus_match?: {
+    applies?: boolean;
+    verdict?: "fatal_fail" | "fail" | "neutral" | "strong_pass";
+    reason?: string;
+  };
   interview_focus?: string[];
   career_info?: {
     career_years?: number | null;
     career_summary?: string | null;
   };
 };
+
+// 6축 가중치 — 프롬프트(prompts.ts buildScreeningPrompt)와 반드시 일치.
+const AXIS_WEIGHTS: Record<string, number> = {
+  tech_fit: 0.3,
+  experience_depth: 0.2,
+  role_match: 0.15,
+  achievement: 0.15,
+  stability: 0.1,
+  growth_attitude: 0.1,
+};
+
+// HR 평가 중점사항 override 임계치 — focus_match.verdict 판정 시 6축 점수를 강제 cap/floor.
+const FOCUS_FATAL_CAP = 15; // fatal_fail → 최하점(비추천 <55 확정)
+const FOCUS_FAIL_CAP = 49; // fail → 비추천 구간 강제
+const FOCUS_STRONG_FLOOR = 70; // strong_pass → 추천(70~84) 이상 보장
+
+function clampScore(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function recommendationFor(score: number): ScreeningResult["recommendation"] {
+  if (score >= 85) return "강력추천";
+  if (score >= 70) return "추천";
+  if (score >= 55) return "보류";
+  return "비추천";
+}
+
+/**
+ * 종합 점수를 코드에서 직접 재계산 — LLM 이 뱉은 score 를 신뢰하지 않는다.
+ * raw = 6축 가중평균(누락 축은 가중치에서 제외 후 정규화) + level_match 페널티 → clamp.
+ * → "6축은 낮은데 종합은 높은" 모순을 구조적으로 차단하고 점수 일관성을 보장.
+ * breakdown 이 전혀 없으면 LLM score 로 폴백.
+ */
+function recomputeScore(result: ScreeningResult): {
+  score: number;
+  recommendation: ScreeningResult["recommendation"];
+} {
+  const b = result.breakdown as
+    | Record<string, { score?: number } | undefined>
+    | undefined;
+  let weighted = 0;
+  let totalW = 0;
+  if (b) {
+    for (const [key, w] of Object.entries(AXIS_WEIGHTS)) {
+      const axis = b[key];
+      if (axis && typeof axis.score === "number") {
+        weighted += clampScore(axis.score) * w;
+        totalW += w;
+      }
+    }
+  }
+  const raw = totalW > 0 ? weighted / totalW : clampScore(result.score);
+  // 페널티는 감점만 — under=-10 / over=-5 / fit=0. 범위 밖 값은 방어적으로 클램프.
+  const rawPenalty =
+    typeof result.level_match?.penalty === "number"
+      ? result.level_match.penalty
+      : 0;
+  const penalty = Math.max(-10, Math.min(0, rawPenalty));
+  let score = clampScore(raw + penalty);
+
+  // HR 평가 중점사항(evaluationFocus) override — 6축보다 우선. 6축 결과 위에 강제 cap/floor.
+  // fatal_fail("보안 없으면 최하점" 같은 필수/배제 위반) → 최하점 강제, strong_pass → 추천 이상 보장.
+  const fm = result.focus_match;
+  if (fm?.applies) {
+    if (fm.verdict === "fatal_fail") score = Math.min(score, FOCUS_FATAL_CAP);
+    else if (fm.verdict === "fail") score = Math.min(score, FOCUS_FAIL_CAP);
+    else if (fm.verdict === "strong_pass")
+      score = Math.max(score, FOCUS_STRONG_FLOOR);
+  }
+
+  return { score, recommendation: recommendationFor(score) };
+}
 
 export class ScreeningError extends Error {
   constructor(
@@ -267,6 +351,12 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
       /429|quota|rate|503|timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(msg);
     throw new ScreeningError(msg, transient);
   }
+
+  // 종합 점수·등급은 LLM 출력을 신뢰하지 않고 6축 + 페널티로 코드가 재계산.
+  // (LLM 이 6축은 낮게 줘도 종합은 후하게 주는 인플레/모순을 차단)
+  const recomputed = recomputeScore(result);
+  result.score = recomputed.score;
+  result.recommendation = recomputed.recommendation;
 
   type UpdateFields = {
     screeningScore: number;
