@@ -496,12 +496,16 @@ async function Dashboard({ me }: { me: CurrentUser }) {
             <p className="text-sm text-ink-soft">
               아직 등록된 공고가 없습니다.
             </p>
+            {/* 공고 등록은 입력 항목이 많아 PC에서만 지원 — 모바일은 안내 문구로 대체 */}
             <Link
               href="/jobs/new"
-              className="inline-block mt-3 text-xs text-primary hover:underline"
+              className="hidden sm:inline-block mt-3 text-xs text-primary hover:underline"
             >
               첫 공고 등록 →
             </Link>
+            <p className="sm:hidden mt-3 text-xs text-ink-soft">
+              공고 등록은 PC(데스크톱)에서 진행해 주세요.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1236,7 +1240,7 @@ async function Landing() {
             <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-soft text-center">
               기능별 단가
             </h3>
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <PriceCell
                 label="공고 등록"
                 tokens={pricing.job_post}
@@ -1251,6 +1255,11 @@ async function Landing() {
                 label="AI 면접"
                 tokens={pricing.interview}
                 hint="후보자 1명 채팅 면접 1회"
+              />
+              <PriceCell
+                label="면접 문제 생성"
+                tokens={pricing.interview_question_gen}
+                hint="1차 면접 문제 1건 생성"
               />
             </div>
           </div>

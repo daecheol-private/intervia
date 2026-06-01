@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { users } from "@/lib/schema";
-import { and, eq, ne, count } from "drizzle-orm";
+import { users, orgJoinRequests, notifications } from "@/lib/schema";
+import { and, eq, ne, count, isNull, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { requireStepUp } from "@/lib/step-up";
@@ -21,6 +21,9 @@ export async function PATCH(
   const body = (await req.json().catch(() => ({}))) as {
     role?: "system_admin" | "org_admin" | "member";
     status?: "active" | "disabled";
+    // 관리자가 대신 이메일 인증 처리 — 인증 메일이 도달하지 않는 사용자 구제용.
+    // true 면 emailVerifiedAt 을 현재 시각으로 설정(이미 인증된 경우 무시).
+    emailVerified?: boolean;
   };
 
   const [target] = await db.select().from(users).where(eq(users.id, targetId));
@@ -124,6 +127,21 @@ export async function PATCH(
     update.status = body.status;
   }
 
+  // 관리자 대리 이메일 인증 — 아직 미인증인 경우에만 현재 시각으로 설정.
+  // 합류 요청 승인(org_admin)이 emailVerifiedAt 을 자동 설정하는 것과 동일한 취지:
+  // 관리자의 본인 확인이 인증 메일 클릭을 대신한다.
+  //
+  // pending(법인 합류 승인 대기) 사용자는 이메일만 인증해도 로그인이 막힌다
+  // (login 라우트가 status==='pending' 을 emailVerifiedAt 보다 먼저 차단).
+  // 관리자의 수동 인증은 곧 본인확인이므로 합류 승인을 겸해 status 도 active 로 올린다.
+  const activateFromPending =
+    body.emailVerified === true && target.status === "pending";
+  if (body.emailVerified === true) {
+    if (!target.emailVerifiedAt)
+      update.emailVerifiedAt = new Date().toISOString();
+    if (activateFromPending) update.status = "active";
+  }
+
   if (Object.keys(update).length === 0)
     return new Response("변경할 내용이 없습니다.", { status: 400 });
 
@@ -132,6 +150,31 @@ export async function PATCH(
     .set(update)
     .where(eq(users.id, targetId))
     .returning();
+
+  // pending 사용자를 인증과 함께 활성화한 경우: 대기 중인 합류 요청도 승인 처리하고
+  // 관련 'join_request' 알림을 읽음 처리한다 (합류 요청 탭 승인과 동일한 후처리).
+  if (activateFromPending) {
+    const now = new Date().toISOString();
+    await db
+      .update(orgJoinRequests)
+      .set({ status: "approved", decidedByUserId: me!.id, decidedAt: now })
+      .where(
+        and(
+          eq(orgJoinRequests.userId, targetId),
+          eq(orgJoinRequests.status, "pending")
+        )
+      );
+    await db
+      .update(notifications)
+      .set({ readAt: now })
+      .where(
+        and(
+          eq(notifications.type, "join_request"),
+          isNull(notifications.readAt),
+          sql`json_extract(${notifications.payload}, '$.userId') = ${targetId}`
+        )
+      );
+  }
 
   if (update.role) {
     logAudit(req, {
@@ -157,6 +200,16 @@ export async function PATCH(
       },
     });
   }
+  if (update.emailVerifiedAt) {
+    logAudit(req, {
+      actor: me!,
+      action: "user.email_verify",
+      resourceType: "user",
+      resourceId: targetId,
+      orgId: updated.orgId,
+      metadata: { email: updated.email, manual: true },
+    });
+  }
 
   return Response.json({
     id: updated.id,
@@ -164,5 +217,6 @@ export async function PATCH(
     name: updated.name,
     role: updated.role,
     status: updated.status,
+    emailVerified: !!updated.emailVerifiedAt,
   });
 }

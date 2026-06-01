@@ -7,7 +7,12 @@ import { getAllPricing } from "@/lib/tokens";
 
 export const runtime = "nodejs";
 
-const ALLOWED = ["job_post", "resume_upload", "interview"] as const;
+const ALLOWED = [
+  "job_post",
+  "resume_upload",
+  "interview",
+  "interview_question_gen",
+] as const;
 type Key = (typeof ALLOWED)[number];
 
 export async function GET() {

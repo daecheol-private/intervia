@@ -27,6 +27,7 @@ export async function GET(req: Request) {
       orgId: users.orgId,
       orgName: organizations.name,
       createdAt: users.createdAt,
+      emailVerifiedAt: users.emailVerifiedAt,
     })
     .from(users)
     .leftJoin(organizations, eq(organizations.id, users.orgId))

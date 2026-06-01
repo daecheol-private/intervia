@@ -40,6 +40,7 @@ export type AuditAction =
   | "appeal.status_change"
   | "user.role_change"
   | "user.status_change"
+  | "user.email_verify"
   | "org.smtp_update"
   | "org.smtp_delete"
   | "job.create"

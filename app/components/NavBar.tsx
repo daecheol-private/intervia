@@ -18,6 +18,7 @@ import {
   ScrollText,
   Lock,
   ShieldCheck,
+  Video,
   Menu,
   X,
   Home,
@@ -143,6 +144,7 @@ export function NavBar({
                     { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
                     { href: "/org/members", label: "멤버", Icon: Users },
                     { href: "/org/smtp", label: "메일 서버", Icon: Mail },
+                    { href: "/org/zoom", label: "화상 면접(줌)", Icon: Video },
                   ]}
                 />
               )}

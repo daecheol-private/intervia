@@ -20,6 +20,7 @@ import {
   createNotification,
   notifyJobInterviewers,
 } from "@/lib/notifications";
+import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
 
 export const runtime = "nodejs";
 
@@ -84,9 +85,18 @@ export async function POST(
       )[0]
     : null;
 
+  // 온라인 면접 + 줌 연동 설정 시: 줌 회의 자동 생성 → 링크 메일(+ICS) 발송.
+  // 성공하면 zoomHandled=true → 아래 "확정 통보" 메일은 생략(중복 방지).
+  const zoom = await tryAutoCreateZoomMeeting({
+    ...sched,
+    status: "selected",
+    selectedSlot: selected,
+  });
+  const zoomHandled = zoom.handled;
+
   if (await isSmtpAvailable(sched.orgId)) {
-    // 후보자 본인
-    if (cand?.email) {
+    // 후보자 본인 — 줌 링크 메일을 이미 보냈으면 생략
+    if (!zoomHandled && cand?.email) {
       try {
         const mail = buildScheduleConfirmedEmail({
           candidateName: cand.name,
@@ -102,8 +112,8 @@ export async function POST(
         console.error("confirm mail to candidate failed", e);
       }
     }
-    // 면접관 (제시한 사람) — 알림 메일
-    if (sched.proposedByUserId) {
+    // 면접관 (제시한 사람) — 알림 메일. 줌 링크 메일을 이미 보냈으면 생략
+    if (!zoomHandled && sched.proposedByUserId) {
       const [interviewer] = await db
         .select({ name: users.name, email: users.email })
         .from(users)

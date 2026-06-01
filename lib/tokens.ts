@@ -2,21 +2,27 @@ import { db } from "./db";
 import { tokenWallets, tokenLedger, tokenPricing } from "./schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 
-export type FeatureKey = "job_post" | "resume_upload" | "interview";
+export type FeatureKey =
+  | "job_post"
+  | "resume_upload"
+  | "interview"
+  | "interview_question_gen";
 export type LedgerReason =
   | "charge"
   | "job_post"
   | "resume_upload"
   | "interview"
+  | "interview_question_gen"
   | "refund"
   | "admin_adjust";
 
 // 100원당 1 토큰 기준 — 정책 변경 시 /admin/pricing 에서 override.
-// 공고 1,000원 / 이력서 200원 / 면접 1,000원.
+// 공고 1,000원 / 이력서 200원 / 면접 1,000원 / 면접 문제 생성 500원.
 const DEFAULT_PRICING: Record<FeatureKey, number> = {
   job_post: 10,
   resume_upload: 2,
   interview: 10,
+  interview_question_gen: 5,
 };
 
 // 법인 최초 등록 시 1회 자동 지급 — 무료 체험용 (3만원).

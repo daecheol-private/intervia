@@ -11,12 +11,15 @@ export const SITE_INFO = {
   baseUrl: process.env.APP_BASE_URL ?? "http://localhost:3003",
 } as const;
 
+// 사업장 미보유(재택). 사업자 등록 시 가상오피스 주소·사업용 번호 확보 후 기재 예정.
+// 그 전까지 개인 거주지·개인 휴대폰을 공개 페이지에 노출하지 않는다.
+// 전자상거래법 §10 사업자정보 표시의무는 통신판매(유료 판매) 개시 시점에 발생 — 그때 채운다.
 export const COMPANY_INFO = {
   name: "Intervia",
   representative: "강대철",
   bizRegistrationNo: "추후 등록 예정",
-  address: "서울특별시 강서구 양천로 28길 29 마곡우림필유 101동 110호",
-  phone: "010-7496-2696",
+  address: "사업자 등록 후 기재 예정",
+  phone: "", // 미공개 — 등록 후 050/070 등 사업용 번호로 기재
   email: "daecheol1983@gmail.com",
 } as const;
 
@@ -24,7 +27,7 @@ export const DPO_INFO = {
   name: "강대철",
   title: "대표 (개인정보보호책임자 겸직)",
   email: "daecheol1983@gmail.com",
-  phone: "010-7496-2696",
+  phone: "", // 처리방침상 연락처는 이메일로 충분 — 개인 휴대폰 미노출
 } as const;
 
 /** 자동화 의사결정·이의제기 수신처. 현재는 DPO 와 동일. */

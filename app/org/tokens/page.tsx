@@ -5,7 +5,12 @@ import Link from "next/link";
 import { formatLocalDateTime } from "@/lib/utils";
 import { CreditCard } from "lucide-react";
 
-type Pricing = { job_post: number; resume_upload: number; interview: number };
+type Pricing = {
+  job_post: number;
+  resume_upload: number;
+  interview: number;
+  interview_question_gen: number;
+};
 
 type LedgerRow = {
   id: number;
@@ -15,6 +20,7 @@ type LedgerRow = {
     | "job_post"
     | "resume_upload"
     | "interview"
+    | "interview_question_gen"
     | "job_extend"
     | "refund"
     | "admin_adjust";
@@ -146,7 +152,7 @@ export default function TokensPage() {
       {/* 기능별 단가 — 큰 카드 3개 */}
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-slate-900 mb-3">기능별 단가</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <PriceCard
             icon="📋"
             label="공고 등록"
@@ -164,6 +170,12 @@ export default function TokensPage() {
             label="AI 면접"
             tokens={data.pricing.interview}
             hint="면접 링크 1회 발급"
+          />
+          <PriceCard
+            icon="📝"
+            label="면접 문제 생성"
+            tokens={data.pricing.interview_question_gen}
+            hint="1차 면접 문제 1건 생성"
           />
         </div>
         <p className="text-[11px] text-slate-500 mt-2">
@@ -347,6 +359,8 @@ function reasonLabel(r: LedgerRow["reason"]): string {
       return "이력서 평가";
     case "interview":
       return "AI 면접 링크 발급";
+    case "interview_question_gen":
+      return "면접 문제 생성";
     case "job_extend":
       return "공고 연장";
     case "refund":

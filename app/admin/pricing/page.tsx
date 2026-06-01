@@ -3,12 +3,22 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type Pricing = { job_post: number; resume_upload: number; interview: number };
+type Pricing = {
+  job_post: number;
+  resume_upload: number;
+  interview: number;
+  interview_question_gen: number;
+};
 
 const LABELS: { key: keyof Pricing; label: string; desc: string }[] = [
   { key: "job_post", label: "공고 등록", desc: "공고 1건 생성 시 차감" },
   { key: "resume_upload", label: "이력서 업로드", desc: "이력서 1건 업로드 시 차감" },
   { key: "interview", label: "면접 1건", desc: "지원자가 동의 후 면접 시작 시 차감" },
+  {
+    key: "interview_question_gen",
+    label: "면접 문제 생성",
+    desc: "1차 면접 문제 1건 생성 시 차감",
+  },
 ];
 
 export default function PricingPage() {
@@ -62,7 +72,8 @@ export default function PricingPage() {
   const dirty =
     draft.job_post !== pricing.job_post ||
     draft.resume_upload !== pricing.resume_upload ||
-    draft.interview !== pricing.interview;
+    draft.interview !== pricing.interview ||
+    draft.interview_question_gen !== pricing.interview_question_gen;
 
   return (
     <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">

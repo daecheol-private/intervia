@@ -842,6 +842,37 @@ export const orgSmtpConfigs = sqliteTable("org_smtp_configs", {
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
 
+/**
+ * 법인별 Zoom 연동 설정 — 온라인 면접 확정 시 줌 회의 자동 생성에 사용.
+ *
+ * 연동 방식: Zoom "Server-to-Server OAuth" 앱 (법인이 직접 생성).
+ *   법인 담당자가 줌 마켓플레이스에서 발급한 Account ID / Client ID / Client Secret 3개를 등록.
+ *   clientSecret 은 lib/crypto.ts(AES-256-GCM)로 암호화 저장 (orgSmtpConfigs.authPass 와 동일 패턴).
+ *
+ * 사용처: 1차 면접 일정이 온라인으로 확정되면 lib/zoom.ts 가 이 자격증명으로
+ *   토큰 발급 → 회의 생성 → join_url 을 interviewSchedules.onlineMeetingUrl 에 저장 + 메일 발송.
+ *
+ * 설정 가이드: docs/ZOOM_SETUP_GUIDE.md (인앱: /org/zoom/guide).
+ */
+export const orgZoomConfigs = sqliteTable("org_zoom_configs", {
+  orgId: integer("org_id")
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  accountId: text("account_id").notNull(),
+  clientId: text("client_id").notNull(),
+  // 암호화 저장 (enc:v1: prefix). 조회 시 마스킹.
+  clientSecret: text("client_secret").notNull(),
+  lastCheckedAt: text("last_checked_at"),
+  lastCheckStatus: text("last_check_status", { enum: ["ok", "fail"] }),
+  lastCheckError: text("last_check_error"),
+  updatedByUserId: integer("updated_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 export const tokenWallets = sqliteTable("token_wallets", {
   orgId: integer("org_id")
     .primaryKey()
@@ -864,6 +895,7 @@ export const tokenLedger = sqliteTable("token_ledger", {
       "job_post",
       "resume_upload",
       "interview",
+      "interview_question_gen",
       "job_extend",
       "refund",
       "admin_adjust",
@@ -883,7 +915,7 @@ export const tokenLedger = sqliteTable("token_ledger", {
 
 export const tokenPricing = sqliteTable("token_pricing", {
   featureKey: text("feature_key", {
-    enum: ["job_post", "resume_upload", "interview"],
+    enum: ["job_post", "resume_upload", "interview", "interview_question_gen"],
   }).primaryKey(),
   cost: integer("cost").notNull(),
   updatedByUserId: integer("updated_by_user_id").references(() => users.id, {
@@ -976,6 +1008,8 @@ export type TokenPricing = typeof tokenPricing.$inferSelect;
 export type PaymentOrder = typeof paymentOrders.$inferSelect;
 export type OrgSmtpConfig = typeof orgSmtpConfigs.$inferSelect;
 export type NewOrgSmtpConfig = typeof orgSmtpConfigs.$inferInsert;
+export type OrgZoomConfig = typeof orgZoomConfigs.$inferSelect;
+export type NewOrgZoomConfig = typeof orgZoomConfigs.$inferInsert;
 export type ScreeningJob = typeof screeningJobs.$inferSelect;
 export type NewScreeningJob = typeof screeningJobs.$inferInsert;
 export type AuthAttempt = typeof authAttempts.$inferSelect;

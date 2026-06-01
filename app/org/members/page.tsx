@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { formatLocalDateTime } from "@/lib/utils";
+import { useStepUpFetch } from "@/app/components/StepUpModal";
 
 type Member = {
   id: number;
@@ -13,6 +14,7 @@ type Member = {
   status: "active" | "pending" | "disabled";
   createdAt: string;
   orgName: string | null;
+  emailVerifiedAt: string | null;
 };
 
 type JoinRequest = {
@@ -142,17 +144,38 @@ function MembersTab() {
     void load();
   }, [load]);
 
+  const { ensureFetch, modal: stepUpModal } = useStepUpFetch();
+
   const update = async (
     id: number,
-    body: { role?: Member["role"]; status?: "active" | "disabled" }
+    body: {
+      role?: Member["role"];
+      status?: "active" | "disabled";
+      emailVerified?: boolean;
+    }
   ) => {
     setBusyId(id);
     setErr("");
-    const res = await fetch(`/api/users/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const reason = body.emailVerified
+      ? "멤버 이메일을 관리자가 대신 인증 처리합니다."
+      : body.role
+        ? `멤버 권한을 ${body.role} 으로 변경합니다.`
+        : `멤버 상태를 ${body.status === "disabled" ? "비활성" : "활성"} 으로 변경합니다.`;
+    let res: Response;
+    try {
+      res = await ensureFetch(
+        `/api/users/${id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+        reason
+      );
+    } catch {
+      setBusyId(null);
+      return;
+    }
     setBusyId(null);
     if (!res.ok) {
       setErr(await res.text());
@@ -163,6 +186,7 @@ function MembersTab() {
 
   return (
     <>
+      {stepUpModal}
       <div className="mb-4 rounded-lg border border-border-default bg-surface-alt/60 px-4 py-3 text-xs text-ink-soft leading-relaxed">
         <div className="font-semibold text-ink mb-1">동료를 합류시키려면?</div>
         <ol className="list-decimal list-inside space-y-0.5">
@@ -209,9 +233,26 @@ function MembersTab() {
               <div className="flex flex-col items-end gap-1 shrink-0">
                 <RoleBadge role={m.role} />
                 <StatusBadge status={m.status} />
+                {!m.emailVerifiedAt && <UnverifiedBadge />}
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
+              {!m.emailVerifiedAt && (
+                <button
+                  onClick={() => {
+                    if (
+                      confirm(
+                        `${m.name || m.email} 님의 이메일을 인증 완료로 처리합니다.\n\n인증 메일이 도달하지 않는 멤버를 위한 기능입니다. 본인 소유 이메일이 맞는지 확인 후 진행하세요. 처리 즉시 로그인이 가능해집니다.`
+                      )
+                    )
+                      void update(m.id, { emailVerified: true });
+                  }}
+                  disabled={busyId === m.id}
+                  className={btnPrimary}
+                >
+                  ✓ 이메일 인증
+                </button>
+              )}
               {m.role === "member" && m.status === "active" && (
                 <button
                   onClick={() => update(m.id, { role: "org_admin" })}
@@ -300,9 +341,26 @@ function MembersTab() {
                 </td>
                 <td className="px-4 py-3">
                   <StatusBadge status={m.status} />
+                  {!m.emailVerifiedAt && <UnverifiedBadge />}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-1.5 justify-end">
+                  <div className="flex gap-1.5 justify-end flex-wrap">
+                    {!m.emailVerifiedAt && (
+                      <button
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `${m.name || m.email} 님의 이메일을 인증 완료로 처리합니다.\n\n인증 메일이 도달하지 않는 멤버를 위한 기능입니다. 본인 소유 이메일이 맞는지 확인 후 진행하세요. 처리 즉시 로그인이 가능해집니다.`
+                            )
+                          )
+                            void update(m.id, { emailVerified: true });
+                        }}
+                        disabled={busyId === m.id}
+                        className={btnPrimary}
+                      >
+                        ✓ 이메일 인증
+                      </button>
+                    )}
                     {m.role === "member" && m.status === "active" && (
                       <button
                         onClick={() => update(m.id, { role: "org_admin" })}
@@ -487,6 +545,18 @@ function RoleBadge({ role }: { role: Member["role"] }) {
   };
   const { label, cls } = map[role];
   return <span className={`text-xs px-2 py-0.5 rounded ${cls}`}>{label}</span>;
+}
+
+// 이메일 미인증 — 로그인이 차단된 상태임을 관리자가 즉시 인지하도록.
+function UnverifiedBadge() {
+  return (
+    <span
+      className="text-xs px-2 py-0.5 rounded bg-danger-soft text-danger border border-danger/30 ml-1"
+      title="이메일 미인증 — 현재 로그인 불가"
+    >
+      메일 미인증
+    </span>
+  );
 }
 
 function StatusBadge({ status }: { status: Member["status"] }) {

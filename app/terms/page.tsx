@@ -227,9 +227,7 @@ export default function TermsPage() {
           <strong>{COMPANY_INFO.name}</strong> · 대표 {COMPANY_INFO.representative}
         </div>
         <div>{COMPANY_INFO.address}</div>
-        <div>
-          {COMPANY_INFO.phone} · {COMPANY_INFO.email}
-        </div>
+        <div>{COMPANY_INFO.email}</div>
       </div>
     </main>
   );

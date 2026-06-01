@@ -219,10 +219,6 @@ export default function PrivacyPage() {
               <td>이메일</td>
               <td>{DPO_INFO.email}</td>
             </tr>
-            <tr>
-              <td>전화</td>
-              <td>{DPO_INFO.phone}</td>
-            </tr>
           </tbody>
         </Table>
       </Section>
@@ -251,7 +247,7 @@ export default function PrivacyPage() {
         </div>
         <div>{COMPANY_INFO.address}</div>
         <div>
-          사업자등록번호 {COMPANY_INFO.bizRegistrationNo} · {COMPANY_INFO.phone}
+          사업자등록번호 {COMPANY_INFO.bizRegistrationNo} · {COMPANY_INFO.email}
         </div>
       </div>
     </main>

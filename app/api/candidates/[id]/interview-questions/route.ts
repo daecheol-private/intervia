@@ -6,7 +6,10 @@
  *
  * 생성 입력: 이력서(마스킹) + 서류평가(screeningReport) + AI 면접 평가(있으면).
  * 면접관(같은 법인 누구나) 이 버튼을 누르면 LLM 이 질문지를 만들어 후보자당 1건 저장.
- * 재생성하면 같은 row 를 덮어쓴다. 토큰 과금 없음(무료).
+ * 재생성하면 같은 row 를 덮어쓴다.
+ *
+ * 과금: 후보자당 1회 interview_question_gen(기본 5토큰) 차감. chargeFeature 가
+ *   (refType="candidate", refId=cid) 기준 멱등이라 재생성 시 추가 차감 없음.
  */
 import { db } from "@/lib/db";
 import {
@@ -25,6 +28,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import { generateJSON } from "@/lib/gemini";
 import { buildInterviewQuestionsPrompt } from "@/lib/prompts";
 import { logAudit } from "@/lib/audit";
+import { chargeFeature } from "@/lib/tokens";
 
 export const runtime = "nodejs";
 
@@ -224,6 +228,18 @@ export async function POST(
         updatedAt: now,
       },
     });
+
+  // 후보자당 1회 차감 (멱등). 재생성은 같은 row 덮어쓰기라 추가 차감 없음.
+  if (candidate.orgId) {
+    await chargeFeature({
+      orgId: candidate.orgId,
+      feature: "interview_question_gen",
+      refType: "candidate",
+      refId: cid,
+      userId: me!.id,
+      memo: `면접 문제 생성 - ${candidate.name ?? ""}`.trim(),
+    });
+  }
 
   logAudit(req, {
     actor: me!,

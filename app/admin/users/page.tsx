@@ -13,6 +13,7 @@ type Row = {
   orgId: number | null;
   orgName: string | null;
   createdAt: string;
+  emailVerifiedAt: string | null;
 };
 
 export default function AdminUsersPage() {
@@ -45,12 +46,18 @@ export default function AdminUsersPage() {
 
   const update = async (
     id: number,
-    body: { role?: Row["role"]; status?: "active" | "disabled" }
+    body: {
+      role?: Row["role"];
+      status?: "active" | "disabled";
+      emailVerified?: boolean;
+    }
   ) => {
     setBusyId(id);
-    const reason = body.role
-      ? `사용자 권한을 ${body.role} 으로 변경합니다.`
-      : `사용자 상태를 ${body.status === "disabled" ? "비활성" : "활성"} 으로 변경합니다.`;
+    const reason = body.emailVerified
+      ? "사용자 이메일을 관리자가 대신 인증 처리합니다."
+      : body.role
+        ? `사용자 권한을 ${body.role} 으로 변경합니다.`
+        : `사용자 상태를 ${body.status === "disabled" ? "비활성" : "활성"} 으로 변경합니다.`;
     let res: Response;
     try {
       res = await ensureFetch(
@@ -77,6 +84,22 @@ export default function AdminUsersPage() {
   // 작업 버튼 묶음 — 데스크톱 테이블 / 모바일 카드 공용
   const renderActionButtons = (u: Row) => (
     <>
+      {!u.emailVerifiedAt && (
+        <button
+          onClick={() => {
+            if (
+              confirm(
+                `'${u.name}' (${u.email}) 의 이메일을 인증 완료로 처리합니다.\n\n인증 메일이 도달하지 않는 사용자를 위한 기능입니다. 본인 소유 이메일이 맞는지 확인 후 진행하세요. 처리 즉시 로그인이 가능해집니다.`
+              )
+            )
+              update(u.id, { emailVerified: true });
+          }}
+          disabled={busyId === u.id}
+          className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-primary-soft border border-primary/40 hover:bg-primary/10 text-primary-deep rounded disabled:opacity-50 font-medium"
+        >
+          ✓ 이메일 인증
+        </button>
+      )}
       {u.role === "member" && (
         <button
           onClick={() => {
@@ -257,6 +280,16 @@ export default function AdminUsersPage() {
     ) : (
       <span className="text-slate-600">{u.status}</span>
     );
+  // 이메일 미인증 표시 — 로그인이 차단된 상태임을 관리자가 즉시 인지하도록.
+  const verifyBadge = (u: Row) =>
+    !u.emailVerifiedAt ? (
+      <span
+        className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-danger-soft text-danger border border-danger/30"
+        title="이메일 미인증 — 현재 로그인 불가"
+      >
+        메일 미인증
+      </span>
+    ) : null;
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
@@ -359,7 +392,10 @@ export default function AdminUsersPage() {
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0 text-xs">
                 {roleBadge(u)}
-                {statusBadge(u)}
+                <span>
+                  {statusBadge(u)}
+                  {verifyBadge(u)}
+                </span>
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
@@ -424,9 +460,26 @@ export default function AdminUsersPage() {
                   ) : (
                     u.status
                   )}
+                  {verifyBadge(u)}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1.5 justify-end flex-wrap">
+                    {!u.emailVerifiedAt && (
+                      <button
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `'${u.name}' (${u.email}) 의 이메일을 인증 완료로 처리합니다.\n\n인증 메일이 도달하지 않는 사용자를 위한 기능입니다. 본인 소유 이메일이 맞는지 확인 후 진행하세요. 처리 즉시 로그인이 가능해집니다.`
+                            )
+                          )
+                            update(u.id, { emailVerified: true });
+                        }}
+                        disabled={busyId === u.id}
+                        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-primary-soft border border-primary/40 hover:bg-primary/10 text-primary-deep rounded disabled:opacity-50 font-medium"
+                      >
+                        ✓ 이메일 인증
+                      </button>
+                    )}
                     {u.role === "member" && (
                       <button
                         onClick={() => {
