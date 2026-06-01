@@ -224,8 +224,12 @@ export function buildDecisionEmail(opts: {
   jobTitle: string;
   decision: "hired" | "rejected";
   customMessage?: string;
+  companyName?: string | null;
 }): { subject: string; html: string; text: string } {
-  const { candidateName, jobTitle, decision, customMessage } = opts;
+  const { candidateName, jobTitle, decision, customMessage, companyName } = opts;
+  // 법인명 접두 — 단, 공고 제목에 이미 법인명이 포함돼 있으면 중복을 피해 생략.
+  const coName = companyName?.trim() ?? "";
+  const co = coName && !jobTitle.includes(coName) ? `${coName} ` : "";
   const headerMap = {
     hired: "🎉 합격을 축하드립니다",
     rejected: "지원해 주셔서 감사합니다",
@@ -241,8 +245,8 @@ export function buildDecisionEmail(opts: {
   const body =
     customMessage ??
     (decision === "hired"
-      ? `${candidateName}님, ${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
-      : `${candidateName}님, ${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`);
+      ? `${candidateName}님, ${co}${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
+      : `${candidateName}님, ${co}${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`);
 
   const text = `${body}\n\nIntervia 채용팀`;
   const escaped = body.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);

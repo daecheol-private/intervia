@@ -17,6 +17,7 @@ import {
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { MAX_INTERVIEW_EMAILS_PER_CANDIDATE } from "@/lib/job-lifecycle";
+import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import { sql } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -54,6 +55,28 @@ export async function POST(
   if (!candidate) return new Response("후보자 없음", { status: 404 });
   if (!ownsOrg(me!, candidate.orgId))
     return new Response("세션 없음", { status: 404 });
+
+  // 종결된 후보 또는 AI 면접 전형을 지나(스킵 포함) 다음 전형으로 진행된 후보에게는
+  // AI 면접 링크를 재발송할 수 없다.
+  if (candidate.outcome) {
+    return Response.json(
+      {
+        code: "candidate_terminated",
+        message: "이미 종결된 후보자에게는 AI 면접 링크를 재발송할 수 없습니다.",
+      },
+      { status: 409 }
+    );
+  }
+  if (STAGE_RANK[candidate.stage as Stage] > STAGE_RANK.ai_evaluated) {
+    return Response.json(
+      {
+        code: "ai_stage_passed",
+        message:
+          "AI 면접 전형이 종료되었습니다. 이미 다음 전형으로 진행된 후보자에게는 AI 면접 링크를 재발송할 수 없습니다.",
+      },
+      { status: 409 }
+    );
+  }
 
   // 잔액 가드
   const balanceGuard = await requirePositiveBalance(candidate.orgId, {

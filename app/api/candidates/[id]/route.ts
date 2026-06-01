@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { candidates, interviewSchedules, interviewSessions, jobPostings, screeningJobs, userCandidateFavorites } from "@/lib/schema";
+import { candidates, interviewSchedules, interviewSessions, jobPostings, organizations, screeningJobs, userCandidateFavorites } from "@/lib/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
@@ -99,9 +99,20 @@ export async function GET(
     );
   const favorited = !!fav;
 
+  // 법인명 — 합·불 통보 메일 본문에 사용 (지원자에게 어느 회사인지 명시).
+  let companyName: string | null = null;
+  if (candidate.orgId) {
+    const [org] = await db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, candidate.orgId));
+    companyName = org?.name ?? null;
+  }
+
   return Response.json({
     candidate: { ...candidate, favorited },
     job,
+    companyName,
     sessions,
     schedules,
     screeningPhase,

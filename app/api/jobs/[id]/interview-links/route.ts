@@ -31,6 +31,7 @@ import { sendMail, buildInterviewEmail, isSmtpAvailable } from "@/lib/mailer";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { MAX_INTERVIEW_EMAILS_PER_CANDIDATE, isJobExpired } from "@/lib/job-lifecycle";
+import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 
 export const runtime = "nodejs";
 
@@ -138,6 +139,14 @@ export async function POST(
         candidateId: c.id,
         status: "skipped",
         reason: "이미 종결된 후보",
+      });
+      continue;
+    }
+    if (STAGE_RANK[c.stage as Stage] > STAGE_RANK.ai_evaluated) {
+      results.push({
+        candidateId: c.id,
+        status: "skipped",
+        reason: "AI 면접 전형 종료 (다음 전형 진행 중)",
       });
       continue;
     }

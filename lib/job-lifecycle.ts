@@ -20,6 +20,7 @@ import {
   tokenLedger,
   interviewSessions as sessions,
   interviewSchedules as schedules,
+  organizations,
 } from "./schema";
 import { and, count, eq, lt, sql } from "drizzle-orm";
 import { deleteFile } from "./storage";
@@ -341,6 +342,12 @@ export async function closeJob(args: {
   let mailsSent = 0;
   let mailsFailed = 0;
   if (args.sendNotification && job) {
+    const [org] = job.orgId
+      ? await db
+          .select({ name: organizations.name })
+          .from(organizations)
+          .where(eq(organizations.id, job.orgId))
+      : [];
     for (const t of targets) {
       if (!t.email) continue;
       try {
@@ -348,6 +355,7 @@ export async function closeJob(args: {
           candidateName: t.name,
           jobTitle: job.title,
           decision: "rejected",
+          companyName: org?.name ?? null,
         });
         await sendMail({
           to: t.email,

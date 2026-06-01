@@ -124,14 +124,18 @@ export async function GET(
       return new Response("file location blocked", { status: 502 });
     }
     const upstream = await fetch(key);
-    if (!upstream.ok || !upstream.body) {
+    if (!upstream.ok) {
       return new Response("upstream fetch failed", { status: 502 });
     }
-    return new Response(upstream.body, {
+    // 스트림 pass-through 대신 버퍼링 — fetch 가 본문을 자동 압축해제하면
+    // upstream 의 Content-Length(압축 크기)가 본문과 어긋나 Vercel 함수가 에러난다.
+    // 작은 이력서 파일이므로 버퍼링 후 정확한 길이로 응답.
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    return new Response(new Uint8Array(buf), {
       headers: {
         "Content-Type":
           upstream.headers.get("content-type") ?? contentTypeFromPath(key),
-        "Content-Length": upstream.headers.get("content-length") ?? "",
+        "Content-Length": String(buf.byteLength),
         "Content-Disposition": disposition,
         "Cache-Control": "private, no-store",
       },

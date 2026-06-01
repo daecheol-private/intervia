@@ -5,7 +5,7 @@
  * stage 변경 API 의 sendNotification 으로 못 보낸/실패한 케이스를 사후에 보내기 위한 별도 엔드포인트.
  */
 import { db } from "@/lib/db";
-import { candidates, jobPostings } from "@/lib/schema";
+import { candidates, jobPostings, organizations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
@@ -82,11 +82,19 @@ export async function POST(
     .from(jobPostings)
     .where(eq(jobPostings.id, candidate.jobId));
 
+  const [org] = candidate.orgId
+    ? await db
+        .select({ name: organizations.name })
+        .from(organizations)
+        .where(eq(organizations.id, candidate.orgId))
+    : [];
+
   const mail = buildDecisionEmail({
     candidateName: candidate.name,
     jobTitle: job?.title ?? "공고",
     decision: candidate.outcome,
     customMessage: body.customMessage,
+    companyName: org?.name ?? null,
   });
 
   try {

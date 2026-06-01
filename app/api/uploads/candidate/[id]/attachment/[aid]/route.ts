@@ -126,13 +126,16 @@ export async function GET(
     );
     if (!ok) return new Response("file location blocked", { status: 502 });
     const upstream = await fetch(key);
-    if (!upstream.ok || !upstream.body)
+    if (!upstream.ok)
       return new Response("upstream fetch failed", { status: 502 });
-    return new Response(upstream.body, {
+    // 스트림 pass-through 대신 버퍼링 — fetch 자동 압축해제 시 upstream 의
+    // Content-Length 가 본문과 어긋나 Vercel 함수가 500 난다 (이력서 라우트와 동일).
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    return new Response(new Uint8Array(buf), {
       headers: {
         "Content-Type":
           upstream.headers.get("content-type") ?? contentTypeFromPath(key),
-        "Content-Length": upstream.headers.get("content-length") ?? "",
+        "Content-Length": String(buf.byteLength),
         "Content-Disposition": disposition,
         "Cache-Control": "private, no-store",
       },

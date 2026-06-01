@@ -32,6 +32,7 @@ type Job = {
   closedAt?: string | null;
   extensionCount?: number;
   evaluationFocus?: string;
+  companyName?: string | null;
 };
 
 type Candidate = {
@@ -1854,6 +1855,7 @@ export default function JobDetailPage() {
             .filter((c) => bulkDecisionState.ids.includes(c.id))
             .map((c) => c.stage)}
           jobTitle={job?.title ?? "공고"}
+          companyName={job?.companyName ?? null}
           busy={bulkBusy}
           onCancel={() => setBulkDecisionState(null)}
           onConfirm={(opts) => void runBulkDecision(opts)}
@@ -3145,6 +3147,7 @@ function BulkDecisionModal({
   count,
   stages,
   jobTitle,
+  companyName,
   busy,
   onCancel,
   onConfirm,
@@ -3153,6 +3156,7 @@ function BulkDecisionModal({
   count: number;
   stages: string[];
   jobTitle: string;
+  companyName?: string | null;
   busy: boolean;
   onCancel: () => void;
   onConfirm: (opts: {
@@ -3196,10 +3200,12 @@ function BulkDecisionModal({
   })();
   // 기본 통보 메일 템플릿 — {이름} 은 발송 시 각 지원자 이름으로 치환된다.
   // (lib/candidate-stage.ts 의 buildDecisionEmail 기본 본문과 동일하게 유지)
+  const coName = companyName?.trim() ?? "";
+  const co = coName && !jobTitle.includes(coName) ? `${coName} ` : "";
   const defaultBody =
     decision === "hired"
-      ? `{이름}님, ${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
-      : `{이름}님, ${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`;
+      ? `{이름}님, ${co}${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
+      : `{이름}님, ${co}${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`;
   const [reason, setReason] = useState<string>(autoReason);
   const [sendMail, setSendMail] = useState(false);
   const [customMessage, setCustomMessage] = useState(defaultBody);

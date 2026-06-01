@@ -8,7 +8,7 @@ import {
   recommendationFromScore,
   formatKstDateTime,
 } from "@/lib/utils";
-import { STAGE_LABELS as STAGE_LABELS_SHARED } from "@/lib/stage-meta";
+import { STAGE_LABELS as STAGE_LABELS_SHARED, STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 
@@ -195,6 +195,7 @@ export default function CandidateDetailPage() {
   const [data, setData] = useState<{
     candidate: Candidate;
     job: Job;
+    companyName?: string | null;
     sessions: Session[];
     schedules: Schedule[];
     screeningPhase: "not_started" | "in_queue" | "done" | "failed";
@@ -348,7 +349,7 @@ export default function CandidateDetailPage() {
     );
   }
 
-  const { candidate, job, sessions, schedules, screeningPhase } = data;
+  const { candidate, job, companyName, sessions, schedules, screeningPhase } = data;
 
   // 공고가 만료(closesAt 지났고 active) 상태면 후보자 상세 진입 차단.
   // 목록 페이지에서의 일괄 합/불 결정·삭제는 가능하지만 상세 페이지에서의 단일 액션은 잠금.
@@ -383,6 +384,11 @@ export default function CandidateDetailPage() {
   }
 
   const activeSession = sessions[0] ?? null;
+  // AI 면접 전형이 지났는지 — 종결됐거나 1차 면접 이상 단계로 진행된 경우.
+  // 이 경우 AI 면접 링크 생성/재발송 차단 (스킵된 전형 재개 방지).
+  const aiStagePassed =
+    !!candidate.outcome ||
+    STAGE_RANK[candidate.stage as Stage] > STAGE_RANK.ai_evaluated;
   const activeSchedule =
     (schedules ?? []).find(
       (s) =>
@@ -480,6 +486,7 @@ export default function CandidateDetailPage() {
         <StagePanel
           candidate={candidate}
           jobTitle={job.title}
+          companyName={companyName ?? null}
           onChanged={() => void load()}
           showFullResume={showFullResume}
           setShowFullResume={setShowFullResume}
@@ -745,7 +752,12 @@ export default function CandidateDetailPage() {
         {!activeSession && (
           <div className="text-center py-8">
             <div className="text-3xl mb-3">💬</div>
-            {candidate.screeningReport ? (
+            {aiStagePassed ? (
+              <p className="text-sm text-slate-500">
+                AI 면접 전형이 종료되었습니다. 이미 다음 전형으로 진행된
+                후보자에게는 AI 면접 링크를 생성할 수 없습니다.
+              </p>
+            ) : candidate.screeningReport ? (
               <>
                 <p className="text-sm text-slate-600 mb-4">
                   아직 면접이 진행되지 않았습니다.
@@ -786,6 +798,7 @@ export default function CandidateDetailPage() {
             session={activeSession}
             candidateEmail={candidate.email}
             onRegenerate={createLink}
+            disabled={aiStagePassed}
           />
         )}
         {completedSession && completedSession.evaluation && (
@@ -793,6 +806,7 @@ export default function CandidateDetailPage() {
             session={completedSession}
             onShowTranscript={() => setShowTranscript(true)}
             onRegenerate={createLink}
+            disabled={aiStagePassed}
           />
         )}
         {completedSession && !completedSession.evaluation && (
@@ -2035,10 +2049,12 @@ function InterviewLinkBox({
   session,
   candidateEmail,
   onRegenerate,
+  disabled = false,
 }: {
   session: Session;
   candidateEmail: string | null;
   onRegenerate: () => void;
+  disabled?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
@@ -2141,8 +2157,13 @@ function InterviewLinkBox({
         </button>
         <button
           onClick={handleSendClick}
-          disabled={sending}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-primary hover:bg-primary-deep text-surface disabled:opacity-50 transition-colors"
+          disabled={sending || disabled}
+          title={
+            disabled
+              ? "AI 면접 전형이 종료되어 재발송할 수 없습니다."
+              : undefined
+          }
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-primary hover:bg-primary-deep text-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {sending ? "발송 중..." : "📧 재발송"}
         </button>
@@ -2339,10 +2360,12 @@ function InterviewResult({
   session,
   onShowTranscript,
   onRegenerate,
+  disabled = false,
 }: {
   session: Session;
   onShowTranscript: () => void;
   onRegenerate: () => void;
+  disabled?: boolean;
 }) {
   const ev = session.evaluation!;
   return (
@@ -2462,12 +2485,14 @@ function InterviewResult({
         >
           면접 대화록 보기 →
         </button>
-        <button
-          onClick={onRegenerate}
-          className="text-xs text-slate-500 hover:text-slate-900 underline"
-        >
-          재면접 링크 발급
-        </button>
+        {!disabled && (
+          <button
+            onClick={onRegenerate}
+            className="text-xs text-slate-500 hover:text-slate-900 underline"
+          >
+            재면접 링크 발급
+          </button>
+        )}
       </div>
     </div>
   );
@@ -2839,22 +2864,27 @@ function OutcomeBadge({
 function defaultDecisionBody(
   decision: "hired" | "rejected",
   candidateName: string,
-  jobTitle: string
+  jobTitle: string,
+  companyName?: string | null
 ): string {
+  const coName = companyName?.trim() ?? "";
+  const co = coName && !jobTitle.includes(coName) ? `${coName} ` : "";
   return decision === "hired"
-    ? `${candidateName}님, ${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
-    : `${candidateName}님, ${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`;
+    ? `${candidateName}님, ${co}${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
+    : `${candidateName}님, ${co}${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`;
 }
 
 function StagePanel({
   candidate,
   jobTitle,
+  companyName,
   onChanged,
   showFullResume,
   setShowFullResume,
 }: {
   candidate: Candidate;
   jobTitle: string;
+  companyName?: string | null;
   onChanged: () => void;
   showFullResume: boolean;
   setShowFullResume: (v: boolean) => void;
@@ -2867,7 +2897,7 @@ function StagePanel({
   const [reason, setReason] = useState<string>("");
   const [note, setNote] = useState("");
   const [customMessage, setCustomMessage] = useState(() =>
-    defaultDecisionBody("rejected", candidate.name, jobTitle)
+    defaultDecisionBody("rejected", candidate.name, jobTitle, companyName)
   );
   // 사용자가 한 번이라도 본문을 직접 수정하면 더 이상 decision 변경 시 덮어쓰지 않음.
   const [messageEdited, setMessageEdited] = useState(false);
@@ -2877,15 +2907,15 @@ function StagePanel({
   // decide 모달: decision 또는 후보자 정보 바뀌면 기본 템플릿 재생성 (사용자가 직접 수정하지 않은 경우만).
   useEffect(() => {
     if (open === "decide" && !messageEdited) {
-      setCustomMessage(defaultDecisionBody(decision, candidate.name, jobTitle));
+      setCustomMessage(defaultDecisionBody(decision, candidate.name, jobTitle, companyName));
     }
-  }, [open, decision, candidate.name, jobTitle, messageEdited]);
+  }, [open, decision, candidate.name, jobTitle, companyName, messageEdited]);
 
   // notify 모달 열 때 — 이미 확정된 outcome 기반으로 기본 템플릿 채움 + edit 플래그 리셋.
   const openNotify = () => {
     if (candidate.outcome === "hired" || candidate.outcome === "rejected") {
       setCustomMessage(
-        defaultDecisionBody(candidate.outcome, candidate.name, jobTitle)
+        defaultDecisionBody(candidate.outcome, candidate.name, jobTitle, companyName)
       );
       setMessageEdited(false);
     }
@@ -3271,7 +3301,7 @@ function StagePanel({
                       type="button"
                       onClick={() => {
                         setCustomMessage(
-                          defaultDecisionBody(decision, candidate.name, jobTitle)
+                          defaultDecisionBody(decision, candidate.name, jobTitle, companyName)
                         );
                         setMessageEdited(false);
                       }}
@@ -3342,7 +3372,8 @@ function StagePanel({
                         defaultDecisionBody(
                           candidate.outcome as "hired" | "rejected",
                           candidate.name,
-                          jobTitle
+                          jobTitle,
+                          companyName
                         )
                       );
                       setMessageEdited(false);

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { jobPostings, candidates } from "@/lib/schema";
+import { jobPostings, candidates, organizations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
@@ -45,8 +45,20 @@ export async function GET(
 
   const { passwordHash, ...rest } = row;
   void passwordHash;
+
+  // 법인명 — 합·불 통보 메일 미리보기 본문에 사용.
+  let companyName: string | null = null;
+  if (row.orgId) {
+    const [org] = await db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, row.orgId));
+    companyName = org?.name ?? null;
+  }
+
   return Response.json({
     ...rest,
+    companyName,
     hasPassword,
     locked: false,
   });

@@ -66,3 +66,4 @@ next-env.d.ts
 # DART 임시 다운로드
 /.tmp-dart/
 drizzle.backup/
+dev.log

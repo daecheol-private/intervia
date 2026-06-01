@@ -5,6 +5,7 @@ import { eq, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { generateToken, addDays } from "@/lib/utils";
+import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import {
   requirePositiveBalance,
   insufficientTokensResponse,
@@ -32,6 +33,30 @@ export async function POST(
   if (!candidate) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, candidate.orgId))
     return new Response("Not found", { status: 404 });
+
+  // 종결(합격·불합격·지원취소)된 후보는 AI 면접 링크 발급 불가.
+  if (candidate.outcome) {
+    return Response.json(
+      {
+        code: "candidate_terminated",
+        error: "이미 종결된 후보자에게는 AI 면접 링크를 발급할 수 없습니다.",
+      },
+      { status: 409 }
+    );
+  }
+
+  // AI 면접 전형을 지나(스킵 포함) 1차 면접 이상으로 진행된 후보는 AI 면접 링크 발급/재발송 불가.
+  // (AI면접 단계: ai_pending / ai_evaluated. 그 이후 단계로 넘어가면 AI면접 전형이 종료된 것으로 간주)
+  if (STAGE_RANK[candidate.stage as Stage] > STAGE_RANK.ai_evaluated) {
+    return Response.json(
+      {
+        code: "ai_stage_passed",
+        error:
+          "AI 면접 전형이 종료되었습니다. 이미 다음 전형으로 진행된 후보자에게는 AI 면접 링크를 발급할 수 없습니다.",
+      },
+      { status: 409 }
+    );
+  }
 
   // 잔액 가드
   const balanceGuard = await requirePositiveBalance(candidate.orgId, {

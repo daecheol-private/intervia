@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useVoiceInput } from "./use-voice-input";
-import { LogoMark } from "@/app/components/Logo";
+import { LogoMark, Logo } from "@/app/components/Logo";
 
 type Message = { role: "user" | "model"; content: string };
 
@@ -309,7 +309,9 @@ export default function InterviewPage() {
       {/* Header card */}
       <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 shadow-sm shrink-0">
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex items-center gap-2.5">
+            <LogoMark size={32} className="shrink-0" />
+            <div className="min-w-0">
             <h1 className="font-bold text-slate-900 truncate text-sm sm:text-base">
               {info.job.title}
             </h1>
@@ -319,6 +321,7 @@ export default function InterviewPage() {
                 ? ` · 약 ${info.job.interviewDurationMinutes}분`
                 : ""}
             </p>
+            </div>
           </div>
           {!ended && (
             <button
@@ -674,6 +677,9 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex-1 flex items-center justify-center p-6">
       <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center max-w-md shadow-sm">
+        <div className="flex justify-center mb-5">
+          <Logo size={36} />
+        </div>
         {children}
       </div>
     </main>
@@ -769,6 +775,9 @@ function ConsentGate({
     <main className="max-w-3xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0">
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <header className="px-6 py-5 border-b border-slate-100 bg-gradient-to-br from-primary-soft to-primary-soft/60">
+          <div className="mb-3">
+            <Logo size={32} />
+          </div>
           <div className="text-xs text-slate-500 mb-1">{candidateName} 님</div>
           <h1 className="text-lg font-bold text-slate-900">
             {jobTitle} AI 면접 — 개인정보 처리 동의
