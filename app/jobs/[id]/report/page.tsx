@@ -210,7 +210,7 @@ export default async function JobReportPage({
     aiSent > 0 ? Math.round((aiResponded / aiSent) * 100) : null;
 
   return (
-    <main className="max-w-4xl mx-auto w-full px-6 py-8 print:px-0 print:py-0 print:max-w-none">
+    <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 print:px-0 print:py-0 print:max-w-none">
       <div className="flex items-center justify-between mb-4 print:hidden">
         <Link
           href={`/jobs/${jobId}`}

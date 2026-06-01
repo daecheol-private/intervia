@@ -248,7 +248,7 @@ export default function AdminOrgsPage() {
   };
 
   return (
-    <main className="max-w-6xl mx-auto w-full px-6 py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {stepUpModal}
       <div className="mb-6">
         <Link href="/" className="text-xs text-slate-500 hover:underline">
@@ -266,7 +266,162 @@ export default function AdminOrgsPage() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      {/* 모바일: 카드 리스트 (충전/조정·환불·정지·재개 — 급한 운영 처리용) */}
+      <div className="sm:hidden space-y-3">
+        {loading && (
+          <div className="text-slate-400 text-sm py-6 text-center">불러오는 중...</div>
+        )}
+        {!loading && rows.length === 0 && (
+          <div className="text-slate-400 text-sm py-6 text-center">법인이 없습니다.</div>
+        )}
+        {rows.map((o) => (
+          <div
+            key={o.id}
+            className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-slate-900 flex items-center gap-2 flex-wrap">
+                  <span className="break-keep">{o.name}</span>
+                  {o.suspendedAt && (
+                    <span
+                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200"
+                      title={o.suspendedReason ?? "정지됨"}
+                    >
+                      정지
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5">
+                  <VerificationBadge org={o} onVerify={verifyOrg} />
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div
+                  className={`font-mono text-lg leading-none ${o.balance < 0 ? "text-danger" : "text-slate-900"}`}
+                >
+                  {o.balance.toLocaleString()}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">토큰 잔액</div>
+              </div>
+            </div>
+
+            <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+              <span>멤버 {o.memberCount}</span>
+              <span>공고 {o.jobCount}</span>
+              {o.bizRegistrationNo && (
+                <span className="font-mono">{o.bizRegistrationNo}</span>
+              )}
+              {o.emailDomain && <span>{o.emailDomain}</span>}
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              {grantId === o.id ? (
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-right font-mono"
+                    placeholder="±수량 (예: 100 충전, -50 차감)"
+                    value={grantAmount}
+                    onChange={(e) => setGrantAmount(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => grant(o.id)}
+                      disabled={busy}
+                      className="flex-1 px-3 py-2 text-sm bg-primary hover:bg-primary-deep text-white rounded-lg disabled:opacity-50 font-medium"
+                    >
+                      적용
+                    </button>
+                    <button
+                      onClick={() => {
+                        setGrantId(null);
+                        setGrantAmount("");
+                      }}
+                      className="px-4 py-2 text-sm bg-white border border-slate-300 hover:bg-slate-50 rounded-lg"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : refundId === o.id ? (
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm text-right font-mono"
+                    placeholder="±수량"
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm"
+                    placeholder="환불 사유 (5자+, 필수)"
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => refund(o.id)}
+                      disabled={busy}
+                      className="flex-1 px-3 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 font-medium"
+                    >
+                      환불
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRefundId(null);
+                        setRefundAmount("");
+                        setRefundReason("");
+                      }}
+                      className="px-4 py-2 text-sm bg-white border border-slate-300 hover:bg-slate-50 rounded-lg"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setGrantId(o.id)}
+                    className="px-3 py-2 text-sm bg-primary hover:bg-primary-deep text-white rounded-lg font-medium"
+                  >
+                    충전 / 조정
+                  </button>
+                  <button
+                    onClick={() => setRefundId(o.id)}
+                    className="px-3 py-2 text-sm bg-white border border-amber-300 hover:bg-amber-50 text-amber-700 rounded-lg"
+                  >
+                    환불
+                  </button>
+                  {o.suspendedAt ? (
+                    <button
+                      onClick={() => resume(o.id, o.name)}
+                      disabled={busy}
+                      className="px-3 py-2 text-sm bg-white border border-primary/40 hover:bg-primary-soft text-primary-deep rounded-lg disabled:opacity-50"
+                    >
+                      재개
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => suspend(o.id, o.name)}
+                      disabled={busy}
+                      className="px-3 py-2 text-sm bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 rounded-lg disabled:opacity-50"
+                    >
+                      정지
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 데스크톱: 전체 테이블 */}
+      <div className="hidden sm:block bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-600 text-xs">
             <tr>

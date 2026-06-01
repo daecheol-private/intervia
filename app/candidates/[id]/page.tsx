@@ -307,7 +307,7 @@ export default function CandidateDetailPage() {
   if (!data) {
     if (loadError === "not_found")
       return (
-        <main className="max-w-4xl mx-auto px-6 py-8">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
             <div className="text-slate-700 font-medium">삭제된 후보자입니다.</div>
             <div className="mt-1 text-sm text-slate-500">
@@ -324,7 +324,7 @@ export default function CandidateDetailPage() {
       );
     if (loadError === "failed")
       return (
-        <main className="max-w-4xl mx-auto px-6 py-8">
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-center">
             <div className="text-rose-700 font-medium">불러오기에 실패했습니다.</div>
             <div className="mt-1 text-sm text-rose-600">
@@ -343,7 +343,7 @@ export default function CandidateDetailPage() {
         </main>
       );
     return (
-      <main className="max-w-4xl mx-auto px-6 py-8 text-slate-500">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
         불러오는 중...
       </main>
     );
@@ -402,7 +402,7 @@ export default function CandidateDetailPage() {
   const rec = composite != null ? recommendationFromScore(composite) : null;
 
   return (
-    <main className="max-w-4xl mx-auto w-full px-6 py-8">
+    <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link
         href={`/jobs/${job.id}`}
         className="text-sm text-slate-500 hover:text-slate-900"
@@ -3091,9 +3091,9 @@ function StagePanel({
 
   return (
     <>
-      <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 flex-wrap text-sm">
+      <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-visible text-sm">
         {candidate.decidedAt && (
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-500 shrink-0 whitespace-nowrap">
             결정 {formatKstDateTime(candidate.decidedAt)}
           </span>
         )}
@@ -3102,7 +3102,7 @@ function StagePanel({
             href={`/api/uploads/candidate/${candidate.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1"
+            className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1"
           >
             📎 이력서
           </a>
@@ -3110,23 +3110,23 @@ function StagePanel({
         {candidate.resumeMaskedText && (
           <button
             onClick={() => setShowFullResume(!showFullResume)}
-            className="text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600"
+            className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600"
           >
             {showFullResume ? "마스킹 접기" : "마스킹 보기"}
           </button>
         )}
         {!candidate.resumeFilePath && !candidate.resumeMaskedText && (
-          <span className="text-xs text-slate-500 italic">
+          <span className="text-xs text-slate-500 italic shrink-0 whitespace-nowrap">
             🔒 보존기간 경과로 이력서 원본 폐기됨
           </span>
         )}
         {!isTerminal && (
-          <div className="flex gap-2 ml-auto">
+          <div className="flex gap-1.5 sm:gap-2 shrink-0 sm:ml-auto">
             {candidate.stage === "ai_evaluated" && (
               <button
                 onClick={() => void move("round1_candidate")}
                 disabled={busy}
-                className="text-xs px-3 py-1.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-50 transition-colors"
+                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-50 transition-colors"
                 title="1차 면접 후보로 지정 — 공고 목록 상단 별도 섹션으로 이동"
               >
                 ⭐ 1차 면접 후보로 지정
@@ -3136,7 +3136,7 @@ function StagePanel({
               <button
                 onClick={() => setOpen("stage")}
                 disabled={busy}
-                className="text-xs px-3.5 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-semibold disabled:opacity-50 transition-colors shadow-sm"
+                className="shrink-0 whitespace-nowrap text-xs px-3.5 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-semibold disabled:opacity-50 transition-colors shadow-sm"
                 title="다음 단계로 진행"
               >
                 ▶ 단계 변경
@@ -3145,7 +3145,7 @@ function StagePanel({
             <button
               onClick={() => setOpen("decide")}
               disabled={busy}
-              className="text-xs px-3 py-1.5 rounded-md border border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink transition-colors"
+              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink transition-colors"
               title="최종합격·불합격·지원취소로 종결"
             >
               종결 결정

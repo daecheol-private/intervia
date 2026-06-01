@@ -74,8 +74,192 @@ export default function AdminUsersPage() {
     void load();
   };
 
+  // 작업 버튼 묶음 — 데스크톱 테이블 / 모바일 카드 공용
+  const renderActionButtons = (u: Row) => (
+    <>
+      {u.role === "member" && (
+        <button
+          onClick={() => {
+            if (
+              confirm(
+                `'${u.name}' (${u.email}) 를 ${u.orgName ?? "법인"} 의 org_admin 으로 승급합니다.\n법인의 멤버 관리·합류 승인 권한을 가지게 됩니다.`
+              )
+            )
+              update(u.id, { role: "org_admin" });
+          }}
+          disabled={busyId === u.id}
+          className={btnSec}
+        >
+          → org_admin
+        </button>
+      )}
+      {u.role === "org_admin" && (
+        <button
+          onClick={() => {
+            if (
+              confirm(
+                `'${u.name}' (${u.email}) 를 일반 member 로 강등합니다.\n법인 관리 권한이 즉시 회수됩니다.`
+              )
+            )
+              update(u.id, { role: "member" });
+          }}
+          disabled={busyId === u.id}
+          className={btnSec}
+        >
+          → member
+        </button>
+      )}
+      {u.role !== "system_admin" && (
+        <button
+          onClick={() => {
+            if (
+              confirm(
+                `'${u.name}' (${u.email}) 에게 시스템 관리자 권한을 부여합니다.\n\n시스템 관리자는 모든 법인 데이터에 접근 가능합니다. 진행하시겠습니까?`
+              )
+            )
+              update(u.id, { role: "system_admin" });
+          }}
+          disabled={busyId === u.id}
+          className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-700 rounded disabled:opacity-50"
+        >
+          → system_admin
+        </button>
+      )}
+      {u.role === "system_admin" && (
+        <button
+          onClick={() => {
+            if (
+              confirm(
+                `'${u.name}' 의 시스템 관리자 권한을 회수합니다.\n(현재 법인의 ${u.orgName ? "org_admin" : "member"}으로 복귀)`
+              )
+            )
+              update(u.id, {
+                role: u.orgName ? "org_admin" : "member",
+              });
+          }}
+          disabled={busyId === u.id}
+          className={btnDanger}
+        >
+          sysadmin 회수
+        </button>
+      )}
+      {u.status === "active" && (
+        <button
+          onClick={() => {
+            if (
+              confirm(
+                `'${u.name}' (${u.email}) 를 비활성화합니다.\n사용자는 즉시 로그인 불가가 되며, 보유 세션도 만료됩니다.`
+              )
+            )
+              update(u.id, { status: "disabled" });
+          }}
+          disabled={busyId === u.id}
+          className={btnDanger}
+        >
+          비활성
+        </button>
+      )}
+      {u.status !== "active" && (
+        <button
+          onClick={() => {
+            if (
+              confirm(
+                `'${u.name}' (${u.email}) 를 활성 상태로 전환합니다.\n${
+                  u.status === "pending"
+                    ? "이 사용자는 합류 승인 대기 중입니다 — 일반적으로는 멤버 관리 > 합류 요청 탭에서 승인하는 것이 권장됩니다."
+                    : "재로그인이 가능해집니다."
+                }`
+              )
+            )
+              update(u.id, { status: "active" });
+          }}
+          disabled={busyId === u.id}
+          className={btnSec}
+        >
+          활성
+        </button>
+      )}
+      <button
+        onClick={async () => {
+          if (
+            !confirm(
+              `'${u.name}' (${u.email}) 의 모든 활성 세션을 강제 만료합니다. 다음 접속 시 재로그인해야 합니다.`
+            )
+          )
+            return;
+          setBusyId(u.id);
+          const res = await fetch(`/api/admin/users/${u.id}/sessions`, {
+            method: "DELETE",
+          });
+          setBusyId(null);
+          if (!res.ok) {
+            setErr(await res.text());
+            return;
+          }
+          const d = (await res.json()) as { sessionsRevoked: number };
+          alert(`${d.sessionsRevoked}개 세션을 만료했습니다.`);
+        }}
+        disabled={busyId === u.id}
+        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-white border border-orange-300 hover:bg-orange-50 text-orange-700 rounded disabled:opacity-50"
+      >
+        강제 로그아웃
+      </button>
+      <button
+        onClick={async () => {
+          if (!confirm(`'${u.email}' 로 비밀번호 리셋 메일을 발송합니다.`))
+            return;
+          setBusyId(u.id);
+          const res = await fetch(`/api/admin/users/${u.id}/password-reset`, {
+            method: "POST",
+          });
+          setBusyId(null);
+          if (!res.ok) {
+            setErr(await res.text());
+            return;
+          }
+          const d = (await res.json()) as {
+            mailSent: boolean;
+            error: string | null;
+          };
+          alert(
+            d.mailSent
+              ? "메일 발송 완료. 사용자가 메일함을 확인하면 됩니다."
+              : `메일 발송 실패: ${d.error ?? "알 수 없는 오류"}`
+          );
+        }}
+        disabled={busyId === u.id}
+        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-card border border-accent/50 hover:bg-accent-soft text-accent-deep rounded disabled:opacity-50 transition-colors"
+      >
+        비번 리셋
+      </button>
+    </>
+  );
+
+  // 권한/상태 배지 — 공용
+  const roleBadge = (u: Row) =>
+    u.role === "system_admin" ? (
+      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 uppercase tracking-wide">
+        system_admin
+      </span>
+    ) : (
+      <span className="text-slate-600">{u.role}</span>
+    );
+  const statusBadge = (u: Row) =>
+    u.status === "pending" ? (
+      <Link
+        href="/org/members?tab=requests"
+        className="inline-flex items-center gap-1 text-warning hover:text-warning/80 hover:underline"
+        title="합류 요청 탭으로 이동 — 정식 승인 권장"
+      >
+        pending
+        <span aria-hidden>↗</span>
+      </Link>
+    ) : (
+      <span className="text-slate-600">{u.status}</span>
+    );
+
   return (
-    <main className="max-w-6xl mx-auto w-full px-6 py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {stepUpModal}
       <div className="mb-6">
         <Link href="/" className="text-xs text-slate-500 hover:underline">
@@ -148,7 +332,45 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      {/* 모바일: 카드 리스트 (테이블 셀 폭 부족으로 이름·법인이 세로로 깨지는 문제 해결) */}
+      <div className="sm:hidden space-y-3">
+        {loading && (
+          <div className="text-slate-400 text-sm py-6 text-center">불러오는 중...</div>
+        )}
+        {!loading && rows.length === 0 && (
+          <div className="text-slate-400 text-sm py-6 text-center">결과가 없습니다.</div>
+        )}
+        {rows.map((u) => (
+          <div
+            key={u.id}
+            className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-slate-900 break-words">
+                  {u.name}
+                </div>
+                <div className="text-xs text-slate-500 break-all mt-0.5">
+                  {u.email}
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  {u.orgName || "법인 없음"}
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0 text-xs">
+                {roleBadge(u)}
+                {statusBadge(u)}
+              </div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
+              {renderActionButtons(u)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 데스크톱: 전체 테이블 */}
+      <div className="hidden sm:block bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-600 text-xs">
             <tr>
@@ -248,7 +470,7 @@ export default function AdminUsersPage() {
                             update(u.id, { role: "system_admin" });
                         }}
                         disabled={busyId === u.id}
-                        className="px-2.5 py-1 text-xs bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-700 rounded disabled:opacity-50"
+                        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-700 rounded disabled:opacity-50"
                       >
                         → system_admin
                       </button>
@@ -328,7 +550,7 @@ export default function AdminUsersPage() {
                         alert(`${d.sessionsRevoked}개 세션을 만료했습니다.`);
                       }}
                       disabled={busyId === u.id}
-                      className="px-2.5 py-1 text-xs bg-white border border-orange-300 hover:bg-orange-50 text-orange-700 rounded disabled:opacity-50"
+                      className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-white border border-orange-300 hover:bg-orange-50 text-orange-700 rounded disabled:opacity-50"
                     >
                       강제 로그아웃
                     </button>
@@ -361,7 +583,7 @@ export default function AdminUsersPage() {
                         );
                       }}
                       disabled={busyId === u.id}
-                      className="px-2.5 py-1 text-xs bg-card border border-accent/50 hover:bg-accent-soft text-accent-deep rounded disabled:opacity-50 transition-colors"
+                      className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-card border border-accent/50 hover:bg-accent-soft text-accent-deep rounded disabled:opacity-50 transition-colors"
                     >
                       비번 리셋
                     </button>
@@ -376,7 +598,8 @@ export default function AdminUsersPage() {
   );
 }
 
+// max-sm:* — 모바일(<640px) 터치 타깃 ~40px 확보. 데스크톱 테이블 밀도는 유지.
 const btnSec =
-  "px-2.5 py-1 text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded disabled:opacity-50";
+  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded disabled:opacity-50";
 const btnDanger =
-  "px-2.5 py-1 text-xs bg-danger-soft border border-danger/30 hover:bg-danger-soft/70 text-danger rounded disabled:opacity-50 transition-colors";
+  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-danger-soft border border-danger/30 hover:bg-danger-soft/70 text-danger rounded disabled:opacity-50 transition-colors";

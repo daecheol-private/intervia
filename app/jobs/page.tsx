@@ -61,7 +61,7 @@ export default async function JobsListPage({
   }));
 
   return (
-    <main className="max-w-6xl mx-auto w-full px-6 py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex items-end justify-between mb-8">
         <div>
           <Link href="/" className="text-xs text-slate-500 hover:text-slate-900">
@@ -78,7 +78,7 @@ export default async function JobsListPage({
         </div>
         <Link
           href="/jobs/new"
-          className="inline-flex items-center gap-2 bg-primary hover:bg-primary-deep text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition-colors"
+          className="hidden sm:inline-flex items-center gap-2 bg-primary hover:bg-primary-deep text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition-colors"
         >
           <span className="text-base leading-none">+</span> 새 공고 등록
         </Link>

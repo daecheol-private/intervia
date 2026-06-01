@@ -71,7 +71,7 @@ export default function AuditPage() {
   };
 
   return (
-    <main className="max-w-6xl mx-auto w-full px-6 py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
         <Link href="/" className="text-xs text-slate-500 hover:underline">
           ← 대시보드

@@ -126,7 +126,7 @@ export default async function AdminDashboardPage() {
   const [totalOrgsAgg] = await db.select({ c: count() }).from(organizations);
 
   return (
-    <main className="max-w-6xl mx-auto w-full px-6 py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">운영 대시보드</h1>
         <p className="text-sm text-slate-500 mt-1">

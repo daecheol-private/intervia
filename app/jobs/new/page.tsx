@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { Sparkles, Link2, Loader2 } from "lucide-react";
+import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 
 export default function NewJobPage() {
   const router = useRouter();
@@ -113,13 +114,24 @@ export default function NewJobPage() {
   };
 
   return (
-    <main className="max-w-3xl mx-auto w-full px-6 py-8">
+    <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link
         href="/"
         className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
       >
         ← 대시보드
       </Link>
+
+      {/* 모바일: 공고 등록은 데스크톱 전용 — 안내만 노출 */}
+      <div className="sm:hidden mt-4">
+        <DesktopOnlyNotice
+          title="공고 등록은 PC에서"
+          description="공고 등록은 입력 항목이 많아 PC(데스크톱)에서 진행해 주세요. 모바일에서는 등록된 공고의 현황 확인과 후보자 단계·합불 변경을 할 수 있습니다."
+        />
+      </div>
+
+      {/* 데스크톱: 공고 등록 폼 (모바일 숨김) */}
+      <div className="hidden sm:block">
       <h1 className="text-2xl font-bold mt-3 mb-1">새 공고 등록</h1>
       <p className="text-sm text-slate-500 mb-6">
         등록된 정보는 면접관 페르소나 생성에 사용됩니다.
@@ -331,6 +343,7 @@ export default function NewJobPage() {
         >
           {saving ? "저장 중..." : "공고 등록"}
         </button>
+      </div>
       </div>
     </main>
   );

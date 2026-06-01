@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Building2,
   LayoutDashboard,
@@ -17,12 +18,71 @@ import {
   ScrollText,
   Lock,
   ShieldCheck,
+  Menu,
+  X,
+  Home,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 import LogoutButton from "../logout-button";
 import { NotificationBell } from "./NotificationBell";
 
 type Role = "system_admin" | "org_admin" | "member" | null;
+
+type NavItem = {
+  href: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+};
+
+type NavSection = {
+  label: string | null; // null = 섹션 헤더 없는 단독 항목 묶음
+  items: NavItem[];
+};
+
+/**
+ * 역할별 메뉴 구성을 한 곳에서 정의 — 데스크톱 드롭다운과 모바일 햄버거가 공유.
+ * 메뉴 추가/변경 시 여기만 고치면 양쪽 모두 반영.
+ */
+function buildSections(role: Role): NavSection[] {
+  const sections: NavSection[] = [];
+  // 시스템관리자의 홈("/")은 운영 대시보드로 리다이렉트되므로 "대시보드"="운영" 중복.
+  // 데스크톱과 동일하게 sysadmin 에겐 "대시보드" 항목을 두지 않고 "운영"만 노출.
+  if (role !== "system_admin") {
+    sections.push({
+      label: null,
+      items: [{ href: "/", label: "대시보드", Icon: Home }],
+    });
+  }
+  if (role === "org_admin") {
+    sections.push({
+      label: "법인",
+      items: [
+        { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
+        { href: "/org/members", label: "멤버", Icon: Users },
+        // 메일 서버 설정은 데스크톱 전용 — 모바일 메뉴에서 숨김
+      ],
+    });
+  }
+  if (role === "system_admin") {
+    sections.push({
+      label: null,
+      items: [{ href: "/admin/dashboard", label: "운영", Icon: LayoutDashboard }],
+    });
+    sections.push({
+      label: "관리",
+      items: [
+        { href: "/admin/orgs", label: "법인", Icon: Building2 },
+        { href: "/admin/users", label: "사용자", Icon: Users2 },
+        { href: "/admin/candidates", label: "후보자", Icon: Users },
+        { href: "/admin/pricing", label: "단가", Icon: DollarSign },
+        { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
+        { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
+        { href: "/admin/locks", label: "잠금", Icon: Lock },
+      ],
+    });
+  }
+  return sections;
+}
 
 export function NavBar({
   userName,
@@ -51,7 +111,7 @@ export function NavBar({
 
   return (
     <header className="sticky top-0 z-40 bg-card/85 backdrop-blur border-b border-border-default">
-      <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 shrink-0">
           <Link
             href="/"
@@ -72,47 +132,244 @@ export function NavBar({
         </div>
 
         {userName ? (
-          <div className="flex items-center gap-1.5">
-            {canManageOrg && (
-              <Dropdown
-                label="법인"
-                Icon={Building2}
-                items={[
-                  { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
-                  { href: "/org/members", label: "멤버", Icon: Users },
-                  { href: "/org/smtp", label: "메일 서버", Icon: Mail },
-                ]}
-              />
-            )}
-            {isSystemAdmin && (
-              <>
-                <NavLink
-                  href="/admin/dashboard"
-                  label="운영"
-                  Icon={LayoutDashboard}
-                />
+          <>
+            {/* 데스크톱 (≥ sm): 기존 가로 메뉴 */}
+            <div className="hidden sm:flex items-center gap-1.5">
+              {canManageOrg && (
                 <Dropdown
-                  label="관리"
-                  Icon={Shield}
+                  label="법인"
+                  Icon={Building2}
                   items={[
-                    { href: "/admin/orgs", label: "법인", Icon: Building2 },
-                    { href: "/admin/users", label: "사용자", Icon: Users2 },
-                    { href: "/admin/candidates", label: "후보자", Icon: Users },
-                    { href: "/admin/pricing", label: "단가", Icon: DollarSign },
-                    { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
-                    { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
-                    { href: "/admin/locks", label: "잠금", Icon: Lock },
+                    { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
+                    { href: "/org/members", label: "멤버", Icon: Users },
+                    { href: "/org/smtp", label: "메일 서버", Icon: Mail },
                   ]}
                 />
-              </>
-            )}
-            <NotificationBell />
-            <ProfilePill userName={userName} isAdmin={isAdmin} />
-            <LogoutButton />
-          </div>
+              )}
+              {isSystemAdmin && (
+                <>
+                  <NavLink
+                    href="/admin/dashboard"
+                    label="운영"
+                    Icon={LayoutDashboard}
+                  />
+                  <Dropdown
+                    label="관리"
+                    Icon={Shield}
+                    items={[
+                      { href: "/admin/orgs", label: "법인", Icon: Building2 },
+                      { href: "/admin/users", label: "사용자", Icon: Users2 },
+                      { href: "/admin/candidates", label: "후보자", Icon: Users },
+                      { href: "/admin/pricing", label: "단가", Icon: DollarSign },
+                      { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
+                      { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
+                      { href: "/admin/locks", label: "잠금", Icon: Lock },
+                    ]}
+                  />
+                </>
+              )}
+              <NotificationBell />
+              <ProfilePill userName={userName} isAdmin={isAdmin} />
+              <LogoutButton />
+            </div>
+
+            {/* 모바일 (< sm): 알림벨 + 햄버거 */}
+            <div className="flex sm:hidden items-center gap-1">
+              <NotificationBell />
+              <MobileMenu
+                userName={userName}
+                isAdmin={isAdmin}
+                sections={buildSections(role)}
+                currentPath={pathname}
+              />
+            </div>
+          </>
         ) : null}
       </div>
     </header>
+  );
+}
+
+function MobileMenu({
+  userName,
+  isAdmin,
+  sections,
+  currentPath,
+}: {
+  userName: string;
+  isAdmin: boolean;
+  sections: NavSection[];
+  currentPath: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // 포털 대상(document.body)은 클라이언트에서만 — SSR 가드
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // 라우트 변경 시 자동 닫기 (Link 클릭 후)
+  useEffect(() => {
+    setOpen(false);
+  }, [currentPath]);
+
+  // 패널 열렸을 때: body 스크롤 잠금 + Esc 닫기 + 초기 포커스 이동 + 간단 포커스 트랩
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    // 패널 내 첫 포커스 가능한 요소로 포커스 이동 (F-1)
+    const focusables = () =>
+      Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) ?? []
+      );
+    // 다음 프레임에 포커스 — 포털 마운트 직후
+    const t = setTimeout(() => focusables()[0]?.focus(), 0);
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      // Tab 트랩 — 패널 경계에서 순환
+      if (e.key === "Tab") {
+        const els = focusables();
+        if (els.length === 0) return;
+        const first = els[0];
+        const last = els[els.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      clearTimeout(t);
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const initial = userName.trim().charAt(0).toUpperCase() || "?";
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="메뉴 열기"
+        aria-expanded={open}
+        className="flex items-center justify-center w-9 h-9 rounded-lg text-ink-soft hover:text-ink hover:bg-surface-alt transition-colors"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {open && mounted &&
+        createPortal(
+        <div className="fixed inset-0 z-[100] sm:hidden">
+          {/* 배경 오버레이 */}
+          <div
+            className="absolute inset-0 bg-ink/40"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          {/* 슬라이드 패널 */}
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="메뉴"
+            className="absolute right-0 top-0 h-full w-[82%] max-w-[320px] bg-card shadow-xl flex flex-col pb-[env(safe-area-inset-bottom)]"
+          >
+            <div className="flex items-center justify-between h-14 px-4 border-b border-border-default">
+              <span className="font-semibold text-ink tracking-tight">메뉴</span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="메뉴 닫기"
+                className="flex items-center justify-center w-9 h-9 rounded-lg text-ink-soft hover:text-ink hover:bg-surface-alt transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 프로필 */}
+            <Link
+              href="/account"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-3.5 border-b border-border-default hover:bg-surface-alt transition-colors"
+            >
+              <span className="w-9 h-9 rounded-full bg-primary-soft text-primary-deep flex items-center justify-center text-sm font-bold shrink-0">
+                {initial}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-ink truncate">
+                  {userName}
+                </span>
+                <span className="block text-xs text-ink-muted">계정 설정</span>
+              </span>
+              {isAdmin && (
+                <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-ink text-surface tracking-wide shrink-0">
+                  <ShieldCheck className="w-3 h-3" />
+                  ADMIN
+                </span>
+              )}
+            </Link>
+
+            {/* 메뉴 항목 */}
+            <nav className="flex-1 overflow-y-auto py-2">
+              {sections.map((section, i) => (
+                <div key={i} className="py-1">
+                  {section.label && (
+                    <div className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                      {section.label}
+                    </div>
+                  )}
+                  {section.items.map((it) => {
+                    const active =
+                      it.href === "/"
+                        ? currentPath === "/"
+                        : currentPath.startsWith(it.href);
+                    return (
+                      <Link
+                        key={it.href}
+                        href={it.href}
+                        onClick={() => setOpen(false)}
+                        className={
+                          "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors " +
+                          (active
+                            ? "text-primary font-semibold bg-primary-soft/50"
+                            : "text-ink-soft hover:bg-surface-alt hover:text-ink")
+                        }
+                      >
+                        <it.Icon className="w-4 h-4 shrink-0" />
+                        <span>{it.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
+
+            {/* 로그아웃 */}
+            <div className="p-4 border-t border-border-default">
+              <LogoutButton variant="full" />
+            </div>
+          </div>
+        </div>,
+          document.body
+        )}
+    </>
   );
 }
 

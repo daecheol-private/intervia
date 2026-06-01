@@ -64,7 +64,7 @@ export default function ComparePage() {
 
   if (!all)
     return (
-      <main className="max-w-6xl mx-auto px-6 py-8 text-slate-500">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
         불러오는 중...
       </main>
     );
@@ -73,7 +73,7 @@ export default function ComparePage() {
 
   if (selected.length === 0) {
     return (
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <Link
           href={`/jobs/${params.id}`}
           className="text-xs text-slate-500 hover:underline"
@@ -88,7 +88,7 @@ export default function ComparePage() {
   }
 
   return (
-    <main className="max-w-7xl mx-auto px-6 py-8">
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <Link
         href={`/jobs/${params.id}`}
         className="text-xs text-slate-500 hover:underline"

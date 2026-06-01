@@ -116,7 +116,7 @@ export default function AdminCandidatesPage() {
   };
 
   return (
-    <main className="max-w-6xl mx-auto w-full px-6 py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {stepUpModal}
       <div className="mb-6">
         <Link href="/admin/dashboard" className="text-xs text-slate-500 hover:underline">
@@ -167,7 +167,7 @@ export default function AdminCandidatesPage() {
           {q ? "결과 없음" : "검색어를 입력하세요."}
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-600 text-xs">
               <tr>

@@ -339,7 +339,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const decidedCount = Number(candAgg?.decided ?? 0);
 
   return (
-    <main className="max-w-6xl mx-auto w-full px-6 py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {/* 환영 헤더 */}
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-ink">
@@ -486,7 +486,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           </div>
           <Link
             href="/jobs/new"
-            className="text-xs px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface font-medium transition-colors"
+            className="hidden sm:inline-block text-xs px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface font-medium transition-colors"
           >
             + 새 공고
           </Link>

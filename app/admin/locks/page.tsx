@@ -62,7 +62,7 @@ export default function AdminLocksPage() {
           </div>
         )}
 
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
           {loading ? (
             <div className="p-6 text-sm text-slate-400">불러오는 중...</div>
           ) : rows.length === 0 ? (

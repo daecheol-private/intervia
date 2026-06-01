@@ -50,7 +50,7 @@ export default function TokensPage() {
 
   if (err)
     return (
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="rounded-2xl border border-border-default bg-card p-8 text-center">
           <div className="text-3xl mb-3">🔒</div>
           <h1 className="text-base font-semibold text-ink mb-2">
@@ -68,13 +68,13 @@ export default function TokensPage() {
     );
   if (!data)
     return (
-      <main className="max-w-4xl mx-auto px-6 py-8 text-slate-400 text-sm">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-400 text-sm">
         불러오는 중...
       </main>
     );
 
   return (
-    <main className="max-w-4xl mx-auto w-full px-6 py-8">
+    <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
         <Link href="/" className="text-xs text-slate-500 hover:underline">
           ← 대시보드
@@ -207,7 +207,8 @@ export default function TokensPage() {
         <div className="px-5 py-3 border-b border-slate-100 text-sm font-semibold">
           최근 사용 내역
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[520px]">
           <thead className="bg-slate-50 text-slate-600 text-xs">
             <tr>
               <th className="text-left px-4 py-2 font-medium">시각</th>
@@ -249,6 +250,7 @@ export default function TokensPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </main>
   );

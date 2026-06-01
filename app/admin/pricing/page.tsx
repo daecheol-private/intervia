@@ -54,7 +54,7 @@ export default function PricingPage() {
 
   if (!pricing || !draft)
     return (
-      <main className="max-w-3xl mx-auto px-6 py-8 text-slate-400 text-sm">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-400 text-sm">
         불러오는 중...
       </main>
     );
@@ -65,7 +65,7 @@ export default function PricingPage() {
     draft.interview !== pricing.interview;
 
   return (
-    <main className="max-w-3xl mx-auto w-full px-6 py-8">
+    <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
         <Link href="/" className="text-xs text-slate-500 hover:underline">
           ← 대시보드

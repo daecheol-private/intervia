@@ -523,7 +523,7 @@ export default function JobDetailPage() {
 
   if (locked) {
     return (
-      <main className="max-w-5xl mx-auto w-full px-6 py-8">
+      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         <Link
           href="/"
           className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
@@ -545,7 +545,7 @@ export default function JobDetailPage() {
   if (!job) {
     if (loadError === "not_found")
       return (
-        <main className="max-w-5xl mx-auto px-6 py-8">
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
             <div className="text-slate-700 font-medium">삭제된 공고입니다.</div>
             <div className="mt-1 text-sm text-slate-500">
@@ -562,7 +562,7 @@ export default function JobDetailPage() {
       );
     if (loadError === "failed")
       return (
-        <main className="max-w-5xl mx-auto px-6 py-8">
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-center">
             <div className="text-rose-700 font-medium">불러오기에 실패했습니다.</div>
             <div className="mt-1 text-sm text-rose-600">
@@ -581,7 +581,7 @@ export default function JobDetailPage() {
         </main>
       );
     return (
-      <main className="max-w-5xl mx-auto px-6 py-8 text-slate-500">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
         불러오는 중...
       </main>
     );
@@ -1070,7 +1070,7 @@ export default function JobDetailPage() {
   };
 
   return (
-    <main className="max-w-5xl mx-auto w-full px-6 py-8">
+    <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {/* 만료 결정 모달 — closesAt 지났는데 아직 active 면 노출. 사용자가 닫을 수 있음. */}
       {isExpired && !expiredModalDismissed && (
         <JobExpiredDecisionModal
@@ -1120,10 +1120,10 @@ export default function JobDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 mt-3 shadow-sm">
-        <div className="flex justify-between items-start gap-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 mt-3 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-slate-900 leading-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight break-keep">
               {job.title}
             </h1>
             <div className="flex flex-wrap gap-1.5 mt-3">
@@ -1137,7 +1137,7 @@ export default function JobDetailPage() {
               등록 {formatKstDateTime(job.createdAt)}
             </div>
           </div>
-          <div className="flex gap-2 shrink-0 items-center">
+          <div className="flex gap-2 flex-wrap sm:shrink-0 items-center">
             <ShareButton jobId={Number(jobId)} jobTitle={job.title} />
             {(() => {
               const waitingCount = candidatesList.filter(
@@ -1215,6 +1215,8 @@ export default function JobDetailPage() {
         }}
       />
 
+      {/* 데스크톱: 동의 게이트 + 업로드 영역 (모바일 완전 숨김 — 업로드는 PC 전용) */}
+      <div className="hidden sm:block">
       {/* 지원자 동의 확인 게이트 — 업로드 전 필수 (PIPA §15·§26·§28의8·§37의2)
          체크 시 모달로 명시 재확인을 요구해 "무심코 체크" 차단. */}
       <ApplicantConsentGate
@@ -1373,6 +1375,8 @@ export default function JobDetailPage() {
           </div>
         )}
       </div>
+      </div>
+      {/* /데스크톱 업로드 영역 */}
 
       {/* Tabs */}
       <div ref={listTopRef} className="flex gap-1 mt-8 border-b border-slate-200 scroll-mt-4">
@@ -1443,7 +1447,7 @@ export default function JobDetailPage() {
         </select>
         <a
           href={`/api/jobs/${jobId}/candidates/export`}
-          className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm ml-auto"
+          className="hidden sm:block px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm ml-auto"
           title="후보자 데이터 CSV 다운로드"
         >
           📥 CSV
@@ -1498,7 +1502,7 @@ export default function JobDetailPage() {
                     </div>
                     <Link
                       href={`/candidates/${c.id}`}
-                      className={`card-hover bg-white border-2 border-amber-300/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
+                      className={`card-hover bg-white border-2 border-amber-300/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-2 sm:gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1605,7 +1609,7 @@ export default function JobDetailPage() {
                     </div>
                     <Link
                       href={`/candidates/${c.id}`}
-                      className={`card-hover bg-card border-2 border-accent/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
+                      className={`card-hover bg-card border-2 border-accent/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-2 sm:gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1735,7 +1739,7 @@ export default function JobDetailPage() {
                       </div>
                       <Link
                         href={`/candidates/${c.id}`}
-                        className={`card-hover bg-white border border-slate-200 rounded-xl p-4 pl-10 flex justify-between items-start gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
+                        className={`card-hover bg-white border border-slate-200 rounded-xl p-4 pl-10 flex justify-between items-start gap-2 sm:gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
                       >
                         <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -2343,7 +2347,7 @@ function CandidateScores({
   const interview = interviewBadge(c.latestInterviewStatus);
 
   return (
-    <div className="shrink-0 grid grid-cols-3 gap-3 text-center min-w-[200px]">
+    <div className="shrink-0 grid grid-cols-3 gap-1.5 sm:gap-3 text-center min-w-[108px] sm:min-w-[200px]">
       <ScoreBlock label="서류" score={c.screeningScore} accent="slate" />
       <ScoreBlock
         label="면접"
@@ -2379,7 +2383,7 @@ function ScoreBlock({
       </span>
       {score != null ? (
         <span
-          className={`text-xl font-bold leading-tight ${
+          className={`text-base sm:text-xl font-bold leading-tight ${
             isBlue ? "text-primary" : "text-slate-900"
           }`}
         >
@@ -3513,8 +3517,8 @@ function FunnelPanel({
         </div>
       </div>
 
-      {/* 파이프라인 — 1줄, 컨테이너 안에 모두 보이게. 모든 셀 동일 폭(flex-1). */}
-      <div className="flex items-stretch gap-0.5 pb-2">
+      {/* 파이프라인 — 데스크톱은 1줄 꽉 채움(flex-1), 모바일은 가로 스크롤(셀 최소폭 유지). */}
+      <div className="flex items-stretch gap-0.5 pb-2 overflow-x-auto sm:overflow-visible -mx-1 px-1">
         {pipelineCells.map((cell, i) => {
           const n = data.stages[cell.stage] ?? 0;
           const next = pipelineCells[i + 1];
@@ -3522,7 +3526,7 @@ function FunnelPanel({
           return (
             <div
               key={cell.stage}
-              className="flex items-center gap-0.5 flex-1 min-w-0"
+              className="flex items-center gap-0.5 shrink-0 sm:shrink sm:flex-1 min-w-[62px] sm:min-w-0"
             >
               <button
                 type="button"

@@ -51,7 +51,7 @@ function OrgMembersInner() {
   };
 
   return (
-    <main className="max-w-5xl mx-auto w-full px-6 py-8">
+    <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
         <Link href="/" className="text-xs text-slate-500 hover:underline">
           ← 대시보드
@@ -178,7 +178,86 @@ function MembersTab() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      {/* 모바일: 카드 리스트 (테이블 셀 폭 부족으로 이름이 세로로 깨지는 문제 해결) */}
+      <div className="sm:hidden space-y-3">
+        {loading && (
+          <div className="text-slate-400 text-sm py-6 text-center">불러오는 중...</div>
+        )}
+        {!loading && rows.length === 0 && (
+          <div className="text-slate-400 text-sm py-6 text-center">멤버가 없습니다.</div>
+        )}
+        {rows.map((m) => (
+          <div
+            key={m.id}
+            className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-slate-900 break-words">
+                  {m.name && m.name.trim() ? (
+                    m.name
+                  ) : (
+                    <span className="text-slate-400 italic font-normal">
+                      이름 미등록
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-slate-500 break-all mt-0.5">
+                  {m.email}
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <RoleBadge role={m.role} />
+                <StatusBadge status={m.status} />
+              </div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
+              {m.role === "member" && m.status === "active" && (
+                <button
+                  onClick={() => update(m.id, { role: "org_admin" })}
+                  disabled={busyId === m.id}
+                  className={btnPrimary}
+                >
+                  관리자 부여
+                </button>
+              )}
+              {m.role === "org_admin" && (
+                <button
+                  onClick={() => update(m.id, { role: "member" })}
+                  disabled={busyId === m.id}
+                  className={btnSecondary}
+                >
+                  일반으로
+                </button>
+              )}
+              {m.status === "active" && m.role !== "system_admin" && (
+                <button
+                  onClick={() => {
+                    if (confirm(`${m.name} 님을 비활성화합니다.`))
+                      void update(m.id, { status: "disabled" });
+                  }}
+                  disabled={busyId === m.id}
+                  className={btnDanger}
+                >
+                  비활성화
+                </button>
+              )}
+              {m.status === "disabled" && (
+                <button
+                  onClick={() => update(m.id, { status: "active" })}
+                  disabled={busyId === m.id}
+                  className={btnSecondary}
+                >
+                  활성화
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 데스크톱: 전체 테이블 */}
+      <div className="hidden sm:block bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-600 text-xs">
             <tr>
@@ -355,18 +434,18 @@ function RequestsTab({ onChanged }: { onChanged: () => void }) {
           <div className="p-6 text-sm text-slate-400">요청이 없습니다.</div>
         )}
         {rows.map((r) => (
-          <div key={r.id} className="p-4 flex items-center justify-between">
-            <div>
-              <div className="font-medium text-slate-900">
+          <div key={r.id} className="p-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-medium text-slate-900 break-words">
                 {r.userName}{" "}
-                <span className="text-xs text-slate-500">{r.userEmail}</span>
+                <span className="text-xs text-slate-500 break-all">{r.userEmail}</span>
               </div>
               <div className="text-xs text-slate-500 mt-1">
                 {r.orgName} · {formatLocalDateTime(r.createdAt, { format: { second: "2-digit" } })}
               </div>
             </div>
             {r.status === "pending" ? (
-              <div className="flex gap-2">
+              <div className="flex gap-2 shrink-0">
                 <button
                   onClick={() => decide(r.id, "approve")}
                   disabled={busyId === r.id}
@@ -420,9 +499,10 @@ function StatusBadge({ status }: { status: Member["status"] }) {
   return <span className={`text-xs px-2 py-0.5 rounded ${cls}`}>{label}</span>;
 }
 
+// max-sm:* — 모바일(<640px) 터치 타깃 ~40px 확보. 데스크톱 테이블 밀도는 유지.
 const btnPrimary =
-  "px-2.5 py-1 text-xs bg-primary hover:bg-primary-deep text-white rounded disabled:opacity-50";
+  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3.5 text-xs bg-primary hover:bg-primary-deep text-white rounded disabled:opacity-50";
 const btnSecondary =
-  "px-2.5 py-1 text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded disabled:opacity-50";
+  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3.5 text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded disabled:opacity-50";
 const btnDanger =
-  "px-2.5 py-1 text-xs bg-danger-soft border border-danger/30 hover:bg-danger-soft/70 text-danger rounded disabled:opacity-50 transition-colors";
+  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3.5 text-xs bg-danger-soft border border-danger/30 hover:bg-danger-soft/70 text-danger rounded disabled:opacity-50 transition-colors";

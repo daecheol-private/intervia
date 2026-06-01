@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 
 type SmtpConfig = {
   orgId: number;
@@ -113,7 +114,7 @@ export default function OrgSmtpPage() {
   const isOutlook = /outlook|office365|hotmail|live/i.test(host);
 
   return (
-    <main className="max-w-3xl mx-auto w-full px-6 py-8">
+    <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
         <Link href="/" className="text-xs text-slate-500 hover:underline">
           ← 대시보드
@@ -125,6 +126,15 @@ export default function OrgSmtpPage() {
         </p>
       </div>
 
+      {/* 모바일: 메일 서버 설정은 데스크톱 전용 — 안내만 노출 */}
+      <div className="sm:hidden">
+        <DesktopOnlyNotice
+          title="메일 서버 설정은 PC에서"
+          description="SMTP 서버 등록·검증은 PC(데스크톱)에서 진행해 주세요."
+        />
+      </div>
+
+      <div className="hidden sm:block">
       {!loaded ? (
         <div className="text-sm text-slate-500">불러오는 중...</div>
       ) : (
@@ -274,6 +284,7 @@ export default function OrgSmtpPage() {
           </div>
         </div>
       )}
+      </div>
 
     </main>
   );

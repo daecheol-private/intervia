@@ -3,6 +3,7 @@
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 
 type Form = {
   title: string;
@@ -78,19 +79,30 @@ export default function EditJobPage() {
 
   if (!form)
     return (
-      <main className="max-w-3xl mx-auto w-full px-6 py-8 text-slate-500">
+      <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
         불러오는 중...
       </main>
     );
 
   return (
-    <main className="max-w-3xl mx-auto w-full px-6 py-8">
+    <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link
         href={`/jobs/${id}`}
         className="text-sm text-slate-500 hover:text-slate-900"
       >
         ← 공고 상세
       </Link>
+
+      {/* 모바일: 공고 수정은 데스크톱 전용 — 안내만 노출 */}
+      <div className="sm:hidden mt-4">
+        <DesktopOnlyNotice
+          title="공고 수정은 PC에서"
+          description="공고 수정은 PC(데스크톱)에서 진행해 주세요. 모바일에서는 공고 현황 확인과 후보자 단계·합불 변경을 할 수 있습니다."
+        />
+      </div>
+
+      {/* 데스크톱: 공고 수정 폼 (모바일 숨김) */}
+      <div className="hidden sm:block">
       <h1 className="text-2xl font-bold mt-3 mb-6">공고 수정</h1>
 
       <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
@@ -280,6 +292,7 @@ export default function EditJobPage() {
         >
           {saving ? "저장 중..." : "저장"}
         </button>
+      </div>
       </div>
     </main>
   );
