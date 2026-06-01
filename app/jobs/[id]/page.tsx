@@ -510,18 +510,6 @@ export default function JobDetailPage() {
     if (res.ok) router.push("/");
   };
 
-  const retryScreening = async (candidateId: number) => {
-    const res = await fetch(`/api/candidates/${candidateId}/screen`, {
-      method: "POST",
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      notify(text, { tone: "danger", title: "재시도 요청 실패" });
-      return;
-    }
-    void loadCandidates();
-  };
-
   if (locked) {
     return (
       <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
@@ -761,11 +749,13 @@ export default function JobDetailPage() {
   const bulkScreen = async (targetIds: number[]) => {
     if (targetIds.length === 0) return;
     const targetSet = new Set(targetIds);
-    // 재평가 대상: 아직 AI 서류평가가 안 끝났거나 마지막 평가가 실패한 후보
+    // 신규 평가 대상: 아직 한 번도 평가 시도가 없는 후보 (실패/완료/대기는 '재평가' 가 담당)
     const targets = filtered.filter(
       (c) =>
         targetSet.has(c.id) &&
-        (c.screeningReport == null || c.lastJobStatus === "failed") &&
+        c.screeningReport == null &&
+        c.lastJobStatus !== "failed" &&
+        c.lastJobStatus !== "paused" &&
         c.queueStatus !== "queued" &&
         c.queueStatus !== "processing"
     );
@@ -803,6 +793,57 @@ export default function JobDetailPage() {
     notify(
       `큐 등록: ${data.enqueued}건${data.skipped > 0 ? ` (스킵 ${data.skipped}건)` : ""}${reasonSummary}`,
       { tone: "success", title: "AI 검토 요청 완료" }
+    );
+    setSelected(new Set());
+    void loadCandidates();
+  };
+
+  // 재평가 — 이미 평가가 끝난 후보를 다시 평가 (공고/평가가이드 수정 후 또는 재확인).
+  // 기존 결과는 새 평가가 끝나면 대체됨. 과금은 평가 성공 시점에 후보당 1건(오류면 과금 없음).
+  const bulkRescreen = async (targetIds: number[]) => {
+    if (targetIds.length === 0) return;
+    const targetSet = new Set(targetIds);
+    // 대상: 평가 완료(재평가) 또는 재시도 대기/백오프(즉시 재시도). 처리중·충전대기는 제외.
+    const targets = filtered.filter(
+      (c) =>
+        targetSet.has(c.id) &&
+        c.queueStatus !== "processing" &&
+        c.lastJobStatus !== "paused" &&
+        (c.screeningReport != null ||
+          c.lastJobStatus === "failed" ||
+          (c.queueStatus === "queued" && c.queueAttempts >= 1))
+    );
+    if (targets.length === 0) {
+      notify("선택된 후보자 중 재평가 가능한 후보가 없습니다.", { tone: "warn" });
+      return;
+    }
+    if (
+      !(await confirmDialog(
+        `${targets.length}명을 다시 AI 서류평가합니다.\n완료된 평가는 새 결과로 대체되고, 재시도 대기 중인 건은 즉시 다시 시도합니다.\n평가가 정상 완료되면 후보당 토큰이 차감됩니다 (오류 시 과금 없음).`,
+        { title: "재평가", confirmText: "재평가" }
+      ))
+    )
+      return;
+    setBulkBusy(true);
+    const res = await fetch("/api/candidates/bulk-screen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: targets.map((c) => c.id) }),
+    });
+    setBulkBusy(false);
+    if (!res.ok) {
+      notify(await res.text(), { tone: "danger", title: "재평가 요청 실패" });
+      return;
+    }
+    const data = (await res.json()) as {
+      enqueued: number;
+      kicked?: number;
+      skipped: number;
+    };
+    const total = data.enqueued + (data.kicked ?? 0);
+    notify(
+      `재평가 등록: ${total}건${data.skipped > 0 ? ` (스킵 ${data.skipped}건)` : ""}`,
+      { tone: "success", title: "재평가 요청 완료" }
     );
     setSelected(new Set());
     void loadCandidates();
@@ -1042,11 +1083,23 @@ export default function JobDetailPage() {
       selCands.length > 0 && inProgress.length === selCands.length;
     const stages = new Set(inProgress.map((c) => c.stage));
     const onlyStage = allInProgress && stages.size === 1 ? [...stages][0] : null;
+    // 신규 평가 대상 — 한 번도 시도 안 한 후보만. (실패/완료/대기는 '재평가' 가 담당)
     const screenable = selCands.filter(
       (c) =>
-        (c.screeningReport == null || c.lastJobStatus === "failed") &&
+        c.screeningReport == null &&
+        c.lastJobStatus !== "failed" &&
+        c.lastJobStatus !== "paused" &&
         c.queueStatus !== "queued" &&
         c.queueStatus !== "processing"
+    );
+    // 재평가 대상 — 완료(재평가) + 실패(재시도) + 재시도 대기/백오프(즉시 재시도). 처리중·충전대기 제외.
+    const rescreenable = selCands.filter(
+      (c) =>
+        c.queueStatus !== "processing" &&
+        c.lastJobStatus !== "paused" &&
+        (c.screeningReport != null ||
+          c.lastJobStatus === "failed" ||
+          (c.queueStatus === "queued" && c.queueAttempts >= 1))
     );
     return (
       <div className="flex items-center gap-2 ml-auto flex-wrap">
@@ -1064,6 +1117,16 @@ export default function JobDetailPage() {
             title="평가 안 됐거나 실패한 후보를 다시 큐에 넣습니다"
           >
             {bulkBusy ? "처리 중..." : `AI 검토 요청 (${screenable.length})`}
+          </button>
+        )}
+        {rescreenable.length > 0 && (
+          <button
+            onClick={() => void bulkRescreen(rescreenable.map((c) => c.id))}
+            disabled={bulkBusy}
+            className="px-2.5 py-1.5 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+            title="이미 평가된 후보를 다시 평가합니다 (공고/평가 가이드 수정 후 등)"
+          >
+            {bulkBusy ? "처리 중..." : `🔄 재평가 (${rescreenable.length})`}
           </button>
         )}
         {(onlyStage === "screened" || onlyStage === "ai_pending") && (
@@ -1648,7 +1711,7 @@ export default function JobDetailPage() {
                           {formatKstDateTime(c.createdAt)} 업로드
                         </div>
                       </div>
-                      <CandidateScores c={c} onRetry={retryScreening} />
+                      <CandidateScores c={c} />
                     </Link>
                   </li>
                 ))}
@@ -1757,7 +1820,7 @@ export default function JobDetailPage() {
                           {formatKstDateTime(c.createdAt)} 업로드
                         </div>
                       </div>
-                      <CandidateScores c={c} onRetry={retryScreening} />
+                      <CandidateScores c={c} />
                     </Link>
                   </li>
                 ))}
@@ -1892,7 +1955,7 @@ export default function JobDetailPage() {
                           {formatKstDateTime(c.createdAt)} 업로드
                         </div>
                       </div>
-                      <CandidateScores c={c} onRetry={retryScreening} />
+                      <CandidateScores c={c} />
                       </Link>
                     </li>
                   ))}
@@ -2343,13 +2406,7 @@ function RecBadge({ rec }: { rec: string }) {
   );
 }
 
-function CandidateScores({
-  c,
-  onRetry,
-}: {
-  c: Candidate;
-  onRetry: (cid: number) => void | Promise<void>;
-}) {
+function CandidateScores({ c }: { c: Candidate }) {
   // 파싱 전(분석 중) — 활성 큐인데 아직 텍스트 추출·마스킹이 안 끝난 상태.
   // 업로드 직후 껍데기 카드가 이 상태로 뜬다 (이름은 파일명 기반).
   if (
@@ -2426,16 +2483,9 @@ function CandidateScores({
             {shortenError(c.lastError)}
           </span>
         )}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            void onRetry(c.id);
-          }}
-          className="text-[11px] px-2 py-0.5 rounded border border-danger/40 text-danger hover:bg-danger-soft font-medium transition-colors"
-        >
-          🔄 재시도
-        </button>
+        <span className="text-[10px] text-slate-400">
+          체크 후 재평가로 다시 시도
+        </span>
       </div>
     );
   }

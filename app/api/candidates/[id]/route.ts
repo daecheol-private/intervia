@@ -87,6 +87,14 @@ export async function GET(
   else if (lastJob?.status === "failed") screeningPhase = "failed";
   else screeningPhase = "not_started";
 
+  // 재평가 진행 중 — 기존 리포트가 있는데 새 평가 job 이 큐/처리중. (done 으로 가려지므로 별도 플래그)
+  const rescreening =
+    !!candidate.screeningReport &&
+    (lastJob?.status === "queued" || lastJob?.status === "processing");
+  // 워커가 실제 점유 중(processing) — 이때만 재평가 버튼을 숨긴다(중복 실행 방지).
+  // queued(재시도 대기 포함)는 "지금 재시도" 가능하므로 버튼 노출.
+  const screeningActive = lastJob?.status === "processing";
+
   // 현재 사용자의 즐겨찾기 여부
   const [fav] = await db
     .select({ userId: userCandidateFavorites.userId })
@@ -116,6 +124,8 @@ export async function GET(
     sessions,
     schedules,
     screeningPhase,
+    rescreening,
+    screeningActive,
   });
 }
 

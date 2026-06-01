@@ -4,7 +4,6 @@ import { eq, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
-import { chargeFeature } from "@/lib/tokens";
 import { enqueueScreening } from "@/lib/screening-queue";
 import { triggerWorker } from "@/lib/worker-trigger";
 import { rateLimit } from "@/lib/rate-limit";
@@ -17,9 +16,11 @@ import {
 export const runtime = "nodejs";
 
 /**
- * 후보자 서류 평가 큐 등록.
+ * 후보자 서류 평가 큐 등록 (신규 평가 + 재평가 공용).
  * - 큐에 enqueue → 워커가 비동기로 처리 (즉시 worker 트리거 + cron 안전망)
- * - resume_upload 토큰 차감 (실패 시 큐의 final fail 단계에서 자동환불)
+ * - 과금은 워커가 "평가 성공" 시점에 함 (chargeScreeningSuccess). 여기선 차감 안 함.
+ * - 이미 평가 완료된 후보도 허용 — 공고/평가가이드 수정 후 또는 재확인용 재평가.
+ *   기존 리포트는 새 평가가 성공하면 덮어쓴다(진행 중엔 기존 결과 유지).
  */
 export async function POST(
   req: Request,
@@ -82,36 +83,43 @@ export async function POST(
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);
 
-  // 상태 체크: 리포트 없음 + 큐 진행 중 아님일 때만 트리거 (실패 후 재시도 OK).
-  if (candidate.screeningReport) {
-    return new Response("이미 평가 완료된 후보입니다.", { status: 409 });
-  }
   const [lastJob] = await db
-    .select({ status: screeningJobs.status })
+    .select({ id: screeningJobs.id, status: screeningJobs.status })
     .from(screeningJobs)
     .where(eq(screeningJobs.candidateId, cid))
     .orderBy(desc(screeningJobs.id))
     .limit(1);
-  if (lastJob?.status === "queued" || lastJob?.status === "processing") {
-    return new Response("이미 진행 중인 후보입니다.", { status: 409 });
+
+  // 워커가 실제 점유 중(processing)이면 중복 실행 금지.
+  if (lastJob?.status === "processing") {
+    return new Response("평가가 실행 중입니다. 잠시 후 다시 시도해 주세요.", {
+      status: 409,
+    });
   }
+
+  // 이미 queued(재시도 대기/백오프 포함)면 새 job 을 만들지 않고 백오프만 해제 후 즉시 워커를
+  // 깨운다 — "지금 다시 시도". (로컬은 cron 이 없어 백오프가 안 풀리므로 이 수동 경로가 중요.)
+  if (lastJob?.status === "queued") {
+    await db
+      .update(screeningJobs)
+      .set({ notBefore: null })
+      .where(eq(screeningJobs.id, lastJob.id));
+    triggerWorker(req);
+    logAudit(req, {
+      actor: me!,
+      action: "screen.retry_now",
+      resourceType: "candidate",
+      resourceId: cid,
+      orgId: candidate.orgId,
+    });
+    return Response.json({ ok: true, status: "retry_kicked", jobId: lastJob.id });
+  }
+
   // NOTE: resumeMaskedText 가 비어 있어도 차단하지 않는다 — 파싱은 워커가
   // 평가 직전에 수행(ensureParsed)하므로, 미파싱/파싱실패 후보의 재시도도 여기서 enqueue.
   // 진짜 추출 불가(스캔 PDF)면 워커가 실패 사유를 job.lastError 로 남긴다.
 
-  // 토큰 차감 (멱등). 실패 시 큐 최종 실패 단계에서 자동환불.
-  if (candidate.orgId) {
-    await chargeFeature({
-      orgId: candidate.orgId,
-      feature: "resume_upload",
-      refType: "candidate",
-      refId: candidate.id,
-      userId: me!.id,
-      memo: candidate.name,
-    });
-  }
-
-  // 큐 등록 — 실제 LLM 호출은 워커가 수행
+  // 큐 등록 — 실제 LLM 호출은 워커가 수행. 과금도 워커가 성공 시점에 함.
   const result = await enqueueScreening(cid, me!.id);
 
   // 워커 즉시 깨우기 (fire-and-forget)

@@ -10,6 +10,7 @@ import {
 } from "@/lib/utils";
 import { STAGE_LABELS as STAGE_LABELS_SHARED, STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
+import { confirmDialog, notify } from "@/app/components/Dialog";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 
 type Candidate = {
@@ -199,6 +200,8 @@ export default function CandidateDetailPage() {
     sessions: Session[];
     schedules: Schedule[];
     screeningPhase: "not_started" | "in_queue" | "done" | "failed";
+    rescreening?: boolean;
+    screeningActive?: boolean;
   } | null>(null);
   const [loadError, setLoadError] = useState<"not_found" | "failed" | null>(null);
   const [showFullResume, setShowFullResume] = useState(false);
@@ -237,6 +240,14 @@ export default function CandidateDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // 평가/재평가가 진행 중(큐 대기 또는 처리중)이면 완료될 때까지 폴링.
+  useEffect(() => {
+    if (data?.screeningPhase !== "in_queue" && !data?.rescreening) return;
+    const t = setTimeout(() => void load(), 4000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.screeningPhase, data?.rescreening, data?.candidate]);
+
   const createLink = async () => {
     setCreating(true);
     const res = await fetch(`/api/candidates/${id}/interview-link`, {
@@ -250,7 +261,7 @@ export default function CandidateDetailPage() {
       const msg = ct.includes("application/json")
         ? ((await res.json().catch(() => ({}))).error ?? "발급 실패")
         : await res.text();
-      alert("발급 실패: " + msg);
+      notify(msg, { title: "발급 실패", tone: "danger" });
       return;
     }
     // 링크 생성 직후 후보자 이메일이 있으면 자동 발송 (UX 한 스텝 축소).
@@ -299,7 +310,14 @@ export default function CandidateDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm("후보자와 면접 기록을 모두 삭제합니다. 진행할까요?")) return;
+    if (
+      !(await confirmDialog("후보자와 면접 기록을 모두 삭제합니다. 진행할까요?", {
+        title: "후보자 삭제",
+        tone: "danger",
+        confirmText: "삭제",
+      }))
+    )
+      return;
     const res = await fetch(`/api/candidates/${id}`, { method: "DELETE" });
     if (res.ok) router.push(`/jobs/${data!.job.id}`);
   };
@@ -493,6 +511,9 @@ export default function CandidateDetailPage() {
           onChanged={() => void load()}
           showFullResume={showFullResume}
           setShowFullResume={setShowFullResume}
+          rescreening={!!data.rescreening}
+          screeningPhase={data.screeningPhase}
+          screeningActive={!!data.screeningActive}
         />
       </div>
 
@@ -625,17 +646,8 @@ export default function CandidateDetailPage() {
             AI 평가 진행 중...
           </div>
         ) : screeningPhase === "failed" ? (
-          <div className="space-y-3">
-            <div className="text-sm text-danger">
-              서류 평가 실패. 다시 시도하거나 이력서를 재업로드하세요.
-            </div>
-            <button
-              onClick={startScreening}
-              disabled={screening}
-              className="px-4 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm border border-slate-300 disabled:opacity-50"
-            >
-              {screening ? "재시도 중..." : "다시 시도"}
-            </button>
+          <div className="text-sm text-danger">
+            서류 평가 실패. 아래 🔄 재평가 버튼으로 다시 시도하거나 이력서를 재업로드하세요.
           </div>
         ) : candidate.screeningReport ? (
           <div className="space-y-4 text-sm">
@@ -1360,7 +1372,12 @@ function ScheduleBox({
 
   // 후보자가 counter 제시한(또는 HR 가 처음 제시한) 슬롯을 확정.
   const confirmSlot = async (slot: { start: string; end: string }) => {
-    if (!confirm(`${formatSlot(slot)} 으로 확정하시겠습니까?\n후보자와 면접관에게 확정 메일이 발송됩니다.`))
+    if (
+      !(await confirmDialog(
+        `${formatSlot(slot)} 으로 확정하시겠습니까?\n후보자와 면접관에게 확정 메일이 발송됩니다.`,
+        { title: "일정 확정", confirmText: "확정" }
+      ))
+    )
       return;
     setConfirming(slot.start);
     setConfirmErr(null);
@@ -2595,7 +2612,7 @@ function AppealsPanel({ candidateId }: { candidateId: number }) {
     );
     setBusy(null);
     if (!r.ok) {
-      alert(await r.text());
+      notify(await r.text(), { tone: "danger" });
       return;
     }
     void load();
@@ -2884,6 +2901,9 @@ function StagePanel({
   onChanged,
   showFullResume,
   setShowFullResume,
+  rescreening,
+  screeningPhase,
+  screeningActive,
 }: {
   candidate: Candidate;
   jobTitle: string;
@@ -2891,8 +2911,12 @@ function StagePanel({
   onChanged: () => void;
   showFullResume: boolean;
   setShowFullResume: (v: boolean) => void;
+  rescreening: boolean;
+  screeningPhase: "not_started" | "in_queue" | "done" | "failed";
+  screeningActive: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [rescreenBusy, setRescreenBusy] = useState(false);
   const [open, setOpen] = useState<
     null | "decide" | "stage" | "notify" | "schedule" | "schedule2"
   >(null);
@@ -3093,6 +3117,33 @@ function StagePanel({
     onChanged();
   };
 
+  // 재평가 — 공고/평가가이드 수정 후 또는 재확인용. 기존 결과는 새 평가가 끝나면 덮어쓴다.
+  // 과금은 평가가 성공 완료될 때 1건 차감(오류면 과금 안 됨).
+  const rescreen = async () => {
+    const overwriteNote = candidate.screeningReport
+      ? "기존 평가 결과는 새 결과로 대체됩니다.\n"
+      : "";
+    if (
+      !(await confirmDialog(
+        `이 후보자를 다시 AI 서류평가합니다.\n${overwriteNote}평가가 정상 완료되면 토큰이 차감됩니다 (오류 시 과금 없음).`,
+        { title: "재평가", confirmText: "재평가" }
+      ))
+    )
+      return;
+    setRescreenBusy(true);
+    setMsg(null);
+    const r = await fetch(`/api/candidates/${candidate.id}/screen`, {
+      method: "POST",
+    });
+    setRescreenBusy(false);
+    if (!r.ok) {
+      setMsg({ kind: "err", text: await r.text() });
+      return;
+    }
+    setMsg({ kind: "ok", text: "재평가를 시작했습니다. 잠시 후 결과가 갱신됩니다." });
+    onChanged();
+  };
+
   return (
     <>
       <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-visible text-sm">
@@ -3119,6 +3170,24 @@ function StagePanel({
             {showFullResume ? "마스킹 접기" : "마스킹 보기"}
           </button>
         )}
+        {/* 재평가 — 평가 완료/실패/재시도 대기 후보 모두 대상(공고·가이드 수정, 오류 복구, 재확인).
+            워커가 실제 처리중일 때만 버튼 숨기고 진행 표시. (not_started 는 위 평가 영역의 "AI 검토 요청" 사용) */}
+        {screeningPhase !== "not_started" &&
+          (screeningActive || rescreening ? (
+            <span className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 rounded-md border border-blue-200 bg-blue-50 text-blue-600 inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+              평가 진행 중...
+            </span>
+          ) : (
+            <button
+              onClick={() => void rescreen()}
+              disabled={rescreenBusy}
+              title="공고/평가 가이드 수정 후, 오류 복구, 또는 결과 재확인 시 다시 평가합니다"
+              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+            >
+              {rescreenBusy ? "요청 중..." : "🔄 재평가"}
+            </button>
+          ))}
         {!candidate.resumeFilePath && !candidate.resumeMaskedText && (
           <span className="text-xs text-slate-500 italic shrink-0 whitespace-nowrap">
             🔒 보존기간 경과로 이력서 원본 폐기됨
@@ -3578,7 +3647,14 @@ function InterviewerNotesPanel({
   };
 
   const remove = async (nid: number) => {
-    if (!confirm("이 메모를 삭제할까요?")) return;
+    if (
+      !(await confirmDialog("이 메모를 삭제할까요?", {
+        title: "메모 삭제",
+        tone: "danger",
+        confirmText: "삭제",
+      }))
+    )
+      return;
     setBusy(true);
     const r = await fetch(`/api/candidates/${candidateId}/notes/${nid}`, {
       method: "DELETE",
@@ -3970,7 +4046,14 @@ function AssignmentsPanel({ candidateId }: { candidateId: number }) {
   };
 
   const remove = async (aid: number) => {
-    if (!confirm("배정을 해제할까요?")) return;
+    if (
+      !(await confirmDialog("배정을 해제할까요?", {
+        title: "배정 해제",
+        tone: "danger",
+        confirmText: "해제",
+      }))
+    )
+      return;
     setBusy(true);
     const r = await fetch(`/api/candidates/${candidateId}/assignments/${aid}`, {
       method: "DELETE",

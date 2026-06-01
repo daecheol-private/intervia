@@ -70,8 +70,8 @@
 | GET | `/api/jobs/[id]/round1-schedule` | 🔑 `stage=round1_waiting` + 확정 schedule(`status=selected`, round1) 조인 → 후보자별 선택 슬롯·온오프라인·주소, 시간 빠른 순. "1차 면접 스케쥴 보기" 팝업용 |
 | POST | `/api/jobs/[id]/schedule-propose` | 🔑 후보자 다수에게 면접 슬롯 제시 + 메일. `round`(round1/round2, 기본 round1) — **round2 는 `round1_passed` 후보만** 가드, stage 변경 없음(round1 은 round1_scheduling 으로 전환) |
 | GET | `/api/org/funnel` | 🔒 🏢 (admin) 법인 채용 퍼널 — 진행 stage 분포(outcome NULL) + 결정 outcome 분포 + 총계·최근 N일·활성공고·진행중 평균 서류점수. `/org/dashboard` 용 |
-| POST | `/api/jobs/[id]/candidates` | 🔑 multipart 또는 JSON manifest 업로드. **`applicantConsentConfirmed=true` 필수** — 미체크 시 400 + `{code:"applicant_consent_required"}`. 채용기업이 지원자 동의 취득 책임 확인. 업로드 후 자동 큐 enqueue + 토큰 차감. 감사 로그 `candidate.upload_with_consent` |
-| POST | `/api/candidates/[id]/screen` | 사용자 확인 후 수동 트리거. **`resume_upload` 차감** + 백그라운드 LLM 평가. 실패 시 자동 환불. status: uploaded/failed 일 때만 동작. **지원자 동의 확인 누락(2026-05-22 이후 row) 시 400** |
+| POST | `/api/jobs/[id]/candidates` | 🔑 multipart 또는 JSON manifest 업로드. **`applicantConsentConfirmed=true` 필수** — 미체크 시 400 + `{code:"applicant_consent_required"}`. 채용기업이 지원자 동의 취득 책임 확인. 업로드 후 자동 큐 enqueue (과금은 평가 성공 시 후차감). 감사 로그 `candidate.upload_with_consent` |
+| POST | `/api/candidates/[id]/screen` | 수동 트리거 (신규 평가 + **재평가** + **재시도 대기 즉시 재시도** 공용). 백그라운드 LLM 평가. **과금은 평가 성공 시 후차감** (오류면 과금 X). 동작: `processing`→409, `queued`(백오프 포함)→새 job 안 만들고 백오프 해제 후 즉시 재시도, 그 외(done/failed/미시작)→새 job enqueue. **지원자 동의 확인 누락(2026-05-22 이후 row) 시 400** |
 | GET | `/api/candidates/[id]` | 🔑 |
 | DELETE | `/api/candidates/[id]` | 후보자 + 파일 삭제 |
 | POST | `/api/candidates/[id]/interview-link` | 새 면접 세션 + 링크 발급 (차감 없음 — 지원자 면접 시작 시 과금) |
@@ -114,7 +114,7 @@
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
 | POST | `/api/candidates/bulk-delete` | 🔒 🏢 | `{ids:number[]}` — 타 법인 ID 포함 시 전체 거부 |
-| POST | `/api/candidates/bulk-screen` | 🔒 🏢 | `{ids:number[]}` — 평가 큐에 일괄 enqueue + 토큰 차감. status=uploaded/failed 만 대상. 응답 `{enqueued, skipped, details}` |
+| POST | `/api/candidates/bulk-screen` | 🔒 🏢 | `{ids:number[]}` — 평가/재평가 일괄 (과금은 성공 시 후차감). 완료/미평가→enqueue, `queued`(재시도 대기)→백오프 해제(즉시 재시도), `processing`/`paused`→skip. 응답 `{enqueued, kicked, skipped, details}` |
 | PATCH | `/api/candidates/[id]/stage` | 🔒 🏢 | `{stage, note?, sendNotification?, customMessage?}` — 단계 변경. 단말(hired/rejected/withdrawn) 도달 시 자동 폐기 + (옵션) 통보 메일. 응답 `{stage, terminal, purged, mail}` |
 | GET | `/api/candidates/[id]/notes` | 🔒 🏢 | 면접관 메모 목록 (같은 법인 누구나 조회) |
 | POST | `/api/candidates/[id]/notes` | 🔒 🏢 | `{scores?, note?, interviewSessionId?}` 메모/스코어카드 작성. 본인 row 생성 |
@@ -130,7 +130,7 @@
 
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
-| POST | `/api/candidates/[id]/screen` | 🔒 🏢 | 단건 평가 큐 등록 + 토큰 차감 + 워커 즉시 트리거 |
+| POST | `/api/candidates/[id]/screen` | 🔒 🏢 | 단건 평가/재평가 큐 등록 (과금은 성공 시 후차감) + 워커 즉시 트리거 |
 | POST/GET | `/api/internal/process-screenings` | 🔒 (X-Internal-Secret 또는 X-Vercel-Cron 또는 system_admin) | 큐 워커. 동시성 N, 최대 M건, 잔여 시 self-chain |
 | GET/POST | `/api/cron/process-screenings` | 🔒 (CRON_SECRET 또는 X-Vercel-Cron 또는 system_admin) | 분당 워커 호출 안전망 |
 
@@ -183,7 +183,7 @@
 |---|---|---|---|---|
 | 공고 생성 | 200 직전 | `job_post` | `job:id` | 5분 내 DELETE |
 | 이력서 업로드 | (차감 없음) | - | - | - |
-| 서류 평가 시작 (수동) | `/screen` 호출 시 | `resume_upload` | `candidate:id` | 백그라운드 LLM 평가 `failed` 시 자동 환불 |
+| 서류 평가 / 재평가 | **평가 성공 시 (후차감)** | `resume_upload` | `screening_job:id` | 환불 없음 — 오류/재시도는 애초에 과금 안 됨. 재평가는 새 job 이라 성공마다 1건 |
 | 면접 링크 발급 | 200 직전 | `interview` | `interview_session:id` | cron `/api/cron/expire-interviews` 가 시간당 호출 — 미시작 만료만 자동 환불 |
 | 관리자 충전 | 즉시 | `admin_adjust` | - | 별도 PATCH 호출로 -delta |
 

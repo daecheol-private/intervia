@@ -29,7 +29,6 @@ import {
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { logAudit } from "@/lib/audit";
-import { chargeFeature } from "@/lib/tokens";
 import { enqueueScreening } from "@/lib/screening-queue";
 import { triggerWorker } from "@/lib/worker-trigger";
 
@@ -691,23 +690,12 @@ async function processGroup(args: {
   }
 
   // 서류평가 큐 자동 등록 — 워커가 [파싱+마스킹 → LLM 평가] 를 한 job 으로 처리.
-  //   1) resume_upload 토큰 차감 (멱등). 실패(파싱 실패 포함) 시 큐 final fail 에서 자동환불.
-  //   2) screening_jobs 에 enqueue.
-  //   3) POST 응답 후 triggerWorker 가 즉시 워커를 깨움 (+ cron 안전망).
+  //   1) screening_jobs 에 enqueue (차감 없음 — 과금은 워커가 평가 성공 시점에 함).
+  //   2) POST 응답 후 triggerWorker 가 즉시 워커를 깨움 (+ cron 안전망).
   //
-  // 차감/enqueue 단계가 실패해도 업로드 자체는 성공 처리 — 후보자 상세에서 "평가" 재시도 가능.
+  // enqueue 단계가 실패해도 업로드 자체는 성공 처리 — 후보자 상세에서 "평가" 재시도 가능.
   let enqueued = false;
   try {
-    if (job.orgId) {
-      await chargeFeature({
-        orgId: job.orgId,
-        feature: "resume_upload",
-        refType: "candidate",
-        refId: inserted.id,
-        userId: me.id,
-        memo: candidateName,
-      });
-    }
     await enqueueScreening(inserted.id, me.id);
     enqueued = true;
   } catch (err) {

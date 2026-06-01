@@ -143,8 +143,8 @@ interviewer/
 
 ### 9. 토큰 / 결제
 - 법인별 지갑 (`token_wallets`) + 변동 감사 로그 (`token_ledger`). 단가는 `token_pricing` (system_admin 수정).
-- 차감 시점: **선차감** (공고 생성, 이력서 업로드, 면접 링크 발급 시점). `chargeFeature` 호출.
-- 환불: 공고 5분 내 삭제, 이력서 LLM 평가 실패 시 자동 (`refundFeature`).
+- 차감 시점: 공고 생성·면접 링크 발급은 **선차감**. **서류 평가는 후차감** — 워커가 평가 성공한 시점에 `chargeScreeningSuccess`(refType=`screening_job`). 오류/재시도는 과금 안 됨 → 환불 불필요. 재평가는 새 job 이라 성공마다 1건 과금.
+- 환불: 공고 5분 내 삭제 시 자동 (`refundFeature`). (서류 평가는 후차감이라 환불 대상 아님.)
 - **마이너스 허용 (후불 정책)** — 잔액 0 이하여도 기능은 계속 동작, `/org/tokens` 에 경고 배너만.
 - 단가 변경은 **호출 시점 기준** 적용 (소급 X).
 - 결제 시스템은 미연동. `payment_orders` 테이블만 스텁. system_admin이 `/admin/orgs` 에서 수동 충전.
@@ -172,13 +172,13 @@ interviewer/
     └─ candidate 상세 페이지: 마스킹된 텍스트 미리보기 (디폴트)
        + "원본 표시" 토글 (체크 시 빨간 박스로 강조 — 개인정보 노출 경고)
 
-[3] 사용자 "검토 진행" 클릭 (POST /api/candidates/[id]/screen)
-    ├─ resume_upload 토큰 차감
-    ├─ screening_jobs 큐에 enqueue
+[3] 사용자 "검토 진행"/"재평가" 클릭 (POST /api/candidates/[id]/screen)
+    ├─ screening_jobs 큐에 enqueue (차감 없음 — 과금은 성공 시점에)
+    ├─ 이미 평가된 후보도 허용(재평가). 진행 중(queued/processing)만 중복 차단.
     └─ /api/internal/process-screenings 즉시 트리거 (fire-and-forget)
 
-[3-bulk] 사용자 N명 일괄 평가 (POST /api/candidates/bulk-screen)
-    └─ 토큰 N회 차감 + N개 enqueue + 워커 1회 트리거 (이후 self-chain)
+[3-bulk] 사용자 N명 일괄 평가/재평가 (POST /api/candidates/bulk-screen)
+    └─ N개 enqueue (차감 없음) + 워커 1회 트리거 (이후 self-chain). 동의 확인된 후보면 평가 완료 여부 무관 대상.
 
 [4] 워커 (lib/screening-queue.ts + /api/internal/process-screenings)
     ├─ cleanupStuck() + reconcileBalanceHolds() — 실행 시작마다.
@@ -188,9 +188,9 @@ interviewer/
     │    나눠 cap = ceil(max/활성법인수). 한 법인의 대량 업로드가 타 법인을 굶기지 않음.
     │    (전역 cap + 법인 cap 을 claim UPDATE 서브쿼리로 원자 보장)
     ├─ runScreeningOnce() — ensureParsed(파싱+마스킹, 미파싱이면) → LLM 평가 → candidates 업데이트
-    ├─ 성공: status='done', candidate.status='screened'
-    ├─ transient 실패 (429/timeout/503/저장소): attempts++ + backoff (30s/2m/5m) 재큐
-    ├─ permanent 실패 (파싱 실패/스캔 PDF/JSON 파싱 실패): 즉시 final fail + 환불
+    ├─ 성공: markDone(status='done') + chargeScreeningSuccess(후차감, job 단위 멱등), candidate.status='screened'
+    ├─ transient 실패 (429/timeout/503/저장소): attempts++ + backoff (30s/2m/5m) 재큐 (과금 없음)
+    ├─ permanent 실패 (파싱 실패/스캔 PDF/JSON 파싱 실패): 즉시 final fail (과금 전이라 환불 불필요)
     └─ 동시성 8 (env 조절). 1 회 호출당 최대 40건 처리, 잔여시 self-chain(처리 0 건이면 생략).
 
 [4-cron] 매분 /api/cron/process-screenings (Vercel Cron)

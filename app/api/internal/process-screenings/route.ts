@@ -9,7 +9,7 @@ import {
 } from "@/lib/screening-queue";
 import {
   runScreeningOnce,
-  markScreeningPermanentlyFailed,
+  chargeScreeningSuccess,
   ScreeningError,
 } from "@/lib/screening";
 import { getCurrentUser } from "@/lib/auth";
@@ -77,23 +77,27 @@ async function processOne(workerId: string): Promise<
   try {
     await runScreeningOnce(claim.candidateId);
     await markDone(claim.jobId);
+    // 과금은 "성공" 시점에만 — 오류/재시도는 과금 안 됨. job 단위 멱등(재평가는 새 job).
+    // 과금 실패는 평가 성공을 되돌리지 않는다(이미 done) — 격리해 로그만. 안 그러면
+    // 아래 catch 가 done 인 job 을 재큐해 재평가 루프가 생긴다.
+    try {
+      await chargeScreeningSuccess(claim.jobId, claim.candidateId);
+    } catch (chargeErr) {
+      console.error("charge after screening success failed", claim.jobId, chargeErr);
+    }
     return "success";
   } catch (e) {
     const err =
       e instanceof ScreeningError
         ? e
         : new ScreeningError(e instanceof Error ? e.message : String(e), true);
-    // 영구 오류면 attempts 무관 즉시 final fail
+    // 영구 오류면 attempts 무관 즉시 final fail (과금 전이므로 환불 불필요).
     const isPermanent = !err.transient;
     if (isPermanent) {
       await markFailedOrRetry(claim.jobId, err.message, MAX_ATTEMPTS); // 즉시 영구 처리
-      await markScreeningPermanentlyFailed(claim.candidateId, err.message);
       return { error: "permanent", permanent: true };
     }
     const r = await markFailedOrRetry(claim.jobId, err.message, claim.attempts);
-    if (r.permanent) {
-      await markScreeningPermanentlyFailed(claim.candidateId, err.message);
-    }
     return { error: "transient", permanent: r.permanent };
   }
 }

@@ -1,9 +1,8 @@
 import { db } from "@/lib/db";
-import { candidates } from "@/lib/schema";
-import { inArray } from "drizzle-orm";
+import { candidates, screeningJobs } from "@/lib/schema";
+import { inArray, and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
-import { chargeFeature } from "@/lib/tokens";
 import { enqueueScreening } from "@/lib/screening-queue";
 import { triggerWorker } from "@/lib/worker-trigger";
 import { rateLimit } from "@/lib/rate-limit";
@@ -12,9 +11,11 @@ import { logAudit } from "@/lib/audit";
 export const runtime = "nodejs";
 
 /**
- * 후보자 N명 일괄 평가 큐 등록.
- * - status='uploaded' or 'failed' 인 후보자만 대상 (이미 진행/완료된 건 skip)
- * - 각 후보자에 대해 토큰 차감 + 큐 enqueue
+ * 후보자 N명 일괄 평가 큐 등록 (신규 평가 + 재평가 + 재시도 대기 즉시 재시도 공용).
+ * - 동의 확인된 후보면 평가 완료/실패 여부와 무관하게 대상 (재평가 허용).
+ * - 이미 queued(재시도 대기/백오프 포함)면 새 job 안 만들고 백오프만 해제해 즉시 재시도.
+ * - processing(워커 점유중)·paused(충전 대기)는 그대로 두고 skip.
+ * - 과금은 워커가 "평가 성공" 시점에 함. 여기선 차감 안 함.
  * - 워커 1회 트리거 (이후 self-chain 으로 끝까지 처리)
  */
 export async function POST(req: Request) {
@@ -59,44 +60,58 @@ export async function POST(req: Request) {
       });
   }
 
-  // 평가 가능: 리포트 없음 + 동의 확인됨 (legacy row 면제).
+  // 평가 가능: 동의 확인됨 (legacy row 면제). 리포트 유무는 보지 않는다 — 재평가 허용.
   // NOTE: 마스킹 텍스트가 비어 있어도 제외하지 않는다 — 파싱은 워커(ensureParsed)가
   // 평가 직전에 수행하므로 미파싱/파싱실패 후보도 enqueue 대상.
   const CONSENT_REQUIRED_FROM = new Date("2026-05-22");
   const isConsentMissing = (r: { consentAt: string | null; createdAt: string }) =>
     !r.consentAt && new Date(r.createdAt) >= CONSENT_REQUIRED_FROM;
-  const eligible = rows.filter(
-    (r) => r.screeningReport == null && !isConsentMissing(r)
-  );
 
   const enqueued: { candidateId: number; jobId: number }[] = [];
   const skipped: { candidateId: number; reason: string }[] = [];
+  // 이미 queued 인 후보 — 백오프 해제(즉시 재시도) 대상으로 모아 일괄 처리.
+  const kickCandidateIds: number[] = [];
 
   for (const r of rows) {
-    if (!eligible.find((e) => e.id === r.id)) {
+    if (isConsentMissing(r)) {
       skipped.push({
         candidateId: r.id,
-        reason: isConsentMissing(r)
-          ? "지원자 동의 확인 누락 (재업로드 필요)"
-          : "이미 평가 완료됨",
+        reason: "지원자 동의 확인 누락 (재업로드 필요)",
       });
       continue;
     }
-    // 토큰 차감 (멱등 — refType+refId 단일성)
-    if (r.orgId) {
-      await chargeFeature({
-        orgId: r.orgId,
-        feature: "resume_upload",
-        refType: "candidate",
-        refId: r.id,
-        userId: me!.id,
-        memo: r.name,
-      });
-    }
+    // enqueue (과금은 워커가 성공 시점에). 이미 활성 job 이 있으면 새로 안 만든다.
     const result = await enqueueScreening(r.id, me!.id);
-    if (result.jobId) {
+    if (result.status === "already_queued") {
+      // queued(재시도 대기)면 백오프 해제로 즉시 재시도, processing/paused 면 그대로 skip.
+      kickCandidateIds.push(r.id);
+    } else if (result.jobId) {
       enqueued.push({ candidateId: r.id, jobId: result.jobId });
     }
+  }
+
+  // 재시도 대기(백오프) queued job 의 notBefore 해제 → 워커가 즉시 점유. processing/paused 는 제외.
+  let kicked = 0;
+  if (kickCandidateIds.length > 0) {
+    const rowsKicked = await db
+      .update(screeningJobs)
+      .set({ notBefore: null })
+      .where(
+        and(
+          inArray(screeningJobs.candidateId, kickCandidateIds),
+          eq(screeningJobs.status, "queued")
+        )
+      )
+      .returning({ id: screeningJobs.id });
+    kicked = rowsKicked.length;
+  }
+  // processing/paused 라 kick 못한 것은 skip 으로 기록.
+  const notKicked = kickCandidateIds.length - kicked;
+  if (notKicked > 0) {
+    skipped.push({
+      candidateId: 0,
+      reason: `${notKicked}건은 처리중/충전대기라 건너뜀`,
+    });
   }
 
   triggerWorker(req);
@@ -105,11 +120,12 @@ export async function POST(req: Request) {
     actor: me!,
     action: "screen.bulk_trigger",
     resourceType: "candidate",
-    metadata: { enqueued: enqueued.length, skipped: skipped.length },
+    metadata: { enqueued: enqueued.length, kicked, skipped: skipped.length },
   });
 
   return Response.json({
     enqueued: enqueued.length,
+    kicked,
     skipped: skipped.length,
     details: { enqueued, skipped },
   });

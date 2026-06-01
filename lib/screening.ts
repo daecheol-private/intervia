@@ -3,7 +3,7 @@ import { candidates, jobPostings, candidateAttachments } from "./schema";
 import { eq, and, isNotNull, ne } from "drizzle-orm";
 import { buildScreeningPrompt } from "./prompts";
 import { generateJSON } from "./gemini";
-import { refundFeature } from "./tokens";
+import { chargeFeature } from "./tokens";
 import { extractTextFromBuffer } from "./parsers";
 import { extractPII } from "./pii-extract";
 import { extractEducation } from "./education-extract";
@@ -384,24 +384,28 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
     .where(eq(candidates.id, candidateId));
 }
 
-/** 영구 실패 시 candidate status='failed' + 토큰 환불. 큐가 호출. */
-export async function markScreeningPermanentlyFailed(
-  candidateId: number,
-  reason: string
+/**
+ * 평가 성공 시 과금 — 평가가 정상 완료된 시점에만 호출(워커가 markDone 직후).
+ *
+ * 과금 모델: enqueue 가 아니라 "성공"에 과금한다. 따라서
+ *   - 오류/재시도(영구실패 포함)는 여기 도달하지 않아 과금 안 됨 (환불 로직 불필요).
+ *   - 재평가는 새 screening_job 이라 refId 가 달라 매 성공마다 1건 과금.
+ *   - 같은 job 의 재시도가 결국 성공해도 refId(job.id) 가 같아 멱등 — 1건만 과금.
+ */
+export async function chargeScreeningSuccess(
+  jobId: number,
+  candidateId: number
 ): Promise<void> {
   const [candidate] = await db
     .select({ orgId: candidates.orgId, name: candidates.name })
     .from(candidates)
     .where(eq(candidates.id, candidateId));
-  if (!candidate) return;
-  // 실패는 screeningJobs.status='failed' 로 추적. candidate row 는 변경 없음.
-  if (candidate.orgId) {
-    await refundFeature({
-      orgId: candidate.orgId,
-      feature: "resume_upload",
-      refType: "candidate",
-      refId: candidateId,
-      memo: `평가 실패 자동환불: ${reason.slice(0, 100)}`,
-    });
-  }
+  if (!candidate?.orgId) return;
+  await chargeFeature({
+    orgId: candidate.orgId,
+    feature: "resume_upload",
+    refType: "screening_job",
+    refId: jobId,
+    memo: candidate.name,
+  });
 }
