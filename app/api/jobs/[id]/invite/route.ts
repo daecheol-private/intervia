@@ -5,7 +5,8 @@
  *  - 발신자는 해당 공고의 법인 멤버여야 함
  *  - 최대 20개 이메일/요청, 분당 1회 (rate limit)
  *  - 같은 이메일에 미사용·미만료 초대가 이미 있으면 그 토큰 재사용 (스팸 방지)
- *  - 이미 같은 법인 멤버인 이메일은 발송 스킵 (응답에 reportedExisting)
+ *  - 이미 같은 법인 멤버인 이메일은 발송 스킵 (status='already_member')
+ *  - 이미 다른 법인 소속 이메일은 발송 스킵 (status='other_org') — 수락 시점에 어차피 거절되므로 미리 차단
  */
 import { db } from "@/lib/db";
 import {
@@ -103,7 +104,7 @@ export async function POST(
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
   const results: {
     email: string;
-    status: "sent" | "already_member" | "failed";
+    status: "sent" | "already_member" | "other_org" | "failed";
     error?: string;
   }[] = [];
 
@@ -190,6 +191,11 @@ export async function POST(
       results.push({ email, status: "already_member" });
       continue;
     }
+    // 이미 다른 법인 소속 → 수락 시점에 거절되므로 발송 자체를 스킵 (혼란 방지)
+    if (existingMember && existingMember.orgId != null) {
+      results.push({ email, status: "other_org" });
+      continue;
+    }
 
     // 미사용·미만료 토큰 재사용
     const [existingInvite] = await db
@@ -251,6 +257,7 @@ export async function POST(
       jobId,
       sent: results.filter((r) => r.status === "sent").length,
       alreadyMember: results.filter((r) => r.status === "already_member").length,
+      otherOrg: results.filter((r) => r.status === "other_org").length,
       failed: results.filter((r) => r.status === "failed").length,
       invalidInputs: parsed.invalid.length,
       memberAssigned: memberResults.filter((r) => r.status === "assigned").length,

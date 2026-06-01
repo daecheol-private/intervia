@@ -2582,7 +2582,7 @@ function ShareButton({
     | {
         results: {
           email: string;
-          status: "sent" | "already_member" | "failed";
+          status: "sent" | "already_member" | "other_org" | "failed";
           error?: string;
         }[];
         memberResults: MemberResult[];
@@ -2848,7 +2848,9 @@ function ShareButton({
                           ? "bg-primary-soft border-primary/30 text-primary-deep"
                           : r.status === "already_member"
                             ? "bg-surface-alt border-border-default text-ink-soft"
-                            : "bg-danger-soft border-danger/30 text-danger"
+                            : r.status === "other_org"
+                              ? "bg-amber-50 border-amber-200 text-amber-700"
+                              : "bg-danger-soft border-danger/30 text-danger"
                       }`}
                     >
                       <span className="truncate">{r.email}</span>
@@ -2857,7 +2859,9 @@ function ShareButton({
                           ? "✓ 발송"
                           : r.status === "already_member"
                             ? "이미 멤버"
-                            : `✗ 실패`}
+                            : r.status === "other_org"
+                              ? "타 법인 — 스킵"
+                              : `✗ 실패`}
                       </span>
                     </div>
                   ))}
