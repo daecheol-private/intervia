@@ -151,7 +151,7 @@ async function withRetry<T>(
 
 export async function generateJSON<T>(
   prompt: string,
-  opts?: { task?: LlmTask }
+  opts?: { task?: LlmTask; responseSchema?: unknown }
 ): Promise<T> {
   const task: LlmTask = opts?.task ?? "screening";
   const thinkingBudget = THINKING_BUDGET[task];
@@ -161,6 +161,11 @@ export async function generateJSON<T>(
         responseMimeType: "application/json",
         temperature: 0.2,
       };
+      // responseSchema 지정 시 Gemini 가 스키마에 맞는 유효 JSON 을 *보장* →
+      // 긴 자유서술 필드에서 따옴표·제어문자 이스케이프가 깨져 파싱 실패하던 문제 차단.
+      if (opts?.responseSchema) {
+        config.responseSchema = opts.responseSchema;
+      }
       if (thinkingBudget !== undefined) {
         config.thinkingConfig = { thinkingBudget };
       }

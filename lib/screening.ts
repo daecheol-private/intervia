@@ -9,6 +9,7 @@ import { eq, and, isNotNull, ne } from "drizzle-orm";
 import { buildScreeningPrompt } from "./prompts";
 import { parseChecklist } from "./job-checklist";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
+import { Type } from "@google/genai";
 import { chargeFeature } from "./tokens";
 import { extractTextFromBuffer } from "./parsers";
 import { extractPII } from "./pii-extract";
@@ -274,6 +275,141 @@ type ScreeningResult = {
   };
 };
 
+// Gemini 구조화 출력 스키마 — prompts.ts buildScreeningPrompt 의 "출력 형식" JSON 과 일치.
+// responseMimeType=json 만으로는 긴 한국어 자유서술 필드에서 모델이 간헐적으로 깨진
+// JSON 을 뱉어(이스케이프 누락 등) 파싱 실패 → "AI 응답 형식 오류" 가 발생했다.
+// responseSchema 를 주면 Vertex 가 스키마에 맞는 유효 JSON 을 보장한다.
+const AXIS_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    score: { type: Type.INTEGER },
+    reason: { type: Type.STRING },
+    confidence: { type: Type.STRING, enum: ["high", "medium", "low"] },
+  },
+  required: ["score", "reason"],
+  propertyOrdering: ["score", "reason", "confidence"],
+};
+
+const SCREENING_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    score: { type: Type.INTEGER },
+    recommendation: {
+      type: Type.STRING,
+      enum: ["강력추천", "추천", "보류", "비추천"],
+    },
+    summary: { type: Type.STRING },
+    breakdown: {
+      type: Type.OBJECT,
+      properties: {
+        tech_fit: AXIS_SCHEMA,
+        experience_depth: AXIS_SCHEMA,
+        role_match: AXIS_SCHEMA,
+        achievement: AXIS_SCHEMA,
+        stability: AXIS_SCHEMA,
+        growth_attitude: AXIS_SCHEMA,
+      },
+      required: [
+        "tech_fit",
+        "experience_depth",
+        "role_match",
+        "achievement",
+        "stability",
+        "growth_attitude",
+      ],
+      propertyOrdering: [
+        "tech_fit",
+        "experience_depth",
+        "role_match",
+        "achievement",
+        "stability",
+        "growth_attitude",
+      ],
+    },
+    requirement_gate: {
+      type: Type.OBJECT,
+      properties: {
+        applies: { type: Type.BOOLEAN },
+        verdict: { type: Type.STRING, enum: ["pass", "fail", "unknown"] },
+        missing: { type: Type.ARRAY, items: { type: Type.STRING } },
+        reason: { type: Type.STRING },
+      },
+      propertyOrdering: ["applies", "verdict", "missing", "reason"],
+    },
+    requirement_coverage: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          requirement: { type: Type.STRING },
+          status: { type: Type.STRING, enum: ["direct", "indirect", "none"] },
+          evidence: { type: Type.STRING },
+        },
+        required: ["requirement", "status"],
+        propertyOrdering: ["requirement", "status", "evidence"],
+      },
+    },
+    level_match: {
+      type: Type.OBJECT,
+      properties: {
+        fit: { type: Type.STRING, enum: ["under", "over", "fit"] },
+        years: { type: Type.INTEGER, nullable: true },
+        penalty: { type: Type.INTEGER },
+        reason: { type: Type.STRING },
+      },
+      propertyOrdering: ["fit", "years", "penalty", "reason"],
+    },
+    focus_match: {
+      type: Type.OBJECT,
+      properties: {
+        applies: { type: Type.BOOLEAN },
+        verdict: {
+          type: Type.STRING,
+          enum: ["fatal_fail", "fail", "neutral", "strong_pass"],
+        },
+        reason: { type: Type.STRING },
+      },
+      propertyOrdering: ["applies", "verdict", "reason"],
+    },
+    strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+    concerns: { type: Type.ARRAY, items: { type: Type.STRING } },
+    matched_keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+    interview_focus: { type: Type.ARRAY, items: { type: Type.STRING } },
+    career_info: {
+      type: Type.OBJECT,
+      properties: {
+        career_years: { type: Type.INTEGER, nullable: true },
+        career_summary: { type: Type.STRING, nullable: true },
+      },
+      propertyOrdering: ["career_years", "career_summary"],
+    },
+  },
+  required: [
+    "score",
+    "recommendation",
+    "summary",
+    "breakdown",
+    "strengths",
+    "concerns",
+    "matched_keywords",
+  ],
+  propertyOrdering: [
+    "score",
+    "recommendation",
+    "summary",
+    "breakdown",
+    "requirement_gate",
+    "requirement_coverage",
+    "level_match",
+    "focus_match",
+    "strengths",
+    "concerns",
+    "matched_keywords",
+    "interview_focus",
+    "career_info",
+  ],
+};
+
 // 6축 가중치 — 프롬프트(prompts.ts buildScreeningPrompt)와 반드시 일치.
 const AXIS_WEIGHTS: Record<string, number> = {
   tech_fit: 0.3,
@@ -445,7 +581,7 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
         // 학력 수준·전공만 — 출신 학교명은 전달 안 함(학벌 차별 방지, 블라인드 유지)
         { level: candidate.educationLevel, major: candidate.educationMajor }
       ),
-      { task: "screening" }
+      { task: "screening", responseSchema: SCREENING_SCHEMA }
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

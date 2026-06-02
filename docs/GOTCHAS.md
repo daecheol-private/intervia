@@ -206,6 +206,8 @@ generateJSON<X>(prompt, { task: "interviewEval" });
 
 SDK: **`@google/genai`** 단일 (vertexai: true 고정).
 
+**구조화 출력(responseSchema) — 서류평가는 필수**: `responseMimeType: "application/json"` *만* 쓰면 Gemini 가 긴 한국어 자유서술 필드(summary·reason 등)에서 **간헐적으로 깨진 JSON**(이스케이프 누락)을 뱉어 `parseJsonResponse` 가 실패 → UI 에 "AI 응답 형식 오류"(`shortenError`). `finishReason=STOP`(정상완료)인데도 파싱 실패하면 이 케이스다. screening 은 `generateJSON(prompt, { task, responseSchema: SCREENING_SCHEMA })` 로 스키마를 넘겨 유효 JSON 을 보장한다(`lib/screening.ts` SCREENING_SCHEMA — prompts.ts 출력 형식과 1:1 일치 유지). 큰 자유서술 JSON 을 새로 추가하면 동일하게 responseSchema 를 권장.
+
 **Vertex AI 서울 응답 시간**: 13K char 프롬프트 기준 30~40초. 비동기 task (screening / interviewEval) 는 큐 처리라 UX 영향 X. interview 는 thinkingBudget=128 로 3~4초 응답 유지.
 
 **환경변수** (모두 Vertex 용):
