@@ -2045,10 +2045,11 @@ function ScoreBar({ label, score }: { label: string; score: number | null }) {
 // 서류평가 6축 정의 — FitHexagon + BreakdownBlock 공유.
 // 순서 = 12시부터 시계방향. 가중치 합은 100%.
 // LLM 프롬프트(lib/prompts.ts)의 가중치와 일치해야 함.
+// weight 라벨은 lib/screening.ts AXIS_WEIGHTS 와 반드시 일치시킬 것.
 const SCREENING_AXES = [
-  { key: "tech_fit", label: "기술 적합도", weight: "30%" },
+  { key: "tech_fit", label: "기술 적합도", weight: "20%" },
   { key: "experience_depth", label: "경험 깊이", weight: "20%" },
-  { key: "role_match", label: "직무 매칭도", weight: "15%" },
+  { key: "role_match", label: "직무 매칭도", weight: "25%" },
   { key: "achievement", label: "성과 임팩트", weight: "15%" },
   { key: "stability", label: "재직 안정성", weight: "10%" },
   { key: "growth_attitude", label: "성장·태도", weight: "10%" },

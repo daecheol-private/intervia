@@ -268,6 +268,15 @@ type ScreeningResult = {
     verdict?: "fatal_fail" | "fail" | "neutral" | "strong_pass";
     reason?: string;
   };
+  // 이력서 자체의 증거 밀도 — 구체적 경력/성과 중심인가, 역량 형용사·스킬 나열인가.
+  evidence_quality?: "specific" | "mixed" | "generic";
+  // JD 핵심 전문 도메인 적합 — 범용 역량과 별개로 "그 도메인을 실제로 했는가".
+  domain_fit?: {
+    has_specialized_domain?: boolean;
+    domain?: string;
+    candidate_level?: "direct" | "adjacent" | "none";
+    reason?: string;
+  };
   interview_focus?: string[];
   career_info?: {
     career_years?: number | null;
@@ -371,6 +380,28 @@ const SCREENING_SCHEMA = {
       },
       propertyOrdering: ["applies", "verdict", "reason"],
     },
+    evidence_quality: {
+      type: Type.STRING,
+      enum: ["specific", "mixed", "generic"],
+    },
+    domain_fit: {
+      type: Type.OBJECT,
+      properties: {
+        has_specialized_domain: { type: Type.BOOLEAN },
+        domain: { type: Type.STRING },
+        candidate_level: {
+          type: Type.STRING,
+          enum: ["direct", "adjacent", "none"],
+        },
+        reason: { type: Type.STRING },
+      },
+      propertyOrdering: [
+        "has_specialized_domain",
+        "domain",
+        "candidate_level",
+        "reason",
+      ],
+    },
     strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
     concerns: { type: Type.ARRAY, items: { type: Type.STRING } },
     matched_keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -402,6 +433,8 @@ const SCREENING_SCHEMA = {
     "requirement_coverage",
     "level_match",
     "focus_match",
+    "evidence_quality",
+    "domain_fit",
     "strengths",
     "concerns",
     "matched_keywords",
@@ -412,9 +445,9 @@ const SCREENING_SCHEMA = {
 
 // 6축 가중치 — 프롬프트(prompts.ts buildScreeningPrompt)와 반드시 일치.
 const AXIS_WEIGHTS: Record<string, number> = {
-  tech_fit: 0.3,
+  tech_fit: 0.2,
   experience_depth: 0.2,
-  role_match: 0.15,
+  role_match: 0.25,
   achievement: 0.15,
   stability: 0.1,
   growth_attitude: 0.1,
@@ -430,6 +463,38 @@ const FOCUS_FATAL_CAP = 15; // fatal_fail(필수/배제 조건 위반)만 하드
 // JD 본문에 명시된 필수/결격 요건 미충족(requirement_gate.verdict=fail) 시 하드캡.
 // HR 가이드 fatal(15)보다는 약간 높게 — "결격에 가깝지만 면접 여지" 수준. unknown 은 감점 안 함.
 const REQUIREMENT_GATE_CAP = 40;
+
+// 변별력 보정 — 가중평균은 중앙으로 수렴해 후보 간 변별이 약해진다.
+// 모집단 중앙값(≈60) 을 기준으로 편차를 SPREAD_FACTOR 배 확대해, 상위는 위로·하위는 아래로 벌린다.
+// (채점 로직은 그대로 두고 순위 변별력만 끌어올리는 후처리)
+// ⚠️ CENTER 를 50 으로 두면 평범한 후보(평균 60대)까지 위로 부풀어 인플레가 된다 — 반드시 모집단 중앙값 근처로.
+const SPREAD_CENTER = 60;
+const SPREAD_FACTOR = 1.4;
+function spreadScore(raw: number): number {
+  return SPREAD_CENTER + (raw - SPREAD_CENTER) * SPREAD_FACTOR;
+}
+
+// 약한 핵심축 캡 — 직무 적합의 핵심 3축(기술·직무매칭·경험깊이) 중 하나라도
+// 임계 이하로 무너지면, 다른 축이 좋아도 종합을 보류 수준 이하로 캡한다.
+// (가중평균이 약한 핵심축을 가려 "핵심은 비었는데 종합은 추천"이 나오는 문제 차단)
+const CORE_AXES = ["tech_fit", "role_match", "experience_depth"] as const;
+const WEAK_CORE_THRESHOLD = 40; // 핵심축이 이 미만이면
+const WEAK_CORE_CAP = 58; // 종합 상한 (추천 70 미만 = 보류 이하)
+
+// 증거 밀도 게이트 — "역량 형용사·스킬 나열" 위주 이력서(evidence_quality=generic)는
+// 주장일 뿐 검증 불가 → 종합 캡. 스킬만 나열해도 고득점 나는 문제 차단.
+const GENERIC_EVIDENCE_CAP = 60;
+
+// confidence 디스카운트 — 6축 중 다수가 low(추정·근거 빈약)면 "인상은 좋으나 검증 불가".
+const LOW_CONF_THRESHOLD = 4; // low 축이 이 개수 이상이면
+const LOW_CONF_PENALTY = -10; // 종합 감점
+
+// 전문 도메인 게이트 — JD 핵심 전문 도메인(보안/금융/의료 등) 경험 수준별 상한.
+// requirement_gate(명시 필수)와 별개로, "JD 전체가 그 도메인인데 후보의 그 도메인 경험이 부족" 케이스를 잡는다.
+// none(전무) → 결격 수준. adjacent(인접 경험만, 직접 경험 없음) → 보류 상한
+// (다른 축·HR 가이드 보너스가 좋아도 핵심 도메인 직접 경험 없이는 추천 못 감 — 면접에서 확인할 보류).
+const DOMAIN_GAP_CAP = 50; // candidate_level === "none"
+const DOMAIN_ADJACENT_CAP = 68; // candidate_level === "adjacent" (보류 상한, 추천 70 미만)
 
 function clampScore(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -454,20 +519,36 @@ function recomputeScore(result: ScreeningResult): {
   recommendation: ScreeningResult["recommendation"];
 } {
   const b = result.breakdown as
-    | Record<string, { score?: number } | undefined>
+    | Record<string, { score?: number; confidence?: Confidence } | undefined>
     | undefined;
+  // 소프트축(성장·태도) 상한 기준 = 핵심 3축 최고점.
+  // 폭(buzzword) 위주 성장 점수가 핵심 적합을 넘어 종합을 끌어올리지 못하게 한다.
+  const coreMax = b
+    ? Math.max(
+        0,
+        ...CORE_AXES.map((k) => b[k]?.score).filter(
+          (s): s is number => typeof s === "number"
+        ).map(clampScore)
+      )
+    : 100;
+  const softCeil = coreMax > 0 ? coreMax : 100;
   let weighted = 0;
   let totalW = 0;
   if (b) {
     for (const [key, w] of Object.entries(AXIS_WEIGHTS)) {
       const axis = b[key];
       if (axis && typeof axis.score === "number") {
-        weighted += clampScore(axis.score) * w;
+        let s = clampScore(axis.score);
+        if (key === "growth_attitude") s = Math.min(s, softCeil);
+        weighted += s * w;
         totalW += w;
       }
     }
   }
-  const raw = totalW > 0 ? weighted / totalW : clampScore(result.score);
+  const avg = totalW > 0 ? weighted / totalW : clampScore(result.score);
+  // 변별력 보정: 6축 가중평균을 50 기준으로 확대(spread)해 분포를 넓힌다.
+  // breakdown 이 없어 LLM score 폴백인 경우엔 확대하지 않는다(원점수 신뢰 불가).
+  const raw = totalW > 0 ? clampScore(spreadScore(avg)) : avg;
   // 페널티는 감점만 — under=-10 / over=-5 / fit=0. 범위 밖 값은 방어적으로 클램프.
   const rawPenalty =
     typeof result.level_match?.penalty === "number"
@@ -475,6 +556,17 @@ function recomputeScore(result: ScreeningResult): {
       : 0;
   const penalty = Math.max(-10, Math.min(0, rawPenalty));
   let score = clampScore(raw + penalty);
+
+  // confidence 디스카운트 — 다수 축이 low(근거 빈약·추정)면 "인상은 좋으나 검증 불가"로 감점.
+  if (b) {
+    let lowConf = 0;
+    for (const key of Object.keys(AXIS_WEIGHTS)) {
+      if (b[key]?.confidence === "low") lowConf++;
+    }
+    if (lowConf >= LOW_CONF_THRESHOLD) {
+      score = clampScore(score + LOW_CONF_PENALTY);
+    }
+  }
 
   // HR 평가 가이드(evaluationFocus) 반영 — 6축 점수에 가감(가산점 방식).
   // strong_pass → +가점, fail → -감점, neutral → 변동 없음.
@@ -486,6 +578,35 @@ function recomputeScore(result: ScreeningResult): {
       score = clampScore(score + FOCUS_FAIL_PENALTY);
     else if (fm.verdict === "strong_pass")
       score = clampScore(score + FOCUS_STRONG_BONUS);
+  }
+
+  // 구체성 게이트 — 스킬·역량 형용사 나열 위주(generic) 이력서는 주장일 뿐 검증 불가 → 캡.
+  if (result.evidence_quality === "generic") {
+    score = Math.min(score, GENERIC_EVIDENCE_CAP);
+  }
+
+  // 전문 도메인 게이트 — JD 핵심 전문 도메인 경험 수준별 상한.
+  // none(전무) → 결격 수준 캡 / adjacent(인접만, 직접 경험 없음) → 보류 상한 캡.
+  // HR 가이드 strong_pass(+12) 같은 보너스가 도메인 갭을 덮지 못하게, 보너스 가산 뒤에 캡한다.
+  const df = result.domain_fit;
+  if (df?.has_specialized_domain) {
+    if (df.candidate_level === "none") {
+      score = Math.min(score, DOMAIN_GAP_CAP);
+    } else if (df.candidate_level === "adjacent") {
+      score = Math.min(score, DOMAIN_ADJACENT_CAP);
+    }
+  }
+
+  // 약한 핵심축 캡 — 핵심 3축(기술·직무매칭·경험깊이) 중 하나라도 임계 이하면 종합 캡.
+  // (해당 축이 breakdown 에 존재할 때만 적용. 누락 축은 판단 근거 없음으로 보고 캡 안 함)
+  if (b) {
+    for (const key of CORE_AXES) {
+      const axis = b[key];
+      if (axis && typeof axis.score === "number" && clampScore(axis.score) < WEAK_CORE_THRESHOLD) {
+        score = Math.min(score, WEAK_CORE_CAP);
+        break;
+      }
+    }
   }
 
   // JD 명시 필수 요건 미충족 → 결격 수준 하드캡. (unknown/pass 는 변동 없음)
