@@ -7,6 +7,7 @@ import {
 } from "./schema";
 import { eq, and, isNotNull, ne } from "drizzle-orm";
 import { buildScreeningPrompt } from "./prompts";
+import { parseChecklist } from "./job-checklist";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
 import { chargeFeature } from "./tokens";
 import { extractTextFromBuffer } from "./parsers";
@@ -434,6 +435,7 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
           employmentType: job.employmentType,
           responsibilities: job.responsibilities,
           requirements: job.requirements,
+          requirementChecklist: parseChecklist(job.requirementChecklist),
           idealProfile: job.idealProfile,
           evaluationFocus: job.evaluationFocus,
           tone: job.tone,

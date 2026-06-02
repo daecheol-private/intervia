@@ -7,6 +7,10 @@ import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
 import { deleteCandidateFiles } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
 import { refundFeature } from "@/lib/tokens";
+import {
+  generateRequirementChecklist,
+  serializeChecklist,
+} from "@/lib/job-checklist";
 
 const REFUND_WINDOW_MS = 5 * 60 * 1000;
 
@@ -98,6 +102,19 @@ export async function PUT(
     tone: body.tone,
     interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
   };
+
+  // 주요업무/자격요건이 바뀐 경우에만 JD 요건 체크리스트 재생성 (그 외 수정은 LLM 호출 생략).
+  const jdChanged =
+    body.responsibilities !== existing.responsibilities ||
+    body.requirements !== existing.requirements;
+  if (jdChanged) {
+    update.requirementChecklist = serializeChecklist(
+      await generateRequirementChecklist({
+        responsibilities: body.responsibilities,
+        requirements: body.requirements,
+      })
+    );
+  }
 
   if (body.password === "") {
     update.passwordHash = null;

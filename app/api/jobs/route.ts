@@ -10,6 +10,10 @@ import { jobOrgFilter, requireUser } from "@/lib/tenant";
 import { isValidPin } from "@/lib/job-lock";
 import { chargeFeature } from "@/lib/tokens";
 import { defaultClosesAt } from "@/lib/job-lifecycle";
+import {
+  generateRequirementChecklist,
+  serializeChecklist,
+} from "@/lib/job-checklist";
 
 export const runtime = "nodejs";
 
@@ -90,6 +94,15 @@ export async function POST(req: Request) {
       ? Number(body.orgId ?? me!.orgId ?? 0) || null
       : me!.orgId;
 
+  // JD 요건 체크리스트 1회 생성 (링크 등록·직접 입력 모두 이 POST 를 거치므로 여기서 통합 처리).
+  // LLM 실패 시 [] → "" 로 저장되고 평가는 기존 즉석 분해로 폴백.
+  const requirementChecklist = serializeChecklist(
+    await generateRequirementChecklist({
+      responsibilities: body.responsibilities,
+      requirements: body.requirements,
+    })
+  );
+
   const now = new Date();
   const [row] = await db
     .insert(jobPostings)
@@ -101,6 +114,7 @@ export async function POST(req: Request) {
       employmentType: body.employmentType,
       responsibilities: body.responsibilities,
       requirements: body.requirements,
+      requirementChecklist,
       idealProfile: (body.idealProfile ?? "").toString().slice(0, 3000),
       evaluationFocus: (body.evaluationFocus ?? "").toString().slice(0, 3000),
       tone: body.tone ?? "중립적인",

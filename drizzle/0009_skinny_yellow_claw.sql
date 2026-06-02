@@ -1,0 +1,1 @@
+ALTER TABLE `job_postings` ADD `requirement_checklist` text DEFAULT '' NOT NULL;

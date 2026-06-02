@@ -154,6 +154,10 @@ export const jobPostings = sqliteTable("job_postings", {
   employmentType: text("employment_type").notNull(),
   responsibilities: text("responsibilities").notNull(),
   requirements: text("requirements").notNull(),
+  // JD 요건 체크리스트 — 공고 저장 시 LLM 이 주요업무+자격요건을 4~8개 항목으로 1회 분해해 저장.
+  // JSON 문자열 배열(string[]) 형태. 이력서 평가 시 이 고정 목록으로 requirement_coverage 를 판정해
+  // **같은 공고는 후보자가 달라도 항상 동일한 JD 항목**이 나오도록 보장한다. 빈 "" = 미생성(구버전 공고).
+  requirementChecklist: text("requirement_checklist").notNull().default(""),
   // 선호 인재상 — 평가·면접 시 추가 컨텍스트. 빈 문자열 허용.
   idealProfile: text("ideal_profile").notNull().default(""),
   // AI 평가 중점 사항 — **HR 내부용. 후보자에게 비공개**.

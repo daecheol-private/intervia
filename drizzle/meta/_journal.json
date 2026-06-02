@@ -64,6 +64,13 @@
       "when": 1780401298758,
       "tag": "0008_good_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1780408917618,
+      "tag": "0009_skinny_yellow_claw",
+      "breakpoints": true
     }
   ]
 }
