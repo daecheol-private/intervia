@@ -15,6 +15,7 @@ import {
   STAGE_META as STAGE_META_SHARED,
   STAGE_RANK as STAGE_RANK_SHARED,
   STAGE_WAITER,
+  STAGE_LABELS,
 } from "@/lib/stage-meta";
 
 type Job = {
@@ -627,6 +628,8 @@ export default function JobDetailPage() {
       c.screeningReport?.strengths?.join(" "),
       c.screeningReport?.matched_keywords?.join(" "),
       c.resumeFilePath,
+      // 전형·태그·결과·점수·상태도 검색 (예: "비추천", "서류평가", "불합격", "평가 실패")
+      candidateSearchExtras(c),
     ]
       .filter(Boolean)
       .join(" ")
@@ -1525,7 +1528,7 @@ export default function JobDetailPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="이름·이메일·전화·요약 검색"
+            placeholder="이름·이메일·전화·요약·전형·태그·결과·점수 검색"
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
@@ -2637,6 +2640,49 @@ function UnlockPanel({
       </button>
     </div>
   );
+}
+
+const OUTCOME_LABELS: Record<NonNullable<Candidate["outcome"]>, string> = {
+  hired: "최종합격",
+  rejected: "불합격",
+  withdrawn: "지원취소",
+};
+
+// 서류평가 상태 라벨 — 카드 배지(CandidateScores)와 동일한 판정. 검색용.
+function screeningStatusLabel(c: Candidate): string | null {
+  if (
+    (c.queueStatus === "queued" || c.queueStatus === "processing") &&
+    !c.parsed
+  )
+    return "분석 중";
+  if (c.queueStatus === "queued")
+    return c.queueAttempts >= 1 && c.lastError ? "재시도 대기" : "대기중";
+  if (c.queueStatus === "processing") return "평가중";
+  if (c.lastJobStatus === "paused") return "충전 대기";
+  if (c.lastJobStatus === "failed") return "평가 실패";
+  return null;
+}
+
+// 카드에 드러나는 전형·태그·결과·점수·상태를 검색 대상에 포함. (이름/이메일 등은 기존 haystack)
+// 예: "비추천", "서류평가", "면접 진행 결정 대기", "불합격", "평가 실패", "68" 검색 가능.
+function candidateSearchExtras(c: Candidate): string {
+  const composite =
+    c.latestInterviewScore != null
+      ? compositeScore(c.screeningScore, c.latestInterviewScore)
+      : null;
+  return [
+    STAGE_LABELS[c.stage], // 전형: "서류평가" 등
+    STAGE_WAITER[c.stage]?.label, // 태그: "면접 진행 결정 대기" 등
+    c.screeningReport?.recommendation, // 결과 태그: "강력추천"/"추천"/"보류"/"비추천"
+    c.outcome ? OUTCOME_LABELS[c.outcome] : "진행 중", // 결과: "불합격"/"진행 중" 등
+    c.screeningScore != null ? `서류 ${c.screeningScore}` : null, // 점수
+    c.latestInterviewScore != null ? `면접 ${c.latestInterviewScore}` : null,
+    composite != null ? `종합 ${composite}` : null,
+    screeningStatusLabel(c), // 서류 상태: "분석 중"/"평가중"/"평가 실패" 등
+    `면접 ${interviewBadge(c.latestInterviewStatus).text}`, // 면접 상태: "미시작" 등
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function interviewBadge(status: Candidate["latestInterviewStatus"]): {
