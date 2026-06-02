@@ -55,7 +55,9 @@ export type AuditAction =
   | "user.password_reset_email"
   | "candidate.admin_delete"
   | "org.admin_transfer"
-  | "candidate.upload_with_consent";
+  | "candidate.upload_with_consent"
+  // 스캔 PDF OCR — 마스킹 전 원본 이력서가 AI 수탁자(Vertex)로 전송됨. PII 외부전송이라 critical.
+  | "candidate.scan_ocr";
 
 export type AuditEntry = {
   actor?: CurrentUser | null;
@@ -81,6 +83,7 @@ const CRITICAL_AUDIT_ACTIONS = new Set<string>([
   "session.revoke_others",
   "appeal.status_change",
   "password_reset.confirm",
+  "candidate.scan_ocr",
 ]);
 
 export function logAudit(req: Request | null, entry: AuditEntry): void {

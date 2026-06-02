@@ -1,8 +1,13 @@
 import { db } from "./db";
-import { candidates, jobPostings, candidateAttachments } from "./schema";
+import {
+  candidates,
+  jobPostings,
+  candidateAttachments,
+  organizations,
+} from "./schema";
 import { eq, and, isNotNull, ne } from "drizzle-orm";
 import { buildScreeningPrompt } from "./prompts";
-import { generateJSON } from "./gemini";
+import { generateJSON, generateJSONMultimodal } from "./gemini";
 import { chargeFeature } from "./tokens";
 import { extractTextFromBuffer } from "./parsers";
 import { extractPII } from "./pii-extract";
@@ -12,10 +17,56 @@ import { sanitizeResumeText } from "./prompt-safety";
 import { readStoredFile } from "./storage";
 import { looksLikeKoreanName } from "./file-classify";
 import { log } from "./logger";
+import { logAudit } from "./audit";
 
 const TEXT_EXTRACTABLE = new Set(["pdf", "docx", "txt", "md", "html", "htm"]);
 function extOf(name: string): string {
   return (name.split(".").pop() ?? "").toLowerCase();
+}
+
+// OCR fallback(스캔 PDF) — Gemini 멀티모달에 PDF 원본을 직접 넘겨 텍스트 추출.
+// 인라인 요청 한도(Vertex ~20MB) 고려, base64 팽창(+33%) 감안해 원본 14MB 까지만 시도.
+const OCR_MAX_BYTES = 14 * 1024 * 1024;
+
+/** 법인이 스캔 PDF OCR(원본→AI 전송)을 허용했는지. orgId 없거나 미허용이면 false. */
+async function orgAllowsScanOcr(orgId: number | null): Promise<boolean> {
+  if (!orgId) return false;
+  const [org] = await db
+    .select({ allow: organizations.allowScanOcr })
+    .from(organizations)
+    .where(eq(organizations.id, orgId));
+  return !!org?.allow;
+}
+
+/**
+ * 텍스트 레이어가 없는 스캔 PDF 를 Gemini 멀티모달로 OCR.
+ * 추출 실패/빈 결과면 빈 문자열 반환(호출부가 기존 에러로 폴백).
+ *
+ * 별도 OCR 인프라 없이 이미 쓰는 Vertex 서울 리전 flash 를 그대로 사용 →
+ * 데이터 국외이전 없이(§28의8 회피 유지) 스캔 이력서도 평가 가능.
+ */
+async function ocrPdfToText(buf: Buffer): Promise<string> {
+  if (buf.length > OCR_MAX_BYTES) return "";
+  const prompt =
+    "이것은 스캔된 이력서 PDF 입니다. 페이지 순서대로 본문에 적힌 모든 글자를 " +
+    "빠짐없이 그대로 추출하세요. 표·머리글·날짜·회사명·기술 스택도 포함합니다. " +
+    "요약·해석·번역하지 말고 원문 텍스트만, 줄바꿈을 살려 그대로 옮기세요. " +
+    '응답은 반드시 {"text": "추출한 전체 텍스트"} JSON 한 개만 반환하세요.';
+  try {
+    const out = await generateJSONMultimodal<{ text?: string }>(
+      [
+        { text: prompt },
+        { inlineData: { mimeType: "application/pdf", data: buf.toString("base64") } },
+      ],
+      { task: "screening" }
+    );
+    return typeof out?.text === "string" ? out.text.trim() : "";
+  } catch (e) {
+    log.warn("resume_ocr_failed", {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return "";
+  }
 }
 
 /**
@@ -68,6 +119,29 @@ export async function ensureParsed(candidateId: number): Promise<void> {
       `파일 파싱 오류: ${e instanceof Error ? e.message : String(e)}`,
       false
     );
+  }
+  // 텍스트 레이어가 없는 스캔 PDF — pdf-parse 가 빈 결과를 뱉음.
+  // 곧장 실패시키지 않고 Gemini 멀티모달 OCR 로 한 번 더 시도.
+  // 단, OCR 은 마스킹 *전* 원본 이력서를 AI 수탁자에 전송하므로(정상 PDF 의
+  // "마스킹 후 전송" 원칙과 달라짐) 법인이 명시적으로 허용(allowScanOcr)한 경우만.
+  if (resumeText.length < 30 && extOf(originalName) === "pdf") {
+    const allowed = await orgAllowsScanOcr(c.orgId);
+    if (allowed) {
+      const ocr = await ocrPdfToText(buf);
+      if (ocr.length >= 30) {
+        log.info("resume_ocr_recovered", { candidateId, chars: ocr.length });
+        resumeText = ocr;
+        // 감사 로그 — 마스킹 전 원본이 외부 AI 수탁자로 전송된 사실을 기록(분쟁 시 입증).
+        logAudit(null, {
+          actorRole: "system",
+          action: "candidate.scan_ocr",
+          resourceType: "candidate",
+          resourceId: candidateId,
+          orgId: c.orgId ?? null,
+          metadata: { filename: originalName, chars: ocr.length },
+        });
+      }
+    }
   }
   if (resumeText.length < 30)
     throw new ScreeningError(

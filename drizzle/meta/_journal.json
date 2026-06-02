@@ -57,6 +57,13 @@
       "when": 1780331713067,
       "tag": "0007_strong_stephen_strange",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1780401298758,
+      "tag": "0008_good_cassandra_nova",
+      "breakpoints": true
     }
   ]
 }

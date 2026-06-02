@@ -237,6 +237,16 @@ const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
 ```
 `lib/pdf-parse.d.ts`에 타입 선언 있음. v2로 업그레이드는 Turbopack worker 이슈로 실패함 (이미 시도해봄).
 
+### 스캔 PDF(텍스트 레이어 없음) → Gemini 멀티모달 OCR fallback
+
+**증상**: 정상 PDF인데 서류 평가가 "이력서 텍스트 추출 실패 (스캔 PDF 또는 빈 파일)."로 실패.
+
+**원인**: 글자가 이미지로 들어간 스캔/캡처 PDF는 pdf-parse 가 빈 텍스트(줄바꿈만)를 반환 → 30자 미만 → 영구 실패.
+
+**해결**: `lib/screening.ts` `ensureParsed()` 에서 PDF 텍스트가 30자 미만이면 `ocrPdfToText()` 가 PDF 원본을 `generateJSONMultimodal`(Vertex 서울 리전 flash)에 직접 넘겨 OCR. 별도 OCR 인프라 없음 → 데이터 국외이전(§28의8) 회피 유지. 14MB 초과 PDF·OCR 빈 결과는 기존 에러로 폴백. 비용 절감 위해 **스캔 PDF일 때만** 타는 경로(정상 텍스트 PDF는 영향 없음). OCR 자체는 ~50초 소요(7페이지 기준)라 worker maxDuration(120s) 안에서 처리됨.
+
+**⚠️ 개인정보 게이트 — `organizations.allowScanOcr` (기본 OFF)**: OCR 은 정상 PDF 의 "로컬 마스킹 후 전송" 원칙과 달리 **마스킹 전 원본** 이력서를 AI 수탁자(Vertex)로 보낸다. 그래서 법인이 명시적으로 토글을 켠 경우(`allowScanOcr=true`)만 OCR 이 돌고, 꺼져 있으면 스캔 PDF 는 기존대로 평가 실패→재업로드 안내. 토글은 `app/account` 법인 패널(org_admin 전용, 경고문 포함) + `PUT /api/orgs/me/scan-ocr`. OCR 전송 시 `candidate.scan_ocr` 감사 로그(critical) 기록. 켜기 전 **처리방침·후보자 동의 범위 정비 선행 필요**. 추출 직후 마스킹되므로 *평가*에 쓰는 텍스트·DB 저장본은 여전히 마스킹본(블라인드 유지).
+
 ## 5. Drizzle 상관 서브쿼리 + libSQL
 
 **증상**: `(SELECT ... FROM ${interviewSessions} WHERE candidate_id = ${candidates.id} ...)` 같은 상관 서브쿼리가 모든 행에 같은 값 반환.

@@ -27,5 +27,6 @@ export async function GET() {
     emailDomain: org.emailDomain,
     officeAddress: org.officeAddress,
     officeAddressDetail: org.officeAddressDetail,
+    allowScanOcr: org.allowScanOcr,
   });
 }

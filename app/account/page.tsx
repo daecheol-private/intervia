@@ -567,6 +567,7 @@ function OrgInfoPanel() {
     emailDomain?: string | null;
     officeAddress?: string | null;
     officeAddressDetail?: string | null;
+    allowScanOcr?: boolean;
   };
   const [org, setOrg] = useState<Org | null>(null);
   const [canEdit, setCanEdit] = useState(false);
@@ -574,6 +575,7 @@ function OrgInfoPanel() {
   const [addr, setAddr] = useState("");
   const [detail, setDetail] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: "error" | "success"; text: string } | null>(
     null
   );
@@ -627,6 +629,28 @@ function OrgInfoPanel() {
     setDetail(org?.officeAddressDetail ?? "");
     setEditing(false);
     setMsg(null);
+  };
+
+  const toggleOcr = async (next: boolean) => {
+    setOcrBusy(true);
+    setMsg(null);
+    const r = await fetch("/api/orgs/me/scan-ocr", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ allowScanOcr: next }),
+    });
+    setOcrBusy(false);
+    if (!r.ok) {
+      setMsg({ type: "error", text: await r.text() });
+      return;
+    }
+    setOrg((o) => (o ? { ...o, allowScanOcr: next } : o));
+    setMsg({
+      type: "success",
+      text: next
+        ? "스캔 PDF AI OCR 을 허용했습니다."
+        : "스캔 PDF AI OCR 을 비활성화했습니다.",
+    });
   };
 
   if (!org || !org.id) return null;
@@ -701,6 +725,44 @@ function OrgInfoPanel() {
                 {busy ? "저장 중..." : "저장"}
               </button>
             </div>
+          </div>
+        )}
+        {canEdit && (
+          <div className="pt-3 mt-3 border-t border-slate-100">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-slate-700">
+                  스캔 PDF 이력서 AI OCR
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  글자가 이미지로 들어간 스캔 이력서를 평가할 수 있게 합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!org.allowScanOcr}
+                disabled={ocrBusy}
+                onClick={() => toggleOcr(!org.allowScanOcr)}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  org.allowScanOcr ? "bg-primary" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    org.allowScanOcr ? "translate-x-5" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-2 leading-relaxed">
+              ⚠️ 켜면 스캔 이력서의 <b>마스킹 전 원본</b>이 AI 처리 수탁자(Vertex AI
+              서울 리전)로 전송됩니다. 일반 이력서의 “로컬 마스킹 후 전송” 원칙과
+              달라지므로, <b>개인정보 처리방침·후보자 동의 범위를 먼저 정비</b>한 뒤
+              켜세요. 데이터는 국내(서울 리전)에 머물러 국외이전은 발생하지 않으며, 모든
+              OCR 전송은 감사 로그에 기록됩니다. 꺼두면 스캔 이력서는 평가되지 않고
+              재업로드 안내만 표시됩니다.
+            </p>
           </div>
         )}
         {msg && (

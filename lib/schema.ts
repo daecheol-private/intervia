@@ -9,6 +9,13 @@ export const organizations = sqliteTable("organizations", {
   // 오프라인 면접 시 후보자에게 안내될 회사 주소 (1차 면접 스케쥴 제시에서 사용)
   officeAddress: text("office_address"),
   officeAddressDetail: text("office_address_detail"),
+  // 스캔 PDF(텍스트 레이어 없음) 이력서를 Gemini 멀티모달 OCR 로 처리할지.
+  // 기본 OFF — OCR 은 마스킹 전 *원본* 이력서를 AI 수탁자(Vertex)에 전송하므로
+  // (정상 PDF 의 "마스킹 후 전송" 원칙과 달라짐) 처리방침·동의를 정비한 법인만 켠다.
+  // OFF 면 스캔 PDF 는 기존대로 평가 실패 → 재업로드 안내.
+  allowScanOcr: integer("allow_scan_ocr", { mode: "boolean" })
+    .notNull()
+    .default(false),
   // 시스템 관리자가 법인을 정지한 시각. null = 정상.
   // 정지 시 멤버 로그인 차단 + 신규 합류 차단. (진행 중 면접 세션은 그대로 종료까지)
   suspendedAt: text("suspended_at"),

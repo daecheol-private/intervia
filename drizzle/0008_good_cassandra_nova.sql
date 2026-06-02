@@ -1,0 +1,1 @@
+ALTER TABLE `organizations` ADD `allow_scan_ocr` integer DEFAULT false NOT NULL;
