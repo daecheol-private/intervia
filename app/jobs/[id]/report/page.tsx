@@ -578,7 +578,7 @@ export default async function JobReportPage({
     max: 100,
     display: `${Math.round(v.sum / v.n)}점`,
     sub: `(${v.n}건)`,
-    color: C.primarySoft,
+    color: C.good,
   }));
   const HUMAN_AXES = ["역량", "경험", "협업", "적합"];
   const HUMAN_KEYS = ["skill", "experience", "collaboration", "fit"] as const;
@@ -910,7 +910,7 @@ export default async function JobReportPage({
                 </div>
                 <VBars
                   bars={scoreBars}
-                  color={C.mutedSoft}
+                  color={C.blueSoft}
                   hiColor={C.primary}
                   baseLabel="전체"
                   hiLabel="최종 합격"
@@ -925,7 +925,7 @@ export default async function JobReportPage({
                   <Radar
                     axes={SCREEN_AXES.map((a) => a.label)}
                     series={[
-                      { label: "전체 평균", color: C.muted, values: radarAll },
+                      { label: "전체 평균", color: C.indigo, values: radarAll },
                       ...(hiredCount > 0
                         ? [
                             {
@@ -1065,6 +1065,7 @@ export default async function JobReportPage({
                       value: r.v,
                       max: durMax,
                       display: `${r.v.toFixed(1)}일`,
+                      color: C.teal,
                     }))}
                   />
                 ) : (
@@ -1117,7 +1118,7 @@ export default async function JobReportPage({
                   </div>
                   <VBars
                     bars={careerBars}
-                    color={C.mutedSoft}
+                    color={C.blueSoft}
                     hiColor={C.primary}
                     baseLabel="전체"
                     hiLabel="최종 합격"
@@ -1184,6 +1185,7 @@ export default async function JobReportPage({
                     value: n,
                     max: kwMax,
                     display: `${n}`,
+                    color: C.indigo,
                   }))}
                 />
               </div>

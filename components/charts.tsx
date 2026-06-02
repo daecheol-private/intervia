@@ -21,7 +21,11 @@ export const C = {
   muted: "#94a3b8", // 진행중/취소
   mutedSoft: "#e2e8f0",
   blue: "#3b6ea5",
+  blueSoft: "#9db8d6", // 히스토그램 기본 막대(전체)
   indigo: "#6366f1",
+  indigoSoft: "#c7c9f7",
+  teal: "#0e9384", // 보조 강조
+  amber: "#d9930a",
   ink: "#0f172a",
   grid: "#e2e8f0",
   axis: "#cbd5e1",
