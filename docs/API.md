@@ -17,6 +17,7 @@
 | POST | `/api/auth/resend-verification` | 🌐 | `{email}` → 미인증 사용자에게 메일 재발송 (존재 여부 노출 X) |
 | POST | `/api/auth/logout` | 🔒 | |
 | POST | `/api/auth/change-password` | 🔒 | 10자+3종+HIBP 정책. 동일 비번 거부 |
+| DELETE | `/api/account` | 🔒 | **본인 계정 탈퇴** (되돌릴 수 없음). `{password, code?, confirm:이메일}`. 2FA 켜져 있으면 `code` 필수. system_admin·법인 유일 관리자(다른 멤버 존재 시)는 409 차단. FK CASCADE 정리, 작성 공고·후보자는 SET NULL 보존 |
 | GET | `/api/auth/sessions` | 🔒 | 본인 활성 세션 목록. `displayId` (토큰 앞 12자) + ip/browser/lastSeenAt |
 | DELETE | `/api/auth/sessions/[displayId]` | 🔒 | 특정 세션 원격 종료. 현재 세션 거부 |
 | POST | `/api/auth/sessions/revoke-others` | 🔒 | 현재 세션 제외 일괄 종료 |

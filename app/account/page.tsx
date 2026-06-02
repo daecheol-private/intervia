@@ -164,7 +164,149 @@ export default function AccountPage() {
         </p>
         <LogoutButton variant="full" />
       </section>
+
+      <DangerZone email={user.email} />
     </main>
+  );
+}
+
+function DangerZone({ email }: { email: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [twoFa, setTwoFa] = useState(false);
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    void fetch("/api/account/2fa")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) setTwoFa(!!d.enabled);
+      });
+  }, []);
+
+  const submit = async () => {
+    setErr("");
+    if (!password) {
+      setErr("비밀번호를 입력하세요.");
+      return;
+    }
+    if (twoFa && code.length !== 6) {
+      setErr("2단계 인증 6자리 코드를 입력하세요.");
+      return;
+    }
+    if (confirmEmail.trim() !== email.trim()) {
+      setErr("확인을 위해 이메일을 정확히 입력하세요.");
+      return;
+    }
+    if (
+      !confirm(
+        "정말로 계정을 탈퇴하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다. 계정과 로그인 정보, 알림·즐겨찾기·작성한 면접관 메모가 삭제됩니다."
+      )
+    )
+      return;
+    setBusy(true);
+    const res = await fetch("/api/account", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        password,
+        code: twoFa ? code : undefined,
+        confirm: confirmEmail,
+      }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    router.replace("/login");
+  };
+
+  return (
+    <section className="mt-8 bg-white border border-danger/30 rounded-2xl p-6 shadow-sm">
+      <h2 className="text-xs font-semibold text-danger uppercase tracking-wider mb-3">
+        계정 탈퇴
+      </h2>
+      <p className="text-sm text-slate-600 mb-4 leading-relaxed">
+        계정을 영구적으로 삭제합니다. <strong>되돌릴 수 없습니다.</strong> 로그인
+        정보·알림·즐겨찾기와 본인이 작성한 면접관 메모가 함께 삭제됩니다. 본인이
+        등록한 공고·후보자 데이터는 법인에 그대로 보존됩니다.
+      </p>
+
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="bg-danger-soft border border-danger/30 hover:bg-danger-soft/70 text-danger text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+        >
+          계정 탈퇴
+        </button>
+      ) : (
+        <div className="space-y-4 border-t border-slate-100 pt-4">
+          <Field label="현재 비밀번호">
+            <input
+              className={inputCls}
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </Field>
+          {twoFa && (
+            <Field label="2단계 인증 6자리 코드">
+              <input
+                className={inputCls}
+                inputMode="numeric"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              />
+            </Field>
+          )}
+          <Field label={`확인을 위해 이메일(${email}) 을 입력하세요`}>
+            <input
+              className={inputCls}
+              type="email"
+              autoComplete="off"
+              placeholder={email}
+              value={confirmEmail}
+              onChange={(e) => setConfirmEmail(e.target.value)}
+            />
+          </Field>
+
+          {err && (
+            <div className="text-xs rounded-lg px-3 py-2 text-danger bg-danger-soft border border-danger/30 whitespace-pre-line">
+              {err}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={submit}
+              disabled={busy}
+              className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg shadow-sm"
+            >
+              {busy ? "처리 중..." : "영구 삭제"}
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                setPassword("");
+                setCode("");
+                setConfirmEmail("");
+                setErr("");
+              }}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-5 py-2 rounded-lg border border-slate-300"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

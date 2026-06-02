@@ -58,6 +58,8 @@ export type AuditAction =
   | "user.delete"
   | "org.admin_transfer"
   | "candidate.upload_with_consent"
+  // 본인 계정 탈퇴 — 되돌릴 수 없는 자가 삭제.
+  | "account.self_delete"
   // 스캔 PDF OCR — 마스킹 전 원본 이력서가 AI 수탁자(Vertex)로 전송됨. PII 외부전송이라 critical.
   | "candidate.scan_ocr";
 
@@ -82,6 +84,7 @@ const CRITICAL_AUDIT_ACTIONS = new Set<string>([
   "candidate.bulk_delete",
   "candidate.download_resume",
   "candidate.self_delete",
+  "account.self_delete",
   "org.smtp_update",
   "org.smtp_delete",
   "session.revoke_others",
