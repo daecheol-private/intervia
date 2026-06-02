@@ -81,6 +81,57 @@ export default function AdminUsersPage() {
     void load();
   };
 
+  // 계정 영구 삭제 — 비활성(disabled) 계정만, sysadmin 전용. step-up + 사유 + 이메일 확인.
+  const deleteUser = async (u: Row) => {
+    const reason = prompt(
+      `'${u.name}' (${u.email}) 계정을 영구 삭제합니다.\n\n` +
+        `세션·알림·즐겨찾기·면접관 메모가 함께 삭제되며 복구할 수 없습니다.\n\n` +
+        `사유 (5자 이상, 감사 로그에 기록):`
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 5) {
+      setErr("삭제 사유는 5자 이상");
+      return;
+    }
+    const confirmEmail = prompt(
+      `실수 방지: 이메일을 정확히 입력하세요.\n\n  ${u.email}`
+    );
+    if (confirmEmail === null) return;
+    if (confirmEmail.trim() !== u.email.trim()) {
+      setErr("이메일 불일치");
+      return;
+    }
+    setBusyId(u.id);
+    let res: Response;
+    try {
+      res = await ensureFetch(
+        `/api/users/${u.id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: reason.trim(),
+            confirm: confirmEmail.trim(),
+          }),
+        },
+        `'${u.name}' (${u.email}) 계정을 영구 삭제합니다.`
+      );
+    } catch {
+      setBusyId(null);
+      return;
+    }
+    setBusyId(null);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    setRows((prev) => prev.filter((r) => r.id !== u.id));
+    alert("삭제 완료. 감사 로그에 기록되었습니다.");
+  };
+
+  // disabled 상태 + 비-sysadmin 계정에만 삭제 버튼 노출.
+  const canDelete = (u: Row) => u.status === "disabled" && u.role !== "system_admin";
+
   // 작업 버튼 묶음 — 데스크톱 테이블 / 모바일 카드 공용
   const renderActionButtons = (u: Row) => (
     <>
@@ -255,6 +306,16 @@ export default function AdminUsersPage() {
       >
         비번 리셋
       </button>
+      {canDelete(u) && (
+        <button
+          onClick={() => deleteUser(u)}
+          disabled={busyId === u.id}
+          title="계정 영구 삭제 (복구 불가)"
+          className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded disabled:opacity-50"
+        >
+          삭제
+        </button>
+      )}
     </>
   );
 
@@ -640,6 +701,16 @@ export default function AdminUsersPage() {
                     >
                       비번 리셋
                     </button>
+                    {canDelete(u) && (
+                      <button
+                        onClick={() => deleteUser(u)}
+                        disabled={busyId === u.id}
+                        title="계정 영구 삭제 (복구 불가)"
+                        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded disabled:opacity-50"
+                      >
+                        삭제
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

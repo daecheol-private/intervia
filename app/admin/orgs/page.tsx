@@ -125,6 +125,55 @@ export default function AdminOrgsPage() {
 
   const { ensureFetch, modal: stepUpModal } = useStepUpFetch();
 
+  const deleteOrg = async (o: Org) => {
+    const reason = prompt(
+      `'${o.name}' 법인을 영구 삭제합니다.\n\n` +
+        `소속 멤버 계정·공고·후보자·토큰 지갑이 모두 삭제되며 복구할 수 없습니다.\n` +
+        `(system_admin 멤버는 법인에서 분리만 됩니다.)\n\n` +
+        `사유 (5자 이상, 감사 로그에 기록):`
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 5) {
+      setErr("삭제 사유는 5자 이상");
+      return;
+    }
+    const confirmName = prompt(
+      `실수 방지: 법인명을 정확히 입력하세요.\n\n  ${o.name}`
+    );
+    if (confirmName === null) return;
+    if (confirmName.trim() !== o.name.trim()) {
+      setErr("법인명 불일치");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    let res: Response;
+    try {
+      res = await ensureFetch(
+        `/api/admin/orgs/${o.id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: reason.trim(),
+            confirm: confirmName.trim(),
+          }),
+        },
+        `'${o.name}' 법인과 소속 데이터를 영구 삭제합니다.`
+      );
+    } catch {
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    setRows((prev) => prev.filter((r) => r.id !== o.id));
+    alert("삭제 완료. 감사 로그에 기록되었습니다.");
+  };
+
   const unmapDomain = async (orgId: number, orgName: string, domain: string) => {
     const reason = prompt(
       `${orgName} 의 도메인 매핑 '${domain}' 을 해제합니다.\n` +
@@ -413,6 +462,15 @@ export default function AdminOrgsPage() {
                       정지
                     </button>
                   )}
+                  {o.suspendedAt && (
+                    <button
+                      onClick={() => deleteOrg(o)}
+                      disabled={busy}
+                      className="px-3 py-2 text-sm bg-rose-600 hover:bg-rose-700 text-white rounded-lg disabled:opacity-50 font-medium"
+                    >
+                      삭제
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -640,6 +698,16 @@ export default function AdminOrgsPage() {
                           className="px-2 py-1 text-xs bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 rounded disabled:opacity-50"
                         >
                           정지
+                        </button>
+                      )}
+                      {o.suspendedAt && (
+                        <button
+                          onClick={() => deleteOrg(o)}
+                          disabled={busy}
+                          title="법인·멤버·후보자 영구 삭제 (복구 불가)"
+                          className="px-2 py-1 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded disabled:opacity-50"
+                        >
+                          삭제
                         </button>
                       )}
                     </div>

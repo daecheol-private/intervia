@@ -1708,7 +1708,7 @@ export default function JobDetailPage() {
                       </div>
                       {c.screeningReport?.summary && (
                         <p className="text-sm text-slate-600 mt-2 line-clamp-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-                          {c.screeningReport.summary}
+                          <HL text={c.screeningReport.summary} />
                         </p>
                       )}
                       <div className="text-[11px] text-slate-400 mt-1">
@@ -1819,7 +1819,7 @@ export default function JobDetailPage() {
                       </div>
                       {c.screeningReport?.summary && (
                         <p className="text-sm text-slate-600 mt-2 line-clamp-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-                          {c.screeningReport.summary}
+                          <HL text={c.screeningReport.summary} />
                         </p>
                       )}
                       <div className="text-[11px] text-slate-400 mt-1">
@@ -1956,7 +1956,7 @@ export default function JobDetailPage() {
                       </div>
                       {c.screeningReport?.summary && (
                         <p className="text-sm text-slate-600 mt-2 line-clamp-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-                          {c.screeningReport.summary}
+                          <HL text={c.screeningReport.summary} />
                         </p>
                       )}
                       <div className="text-[11px] text-slate-400 mt-1">
@@ -2213,6 +2213,25 @@ function shortenError(msg: string | null): string {
     return "API 키 / 서비스계정 설정 문제 — 관리자 확인 필요";
   if (/마스킹|텍스트 없음/.test(msg)) return "이력서 텍스트 추출 실패";
   return msg.length > 60 ? msg.slice(0, 60) + "…" : msg;
+}
+
+// 요약 텍스트의 **굵게** 마크다운만 렌더 (그 외는 평문 유지)
+function HL({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((p, i) => {
+        const m = /^\*\*([^*]+)\*\*$/.exec(p);
+        if (m)
+          return (
+            <strong key={i} className="font-semibold text-slate-900">
+              {m[1]}
+            </strong>
+          );
+        return <span key={i}>{p}</span>;
+      })}
+    </>
+  );
 }
 
 /**

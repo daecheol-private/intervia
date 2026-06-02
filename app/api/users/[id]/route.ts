@@ -8,6 +8,80 @@ import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
+/**
+ * 계정 영구 삭제 — sysadmin 전용. 파괴적.
+ *
+ * 전제: 계정이 **비활성(disabled)** 상태여야 함 (실수 방지 2단계).
+ * 가드: step-up 인증 + 사유 5자+ + confirm 에 이메일 정확히.
+ *
+ * 차단: 본인 / system_admin 계정 (먼저 sysadmin 권한 회수 후 삭제).
+ * 삭제 시 세션·알림·즐겨찾기·합류요청·면접관 메모 등은 FK CASCADE 로 정리.
+ * (작성한 후보자/공고 등의 참조는 ON DELETE SET NULL — 데이터 자체는 보존.)
+ */
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const me = await getCurrentUser();
+  const guard = requireUser(me);
+  if (guard) return guard;
+  if (me!.role !== "system_admin")
+    return new Response("권한 없음 (시스템 관리자 전용)", { status: 403 });
+
+  const stepUpGuard = await requireStepUp();
+  if (stepUpGuard) return stepUpGuard;
+
+  const { id } = await params;
+  const targetId = Number(id);
+  if (targetId === me!.id)
+    return new Response("본인 계정은 삭제할 수 없습니다.", { status: 400 });
+
+  const body = (await req.json().catch(() => ({}))) as {
+    reason?: string;
+    confirm?: string;
+  };
+  const reason = (body.reason ?? "").trim();
+  if (reason.length < 5)
+    return new Response("삭제 사유는 5자 이상 입력하세요.", { status: 400 });
+
+  const [target] = await db.select().from(users).where(eq(users.id, targetId));
+  if (!target) return new Response("Not found", { status: 404 });
+
+  if (target.role === "system_admin")
+    return new Response(
+      "시스템 관리자 계정은 삭제할 수 없습니다. 먼저 sysadmin 권한을 회수하세요.",
+      { status: 409 }
+    );
+
+  // 전제조건: 비활성 계정만 삭제 가능 (실수 방지)
+  if (target.status !== "disabled")
+    return new Response(
+      "비활성(disabled) 계정만 삭제할 수 있습니다. 먼저 계정을 비활성화하세요.",
+      { status: 400 }
+    );
+
+  // 실수 방지: 이메일 정확히 입력
+  const got = (body.confirm ?? "").trim();
+  if (got !== target.email.trim())
+    return new Response(
+      `실수 방지: 이메일(${target.email}) 을 confirm 필드에 정확히 입력하세요.`,
+      { status: 400 }
+    );
+
+  await db.delete(users).where(eq(users.id, targetId));
+
+  logAudit(req, {
+    actor: me!,
+    action: "user.delete",
+    resourceType: "user",
+    resourceId: targetId,
+    orgId: target.orgId,
+    metadata: { reason, email: target.email, name: target.name, role: target.role },
+  });
+
+  return new Response(null, { status: 204 });
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }

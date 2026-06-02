@@ -54,6 +54,8 @@ export type AuditAction =
   | "session.force_logout"
   | "user.password_reset_email"
   | "candidate.admin_delete"
+  | "org.delete"
+  | "user.delete"
   | "org.admin_transfer"
   | "candidate.upload_with_consent"
   // 스캔 PDF OCR — 마스킹 전 원본 이력서가 AI 수탁자(Vertex)로 전송됨. PII 외부전송이라 critical.
@@ -74,6 +76,8 @@ export type AuditEntry = {
 const CRITICAL_AUDIT_ACTIONS = new Set<string>([
   "user.role_change",
   "user.status_change",
+  "user.delete",
+  "org.delete",
   "candidate.delete",
   "candidate.bulk_delete",
   "candidate.download_resume",
