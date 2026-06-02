@@ -4,8 +4,11 @@ import {
   jobPostings,
   candidateAttachments,
   organizations,
+  screeningCache,
 } from "./schema";
-import { eq, and, isNotNull, ne } from "drizzle-orm";
+import { eq, and, isNotNull, ne, lt } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { deleteFilesForCandidate } from "./candidate-files";
 import { buildScreeningPrompt } from "./prompts";
 import { parseChecklist } from "./job-checklist";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
@@ -24,6 +27,15 @@ import { logAudit } from "./audit";
 const TEXT_EXTRACTABLE = new Set(["pdf", "docx", "txt", "md", "html", "htm"]);
 function extOf(name: string): string {
   return (name.split(".").pop() ?? "").toLowerCase();
+}
+
+/**
+ * 이력서 본문 정규화 후 SHA-256 — "내용 동일" 중복 판정용.
+ * 공백·대소문자 차이를 무시해, 바이트가 달라도(재저장·재export) 본문이 같으면 같은 해시.
+ */
+function contentHashOf(text: string): string {
+  const normalized = text.replace(/\s+/g, " ").trim().toLowerCase();
+  return createHash("sha256").update(normalized).digest("hex");
 }
 
 // OCR fallback(스캔 PDF) — Gemini 멀티모달에 PDF 원본을 직접 넘겨 텍스트 추출.
@@ -190,6 +202,8 @@ export async function ensureParsed(candidateId: number): Promise<void> {
       educationSchool: education.school,
       educationMajor: education.major,
       resumeMaskedText: sanitized.text,
+      // 내용 기반 중복 판정용 — 파싱된 *원문* 기준(마스킹 전, 바이트 무관).
+      resumeContentHash: contentHashOf(resumeText),
     })
     .where(eq(candidates.id, candidateId));
 
@@ -646,6 +660,49 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
   if (!candidate) {
     throw new ScreeningError(`candidate ${candidateId} 없음`, false);
   }
+
+  // 내용 기반 중복 자동 삭제 (2차 dedup).
+  // 업로드 시 1차 dedup(공고+파일 바이트 해시)은 "바이트 동일"만 잡는다. 같은 이력서를
+  // 재저장·재export·다른 ZIP 으로 올리면 바이트가 달라 통과됐다. 여기서 파싱된 *본문* 해시로
+  // 같은 공고에 동일 내용 이력서가 *더 먼저*(작은 id) 있으면 이 후보자는 중복 → 평가 없이 삭제.
+  // (작은 id = 먼저 업로드된 원본을 보존. 파일·행 삭제, cascade 로 첨부·큐 정리. 과금도 안 됨.)
+  if (candidate.resumeContentHash) {
+    const [earlier] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.jobId, candidate.jobId),
+          eq(candidates.resumeContentHash, candidate.resumeContentHash),
+          lt(candidates.id, candidate.id)
+        )
+      )
+      .orderBy(candidates.id)
+      .limit(1);
+    if (earlier) {
+      await deleteFilesForCandidate(candidateId);
+      await db.delete(candidates).where(eq(candidates.id, candidateId));
+      logAudit(null, {
+        actorRole: "system",
+        action: "candidate.delete",
+        resourceType: "candidate",
+        resourceId: candidateId,
+        orgId: candidate.orgId ?? null,
+        metadata: {
+          reason: "duplicate_content",
+          keptCandidateId: earlier.id,
+          name: candidate.name,
+        },
+      });
+      log.info("screening_duplicate_auto_deleted", {
+        candidateId,
+        keptCandidateId: earlier.id,
+        jobId: candidate.jobId,
+      });
+      return;
+    }
+  }
+
   const [job] = await db
     .select()
     .from(jobPostings)
@@ -682,41 +739,77 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
       maskedText: a.maskedText as string,
     }));
 
-  let result: ScreeningResult;
-  try {
-    result = await generateJSON<ScreeningResult>(
-      buildScreeningPrompt(
-        {
-          position: job.position,
-          level: job.level,
-          employmentType: job.employmentType,
-          responsibilities: job.responsibilities,
-          requirements: job.requirements,
-          requirementChecklist: parseChecklist(job.requirementChecklist),
-          idealProfile: job.idealProfile,
-          evaluationFocus: job.evaluationFocus,
-          tone: job.tone,
-        },
-        masked,
-        attachmentsForPrompt,
-        // 학력 수준·전공만 — 출신 학교명은 전달 안 함(학벌 차별 방지, 블라인드 유지)
-        { level: candidate.educationLevel, major: candidate.educationMajor }
-      ),
-      { task: "screening", responseSchema: SCREENING_SCHEMA }
-    );
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    // Gemini RPM/quota/timeout 류는 transient 으로 — 큐가 백오프 후 재시도
-    const transient =
-      /429|quota|rate|503|timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(msg);
-    throw new ScreeningError(msg, transient);
-  }
+  const prompt = buildScreeningPrompt(
+    {
+      position: job.position,
+      level: job.level,
+      employmentType: job.employmentType,
+      responsibilities: job.responsibilities,
+      requirements: job.requirements,
+      requirementChecklist: parseChecklist(job.requirementChecklist),
+      idealProfile: job.idealProfile,
+      evaluationFocus: job.evaluationFocus,
+      tone: job.tone,
+    },
+    masked,
+    attachmentsForPrompt,
+    // 학력 수준·전공만 — 출신 학교명은 전달 안 함(학벌 차별 방지, 블라인드 유지)
+    { level: candidate.educationLevel, major: candidate.educationMajor }
+  );
 
-  // 종합 점수·등급은 LLM 출력을 신뢰하지 않고 6축 + 페널티로 코드가 재계산.
-  // (LLM 이 6축은 낮게 줘도 종합은 후하게 주는 인플레/모순을 차단)
-  const recomputed = recomputeScore(result);
-  result.score = recomputed.score;
-  result.recommendation = recomputed.recommendation;
+  // 결과 캐시 키 = 공고ID + 평가 프롬프트 전체 해시. 입력(공고 평가기준 + 이력서 내용 + 첨부)이
+  // 동일하면 LLM 재호출 없이 같은 결과를 재사용 → 재평가/중복 시 점수가 흔들리지 않고 토큰도 절약.
+  // 공고 평가기준을 바꾸면 프롬프트가 달라져 cache miss → 자동으로 새로 평가.
+  const promptHash = createHash("sha256")
+    .update(`${job.id}\n${prompt}`)
+    .digest("hex");
+
+  let result: ScreeningResult;
+  const [cached] = await db
+    .select({ report: screeningCache.report })
+    .from(screeningCache)
+    .where(eq(screeningCache.promptHash, promptHash))
+    .limit(1);
+
+  if (cached?.report) {
+    // 캐시된 report 는 recomputeScore 까지 반영된 *최종* 결과.
+    result = cached.report as ScreeningResult;
+    log.info("screening_cache_hit", { candidateId, jobId: job.id });
+  } else {
+    try {
+      result = await generateJSON<ScreeningResult>(prompt, {
+        task: "screening",
+        responseSchema: SCREENING_SCHEMA,
+        // 평가 일관성 — 같은 이력서가 매번 다른 점수를 받지 않도록 결정성 최대화.
+        temperature: 0,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Gemini RPM/quota/timeout 류는 transient 으로 — 큐가 백오프 후 재시도
+      const transient =
+        /429|quota|rate|503|timeout|ETIMEDOUT|ECONNRESET|fetch failed/i.test(msg);
+      throw new ScreeningError(msg, transient);
+    }
+
+    // 종합 점수·등급은 LLM 출력을 신뢰하지 않고 6축 + 페널티로 코드가 재계산.
+    // (LLM 이 6축은 낮게 줘도 종합은 후하게 주는 인플레/모순을 차단)
+    const recomputed = recomputeScore(result);
+    result.score = recomputed.score;
+    result.recommendation = recomputed.recommendation;
+
+    // 캐시 저장 — best-effort. 동시 평가가 먼저 넣었으면 unique 충돌로 무시.
+    try {
+      await db
+        .insert(screeningCache)
+        .values({ promptHash, score: result.score, report: result })
+        .onConflictDoNothing();
+    } catch (cacheErr) {
+      log.warn("screening_cache_write_failed", {
+        candidateId,
+        error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr),
+      });
+    }
+  }
 
   type UpdateFields = {
     screeningScore: number;

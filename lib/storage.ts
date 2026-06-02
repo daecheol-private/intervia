@@ -4,6 +4,38 @@ import { randomBytes } from "node:crypto";
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 
+/**
+ * 파일명(또는 경로) 확장자로 content-type 도출.
+ * 미지정 시 octet-stream 으로 저장하면 브라우저가 inline 렌더 대신 무조건
+ * 다운로드해버린다 (Content-Disposition: inline 무시). 그래서 업로드·로컬읽기
+ * 양쪽에서 확장자 기반으로 정확한 타입을 매긴다.
+ */
+export function contentTypeFromName(name: string): string {
+  const ext = path.extname(name).toLowerCase();
+  const map: Record<string, string> = {
+    ".pdf": "application/pdf",
+    ".docx":
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".hwp": "application/x-hwp",
+    ".hwpx": "application/vnd.hancom.hwpx",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".pptx":
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".xlsx":
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".txt": "text/plain",
+    ".md": "text/plain",
+    ".html": "text/html",
+    ".htm": "text/html",
+  };
+  return map[ext] ?? "application/octet-stream";
+}
+
 function useBlob(): boolean {
   const has = !!process.env.BLOB_READ_WRITE_TOKEN;
   // 안전 가드: dev 에서 Blob 토큰이 실수로 .env.local 에 있으면 로컬 디스크 fallback
@@ -37,7 +69,7 @@ export async function saveFile(
     const { put } = await import("@vercel/blob");
     const result = await put(safeBase, buffer, {
       access: "public",
-      contentType: contentType ?? "application/octet-stream",
+      contentType: contentType ?? contentTypeFromName(originalName),
       addRandomSuffix: false,
     });
     return result.url;
@@ -111,14 +143,7 @@ export async function readLocalFile(
     return null;
   try {
     const data = await fs.readFile(path.join(UPLOAD_DIR, filename));
-    const ext = path.extname(filename).toLowerCase();
-    const contentType =
-      ext === ".pdf"
-        ? "application/pdf"
-        : ext === ".html" || ext === ".htm"
-          ? "text/html"
-          : "application/octet-stream";
-    return { data, contentType };
+    return { data, contentType: contentTypeFromName(filename) };
   } catch {
     return null;
   }

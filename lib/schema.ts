@@ -281,6 +281,9 @@ export const candidates = sqliteTable("candidates", {
     onDelete: "set null",
   }),
   resumeHash: text("resume_hash"),
+  // 파싱된 이력서 본문(정규화) SHA-256. resume_hash(파일 바이트)와 달리 "내용 동일"을 잡는다.
+  // 바이트가 달라도(재저장·재export) 텍스트가 같으면 같은 값 → 워커가 같은 공고 내 중복 자동 삭제.
+  resumeContentHash: text("resume_content_hash"),
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
@@ -456,6 +459,26 @@ export const screeningJobs = sqliteTable("screening_jobs", {
   }),
   startedAt: text("started_at"),
   completedAt: text("completed_at"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/**
+ * 서류평가 결과 캐시 — 동일 입력(같은 공고 평가기준 + 같은 이력서 내용)은 같은 점수를 재사용.
+ *
+ * 왜: Gemini 는 temperature 0 이어도 thinking 으로 완전 결정적이지 않다. 같은 이력서를
+ *     재평가/중복 업로드하면 점수가 흔들렸다. prompt_hash(공고ID + 평가 프롬프트 전체의
+ *     SHA-256)로 캐싱해, 입력이 동일하면 LLM 호출 없이 캐시 결과를 그대로 쓴다.
+ *     공고 평가기준이 바뀌면 프롬프트가 달라져 cache miss → 자동으로 새로 평가.
+ *
+ * report 는 recomputeScore 까지 반영된 *최종* ScreeningResult.
+ */
+export const screeningCache = sqliteTable("screening_cache", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  promptHash: text("prompt_hash").notNull().unique(),
+  score: integer("score").notNull(),
+  report: text("report", { mode: "json" }).notNull(),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),

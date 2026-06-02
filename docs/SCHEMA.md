@@ -101,7 +101,8 @@
 | org_id | INTEGER NULL FK organizations(id) ON DELETE CASCADE | job.org_id 와 동일하게 비정규화 (쿼리 단순화) |
 | job_id | INTEGER NOT NULL FK job_postings(id) ON DELETE CASCADE | |
 | uploaded_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
-| resume_hash | TEXT NULL | SHA-256 |
+| resume_hash | TEXT NULL | 파일 **바이트** SHA-256. 업로드 시 `(job_id, resume_hash)` 중복 거부 (1차 dedup, 바이트 동일만) |
+| resume_content_hash | TEXT NULL | 파싱된 **본문**(정규화) SHA-256. 워커가 파싱 후 기록. 같은 공고에 동일 내용이 먼저 있으면 자동 삭제 (2차 dedup, 바이트 달라도 잡음) |
 | name / email / phone / age / career_years / career_summary | … | 정규식 + LLM 추출 |
 | education_level / education_school / education_major | TEXT NULL | 최종학력(수준/학교명/전공). 업로드 시 원문에서 결정적 추출 (`lib/education-extract.ts`). 셋 다 화면 표시. **AI 평가에는 학력 수준·전공만 전달(학교명 제외 — 학벌 차별 방지)** |
 | stage | TEXT NOT NULL DEFAULT 'applied' | applied/screened/interview_1/interview_2/offer/hired/rejected/hold/withdrawn |
@@ -122,7 +123,21 @@
 | status | TEXT NOT NULL DEFAULT 'uploaded' | uploaded/screening/screened/interviewed/failed |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
-인덱스: `(job_id, uploaded_by_user_id, resume_hash)` 중복 체크.
+중복 체크: 코드는 `(job_id, resume_hash)` 로 검사 (업로더 무관). 2차로 워커가 `(job_id, resume_content_hash)` 비교 후 중복 자동 삭제.
+
+## screening_cache
+
+서류평가 결과 캐시 — 동일 입력은 같은 점수 재사용 (재평가·중복 시 점수 흔들림 방지 + 토큰 절약).
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| prompt_hash | TEXT NOT NULL UNIQUE | `SHA-256(job_id + "\n" + 평가 프롬프트 전체)`. 공고 평가기준·이력서 내용·첨부가 모두 반영됨 |
+| score | INTEGER NOT NULL | 캐시된 종합 점수 (디버깅용) |
+| report | JSON NOT NULL | `recomputeScore` 까지 반영된 최종 `ScreeningResult` |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+`lib/screening.ts runScreeningOnce` 가 LLM 호출 전 조회 → hit 면 LLM 생략. miss 면 평가 후 저장. 공고 평가기준이 바뀌면 prompt_hash 가 달라져 자동으로 새로 평가. (정리 cron 없음 — 무한 증가하지만 행당 작음)
 
 ## interview_sessions
 

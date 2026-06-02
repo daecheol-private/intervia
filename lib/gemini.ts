@@ -151,7 +151,7 @@ async function withRetry<T>(
 
 export async function generateJSON<T>(
   prompt: string,
-  opts?: { task?: LlmTask; responseSchema?: unknown }
+  opts?: { task?: LlmTask; responseSchema?: unknown; temperature?: number }
 ): Promise<T> {
   const task: LlmTask = opts?.task ?? "screening";
   const thinkingBudget = THINKING_BUDGET[task];
@@ -159,7 +159,8 @@ export async function generateJSON<T>(
     async () => {
       const config: Record<string, unknown> = {
         responseMimeType: "application/json",
-        temperature: 0.2,
+        // 평가 일관성을 위해 호출부가 temperature 를 낮출 수 있음(screening=0). 기본 0.2.
+        temperature: opts?.temperature ?? 0.2,
       };
       // responseSchema 지정 시 Gemini 가 스키마에 맞는 유효 JSON 을 *보장* →
       // 긴 자유서술 필드에서 따옴표·제어문자 이스케이프가 깨져 파싱 실패하던 문제 차단.

@@ -187,6 +187,21 @@ Next 16 의 `after(async () => ...)` (from `next/server`) 는 Vercel 이 응답 
 
 **튜닝 포인트**: 공통 토큰 임계(`Math.ceil(N * 0.6)`), 직무어 사전(`NON_PERSON_TOKENS`), 노이즈(`NAME_NOISE`).
 
+## 0-5. 중복 이력서가 별개로 등록 + 같은 이력서 점수가 매번 다름 (2026-06-03)
+
+**증상**: 같은 사람 이력서를 ZIP A·B 로 두 번 올렸더니 후보자 2명으로 생성되고, 점수도 크게 다름(예 52 vs 68).
+
+**원인 1 (중복)**: 업로드 dedup 은 **파일 바이트** SHA-256(`resume_hash`)만 본다. 재저장·재export·다른 ZIP 으로 만든 동일 이력서는 바이트가 달라 통과한다.
+
+**원인 2 (점수)**: 후보자 2명 = **독립 평가 2회**. Gemini 는 비결정적이고, `recomputeScore` 의 spread(×1.4)·절벽형 캡들이 작은 차이를 증폭한다. 범주 판정 1개만 뒤집혀도 12점+ 점프.
+
+**해결** (2026-06-03):
+1. **2차 dedup (내용 해시)** — 워커가 파싱 후 `resume_content_hash`(본문 정규화 SHA-256) 비교. 같은 공고에 동일 내용이 *먼저*(작은 id) 있으면 평가 없이 자동 삭제 (`lib/screening.ts runScreeningOnce`). 바이트가 달라도 본문 같으면 잡힘.
+2. **점수 일관성** — screening `temperature: 0` + `screening_cache`(prompt_hash 캐싱). 같은 입력은 LLM 재호출 없이 같은 결과 재사용.
+
+⚠️ **내용이 진짜로 다르면(다른 버전)** 여전히 별개 후보자 + 다른 점수가 정상. "동일한데 다르다" 면 운영 DB 에서 `resume_content_hash` 가 실제로 같은지 먼저 확인.
+⚠️ recomputeScore 의 spread/캡은 **변별력용 의도된 설계** — 건드리지 말 것. 점수 흔들림은 temp+캐시로 해결, 공식은 그대로.
+
 ## 1. Gemini 모델 선택 (paid tier, 2026-05-26 통합)
 
 **현재 셋업**: paid tier. 모든 task 가 Vertex AI 서울 + flash 로 단일화.
@@ -321,6 +336,12 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 - Blob URL 이어도 server-side fetch 해서 stream proxy → Blob 의 public URL 외부 노출 X
 
 ⚠️ `lib/storage.ts` 의 `getDownloadUrl` 은 deprecated. 직접 사용 금지.
+
+⚠️ **content-type 필수 — octet-stream 으로 저장하면 PDF 가 inline 대신 다운로드됨** (2026-06-03):
+- 다운로드 라우트는 `Content-Disposition: inline` 을 보내지만, `Content-Type: application/octet-stream` 이면 브라우저는 inline 무시하고 무조건 다운로드한다.
+- 다운로드 프록시는 Blob 이 저장한 content-type 을 그대로 흘려보낸다 → **업로드 시점에 정확한 타입을 박아야 함**.
+- `saveFile()` 은 `contentType` 미지정 시 `contentTypeFromName(originalName)` (확장자 기반)으로 도출한다. 새 업로드 경로 추가 시 **확장자가 살아있는 파일명을 넘길 것**.
+- 클라이언트 직접 Blob 업로드(`@vercel/blob/client` `upload()`)는 pathname 확장자에서 자동 도출되므로 OK. 단 **ZIP 추출 항목은 `saveFile` 을 거치므로** 위 규칙 적용 대상.
 
 ## 11. 이메일 발송 환경변수
 
