@@ -19,6 +19,7 @@ import {
   Lock,
   ShieldCheck,
   Video,
+  Settings,
   Menu,
   X,
   Home,
@@ -61,6 +62,7 @@ function buildSections(role: Role): NavSection[] {
         { href: "/org/dashboard", label: "채용 현황", Icon: BarChart3 },
         { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
         { href: "/org/members", label: "멤버", Icon: Users },
+        { href: "/org/settings", label: "법인 설정", Icon: Settings },
         // 메일 서버 설정은 데스크톱 전용 — 모바일 메뉴에서 숨김
       ],
     });
@@ -147,6 +149,7 @@ export function NavBar({
                     { href: "/org/members", label: "멤버", Icon: Users },
                     { href: "/org/smtp", label: "메일 서버", Icon: Mail },
                     { href: "/org/zoom", label: "화상 면접(줌)", Icon: Video },
+                    { href: "/org/settings", label: "법인 설정", Icon: Settings },
                   ]}
                 />
               )}

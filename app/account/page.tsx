@@ -567,18 +567,9 @@ function OrgInfoPanel() {
     emailDomain?: string | null;
     officeAddress?: string | null;
     officeAddressDetail?: string | null;
-    allowScanOcr?: boolean;
   };
   const [org, setOrg] = useState<Org | null>(null);
   const [canEdit, setCanEdit] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [addr, setAddr] = useState("");
-  const [detail, setDetail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [ocrBusy, setOcrBusy] = useState(false);
-  const [msg, setMsg] = useState<{ type: "error" | "success"; text: string } | null>(
-    null
-  );
 
   const load = async () => {
     const [orgRes, statusRes] = await Promise.all([
@@ -588,8 +579,6 @@ function OrgInfoPanel() {
     if (orgRes.ok) {
       const o = (await orgRes.json()) as Org;
       setOrg(o);
-      setAddr(o.officeAddress ?? "");
-      setDetail(o.officeAddressDetail ?? "");
     }
     if (statusRes.ok) {
       const s = await statusRes.json();
@@ -603,56 +592,6 @@ function OrgInfoPanel() {
     void load();
   }, []);
 
-  const save = async () => {
-    setBusy(true);
-    setMsg(null);
-    const r = await fetch("/api/orgs/me/address", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        officeAddress: addr.trim() || null,
-        officeAddressDetail: detail.trim() || null,
-      }),
-    });
-    setBusy(false);
-    if (!r.ok) {
-      setMsg({ type: "error", text: await r.text() });
-      return;
-    }
-    setMsg({ type: "success", text: "회사 주소가 저장되었습니다." });
-    setEditing(false);
-    void load();
-  };
-
-  const cancel = () => {
-    setAddr(org?.officeAddress ?? "");
-    setDetail(org?.officeAddressDetail ?? "");
-    setEditing(false);
-    setMsg(null);
-  };
-
-  const toggleOcr = async (next: boolean) => {
-    setOcrBusy(true);
-    setMsg(null);
-    const r = await fetch("/api/orgs/me/scan-ocr", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ allowScanOcr: next }),
-    });
-    setOcrBusy(false);
-    if (!r.ok) {
-      setMsg({ type: "error", text: await r.text() });
-      return;
-    }
-    setOrg((o) => (o ? { ...o, allowScanOcr: next } : o));
-    setMsg({
-      type: "success",
-      text: next
-        ? "스캔 PDF AI OCR 을 허용했습니다."
-        : "스캔 PDF AI OCR 을 비활성화했습니다.",
-    });
-  };
-
   if (!org || !org.id) return null;
 
   return (
@@ -661,13 +600,13 @@ function OrgInfoPanel() {
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
           소속 법인
         </h2>
-        {canEdit && !editing && (
-          <button
-            onClick={() => setEditing(true)}
+        {canEdit && (
+          <Link
+            href="/org/settings"
             className="text-xs text-primary hover:underline"
           >
-            주소 수정
-          </button>
+            법인 설정에서 수정 →
+          </Link>
         )}
       </div>
       <div className="space-y-2 text-sm">
@@ -675,106 +614,26 @@ function OrgInfoPanel() {
         {org.emailDomain && (
           <Row label="이메일 도메인" value={org.emailDomain} />
         )}
-        {!editing ? (
-          <>
-            <Row
-              label="회사 주소"
-              value={org.officeAddress ?? "(미설정)"}
-            />
-            {org.officeAddressDetail && (
-              <Row label="상세 주소" value={org.officeAddressDetail} />
-            )}
-            {!org.officeAddress && (
-              <p className="text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-2 mt-1">
-                오프라인 면접 일정 메일에 회사 주소가 포함됩니다.
-                {canEdit
-                  ? " 미리 등록해 두면 매번 입력하지 않아도 됩니다."
-                  : " 법인 관리자에게 등록을 요청하세요."}
-              </p>
-            )}
-          </>
-        ) : (
-          <div className="space-y-2 pt-2">
-            <input
-              value={addr}
-              onChange={(e) => setAddr(e.target.value)}
-              placeholder="예: 서울시 강남구 테헤란로 123"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <input
-              value={detail}
-              onChange={(e) => setDetail(e.target.value)}
-              placeholder="상세 (호수·층 등, 선택)"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <p className="text-[11px] text-slate-500">
-              주소는 같은 법인 모든 멤버에게 공유됩니다. 오프라인 면접 일정 메일에 자동으로 포함됩니다.
-            </p>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={cancel}
-                className="px-3 py-1.5 rounded-md border border-slate-300 text-sm text-slate-700"
-              >
-                취소
-              </button>
-              <button
-                onClick={save}
-                disabled={busy}
-                className="px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
-              >
-                {busy ? "저장 중..." : "저장"}
-              </button>
-            </div>
-          </div>
+        <Row label="회사 주소" value={org.officeAddress ?? "(미설정)"} />
+        {org.officeAddressDetail && (
+          <Row label="상세 주소" value={org.officeAddressDetail} />
+        )}
+        {!org.officeAddress && (
+          <p className="text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-2 mt-1">
+            오프라인 면접 일정 메일에 회사 주소가 포함됩니다.
+            {canEdit
+              ? " 법인 설정에서 등록해 두면 매번 입력하지 않아도 됩니다."
+              : " 법인 관리자에게 등록을 요청하세요."}
+          </p>
         )}
         {canEdit && (
-          <div className="pt-3 mt-3 border-t border-slate-100">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-slate-700">
-                  스캔 PDF 이력서 AI OCR
-                </p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  글자가 이미지로 들어간 스캔 이력서를 평가할 수 있게 합니다.
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={!!org.allowScanOcr}
-                disabled={ocrBusy}
-                onClick={() => toggleOcr(!org.allowScanOcr)}
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                  org.allowScanOcr ? "bg-primary" : "bg-slate-300"
-                }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                    org.allowScanOcr ? "translate-x-5" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </div>
-            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-2 leading-relaxed">
-              ⚠️ 켜면 스캔 이력서의 <b>마스킹 전 원본</b>이 AI 처리 수탁자(Vertex AI
-              서울 리전)로 전송됩니다. 일반 이력서의 “로컬 마스킹 후 전송” 원칙과
-              달라지므로, <b>개인정보 처리방침·후보자 동의 범위를 먼저 정비</b>한 뒤
-              켜세요. 데이터는 국내(서울 리전)에 머물러 국외이전은 발생하지 않으며, 모든
-              OCR 전송은 감사 로그에 기록됩니다. 꺼두면 스캔 이력서는 평가되지 않고
-              재업로드 안내만 표시됩니다.
-            </p>
-          </div>
-        )}
-        {msg && (
-          <div
-            className={`text-xs rounded-lg px-3 py-2 ${
-              msg.type === "error"
-                ? "text-danger bg-danger-soft border border-danger/30"
-                : "text-primary-deep bg-primary-soft border border-primary/30"
-            }`}
-          >
-            {msg.text}
-          </div>
+          <p className="text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-2 mt-1">
+            회사 주소·스캔 PDF AI OCR 등 법인 단위 설정은{" "}
+            <Link href="/org/settings" className="text-primary hover:underline">
+              법인 설정
+            </Link>
+            에서 변경할 수 있습니다.
+          </p>
         )}
       </div>
     </section>
