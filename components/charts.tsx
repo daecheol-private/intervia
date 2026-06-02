@@ -1,13 +1,14 @@
 /**
- * 공고 리포트용 순수 SVG 차트 프리미티브.
+ * 공용 순수 SVG 차트 프리미티브 (공고 리포트 + 법인 대시보드 공유).
  *
  * 왜 라이브러리(recharts 등) 대신 SVG 인가:
- *   - 이 리포트는 인쇄/PDF 지향(PrintButton + print: 스타일 다수).
+ *   - 공고 리포트는 인쇄/PDF 지향(PrintButton + print: 스타일 다수).
  *     recharts 는 클라이언트 전용이라 print 레이아웃에서 깨지기 쉽다.
  *   - 정적 SVG 는 서버 컴포넌트로 그대로 렌더 → JS 없이 인쇄에 안정적이고
  *     의존성도 늘지 않는다.
+ *   - "use client" / 서버 의존성이 없어 서버·클라이언트 컴포넌트 양쪽에서 재사용 가능.
  *
- * 모든 컴포넌트는 상호작용 없음("use client" 불필요). 툴팁은 <title> 로만.
+ * 모든 컴포넌트는 상호작용 없음. 툴팁은 <title> 로만.
  */
 
 // 딥그린(#0d4f3c) 테마와 조화되는 팔레트.
@@ -579,5 +580,113 @@ export function DotTrend({
         {yLabel}
       </text>
     </svg>
+  );
+}
+
+/* ───────────────── 시계열 영역 차트 (일·주별 추이) ───────────────── */
+
+export function TimeArea({
+  points,
+  height = 150,
+  color = C.primary,
+  unit = "건",
+}: {
+  points: { label: string; value: number }[];
+  height?: number;
+  color?: string;
+  unit?: string;
+}) {
+  const width = 640;
+  const padL = 26;
+  const padR = 8;
+  const padT = 10;
+  const padB = 20;
+  const plotW = width - padL - padR;
+  const plotH = height - padT - padB;
+  const n = points.length;
+  const max = Math.max(1, ...points.map((p) => p.value));
+  const total = points.reduce((s, p) => s + p.value, 0);
+  const sx = (i: number) =>
+    padL + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const sy = (v: number) => padT + plotH - (v / max) * plotH;
+
+  const line = points.map((p, i) => `${sx(i)},${sy(p.value)}`).join(" ");
+  const area =
+    n > 0 ? `${padL},${padT + plotH} ${line} ${sx(n - 1)},${padT + plotH}` : "";
+  // x축 라벨은 과밀 방지를 위해 ~6개만
+  const labelStep = Math.max(1, Math.ceil(n / 6));
+  const peakIdx = points.reduce(
+    (best, p, i) => (p.value > points[best].value ? i : best),
+    0
+  );
+
+  return (
+    <div>
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`}>
+        {[0, 0.5, 1].map((f) => (
+          <line
+            key={f}
+            x1={padL}
+            y1={sy(f * max)}
+            x2={padL + plotW}
+            y2={sy(f * max)}
+            stroke={C.grid}
+          />
+        ))}
+        <text
+          x={padL - 4}
+          y={sy(max) + 3}
+          textAnchor="end"
+          className="fill-slate-400"
+          style={{ fontSize: 8 }}
+        >
+          {max}
+        </text>
+        {area && <polygon points={area} fill={color} fillOpacity={0.12} />}
+        {n > 1 && (
+          <polyline points={line} fill="none" stroke={color} strokeWidth={1.8} />
+        )}
+        {points.map((p, i) => (
+          <circle
+            key={i}
+            cx={sx(i)}
+            cy={sy(p.value)}
+            r={n > 40 ? 0 : 2.2}
+            fill={color}
+          >
+            <title>{`${p.label}: ${p.value}${unit}`}</title>
+          </circle>
+        ))}
+        {n > 0 && max > 0 && (
+          <text
+            x={sx(peakIdx)}
+            y={sy(points[peakIdx].value) - 5}
+            textAnchor="middle"
+            className="fill-slate-500"
+            style={{ fontSize: 8, fontWeight: 600 }}
+          >
+            {points[peakIdx].value}
+          </text>
+        )}
+        {points.map((p, i) =>
+          i % labelStep === 0 || i === n - 1 ? (
+            <text
+              key={`l${i}`}
+              x={sx(i)}
+              y={height - 6}
+              textAnchor="middle"
+              className="fill-slate-400"
+              style={{ fontSize: 8 }}
+            >
+              {p.label}
+            </text>
+          ) : null
+        )}
+      </svg>
+      <div className="text-[10px] text-slate-400 text-right mt-0.5">
+        기간 합계 {total}
+        {unit}
+      </div>
+    </div>
   );
 }

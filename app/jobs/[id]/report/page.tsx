@@ -17,7 +17,7 @@ import Link from "next/link";
 import { formatKstDateTime, formatLocalDate } from "@/lib/utils";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import { PrintButton } from "./PrintButton";
-import { Donut, Radar, Scatter, VBars, HBars, DotTrend, C, CATEGORICAL } from "./charts";
+import { Donut, Radar, Scatter, VBars, HBars, DotTrend, C, CATEGORICAL } from "@/components/charts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
