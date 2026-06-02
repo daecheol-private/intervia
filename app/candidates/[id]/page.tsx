@@ -3971,7 +3971,17 @@ function ScoreInput({
         min={0}
         max={100}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === "") {
+            onChange("");
+            return;
+          }
+          // 숫자만 허용 + 0~100 범위로 제한 (직접 타이핑한 범위 밖 값 차단)
+          const n = Math.floor(Number(raw));
+          if (!Number.isFinite(n)) return;
+          onChange(String(Math.max(0, Math.min(100, n))));
+        }}
         placeholder="0~100"
         className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
       />

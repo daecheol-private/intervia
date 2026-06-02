@@ -1649,8 +1649,9 @@ export default function JobDetailPage() {
                     </div>
                     <Link
                       href={`/candidates/${c.id}`}
-                      className={`card-hover bg-white border-2 border-amber-300/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-2 sm:gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
+                      className={`card-hover bg-white border-2 border-amber-300/60 rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
                     >
+                      <div className="flex justify-between items-start gap-2 sm:gap-4 w-full">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <CandidateFavoriteStar
@@ -1702,16 +1703,17 @@ export default function JobDetailPage() {
                             {c.careerSummary}
                           </p>
                         )}
-                        {c.screeningReport?.summary && (
-                          <p className="text-sm text-slate-600 mt-2 line-clamp-2">
-                            {c.screeningReport.summary}
-                          </p>
-                        )}
-                        <div className="text-[11px] text-slate-400 mt-2">
-                          {formatKstDateTime(c.createdAt)} 업로드
                         </div>
+                        <CandidateScores c={c} />
                       </div>
-                      <CandidateScores c={c} />
+                      {c.screeningReport?.summary && (
+                        <p className="text-sm text-slate-600 mt-2 line-clamp-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                          {c.screeningReport.summary}
+                        </p>
+                      )}
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        {formatKstDateTime(c.createdAt)} 업로드
+                      </div>
                     </Link>
                   </li>
                 ))}
@@ -1763,8 +1765,9 @@ export default function JobDetailPage() {
                     </div>
                     <Link
                       href={`/candidates/${c.id}`}
-                      className={`card-hover bg-card border-2 border-accent/60 rounded-xl p-4 pl-10 flex justify-between items-start gap-2 sm:gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
+                      className={`card-hover bg-card border-2 border-accent/60 rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
                     >
+                      <div className="flex justify-between items-start gap-2 sm:gap-4 w-full">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <CandidateFavoriteStar
@@ -1811,16 +1814,17 @@ export default function JobDetailPage() {
                             {c.careerSummary}
                           </p>
                         )}
-                        {c.screeningReport?.summary && (
-                          <p className="text-sm text-slate-600 mt-2 line-clamp-2">
-                            {c.screeningReport.summary}
-                          </p>
-                        )}
-                        <div className="text-[11px] text-slate-400 mt-2">
-                          {formatKstDateTime(c.createdAt)} 업로드
                         </div>
+                        <CandidateScores c={c} />
                       </div>
-                      <CandidateScores c={c} />
+                      {c.screeningReport?.summary && (
+                        <p className="text-sm text-slate-600 mt-2 line-clamp-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                          {c.screeningReport.summary}
+                        </p>
+                      )}
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        {formatKstDateTime(c.createdAt)} 업로드
+                      </div>
                     </Link>
                   </li>
                 ))}
@@ -1893,8 +1897,9 @@ export default function JobDetailPage() {
                       </div>
                       <Link
                         href={`/candidates/${c.id}`}
-                        className={`card-hover bg-white border border-slate-200 rounded-xl p-4 pl-10 flex justify-between items-start gap-2 sm:gap-4 block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
+                        className={`card-hover bg-white border border-slate-200 rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
                       >
+                        <div className="flex justify-between items-start gap-2 sm:gap-4 w-full">
                         <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <CandidateFavoriteStar
@@ -1946,16 +1951,17 @@ export default function JobDetailPage() {
                             {c.careerSummary}
                           </p>
                         )}
-                        {c.screeningReport?.summary && (
-                          <p className="text-sm text-slate-600 mt-2 line-clamp-2">
-                            {c.screeningReport.summary}
-                          </p>
-                        )}
-                        <div className="text-[11px] text-slate-400 mt-2">
-                          {formatKstDateTime(c.createdAt)} 업로드
                         </div>
+                        <CandidateScores c={c} />
                       </div>
-                      <CandidateScores c={c} />
+                      {c.screeningReport?.summary && (
+                        <p className="text-sm text-slate-600 mt-2 line-clamp-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                          {c.screeningReport.summary}
+                        </p>
+                      )}
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        {formatKstDateTime(c.createdAt)} 업로드
+                      </div>
                       </Link>
                     </li>
                   ))}

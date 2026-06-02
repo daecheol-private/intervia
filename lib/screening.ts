@@ -270,10 +270,12 @@ const AXIS_WEIGHTS: Record<string, number> = {
   growth_attitude: 0.1,
 };
 
-// HR 평가 중점사항 override 임계치 — focus_match.verdict 판정 시 6축 점수를 강제 cap/floor.
-const FOCUS_FATAL_CAP = 15; // fatal_fail → 최하점(비추천 <55 확정)
-const FOCUS_FAIL_CAP = 49; // fail → 비추천 구간 강제
-const FOCUS_STRONG_FLOOR = 70; // strong_pass → 추천(70~84) 이상 보장
+// HR 평가 가이드(evaluationFocus) 점수 반영 — 가산점 방식.
+// 6축 점수를 고정값으로 덮어쓰지 않고 가감하여, 이력서별 점수 편차를 보존한다.
+// (과거: fail→49 cap / strong_pass→70 floor 로 덮어써서 점수가 49·70에 양극화되던 문제 해결)
+const FOCUS_STRONG_BONUS = 12; // strong_pass → 가점
+const FOCUS_FAIL_PENALTY = -12; // fail → 감점
+const FOCUS_FATAL_CAP = 15; // fatal_fail(필수/배제 조건 위반)만 하드캡 유지 — 진짜 결격 사유
 
 function clampScore(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -320,14 +322,16 @@ function recomputeScore(result: ScreeningResult): {
   const penalty = Math.max(-10, Math.min(0, rawPenalty));
   let score = clampScore(raw + penalty);
 
-  // HR 평가 중점사항(evaluationFocus) override — 6축보다 우선. 6축 결과 위에 강제 cap/floor.
-  // fatal_fail("보안 없으면 최하점" 같은 필수/배제 위반) → 최하점 강제, strong_pass → 추천 이상 보장.
+  // HR 평가 가이드(evaluationFocus) 반영 — 6축 점수에 가감(가산점 방식).
+  // strong_pass → +가점, fail → -감점, neutral → 변동 없음.
+  // fatal_fail("보안 경력 필수인데 전무" 같은 필수/배제 위반)만 결격으로 보고 하드캡 유지.
   const fm = result.focus_match;
   if (fm?.applies) {
     if (fm.verdict === "fatal_fail") score = Math.min(score, FOCUS_FATAL_CAP);
-    else if (fm.verdict === "fail") score = Math.min(score, FOCUS_FAIL_CAP);
+    else if (fm.verdict === "fail")
+      score = clampScore(score + FOCUS_FAIL_PENALTY);
     else if (fm.verdict === "strong_pass")
-      score = Math.max(score, FOCUS_STRONG_FLOOR);
+      score = clampScore(score + FOCUS_STRONG_BONUS);
   }
 
   return { score, recommendation: recommendationFor(score) };
