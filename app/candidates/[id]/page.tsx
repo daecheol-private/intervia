@@ -13,6 +13,8 @@ import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
 import { confirmDialog, notify } from "@/app/components/Dialog";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 
+type Confidence = "high" | "medium" | "low";
+
 type Candidate = {
   id: number;
   jobId: number;
@@ -36,13 +38,24 @@ type Candidate = {
     concerns: string[];
     matched_keywords: string[];
     breakdown?: {
-      tech_fit?: { score: number; reason: string };
-      experience_depth?: { score: number; reason: string };
-      role_match?: { score: number; reason: string };
-      achievement?: { score: number; reason: string };
-      stability?: { score: number; reason: string };
-      growth_attitude?: { score: number; reason: string };
+      tech_fit?: { score: number; reason: string; confidence?: Confidence };
+      experience_depth?: { score: number; reason: string; confidence?: Confidence };
+      role_match?: { score: number; reason: string; confidence?: Confidence };
+      achievement?: { score: number; reason: string; confidence?: Confidence };
+      stability?: { score: number; reason: string; confidence?: Confidence };
+      growth_attitude?: { score: number; reason: string; confidence?: Confidence };
     };
+    requirement_gate?: {
+      applies?: boolean;
+      verdict?: "pass" | "fail" | "unknown";
+      missing?: string[];
+      reason?: string;
+    };
+    requirement_coverage?: Array<{
+      requirement: string;
+      status: "direct" | "indirect" | "none";
+      evidence?: string;
+    }>;
     level_match?: {
       fit: "under" | "over" | "fit";
       years: number;
@@ -671,6 +684,11 @@ export default function CandidateDetailPage() {
             <blockquote className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-slate-800 leading-relaxed">
               <HL text={candidate.screeningReport.summary} />
             </blockquote>
+            {candidate.screeningReport.requirement_gate && (
+              <RequirementGateBadge
+                gate={candidate.screeningReport.requirement_gate}
+              />
+            )}
             {candidate.screeningReport.level_match &&
               candidate.screeningReport.level_match.fit !== "fit" && (
                 <LevelMatchBadge match={candidate.screeningReport.level_match} />
@@ -678,6 +696,12 @@ export default function CandidateDetailPage() {
             {candidate.screeningReport.breakdown && (
               <BreakdownBlock breakdown={candidate.screeningReport.breakdown} />
             )}
+            {candidate.screeningReport.requirement_coverage &&
+              candidate.screeningReport.requirement_coverage.length > 0 && (
+                <RequirementCoverageBlock
+                  coverage={candidate.screeningReport.requirement_coverage}
+                />
+              )}
             <BulletBlock
               title="강점"
               items={candidate.screeningReport.strengths}
@@ -1334,6 +1358,238 @@ function LevelMatchBadge({
   );
 }
 
+function RequirementGateBadge({
+  gate,
+}: {
+  gate: NonNullable<NonNullable<Candidate["screeningReport"]>["requirement_gate"]>;
+}) {
+  // 필수 요건 미충족(fail)·판단보류(unknown)만 노출. pass/미해당은 표시 안 함.
+  if (!gate.applies || gate.verdict === "pass" || !gate.verdict) return null;
+  const isFail = gate.verdict === "fail";
+  const wrap = isFail
+    ? "border-danger/40 bg-danger-soft/60"
+    : "border-warning/40 bg-warning-soft/60";
+  const titleClr = isFail ? "text-danger" : "text-warning";
+  return (
+    <div className={`border rounded-lg px-4 py-3 ${wrap}`}>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className={`text-sm font-semibold ${titleClr}`}>
+          {isFail ? "⚠ 필수 요건 미충족 — 결격 가능" : "필수 요건 확인 필요"}
+        </span>
+        {isFail && (
+          <span className="text-xs text-danger tabular-nums">점수 상한 적용</span>
+        )}
+      </div>
+      {gate.missing && gate.missing.length > 0 && (
+        <ul className="mt-1.5 space-y-0.5">
+          {gate.missing.map((m, i) => (
+            <li key={i} className="text-xs text-slate-700 leading-snug">
+              · {m}
+            </li>
+          ))}
+        </ul>
+      )}
+      {gate.reason && (
+        <p className="text-xs text-slate-600 mt-1 leading-snug">{gate.reason}</p>
+      )}
+    </div>
+  );
+}
+
+type CoverageStatus = "direct" | "indirect" | "none";
+
+const COVERAGE_META: Record<
+  CoverageStatus,
+  {
+    label: string;
+    icon: string;
+    /** 좌측 액센트 보더 */
+    accent: string;
+    /** 아이콘 원형 배지 */
+    badge: string;
+    /** 상단 요약 바 세그먼트 */
+    bar: string;
+    /** 행 배경 (none 은 흐리게) */
+    row: string;
+  }
+> = {
+  direct: {
+    label: "직접 부합",
+    icon: "✓",
+    accent: "border-l-primary",
+    badge: "bg-primary text-white",
+    bar: "bg-primary",
+    row: "bg-white",
+  },
+  indirect: {
+    label: "간접 부합",
+    icon: "~",
+    accent: "border-l-info",
+    badge: "bg-info text-white",
+    bar: "bg-info",
+    row: "bg-white",
+  },
+  none: {
+    label: "근거 없음",
+    icon: "–",
+    accent: "border-l-slate-300",
+    badge: "bg-slate-300 text-white",
+    bar: "bg-slate-200",
+    row: "bg-slate-50/60",
+  },
+};
+
+const COVERAGE_ORDER: CoverageStatus[] = ["direct", "indirect", "none"];
+
+/** 요건 충족도 링 게이지 — 숫자 하나를 시각화 (도넛 풀차트 X, 디테일은 리스트가 담당). */
+function CoverageRing({ pct }: { pct: number }) {
+  const size = 56;
+  const stroke = 6;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, pct));
+  const dash = (clamped / 100) * c;
+  // 충족도 구간별 색 — 리스트 헤더 텍스트와 동일 기준(70/40).
+  const color =
+    pct >= 70
+      ? "var(--color-primary)"
+      : pct >= 40
+        ? "var(--color-info)"
+        : "var(--color-warning)";
+  const textCls =
+    pct >= 70 ? "fill-primary-deep" : pct >= 40 ? "fill-info" : "fill-warning";
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className="flex-none"
+      role="img"
+      aria-label={`요건 충족도 ${clamped}%`}
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="#e2e8f0"
+        strokeWidth={stroke}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={`${dash} ${c - dash}`}
+        // 12시 방향에서 시작하도록 -90도 회전.
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+      <text
+        x="50%"
+        y="50%"
+        dominantBaseline="central"
+        textAnchor="middle"
+        className={`text-[13px] font-bold tabular-nums ${textCls}`}
+      >
+        {clamped}%
+      </text>
+    </svg>
+  );
+}
+
+function RequirementCoverageBlock({
+  coverage,
+}: {
+  coverage: NonNullable<
+    NonNullable<Candidate["screeningReport"]>["requirement_coverage"]
+  >;
+}) {
+  if (!coverage || coverage.length === 0) return null;
+  const total = coverage.length;
+  const counts: Record<CoverageStatus, number> = {
+    direct: 0,
+    indirect: 0,
+    none: 0,
+  };
+  for (const c of coverage) counts[c.status] = (counts[c.status] ?? 0) + 1;
+  // 충족도 = (직접 1.0 + 간접 0.5) / 전체
+  const fitPct = Math.round(
+    ((counts.direct + counts.indirect * 0.5) / total) * 100
+  );
+
+  return (
+    <div className="space-y-2.5">
+      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        JD 요건별 충족
+      </div>
+
+      {/* 상단 요약 — 링 게이지(전체 충족도) + 상태별 개수 범례 */}
+      <div className="flex items-center gap-4">
+        <CoverageRing pct={fitPct} />
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {COVERAGE_ORDER.map((s) => (
+            <span
+              key={s}
+              className="flex items-center gap-1.5 text-xs text-slate-500"
+            >
+              <span className={`w-2.5 h-2.5 rounded-sm ${COVERAGE_META[s].bar}`} />
+              {COVERAGE_META[s].label}
+              <span className="tabular-nums font-semibold text-slate-700">
+                {counts[s]}
+              </span>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* 요건 행 — 2컬럼 그리드 (좁은 화면은 1컬럼). 상태별 색 좌측 보더 + 아이콘 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+        {coverage.map((c, i) => {
+          const m = COVERAGE_META[c.status] ?? COVERAGE_META.none;
+          const dim = c.status === "none";
+          return (
+            <div
+              key={i}
+              className={`flex items-start gap-2.5 rounded-md border border-slate-100 border-l-[3px] ${m.accent} ${m.row} px-3 py-2`}
+            >
+              <span
+                className={`mt-0.5 flex-none w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold leading-none ${m.badge}`}
+                title={m.label}
+                aria-label={m.label}
+              >
+                {m.icon}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div
+                  className={`text-sm leading-snug ${
+                    dim ? "text-slate-500" : "text-slate-800 font-medium"
+                  }`}
+                >
+                  {c.requirement}
+                </div>
+                {c.evidence ? (
+                  <div className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                    {c.evidence}
+                  </div>
+                ) : (
+                  dim && (
+                    <div className="text-[11px] text-slate-400 leading-snug mt-0.5 italic">
+                      이력서에서 근거를 찾지 못함 — 면접 확인 권장
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const SCHEDULE_STATUS_LABEL: Record<Schedule["status"], string> = {
   pending: "후보자 응답 대기",
   selected: "확정",
@@ -1938,6 +2194,27 @@ function FitHexagon({
   );
 }
 
+const CONFIDENCE_META: Record<
+  Confidence,
+  { label: string; cls: string }
+> = {
+  high: { label: "근거 충분", cls: "bg-primary-soft/70 text-primary-deep border-primary/30" },
+  medium: { label: "근거 보통", cls: "bg-slate-100 text-slate-500 border-slate-200" },
+  low: { label: "근거 부족·면접확인", cls: "bg-warning-soft/70 text-warning border-warning/30" },
+};
+
+function ConfidenceChip({ c }: { c?: Confidence }) {
+  if (!c) return null;
+  const m = CONFIDENCE_META[c];
+  return (
+    <span
+      className={`text-[10px] px-1.5 py-0.5 rounded border font-medium whitespace-nowrap ${m.cls}`}
+    >
+      {m.label}
+    </span>
+  );
+}
+
 function BreakdownBlock({
   breakdown,
 }: {
@@ -1985,8 +2262,9 @@ function BreakdownBlock({
                   />
                 </div>
                 {d?.reason && (
-                  <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-                    {d.reason}
+                  <p className="text-[11px] text-slate-500 mt-1 leading-snug flex items-start gap-1.5">
+                    <span className="flex-1">{d.reason}</span>
+                    <ConfidenceChip c={d.confidence} />
                   </p>
                 )}
               </div>

@@ -227,6 +227,8 @@ export async function ensureParsed(candidateId: number): Promise<void> {
   }
 }
 
+type Confidence = "high" | "medium" | "low";
+
 type ScreeningResult = {
   score: number;
   recommendation: "강력추천" | "추천" | "보류" | "비추천";
@@ -235,13 +237,24 @@ type ScreeningResult = {
   concerns: string[];
   matched_keywords: string[];
   breakdown?: {
-    tech_fit?: { score: number; reason: string };
-    experience_depth?: { score: number; reason: string };
-    role_match?: { score: number; reason: string };
-    achievement?: { score: number; reason: string };
-    stability?: { score: number; reason: string };
-    growth_attitude?: { score: number; reason: string };
+    tech_fit?: { score: number; reason: string; confidence?: Confidence };
+    experience_depth?: { score: number; reason: string; confidence?: Confidence };
+    role_match?: { score: number; reason: string; confidence?: Confidence };
+    achievement?: { score: number; reason: string; confidence?: Confidence };
+    stability?: { score: number; reason: string; confidence?: Confidence };
+    growth_attitude?: { score: number; reason: string; confidence?: Confidence };
   };
+  requirement_gate?: {
+    applies?: boolean;
+    verdict?: "pass" | "fail" | "unknown";
+    missing?: string[];
+    reason?: string;
+  };
+  requirement_coverage?: Array<{
+    requirement: string;
+    status: "direct" | "indirect" | "none";
+    evidence?: string;
+  }>;
   level_match?: {
     fit?: "under" | "over" | "fit";
     years?: number | null;
@@ -276,6 +289,10 @@ const AXIS_WEIGHTS: Record<string, number> = {
 const FOCUS_STRONG_BONUS = 12; // strong_pass → 가점
 const FOCUS_FAIL_PENALTY = -12; // fail → 감점
 const FOCUS_FATAL_CAP = 15; // fatal_fail(필수/배제 조건 위반)만 하드캡 유지 — 진짜 결격 사유
+
+// JD 본문에 명시된 필수/결격 요건 미충족(requirement_gate.verdict=fail) 시 하드캡.
+// HR 가이드 fatal(15)보다는 약간 높게 — "결격에 가깝지만 면접 여지" 수준. unknown 은 감점 안 함.
+const REQUIREMENT_GATE_CAP = 40;
 
 function clampScore(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -332,6 +349,12 @@ function recomputeScore(result: ScreeningResult): {
       score = clampScore(score + FOCUS_FAIL_PENALTY);
     else if (fm.verdict === "strong_pass")
       score = clampScore(score + FOCUS_STRONG_BONUS);
+  }
+
+  // JD 명시 필수 요건 미충족 → 결격 수준 하드캡. (unknown/pass 는 변동 없음)
+  const rg = result.requirement_gate;
+  if (rg?.applies && rg.verdict === "fail") {
+    score = Math.min(score, REQUIREMENT_GATE_CAP);
   }
 
   return { score, recommendation: recommendationFor(score) };

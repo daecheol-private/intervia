@@ -118,7 +118,7 @@
 | resume_text | TEXT NOT NULL | **항상 빈 문자열** — 원본은 DB 에 저장 안 함 (PIPA). 컬럼은 호환성 위해 유지 |
 | resume_masked_text | TEXT NULL | 마스킹된 텍스트. **LLM 에 전달되는 유일한 본문**. UI 미리보기도 이 값. 폐기 시 NULL |
 | screening_score | INTEGER NULL | 0~100 |
-| screening_report | JSON NULL | 평가 리포트 |
+| screening_report | JSON NULL | 평가 리포트 (`ScreeningResult` — `lib/screening.ts`). 6축 `breakdown`(각 축 score/reason/**confidence**) + `level_match`(연차 보정) + `focus_match`(HR 가이드 가감) + **`requirement_gate`**(JD 필수요건 미충족 시 종합점수 하드캡 40) + **`requirement_coverage`**(JD 요건별 direct/indirect/none 매트릭스) + `career_info` 등. 종합 점수는 LLM 출력이 아니라 6축+페널티로 코드가 재계산 |
 | status | TEXT NOT NULL DEFAULT 'uploaded' | uploaded/screening/screened/interviewed/failed |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
