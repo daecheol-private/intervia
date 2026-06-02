@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { after } from "next/server";
 import { jobPostings, candidates, organizations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
@@ -104,17 +105,11 @@ export async function PUT(
   };
 
   // 주요업무/자격요건이 바뀐 경우에만 JD 요건 체크리스트 재생성 (그 외 수정은 LLM 호출 생략).
+  // LLM 호출이 느리므로 응답을 막지 않는다 — 기존 체크리스트는 그대로 두고(빈 구간 없이 잠깐 stale),
+  // 응답 후 after() 백그라운드에서 재생성해 교체.
   const jdChanged =
     body.responsibilities !== existing.responsibilities ||
     body.requirements !== existing.requirements;
-  if (jdChanged) {
-    update.requirementChecklist = serializeChecklist(
-      await generateRequirementChecklist({
-        responsibilities: body.responsibilities,
-        requirements: body.requirements,
-      })
-    );
-  }
 
   if (body.password === "") {
     update.passwordHash = null;
@@ -130,6 +125,27 @@ export async function PUT(
     .where(eq(jobPostings.id, jobId))
     .returning();
   if (!row) return new Response("Not found", { status: 404 });
+
+  if (jdChanged) {
+    after(async () => {
+      try {
+        const checklist = serializeChecklist(
+          await generateRequirementChecklist({
+            responsibilities: body.responsibilities,
+            requirements: body.requirements,
+          })
+        );
+        if (checklist) {
+          await db
+            .update(jobPostings)
+            .set({ requirementChecklist: checklist })
+            .where(eq(jobPostings.id, jobId));
+        }
+      } catch {
+        // 체크리스트는 보조 데이터 — 실패 시 기존/즉석 분해 폴백으로 충분.
+      }
+    });
+  }
 
   const { passwordHash, ...rest } = row;
   return Response.json({ ...rest, hasPassword: passwordHash != null });

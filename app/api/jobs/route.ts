@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { after } from "next/server";
 import {
   jobPostings,
   candidates,
@@ -94,15 +95,6 @@ export async function POST(req: Request) {
       ? Number(body.orgId ?? me!.orgId ?? 0) || null
       : me!.orgId;
 
-  // JD 요건 체크리스트 1회 생성 (링크 등록·직접 입력 모두 이 POST 를 거치므로 여기서 통합 처리).
-  // LLM 실패 시 [] → "" 로 저장되고 평가는 기존 즉석 분해로 폴백.
-  const requirementChecklist = serializeChecklist(
-    await generateRequirementChecklist({
-      responsibilities: body.responsibilities,
-      requirements: body.requirements,
-    })
-  );
-
   const now = new Date();
   const [row] = await db
     .insert(jobPostings)
@@ -114,7 +106,9 @@ export async function POST(req: Request) {
       employmentType: body.employmentType,
       responsibilities: body.responsibilities,
       requirements: body.requirements,
-      requirementChecklist,
+      // JD 요건 체크리스트는 LLM 호출이라 느리다 → 응답 후 after() 백그라운드 생성.
+      // 그 사이 체크리스트는 "" 라 이력서 평가는 기존 즉석 분해로 폴백 (정상 동작).
+      requirementChecklist: "",
       idealProfile: (body.idealProfile ?? "").toString().slice(0, 3000),
       evaluationFocus: (body.evaluationFocus ?? "").toString().slice(0, 3000),
       tone: body.tone ?? "중립적인",
@@ -146,6 +140,27 @@ export async function POST(req: Request) {
       memo: row.title,
     });
   }
+
+  // 응답을 먼저 돌려주고(공고 즉시 등록 + 페이지 이동), JD 요건 체크리스트는
+  // 백그라운드에서 생성해 행을 업데이트한다. 실패해도 평가는 폴백되므로 무시.
+  after(async () => {
+    try {
+      const checklist = serializeChecklist(
+        await generateRequirementChecklist({
+          responsibilities: body.responsibilities,
+          requirements: body.requirements,
+        })
+      );
+      if (checklist) {
+        await db
+          .update(jobPostings)
+          .set({ requirementChecklist: checklist })
+          .where(eq(jobPostings.id, row.id));
+      }
+    } catch {
+      // 체크리스트는 보조 데이터 — 실패 시 즉석 분해 폴백으로 충분.
+    }
+  });
 
   return Response.json(row);
 }

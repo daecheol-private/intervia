@@ -140,6 +140,15 @@ function parseSqliteTimestamp(s: string): Date {
 
 새 LLM 호출 로직 추가할 때도 같은 패턴 적용 (직접 `void someAsyncLLM(...)` 금지).
 
+**예외 — `after()` 는 허용**: 0-1 이 금지하는 건 응답 후 잘리는 naked `void asyncLLM()` 다.
+Next 16 의 `after(async () => ...)` (from `next/server`) 는 Vercel 이 응답 후에도 함수를
+의도적으로 살려두는 공식 후크라 잘리지 않는다. 단, **단건·best-effort·폴백 있는** 경우만.
+배치/필수 LLM 은 여전히 큐로.
+
+- 적용 예: 공고 등록·수정(`/api/jobs`, `/api/jobs/[id]` PUT) 의 JD 요건 체크리스트 생성.
+  공고는 즉시 저장·응답하고(체크리스트는 `""` 또는 기존 값 유지), `after()` 가 백그라운드에서
+  생성해 행을 업데이트. 그 사이 평가는 즉석 분해 폴백으로 정상 동작 → 잘려도 치명적이지 않음.
+
 ## 0-2. 이력서 자동 평가하지 않음 — 사용자 게이트 필요
 
 **증상**: 이력서 업로드 직후 status 가 계속 `uploaded` 이고 평가가 시작되지 않음.
