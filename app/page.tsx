@@ -32,6 +32,9 @@ import {
   CheckCircle2,
   Workflow,
   Check,
+  CalendarClock,
+  ClipboardList,
+  ScanSearch,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -912,8 +915,8 @@ async function Landing() {
               <span className="text-primary">AI 면접관에게 맡기세요.</span>
             </h1>
             <p className="mt-6 text-base sm:text-lg text-ink-soft max-w-xl leading-relaxed">
-              이력서 자동 평가부터 채팅 기반 면접, 결과 리포트까지 한 번에.
-              채용 담당자가 진짜 중요한 결정에 집중할 수 있도록 돕습니다.
+              이력서 자동 평가부터 채팅 기반 AI 면접, 면접 일정 조율, 대면 면접 질문지,
+              결과 리포트까지 한 번에. 채용 담당자가 진짜 중요한 결정에 집중하도록 돕습니다.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-start gap-3">
               <Link
@@ -962,7 +965,7 @@ async function Landing() {
         <p className="mt-4 text-base text-ink-soft text-center max-w-xl mx-auto leading-relaxed">
           이력서 업로드부터 면접 결과 리포트까지, 사람이 매번 할 필요 없는 일을 AI가 처리합니다.
         </p>
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           <Feature
             Icon={FileText}
             title="이력서 자동 평가"
@@ -974,9 +977,24 @@ async function Landing() {
             body="후보자에게 링크 한 번 발송하면 AI 면접관이 1:1 채팅으로 진행. 10·20·30분 옵션 선택. 꼬리질문으로 깊이 검증."
           />
           <Feature
+            Icon={ScanSearch}
+            title="AI 보조 답변 탐지"
+            body="AI 면접 중 붙여넣기·탭 이탈·문체를 분석해 외부 LLM 대리 작성 신호를 수집. 단정하지 않고 면접관에게 객관 수치로 투명하게 보고."
+          />
+          <Feature
+            Icon={CalendarClock}
+            title="면접 일정 조율"
+            body="합격자에게 면접 시간을 제시하면 후보자가 직접 선택하거나 다른 시간을 역제시. 확정 시 Zoom 온라인 회의와 캘린더 초대를 자동 생성·발송."
+          />
+          <Feature
+            Icon={ClipboardList}
+            title="맞춤 면접 질문지 생성"
+            body="이력서·서류 평가·AI 면접 결과를 종합해 1차 대면 면접용 질문지를 자동 작성. 검증 포인트와 꼬리질문까지 제시해 면접관 준비 시간을 단축."
+          />
+          <Feature
             Icon={BarChart3}
             title="결과 리포트 + 사람 면접 통합"
-            body="기술·경험·협업·적합성 4영역 점수와 근거. 사람 면접관 메모도 같은 화면에서 비교. 합·불 결정 시 자동 메일 발송."
+            body="기술·경험·협업·적합성 4영역 점수와 근거. 1·2차 면접관 스코어카드를 한 화면에서 비교. 합·불 결정과 동시에 결과 메일 자동 발송."
           />
         </div>
       </section>
@@ -1095,18 +1113,13 @@ async function Landing() {
               어떻게 동작하나요?
             </h2>
             <p className="mt-3 text-sm text-ink-soft">
-              4단계만 거치면 채용 사이클 1회가 완성됩니다.
+              공고 등록부터 합·불 통보까지, 한 흐름으로 채용 사이클이 완성됩니다.
             </p>
           </div>
 
           {/* Flow */}
           <div className="relative">
-            {/* 연결선 (md 이상) */}
-            <div
-              aria-hidden
-              className="hidden md:block absolute top-[42px] left-[12.5%] right-[12.5%] h-px border-t-2 border-dashed border-primary/25"
-            />
-            <ol className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <ol className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <FlowStep
                 n={1}
                 title="공고 등록"
@@ -1123,8 +1136,8 @@ async function Landing() {
               />
               <FlowStep
                 n={2}
-                title="이력서 업로드"
-                body="후보자 이력서 PDF 일괄 업로드 → 자동 마스킹 + AI 서류 평가."
+                title="이력서 업로드 · 평가"
+                body="후보자 이력서 PDF 일괄 업로드 → 자동 마스킹 + AI 서류 평가로 점수·추천 등급 산출."
                 mock={
                   <div className="relative h-12 text-left">
                     <div className="absolute left-0 top-0 w-10 h-12 rounded bg-card border border-border-default shadow-sm flex items-center justify-center">
@@ -1145,8 +1158,8 @@ async function Landing() {
               />
               <FlowStep
                 n={3}
-                title="면접 진행"
-                body="선별된 후보자에게 메일 발송. 후보자가 채팅으로 AI 면접 응답."
+                title="AI 채팅 면접"
+                body="선별된 후보자에게 메일 발송. 후보자가 채팅으로 AI 면접에 응답하면 자동 평가."
                 mock={
                   <div className="space-y-1 text-left">
                     <div className="text-[10px] px-2 py-1 rounded-lg rounded-bl-sm bg-card border border-border-default inline-block max-w-full">
@@ -1160,8 +1173,46 @@ async function Landing() {
               />
               <FlowStep
                 n={4}
-                title="결과 검토"
-                body="평가 리포트 + 사람 면접 메모를 한 화면에서 비교 후 합·불 결정."
+                title="면접 일정 조율"
+                body="합격자에게 면접 시간 제시 → 후보자가 선택하거나 역제시. 확정 시 Zoom 회의 자동 생성."
+                mock={
+                  <div className="space-y-1.5 text-left w-full">
+                    <div className="flex items-center gap-1 text-[10px] text-ink-soft">
+                      <CalendarClock className="w-3 h-3 text-primary" />
+                      제시한 면접 시간
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <MiniTag>6/10 14:00</MiniTag>
+                      <MiniTag>6/11 10:00</MiniTag>
+                    </div>
+                    <div className="text-[9px] text-primary font-semibold">
+                      ↩ 후보자 시간 역제시 가능
+                    </div>
+                  </div>
+                }
+              />
+              <FlowStep
+                n={5}
+                title="대면 면접"
+                body="맞춤 질문지를 자동 생성해 1·2차 대면 면접 진행. 면접관 스코어카드 기록."
+                mock={
+                  <div className="space-y-1 text-left w-full">
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-ink">
+                      <ClipboardList className="w-3 h-3 text-primary" />
+                      AI 생성 면접 질문지
+                    </div>
+                    <div className="text-[9px] text-ink-soft leading-relaxed">
+                      Q. 대규모 트래픽 처리 경험은?
+                      <br />
+                      Q. 팀 내 갈등 해결 사례는?
+                    </div>
+                  </div>
+                }
+              />
+              <FlowStep
+                n={6}
+                title="합·불 결정 · 통보"
+                body="평가 리포트와 면접 메모를 한 화면에서 비교 후 합·불 결정. 결과 메일 자동 발송."
                 mock={
                   <div className="flex items-end gap-1.5 h-12">
                     {[60, 80, 90, 75].map((h, i) => (
