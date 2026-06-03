@@ -7,6 +7,7 @@ import { PasswordStrength } from "@/app/password-strength";
 import { LogoMark } from "@/app/components/Logo";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { isPublicDomain, getEmailDomain } from "@/lib/email-domain";
+import { COMPANY_INFO } from "@/lib/site-info";
 
 type CheckResponse = {
   available: boolean;
@@ -45,7 +46,15 @@ type Stage =
   | { kind: "create" }
   | { kind: "search"; results: OrgSearchResult[]; q: string }
   | { kind: "choose_match"; orgs: MatchedOrgFull[] }
-  | { kind: "done"; title: string; body: string };
+  | {
+      kind: "done";
+      title: string;
+      body: string;
+      // 인증 메일 복구 동선을 띄울 대상 이메일 (법인 신규 등록 경로에서만 설정).
+      // 회사 메일서버가 인증 메일을 차단해도 "재가입" 대신 재발송/문의로 유도 — 법인 중복 생성 방지.
+      verifyEmail?: string;
+      mailSent?: boolean;
+    };
 
 export default function SignupPage() {
   const router = useRouter();
@@ -59,6 +68,7 @@ export default function SignupPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
+  const [resendInfo, setResendInfo] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [ageOver14, setAgeOver14] = useState(false);
@@ -206,11 +216,32 @@ export default function SignupPage() {
       return;
     }
     setInfo("");
+    const data = (await res.json().catch(() => ({}))) as { mailSent?: boolean };
     setStage({
       kind: "done",
       title: "법인이 등록되었습니다",
-      body: "입력한 이메일로 인증 메일을 보냈습니다. 메일의 링크를 클릭한 뒤 로그인해주세요.",
+      body: "입력하신 이메일로 인증 메일을 보냈습니다. 메일의 링크를 클릭한 뒤 로그인해주세요.",
+      verifyEmail: email,
+      mailSent: data?.mailSent !== false,
     });
+  };
+
+  // 가입 완료 화면 재발송 — 회사 메일서버 차단/지연 시 "재가입" 대신 복구.
+  const resendVerification = async (targetEmail: string) => {
+    setResendInfo("");
+    setErr("");
+    setBusy(true);
+    const res = await fetch("/api/auth/resend-verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: targetEmail }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    setResendInfo("인증 메일을 재발송했습니다. 메일함(스팸·정크함 포함)을 확인해주세요.");
   };
 
   const runSearch = async () => {
@@ -257,6 +288,61 @@ export default function SignupPage() {
                   {stage.body}
                 </p>
               </div>
+              {stage.verifyEmail && (
+                <div className="text-left bg-amber-50 border border-amber-200 rounded-lg px-3 py-3 text-xs text-amber-900 leading-relaxed space-y-2">
+                  {stage.mailSent === false && (
+                    <div className="font-semibold text-danger">
+                      ⚠️ 인증 메일 발송에 실패했습니다. 아래 “인증 메일 재발송”을 눌러주세요.
+                    </div>
+                  )}
+                  <div className="font-semibold text-amber-800">
+                    인증 메일이 오지 않나요?
+                  </div>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li>스팸·정크 메일함을 먼저 확인해 주세요.</li>
+                    <li>
+                      회사 메일 보안 필터가 외부 메일을 지연·격리할 수 있습니다
+                      (수 분~수 시간 소요될 수 있음).
+                    </li>
+                    <li>
+                      <strong>
+                        다른 이메일로 다시 가입하지 마세요.
+                      </strong>{" "}
+                      같은 회사가 여러 법인으로 중복 등록되어 데이터·권한이
+                      분리됩니다.
+                    </li>
+                    <li>
+                      재발송 후에도 계속 오지 않으면{" "}
+                      <a
+                        href={`mailto:${COMPANY_INFO.email}`}
+                        className="underline hover:opacity-80"
+                      >
+                        운영자({COMPANY_INFO.email})
+                      </a>
+                      에게 문의해 주세요.
+                    </li>
+                  </ul>
+                  <div className="pt-1">
+                    <button
+                      onClick={() => resendVerification(stage.verifyEmail!)}
+                      disabled={busy}
+                      className="px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded font-medium"
+                    >
+                      {busy ? "발송 중..." : "인증 메일 재발송"}
+                    </button>
+                  </div>
+                  {resendInfo && (
+                    <div className="text-primary-deep bg-primary-soft border border-primary/30 rounded px-2.5 py-1.5">
+                      {resendInfo}
+                    </div>
+                  )}
+                  {err && (
+                    <div className="text-danger bg-danger-soft border border-danger/30 rounded px-2.5 py-1.5">
+                      {err}
+                    </div>
+                  )}
+                </div>
+              )}
               <Link
                 href="/login"
                 className="inline-block px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
