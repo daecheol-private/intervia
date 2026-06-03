@@ -3423,7 +3423,8 @@ function BulkDecisionModal({
       counts[r] = (counts[r] ?? 0) + 1;
     }
     const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-    return top ? top[0] : "";
+    // 불합격 사유는 서버에서 필수(§37의2) — 빈 값 방지 위해 기본 사유로 폴백.
+    return top ? top[0] : "resume_unfit";
   })();
   // 기본 통보 메일 템플릿 — {이름} 은 발송 시 각 지원자 이름으로 치환된다.
   // (lib/candidate-stage.ts 의 buildDecisionEmail 기본 본문과 동일하게 유지)
@@ -3460,7 +3461,7 @@ function BulkDecisionModal({
 
         <div className="mt-4">
           <label className="block text-xs font-semibold text-ink-soft mb-1.5">
-            {label} 사유 (선택)
+            {label} 사유 {isReject ? "(필수)" : "(선택)"}
           </label>
           <select
             value={reason}
@@ -3468,7 +3469,6 @@ function BulkDecisionModal({
             disabled={busy}
             className="w-full px-3 py-2 text-sm border border-border-default rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
           >
-            {isReject && <option value="">선택 안 함</option>}
             {reasonOptions.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}

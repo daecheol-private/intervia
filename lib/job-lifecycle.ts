@@ -27,6 +27,7 @@ import { deleteFile } from "./storage";
 import { getBalance, getPricing } from "./tokens";
 import { buildDecisionEmail, purgeOnDecision } from "./candidate-stage";
 import { sendMail } from "./mailer";
+import { redactCandidateAuditPii } from "./audit";
 
 export const DEFAULT_JOB_DURATION_DAYS = 30;
 export const EXTENSION_DAYS = 30;
@@ -522,6 +523,16 @@ export async function purgePiiAfterClose(): Promise<{
     );
 
   for (const t of targets) {
+    // 감사 로그 metadata 의 후보자 PII redact — 행 삭제 전에 세션 id 확보 후 처리
+    // (감사 추적성은 보존, 식별자만 [redacted]. 후보자 행 삭제 후 metadata 평문 PII 잔존 방지)
+    const sess = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(eq(sessions.candidateId, t.id));
+    await redactCandidateAuditPii(
+      t.id,
+      sess.map((s) => s.id)
+    ).catch((e) => console.error(`purgePii: audit redact failed (cid=${t.id})`, e));
     // appeal / consent — PII 마스킹 후 유지 (감사·법적 추적용. candidate_id 는 dangling FK가 되지만 의도된 동작)
     await db
       .update(appealLogs)
@@ -572,6 +583,16 @@ export async function deleteUnresolvedExpiredJobs(): Promise<{
       .from(candidates)
       .where(eq(candidates.jobId, t.id));
     for (const c of cands) {
+      const sess = await db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(eq(sessions.candidateId, c.id));
+      await redactCandidateAuditPii(
+        c.id,
+        sess.map((s) => s.id)
+      ).catch((e) =>
+        console.error(`deleteUnresolvedExpiredJobs: audit redact failed (cid=${c.id})`, e)
+      );
       await db
         .update(appealLogs)
         .set({ email: "[purged]", ip: null, userAgent: null })

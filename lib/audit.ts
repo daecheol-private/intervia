@@ -19,6 +19,7 @@ import { auditLogs } from "./schema";
 import { extractIp } from "./auth-attempts";
 import type { CurrentUser } from "./auth";
 import { captureCritical } from "./error-reporter";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 export type AuditAction =
   | "login.success"
@@ -136,4 +137,76 @@ export function logAudit(req: Request | null, entry: AuditEntry): void {
         });
       }
     });
+}
+
+/**
+ * 감사 metadata 에 후보자 PII 로 자주 들어가는 키 — 후보자 폐기 시 redact 대상.
+ * (logAudit 호출부에서 실제 사용되는 키들. 새 PII 키 추가 시 여기도 갱신.)
+ */
+const AUDIT_PII_KEYS = [
+  "name",
+  "prevName",
+  "newName",
+  "candidateName",
+  "candidateEmail",
+  "email",
+  "to",
+  "recipient",
+  "tried_email",
+  "phone",
+] as const;
+
+/**
+ * 후보자 폐기(보유기간 경과 삭제) 시 감사 로그 metadata 의 식별정보를 "[redacted]" 로 치환.
+ *
+ * 감사 추적성(누가·언제·무엇을 했는지: actorUserId / action / resourceId / createdAt)은
+ * 그대로 보존하되, **폐기된 후보자의 이름·이메일·전화 등 직접 식별자만 제거**한다.
+ * → PIPA §21(보유목적 달성 후 파기)·최소수집 원칙. 감사 로그는 분쟁 대비 장기 보존되므로,
+ *   후보자 행이 삭제된 뒤에도 metadata 에 평문 PII 가 남는 것을 막는다.
+ *
+ * 대상: resourceType='candidate' 이고 resourceId=candidateId 인 행 +
+ *       해당 후보의 interview_session 단위 행(sessionIds 전달 시).
+ * fire-and-forget 으로 호출해도 되도록 예외는 호출부에서 처리.
+ */
+export async function redactCandidateAuditPii(
+  candidateId: number,
+  sessionIds: number[] = []
+): Promise<void> {
+  const conds = [
+    and(
+      eq(auditLogs.resourceType, "candidate"),
+      eq(auditLogs.resourceId, candidateId)
+    ),
+  ];
+  if (sessionIds.length > 0) {
+    conds.push(
+      and(
+        eq(auditLogs.resourceType, "interview_session"),
+        inArray(auditLogs.resourceId, sessionIds)
+      )
+    );
+  }
+  const rows = await db
+    .select({ id: auditLogs.id, metadata: auditLogs.metadata })
+    .from(auditLogs)
+    .where(conds.length === 1 ? conds[0] : or(...conds));
+
+  for (const r of rows) {
+    const m = r.metadata;
+    if (!m || typeof m !== "object") continue;
+    let changed = false;
+    const next: Record<string, unknown> = { ...m };
+    for (const k of AUDIT_PII_KEYS) {
+      if (k in next && next[k] !== "[redacted]") {
+        next[k] = "[redacted]";
+        changed = true;
+      }
+    }
+    if (changed) {
+      await db
+        .update(auditLogs)
+        .set({ metadata: next })
+        .where(eq(auditLogs.id, r.id));
+    }
+  }
 }

@@ -13,6 +13,7 @@
     "db:sync-check": "tsx scripts/sync-schema.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed-test": "node scripts/seed-test.mjs",
+    "db:seed-test-appeal": "node scripts/seed-test-appeal.mjs",
     "dart:fetch": "node scripts/fetch-dart-corps.mjs"
   },
   "dependencies": {

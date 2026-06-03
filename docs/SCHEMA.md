@@ -112,7 +112,7 @@
 | interview_email_count | INTEGER NOT NULL DEFAULT 0 | 면접링크 메일 발송 누적. 후보자당 10회 한도 |
 | last_interview_email_sent_at | TEXT NULL | 가장 최근 면접 링크 메일 발송 시각. UI 경과일 배지에 사용 |
 | decision_email_count | INTEGER NOT NULL DEFAULT 0 | 결정 통보 메일 발송 누적. 후보자당 10회 한도 |
-| pii_purged_at | TEXT NULL | 공고 종결 +14일 cron 이 PII 익명화한 시각. NULL = 미처리 |
+| pii_purged_at | TEXT NULL | ⚠️ **현재 미사용 컬럼** — 종결 +14일 폐기는 `purgePiiAfterClose` 가 candidates **행 자체를 삭제**(anonymize-in-place 아님)하므로 이 값을 set 하는 코드 경로가 없음. 향후 "행 보존 + 익명화" 전략으로 바꿀 때 사용 예정. (감사 로그 metadata 의 후보자 PII 는 삭제 시 `redactCandidateAuditPii` 로 [redacted] 처리) |
 | applicant_consent_confirmed_at | TEXT NULL | 채용기업이 "지원자가 AI 평가 적용에 동의했음"을 확인한 시각. PIPA §15·§26·§28의8·§37의2 책임을 고객사로 전가. 업로드/평가 라우트가 NOT NULL 검증 (2026-05-22 이전 row 는 legacy 면제) |
 | applicant_consent_confirmed_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 동의 확인을 클릭한 채용기업 사용자 |
 | resume_file_path | TEXT NOT NULL | 로컬 파일명 또는 Blob URL. 폐기 시 빈 문자열 |
@@ -330,7 +330,7 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 | port | INTEGER NOT NULL DEFAULT 465 | |
 | secure | INTEGER NOT NULL DEFAULT 1 | boolean, 465=true, 587=false (STARTTLS) |
 | auth_user | TEXT NOT NULL | SMTP 로그인 계정 |
-| auth_pass | TEXT NOT NULL | 평문 저장 (프로토타입). 응답 시 마스킹 |
+| auth_pass | TEXT NOT NULL | **AES-256-GCM 암호화 저장** (`lib/crypto.ts` `encrypt()`, `enc:v1:` prefix). 사용 시 `decrypt()`, 응답 시 마스킹. (과거 "평문 저장" 기재는 stale — 실제 코드는 암호화함) |
 | from_email | TEXT NOT NULL | 발신 주소 |
 | from_name | TEXT NULL | 발신자 표시명 |
 | last_checked_at | TEXT NULL | 마지막 헬스체크 시각 |

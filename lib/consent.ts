@@ -18,7 +18,8 @@ import { eq, desc } from "drizzle-orm";
 // 1.2.0 — 마스킹 표현 절제, 식별가능정보 자동 마스킹 명시
 // 1.3.0 — 서류평가는 Vertex AI 한국 리전(asia-northeast3) 처리로 §28의8 미적용. 국외이전은 면접 단계만 해당
 // 1.4.0 — 모든 LLM 호출을 Vertex AI 서울 리전으로 통합 (flash). 국외이전 동의 항목 제거.
-export const CONSENT_VERSION = "1.4.0-2026-05-26";
+// 1.5.0 — 면접 무결성 행태정보(붙여넣기·타이핑·화면이탈·복사시도) 수집 동의 항목 신설 + collection_use 에 나이·학력 명시 (PIPA §15)
+export const CONSENT_VERSION = "1.5.0-2026-06-03";
 
 export type ConsentItem = {
   key: string;
@@ -34,7 +35,15 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     required: true,
     title: "개인정보 수집 · 이용 동의",
     description:
-      "이름·이메일·전화·이력서 본문 및 면접 대화록을 수집·이용합니다. 목적: 채용 절차 수행 (서류 평가, 면접 진행, 합·불 결정). 거부 시 면접에 참여할 수 없습니다.",
+      "이름·이메일·전화·나이·학력(수준·전공·학교)·이력서 본문 및 면접 대화록을 수집·이용합니다. 목적: 채용 절차 수행 (서류 평가, 면접 진행, 합·불 결정). 거부 시 면접에 참여할 수 없습니다.",
+    legalBasis: "PIPA §15",
+  },
+  {
+    key: "interview_integrity",
+    required: true,
+    title: "면접 무결성·부정행위 방지 정보 수집 동의",
+    description:
+      "AI 면접의 공정성을 위해 면접 진행 중 답변 입력 과정의 행태정보 — 붙여넣기 횟수·분량, 타이핑 분량, 응답까지 걸린 시간, 면접 화면 이탈(탭 전환) 횟수, 질문 복사 시도 횟수 — 를 수집·기록합니다. 목적: 외부 도구를 이용한 대리 작성 등 부정행위의 방지·탐지. 수집된 신호는 채용 담당자의 참고 자료로만 제공되며 단독으로 합·불을 결정하지 않습니다. 거부 시 AI 면접에 참여할 수 없습니다.",
     legalBasis: "PIPA §15",
   },
   {

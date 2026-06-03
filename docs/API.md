@@ -27,6 +27,7 @@
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
 | GET | `/api/admin/audit` | 🔒 🏢 (admin) | 감사 로그 조회. query: `days`, `action`, `orgId` |
+| GET | `/api/admin/appeals` | 🔒 🏢 (admin) | 자동화 의사결정 이의제기 개요 (PIPA §37의2). system_admin=전체 / org_admin=자기 법인. query: `status`(pending/reviewed/resolved/rejected). pending 우선 정렬 + `pendingCount`. DPO 알림 메일이 링크하는 `/admin/appeals` 페이지 데이터 소스 |
 | GET | `/api/admin/metrics` | 🔒 🏢 (admin) | 운영 메트릭 — totals / stages / queue / interviews / tokenUsage / perOrg / recentCrossOrg |
 | GET | `/api/health` | 🌐 | DB·env 헬스체크. 200 정상 / 503 실패. 외부 모니터링 호환 |
 
@@ -116,7 +117,7 @@
 |---|---|---|---|
 | POST | `/api/candidates/bulk-delete` | 🔒 🏢 | `{ids:number[]}` — 타 법인 ID 포함 시 전체 거부 |
 | POST | `/api/candidates/bulk-screen` | 🔒 🏢 | `{ids:number[]}` — 평가/재평가 일괄 (과금은 성공 시 후차감). 완료/미평가→enqueue, `queued`(재시도 대기)→백오프 해제(즉시 재시도), `processing`/`paused`→skip. 응답 `{enqueued, kicked, skipped, details}` |
-| PATCH | `/api/candidates/[id]/stage` | 🔒 🏢 | `{stage, note?, sendNotification?, customMessage?}` — 단계 변경. 단말(hired/rejected/withdrawn) 도달 시 자동 폐기 + (옵션) 통보 메일. 응답 `{stage, terminal, purged, mail}` |
+| PATCH | `/api/candidates/[id]/stage` | 🔒 🏢 | `{stage, outcome?, outcomeReason?, note?, sendNotification?, customMessage?}` — 단계 변경. 단말(hired/rejected/withdrawn) 도달 시 자동 폐기 + (옵션) 통보 메일. **outcome=rejected 는 `outcomeReason`(목록값) 필수** — 없으면 `400 {code:"reason_required"}` (PIPA §37의2 인적검토 근거 기록). 응답 `{stage, terminal, purged, mail}` |
 | GET | `/api/candidates/[id]/notes` | 🔒 🏢 | 면접관 메모 목록 (같은 법인 누구나 조회) |
 | POST | `/api/candidates/[id]/notes` | 🔒 🏢 | `{scores?, note?, interviewSessionId?}` 메모/스코어카드 작성. 본인 row 생성 |
 | PATCH | `/api/candidates/[id]/notes/[noteId]` | 🔒 🏢 | 본인 작성 메모 수정 |

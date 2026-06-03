@@ -14,6 +14,7 @@ import {
   type Outcome,
   STAGE_LABELS,
   OUTCOME_LABELS,
+  OUTCOME_REASONS_BY_OUTCOME,
   isOutcome,
   purgeOnDecision,
   buildDecisionEmail,
@@ -107,6 +108,25 @@ export async function PATCH(
   }
   if (stageRequested && prevStage === stageRequested && !isOutcomeAction) {
     return new Response("이미 같은 단계입니다.", { status: 400 });
+  }
+
+  // PIPA §37의2 — 불합격(불리한 자동화 의사결정 후속) 확정 시 사유 기록 필수.
+  // 목록에서 선택한 사유 코드여야 통과 (자유 입력 강제는 아니나, 사람이 사유를 고르게 해
+  // "실질적 인적 검토"를 보장 + 사전공개 문구("결정 사유를 기록한 뒤 확정")와 정합).
+  // hired 는 단일 사유(passed_final)를 UI 가 자동 첨부, withdrawn 은 후보자 자의라 제외.
+  if (outcomeRequested === "rejected") {
+    const allowed = OUTCOME_REASONS_BY_OUTCOME.rejected as readonly string[];
+    const reason = typeof body.outcomeReason === "string" ? body.outcomeReason : "";
+    if (!reason || !allowed.includes(reason)) {
+      return Response.json(
+        {
+          error: "불합격 결정에는 사유를 선택해야 합니다.",
+          code: "reason_required",
+          allowed,
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const updateFields: {

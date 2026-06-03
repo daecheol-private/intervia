@@ -17,6 +17,7 @@ import {
   BarChart3,
   ScrollText,
   Lock,
+  Scale,
   ShieldCheck,
   Video,
   Settings,
@@ -81,6 +82,7 @@ function buildSections(role: Role): NavSection[] {
         { href: "/admin/pricing", label: "단가", Icon: DollarSign },
         { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
         { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
+        { href: "/admin/appeals", label: "이의제기", Icon: Scale },
         { href: "/admin/locks", label: "잠금", Icon: Lock },
       ],
     });
@@ -170,6 +172,7 @@ export function NavBar({
                       { href: "/admin/pricing", label: "단가", Icon: DollarSign },
                       { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
                       { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
+                      { href: "/admin/appeals", label: "이의제기", Icon: Scale },
                       { href: "/admin/locks", label: "잠금", Icon: Lock },
                     ]}
                   />
