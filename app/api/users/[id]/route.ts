@@ -40,6 +40,9 @@ export async function DELETE(
   const body = (await req.json().catch(() => ({}))) as {
     reason?: string;
     confirm?: string;
+    // force=true: 비활성(disabled) 전제조건을 건너뛰고 활성/대기 계정도 즉시 삭제.
+    // (잘못 등록된 계정이 법인의 마지막 org_admin 이라 비활성화조차 막히는 catch-22 해소)
+    force?: boolean;
   };
   const reason = (body.reason ?? "").trim();
   if (reason.length < 5)
@@ -61,10 +64,11 @@ export async function DELETE(
       { status: 409 }
     );
 
-  // 전제조건: 비활성 계정만 삭제 가능 (실수 방지)
-  if (target.status !== "disabled")
+  // 전제조건: 기본은 비활성(disabled) 계정만 (실수 방지 2단계).
+  // force=true 면 활성/대기 계정도 즉시 삭제 — system_admin 전용 + step-up + 이메일 confirm 으로 여전히 보호.
+  if (!body.force && target.status !== "disabled")
     return new Response(
-      "비활성(disabled) 계정만 삭제할 수 있습니다. 먼저 계정을 비활성화하세요.",
+      "비활성(disabled) 계정만 삭제할 수 있습니다. 먼저 계정을 비활성화하거나, 강제 삭제(force)를 사용하세요.",
       { status: 400 }
     );
 
@@ -84,7 +88,14 @@ export async function DELETE(
     resourceType: "user",
     resourceId: targetId,
     orgId: target.orgId,
-    metadata: { reason, email: target.email, name: target.name, role: target.role },
+    metadata: {
+      reason,
+      email: target.email,
+      name: target.name,
+      role: target.role,
+      force: !!body.force,
+      status: target.status,
+    },
   });
 
   return new Response(null, { status: 204 });

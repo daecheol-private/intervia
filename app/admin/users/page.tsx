@@ -167,8 +167,20 @@ export default function AdminUsersPage() {
     );
   };
 
-  // 계정 영구 삭제 — 비활성(disabled) 계정만, sysadmin 전용. step-up + 사유 + 이메일 확인.
+  // 계정 영구 삭제 — sysadmin 전용. step-up + 사유 + 이메일 확인.
+  // disabled 면 일반 삭제, 그 외(active/pending)면 강제 삭제(force) — 한 단계 더 경고.
   const deleteUser = async (u: Row) => {
+    const force = u.status !== "disabled";
+    if (
+      force &&
+      !confirm(
+        `⚠️ '${u.name}' (${u.email}) 는 '${u.status}' 상태입니다.\n\n` +
+          `보통은 비활성화 후 삭제하지만, 강제로 즉시 영구 삭제합니다.\n` +
+          `이 계정이 법인의 유일한 관리자라면 삭제 후 그 법인은 관리자가 없는 상태로 남습니다 ` +
+          `— 법인 자체를 정리하려면 '법인 관리'에서 정지→삭제하세요.\n\n계속할까요?`
+      )
+    )
+      return;
     const reason = prompt(
       `'${u.name}' (${u.email}) 계정을 영구 삭제합니다.\n\n` +
         `세션·알림·즐겨찾기·면접관 메모가 함께 삭제되며 복구할 수 없습니다.\n\n` +
@@ -198,6 +210,7 @@ export default function AdminUsersPage() {
           body: JSON.stringify({
             reason: reason.trim(),
             confirm: confirmEmail.trim(),
+            force,
           }),
         },
         `'${u.name}' (${u.email}) 계정을 영구 삭제합니다.`
@@ -215,9 +228,9 @@ export default function AdminUsersPage() {
     alert("삭제 완료. 감사 로그에 기록되었습니다.");
   };
 
-  // disabled 상태 + 비-sysadmin 계정에만 삭제 버튼 노출.
-  const canDelete = (u: Row) =>
-    u.status === "disabled" && u.role !== "system_admin";
+  // 비-sysadmin 계정에 삭제 버튼 노출. disabled=일반 삭제 / 그 외=강제 삭제.
+  // (system_admin 은 보호 — 먼저 권한 회수 후 삭제)
+  const canDelete = (u: Row) => u.role !== "system_admin";
 
   // ── 공용 표시 헬퍼 ──
   const roleBadge = (u: Row) =>
@@ -320,10 +333,14 @@ export default function AdminUsersPage() {
           <button
             onClick={() => deleteUser(u)}
             disabled={busy}
-            title="계정 영구 삭제 (복구 불가)"
+            title={
+              u.status === "disabled"
+                ? "계정 영구 삭제 (복구 불가)"
+                : "강제 영구 삭제 — 활성/대기 계정도 즉시 삭제 (복구 불가)"
+            }
             className={btnDeleteSolid}
           >
-            삭제
+            {u.status === "disabled" ? "삭제" : "강제 삭제"}
           </button>
         )}
       </div>
