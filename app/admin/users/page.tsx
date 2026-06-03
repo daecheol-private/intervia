@@ -16,6 +16,12 @@ type Row = {
   emailVerifiedAt: string | null;
 };
 
+const ROLE_LABELS: Record<Row["role"], string> = {
+  member: "일반 멤버",
+  org_admin: "법인 관리자",
+  system_admin: "시스템 관리자",
+};
+
 export default function AdminUsersPage() {
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
@@ -81,6 +87,86 @@ export default function AdminUsersPage() {
     void load();
   };
 
+  // 권한 변경 — select 에서 호출. 전이별 확인 문구 분기 (취소 시 select 는 controlled 라 원복).
+  const changeRole = (u: Row, newRole: Row["role"]) => {
+    if (newRole === u.role) return;
+    let msg: string;
+    if (newRole === "system_admin") {
+      msg = `'${u.name}' (${u.email}) 에게 시스템 관리자 권한을 부여합니다.\n\n시스템 관리자는 모든 법인 데이터에 접근 가능합니다. 진행하시겠습니까?`;
+    } else if (u.role === "system_admin") {
+      msg = `'${u.name}' 의 시스템 관리자 권한을 회수하고 '${ROLE_LABELS[newRole]}' 로 전환합니다.`;
+    } else if (newRole === "org_admin") {
+      msg = `'${u.name}' (${u.email}) 를 ${u.orgName ?? "법인"} 의 법인 관리자(org_admin)로 승급합니다.\n법인의 멤버 관리·합류 승인 권한을 가지게 됩니다.`;
+    } else {
+      msg = `'${u.name}' (${u.email}) 를 일반 멤버(member)로 강등합니다.\n법인 관리 권한이 즉시 회수됩니다.`;
+    }
+    if (confirm(msg)) void update(u.id, { role: newRole });
+  };
+
+  // 활성/비활성 토글
+  const toggleStatus = (u: Row, next: "active" | "disabled") => {
+    const msg =
+      next === "disabled"
+        ? `'${u.name}' (${u.email}) 를 비활성화합니다.\n사용자는 즉시 로그인 불가가 되며, 보유 세션도 만료됩니다.`
+        : `'${u.name}' (${u.email}) 를 활성 상태로 전환합니다.\n${
+            u.status === "pending"
+              ? "이 사용자는 합류 승인 대기 중입니다 — 일반적으로는 멤버 관리 > 합류 요청 탭에서 승인하는 것이 권장됩니다."
+              : "재로그인이 가능해집니다."
+          }`;
+    if (confirm(msg)) void update(u.id, { status: next });
+  };
+
+  // 관리자 대리 이메일 인증 — 인증 메일이 도달하지 않는 사용자 구제용.
+  const verifyEmail = (u: Row) => {
+    if (
+      confirm(
+        `'${u.name}' (${u.email}) 의 이메일을 인증 완료로 처리합니다.\n\n인증 메일이 도달하지 않는 사용자를 위한 기능입니다. 본인 소유 이메일이 맞는지 확인 후 진행하세요. 처리 즉시 로그인이 가능해집니다.`
+      )
+    )
+      void update(u.id, { emailVerified: true });
+  };
+
+  // 강제 로그아웃 — 활성 세션 전부 만료
+  const forceLogout = async (u: Row) => {
+    if (
+      !confirm(
+        `'${u.name}' (${u.email}) 의 모든 활성 세션을 강제 만료합니다. 다음 접속 시 재로그인해야 합니다.`
+      )
+    )
+      return;
+    setBusyId(u.id);
+    const res = await fetch(`/api/admin/users/${u.id}/sessions`, {
+      method: "DELETE",
+    });
+    setBusyId(null);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    const d = (await res.json()) as { sessionsRevoked: number };
+    alert(`${d.sessionsRevoked}개 세션을 만료했습니다.`);
+  };
+
+  // 비밀번호 리셋 메일 발송
+  const passwordReset = async (u: Row) => {
+    if (!confirm(`'${u.email}' 로 비밀번호 리셋 메일을 발송합니다.`)) return;
+    setBusyId(u.id);
+    const res = await fetch(`/api/admin/users/${u.id}/password-reset`, {
+      method: "POST",
+    });
+    setBusyId(null);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    const d = (await res.json()) as { mailSent: boolean; error: string | null };
+    alert(
+      d.mailSent
+        ? "메일 발송 완료. 사용자가 메일함을 확인하면 됩니다."
+        : `메일 발송 실패: ${d.error ?? "알 수 없는 오류"}`
+    );
+  };
+
   // 계정 영구 삭제 — 비활성(disabled) 계정만, sysadmin 전용. step-up + 사유 + 이메일 확인.
   const deleteUser = async (u: Row) => {
     const reason = prompt(
@@ -130,204 +216,19 @@ export default function AdminUsersPage() {
   };
 
   // disabled 상태 + 비-sysadmin 계정에만 삭제 버튼 노출.
-  const canDelete = (u: Row) => u.status === "disabled" && u.role !== "system_admin";
+  const canDelete = (u: Row) =>
+    u.status === "disabled" && u.role !== "system_admin";
 
-  // 작업 버튼 묶음 — 데스크톱 테이블 / 모바일 카드 공용
-  const renderActionButtons = (u: Row) => (
-    <>
-      {!u.emailVerifiedAt && (
-        <button
-          onClick={() => {
-            if (
-              confirm(
-                `'${u.name}' (${u.email}) 의 이메일을 인증 완료로 처리합니다.\n\n인증 메일이 도달하지 않는 사용자를 위한 기능입니다. 본인 소유 이메일이 맞는지 확인 후 진행하세요. 처리 즉시 로그인이 가능해집니다.`
-              )
-            )
-              update(u.id, { emailVerified: true });
-          }}
-          disabled={busyId === u.id}
-          className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-primary-soft border border-primary/40 hover:bg-primary/10 text-primary-deep rounded disabled:opacity-50 font-medium"
-        >
-          ✓ 이메일 인증
-        </button>
-      )}
-      {u.role === "member" && (
-        <button
-          onClick={() => {
-            if (
-              confirm(
-                `'${u.name}' (${u.email}) 를 ${u.orgName ?? "법인"} 의 org_admin 으로 승급합니다.\n법인의 멤버 관리·합류 승인 권한을 가지게 됩니다.`
-              )
-            )
-              update(u.id, { role: "org_admin" });
-          }}
-          disabled={busyId === u.id}
-          className={btnSec}
-        >
-          → org_admin
-        </button>
-      )}
-      {u.role === "org_admin" && (
-        <button
-          onClick={() => {
-            if (
-              confirm(
-                `'${u.name}' (${u.email}) 를 일반 member 로 강등합니다.\n법인 관리 권한이 즉시 회수됩니다.`
-              )
-            )
-              update(u.id, { role: "member" });
-          }}
-          disabled={busyId === u.id}
-          className={btnSec}
-        >
-          → member
-        </button>
-      )}
-      {u.role !== "system_admin" && (
-        <button
-          onClick={() => {
-            if (
-              confirm(
-                `'${u.name}' (${u.email}) 에게 시스템 관리자 권한을 부여합니다.\n\n시스템 관리자는 모든 법인 데이터에 접근 가능합니다. 진행하시겠습니까?`
-              )
-            )
-              update(u.id, { role: "system_admin" });
-          }}
-          disabled={busyId === u.id}
-          className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-700 rounded disabled:opacity-50"
-        >
-          → system_admin
-        </button>
-      )}
-      {u.role === "system_admin" && (
-        <button
-          onClick={() => {
-            if (
-              confirm(
-                `'${u.name}' 의 시스템 관리자 권한을 회수합니다.\n(현재 법인의 ${u.orgName ? "org_admin" : "member"}으로 복귀)`
-              )
-            )
-              update(u.id, {
-                role: u.orgName ? "org_admin" : "member",
-              });
-          }}
-          disabled={busyId === u.id}
-          className={btnDanger}
-        >
-          sysadmin 회수
-        </button>
-      )}
-      {u.status === "active" && (
-        <button
-          onClick={() => {
-            if (
-              confirm(
-                `'${u.name}' (${u.email}) 를 비활성화합니다.\n사용자는 즉시 로그인 불가가 되며, 보유 세션도 만료됩니다.`
-              )
-            )
-              update(u.id, { status: "disabled" });
-          }}
-          disabled={busyId === u.id}
-          className={btnDanger}
-        >
-          비활성
-        </button>
-      )}
-      {u.status !== "active" && (
-        <button
-          onClick={() => {
-            if (
-              confirm(
-                `'${u.name}' (${u.email}) 를 활성 상태로 전환합니다.\n${
-                  u.status === "pending"
-                    ? "이 사용자는 합류 승인 대기 중입니다 — 일반적으로는 멤버 관리 > 합류 요청 탭에서 승인하는 것이 권장됩니다."
-                    : "재로그인이 가능해집니다."
-                }`
-              )
-            )
-              update(u.id, { status: "active" });
-          }}
-          disabled={busyId === u.id}
-          className={btnSec}
-        >
-          활성
-        </button>
-      )}
-      <button
-        onClick={async () => {
-          if (
-            !confirm(
-              `'${u.name}' (${u.email}) 의 모든 활성 세션을 강제 만료합니다. 다음 접속 시 재로그인해야 합니다.`
-            )
-          )
-            return;
-          setBusyId(u.id);
-          const res = await fetch(`/api/admin/users/${u.id}/sessions`, {
-            method: "DELETE",
-          });
-          setBusyId(null);
-          if (!res.ok) {
-            setErr(await res.text());
-            return;
-          }
-          const d = (await res.json()) as { sessionsRevoked: number };
-          alert(`${d.sessionsRevoked}개 세션을 만료했습니다.`);
-        }}
-        disabled={busyId === u.id}
-        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-white border border-orange-300 hover:bg-orange-50 text-orange-700 rounded disabled:opacity-50"
-      >
-        강제 로그아웃
-      </button>
-      <button
-        onClick={async () => {
-          if (!confirm(`'${u.email}' 로 비밀번호 리셋 메일을 발송합니다.`))
-            return;
-          setBusyId(u.id);
-          const res = await fetch(`/api/admin/users/${u.id}/password-reset`, {
-            method: "POST",
-          });
-          setBusyId(null);
-          if (!res.ok) {
-            setErr(await res.text());
-            return;
-          }
-          const d = (await res.json()) as {
-            mailSent: boolean;
-            error: string | null;
-          };
-          alert(
-            d.mailSent
-              ? "메일 발송 완료. 사용자가 메일함을 확인하면 됩니다."
-              : `메일 발송 실패: ${d.error ?? "알 수 없는 오류"}`
-          );
-        }}
-        disabled={busyId === u.id}
-        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-card border border-accent/50 hover:bg-accent-soft text-accent-deep rounded disabled:opacity-50 transition-colors"
-      >
-        비번 리셋
-      </button>
-      {canDelete(u) && (
-        <button
-          onClick={() => deleteUser(u)}
-          disabled={busyId === u.id}
-          title="계정 영구 삭제 (복구 불가)"
-          className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded disabled:opacity-50"
-        >
-          삭제
-        </button>
-      )}
-    </>
-  );
-
-  // 권한/상태 배지 — 공용
+  // ── 공용 표시 헬퍼 ──
   const roleBadge = (u: Row) =>
     u.role === "system_admin" ? (
       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 uppercase tracking-wide">
         system_admin
       </span>
     ) : (
-      <span className="text-slate-600">{u.role}</span>
+      <span className="text-slate-600">{ROLE_LABELS[u.role]}</span>
     );
+
   const statusBadge = (u: Row) =>
     u.status === "pending" ? (
       <Link
@@ -338,9 +239,12 @@ export default function AdminUsersPage() {
         pending
         <span aria-hidden>↗</span>
       </Link>
+    ) : u.status === "disabled" ? (
+      <span className="text-danger font-medium">비활성</span>
     ) : (
-      <span className="text-slate-600">{u.status}</span>
+      <span className="text-emerald-600 font-medium">활성</span>
     );
+
   // 이메일 미인증 표시 — 로그인이 차단된 상태임을 관리자가 즉시 인지하도록.
   const verifyBadge = (u: Row) =>
     !u.emailVerifiedAt ? (
@@ -351,6 +255,80 @@ export default function AdminUsersPage() {
         메일 미인증
       </span>
     ) : null;
+
+  // ── 작업 영역 (데스크톱 테이블 / 모바일 카드 공용) ──
+  // 권한은 버튼 묶음 대신 select 로 — 4개 버튼이 한 컨트롤로 합쳐져 영역이 단순해진다.
+  // [ 권한 select ] [ 활성/비활성 ] [ 이메일 인증 ]  |  [ 강제 로그아웃 ] [ 비번 리셋 ] [ 삭제 ]
+  const renderActions = (u: Row) => {
+    const busy = busyId === u.id;
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {/* 권한 변경 */}
+        <label className="inline-flex items-center gap-1.5">
+          <span className="text-[11px] text-slate-400">권한</span>
+          <select
+            aria-label="권한 변경"
+            title="권한 변경"
+            value={u.role}
+            disabled={busy}
+            onChange={(e) => changeRole(u, e.target.value as Row["role"])}
+            className={selectCls}
+          >
+            <option value="member">일반 멤버</option>
+            <option value="org_admin">법인 관리자</option>
+            <option value="system_admin">시스템 관리자</option>
+          </select>
+        </label>
+
+        {/* 상태 토글 */}
+        {u.status === "active" ? (
+          <button
+            onClick={() => toggleStatus(u, "disabled")}
+            disabled={busy}
+            className={btnDanger}
+          >
+            비활성화
+          </button>
+        ) : (
+          <button
+            onClick={() => toggleStatus(u, "active")}
+            disabled={busy}
+            className={btnSec}
+          >
+            활성화
+          </button>
+        )}
+
+        {/* 이메일 인증 (미인증 시) */}
+        {!u.emailVerifiedAt && (
+          <button onClick={() => verifyEmail(u)} disabled={busy} className={btnVerify}>
+            ✓ 이메일 인증
+          </button>
+        )}
+
+        {/* 상태 변경 ↔ 계정 유틸 구분선 (데스크톱) */}
+        <span aria-hidden className="hidden sm:block w-px h-5 bg-slate-200 mx-0.5" />
+
+        {/* 계정 유틸 */}
+        <button onClick={() => forceLogout(u)} disabled={busy} className={btnWarn}>
+          강제 로그아웃
+        </button>
+        <button onClick={() => passwordReset(u)} disabled={busy} className={btnAccent}>
+          비번 리셋
+        </button>
+        {canDelete(u) && (
+          <button
+            onClick={() => deleteUser(u)}
+            disabled={busy}
+            title="계정 영구 삭제 (복구 불가)"
+            className={btnDeleteSolid}
+          >
+            삭제
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
@@ -459,14 +437,14 @@ export default function AdminUsersPage() {
                 </span>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
-              {renderActionButtons(u)}
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              {renderActions(u)}
             </div>
           </div>
         ))}
       </div>
 
-      {/* 데스크톱: 전체 테이블 */}
+      {/* 데스크톱: 테이블. 권한은 작업 영역의 select 가 곧 현재값 표시를 겸하므로 별도 컬럼 제거 */}
       <div className="hidden sm:block bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-600 text-xs">
@@ -474,7 +452,6 @@ export default function AdminUsersPage() {
               <th className="text-left px-4 py-3 font-medium">이름</th>
               <th className="text-left px-4 py-3 font-medium">이메일</th>
               <th className="text-left px-4 py-3 font-medium">법인</th>
-              <th className="text-left px-4 py-3 font-medium">권한</th>
               <th className="text-left px-4 py-3 font-medium">상태</th>
               <th className="text-right px-4 py-3 font-medium">작업</th>
             </tr>
@@ -482,14 +459,14 @@ export default function AdminUsersPage() {
           <tbody className="divide-y divide-slate-100">
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={6}>
+                <td className="px-4 py-6 text-slate-400" colSpan={5}>
                   불러오는 중...
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={6}>
+                <td className="px-4 py-6 text-slate-400" colSpan={5}>
                   결과가 없습니다.
                 </td>
               </tr>
@@ -499,219 +476,12 @@ export default function AdminUsersPage() {
                 <td className="px-4 py-3 font-medium text-slate-900">{u.name}</td>
                 <td className="px-4 py-3 text-slate-600">{u.email}</td>
                 <td className="px-4 py-3 text-slate-600">{u.orgName || "-"}</td>
-                <td className="px-4 py-3 text-xs">
-                  {u.role === "system_admin" ? (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 uppercase tracking-wide">
-                      system_admin
-                    </span>
-                  ) : (
-                    u.role
-                  )}
-                </td>
-                <td className="px-4 py-3 text-xs">
-                  {u.status === "pending" ? (
-                    <Link
-                      href="/org/members?tab=requests"
-                      className="inline-flex items-center gap-1 text-warning hover:text-warning/80 hover:underline"
-                      title="합류 요청 탭으로 이동 — 정식 승인 권장"
-                    >
-                      pending
-                      <span aria-hidden>↗</span>
-                    </Link>
-                  ) : (
-                    u.status
-                  )}
+                <td className="px-4 py-3 text-xs whitespace-nowrap">
+                  {statusBadge(u)}
                   {verifyBadge(u)}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex gap-1.5 justify-end flex-wrap">
-                    {!u.emailVerifiedAt && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `'${u.name}' (${u.email}) 의 이메일을 인증 완료로 처리합니다.\n\n인증 메일이 도달하지 않는 사용자를 위한 기능입니다. 본인 소유 이메일이 맞는지 확인 후 진행하세요. 처리 즉시 로그인이 가능해집니다.`
-                            )
-                          )
-                            update(u.id, { emailVerified: true });
-                        }}
-                        disabled={busyId === u.id}
-                        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-primary-soft border border-primary/40 hover:bg-primary/10 text-primary-deep rounded disabled:opacity-50 font-medium"
-                      >
-                        ✓ 이메일 인증
-                      </button>
-                    )}
-                    {u.role === "member" && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `'${u.name}' (${u.email}) 를 ${u.orgName ?? "법인"} 의 org_admin 으로 승급합니다.\n법인의 멤버 관리·합류 승인 권한을 가지게 됩니다.`
-                            )
-                          )
-                            update(u.id, { role: "org_admin" });
-                        }}
-                        disabled={busyId === u.id}
-                        className={btnSec}
-                      >
-                        → org_admin
-                      </button>
-                    )}
-                    {u.role === "org_admin" && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `'${u.name}' (${u.email}) 를 일반 member 로 강등합니다.\n법인 관리 권한이 즉시 회수됩니다.`
-                            )
-                          )
-                            update(u.id, { role: "member" });
-                        }}
-                        disabled={busyId === u.id}
-                        className={btnSec}
-                      >
-                        → member
-                      </button>
-                    )}
-                    {u.role !== "system_admin" && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `'${u.name}' (${u.email}) 에게 시스템 관리자 권한을 부여합니다.\n\n시스템 관리자는 모든 법인 데이터에 접근 가능합니다. 진행하시겠습니까?`
-                            )
-                          )
-                            update(u.id, { role: "system_admin" });
-                        }}
-                        disabled={busyId === u.id}
-                        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-700 rounded disabled:opacity-50"
-                      >
-                        → system_admin
-                      </button>
-                    )}
-                    {u.role === "system_admin" && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `'${u.name}' 의 시스템 관리자 권한을 회수합니다.\n(현재 법인의 ${u.orgName ? "org_admin" : "member"}으로 복귀)`
-                            )
-                          )
-                            update(u.id, {
-                              role: u.orgName ? "org_admin" : "member",
-                            });
-                        }}
-                        disabled={busyId === u.id}
-                        className={btnDanger}
-                      >
-                        sysadmin 회수
-                      </button>
-                    )}
-                    {u.status === "active" && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `'${u.name}' (${u.email}) 를 비활성화합니다.\n사용자는 즉시 로그인 불가가 되며, 보유 세션도 만료됩니다.`
-                            )
-                          )
-                            update(u.id, { status: "disabled" });
-                        }}
-                        disabled={busyId === u.id}
-                        className={btnDanger}
-                      >
-                        비활성
-                      </button>
-                    )}
-                    {u.status !== "active" && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `'${u.name}' (${u.email}) 를 활성 상태로 전환합니다.\n${
-                                u.status === "pending"
-                                  ? "이 사용자는 합류 승인 대기 중입니다 — 일반적으로는 멤버 관리 > 합류 요청 탭에서 승인하는 것이 권장됩니다."
-                                  : "재로그인이 가능해집니다."
-                              }`
-                            )
-                          )
-                            update(u.id, { status: "active" });
-                        }}
-                        disabled={busyId === u.id}
-                        className={btnSec}
-                      >
-                        활성
-                      </button>
-                    )}
-                    <button
-                      onClick={async () => {
-                        if (
-                          !confirm(
-                            `'${u.name}' (${u.email}) 의 모든 활성 세션을 강제 만료합니다. 다음 접속 시 재로그인해야 합니다.`
-                          )
-                        )
-                          return;
-                        setBusyId(u.id);
-                        const res = await fetch(`/api/admin/users/${u.id}/sessions`, {
-                          method: "DELETE",
-                        });
-                        setBusyId(null);
-                        if (!res.ok) {
-                          setErr(await res.text());
-                          return;
-                        }
-                        const d = (await res.json()) as { sessionsRevoked: number };
-                        alert(`${d.sessionsRevoked}개 세션을 만료했습니다.`);
-                      }}
-                      disabled={busyId === u.id}
-                      className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-white border border-orange-300 hover:bg-orange-50 text-orange-700 rounded disabled:opacity-50"
-                    >
-                      강제 로그아웃
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (
-                          !confirm(
-                            `'${u.email}' 로 비밀번호 리셋 메일을 발송합니다.`
-                          )
-                        )
-                          return;
-                        setBusyId(u.id);
-                        const res = await fetch(
-                          `/api/admin/users/${u.id}/password-reset`,
-                          { method: "POST" }
-                        );
-                        setBusyId(null);
-                        if (!res.ok) {
-                          setErr(await res.text());
-                          return;
-                        }
-                        const d = (await res.json()) as {
-                          mailSent: boolean;
-                          error: string | null;
-                        };
-                        alert(
-                          d.mailSent
-                            ? "메일 발송 완료. 사용자가 메일함을 확인하면 됩니다."
-                            : `메일 발송 실패: ${d.error ?? "알 수 없는 오류"}`
-                        );
-                      }}
-                      disabled={busyId === u.id}
-                      className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-card border border-accent/50 hover:bg-accent-soft text-accent-deep rounded disabled:opacity-50 transition-colors"
-                    >
-                      비번 리셋
-                    </button>
-                    {canDelete(u) && (
-                      <button
-                        onClick={() => deleteUser(u)}
-                        disabled={busyId === u.id}
-                        title="계정 영구 삭제 (복구 불가)"
-                        className="px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded disabled:opacity-50"
-                      >
-                        삭제
-                      </button>
-                    )}
-                  </div>
+                  <div className="flex justify-end">{renderActions(u)}</div>
                 </td>
               </tr>
             ))}
@@ -722,8 +492,14 @@ export default function AdminUsersPage() {
   );
 }
 
-// max-sm:* — 모바일(<640px) 터치 타깃 ~40px 확보. 데스크톱 테이블 밀도는 유지.
-const btnSec =
-  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded disabled:opacity-50";
-const btnDanger =
-  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs bg-danger-soft border border-danger/30 hover:bg-danger-soft/70 text-danger rounded disabled:opacity-50 transition-colors";
+// max-sm:* — 모바일(<640px) 터치 타깃 ~40px 확보. 데스크톱 밀도는 유지.
+const btnBase =
+  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs rounded disabled:opacity-50";
+const btnSec = `${btnBase} bg-white border border-slate-300 hover:bg-slate-50 text-slate-700`;
+const btnDanger = `${btnBase} bg-danger-soft border border-danger/30 hover:bg-danger-soft/70 text-danger transition-colors`;
+const btnVerify = `${btnBase} bg-primary-soft border border-primary/40 hover:bg-primary/10 text-primary-deep font-medium`;
+const btnWarn = `${btnBase} bg-white border border-orange-300 hover:bg-orange-50 text-orange-700`;
+const btnAccent = `${btnBase} bg-card border border-accent/50 hover:bg-accent-soft text-accent-deep transition-colors`;
+const btnDeleteSolid = `${btnBase} bg-rose-600 hover:bg-rose-700 text-white`;
+const selectCls =
+  "px-2 py-1 max-sm:py-2.5 text-xs rounded-md border border-slate-300 bg-white text-slate-700 disabled:opacity-50 cursor-pointer hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30";
