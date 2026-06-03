@@ -1098,14 +1098,14 @@ function QuestionSheetModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/40 flex items-start justify-center overflow-y-auto p-4"
+      className="fixed inset-0 z-50 bg-slate-900/40 flex items-stretch sm:items-start justify-center overflow-y-auto p-0 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl max-w-2xl w-full my-8"
+        className="bg-white rounded-none sm:rounded-2xl shadow-xl w-full max-w-4xl min-h-full sm:min-h-0 sm:my-8"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-none sm:rounded-t-2xl z-10">
           <h3 className="text-base font-bold text-slate-900">
             1차 면접 질문지
           </h3>
