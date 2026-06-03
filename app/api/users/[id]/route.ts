@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { requireStepUp } from "@/lib/step-up";
 import { logAudit } from "@/lib/audit";
+import { isProtectedSystemAdminEmail } from "@/lib/bootstrap-admin";
 
 export const runtime = "nodejs";
 
@@ -46,6 +47,13 @@ export async function DELETE(
 
   const [target] = await db.select().from(users).where(eq(users.id, targetId));
   if (!target) return new Response("Not found", { status: 404 });
+
+  // SYSTEM_ADMIN_EMAIL 로 지정된 보호 계정 — 삭제 불가 (env/DB 직접 관리 전용).
+  if (isProtectedSystemAdminEmail(target.email))
+    return new Response(
+      "SYSTEM_ADMIN_EMAIL 로 지정된 시스템 관리자 계정은 삭제할 수 없습니다. (운영 락아웃 방지 — 변경이 필요하면 환경변수/DB 를 직접 다루세요.)",
+      { status: 403 }
+    );
 
   if (target.role === "system_admin")
     return new Response(
@@ -107,6 +115,15 @@ export async function PATCH(
   if (me!.role === "member") return new Response("권한 없음", { status: 403 });
   if (me!.role === "org_admin" && !ownsOrg(me!, target.orgId))
     return new Response("권한 없음", { status: 403 });
+
+  // SYSTEM_ADMIN_EMAIL 로 지정된 보호 계정 — 권한/상태 변경 불가 (실수로 비활성화·권한 회수
+  // 해 운영 락아웃되는 사고 방지). 변경이 필요하면 환경변수/DB 를 직접 다뤄야 한다.
+  // 권한 체크 이후에 둬, 권한 없는 사용자에겐 보호 계정의 존재를 노출하지 않는다.
+  if (isProtectedSystemAdminEmail(target.email))
+    return new Response(
+      "SYSTEM_ADMIN_EMAIL 로 지정된 시스템 관리자 계정은 변경할 수 없습니다. (운영 락아웃 방지)",
+      { status: 403 }
+    );
 
   // 민감 액션 — step-up 인증 통과 필수 (role/status 변경 모두)
   const stepUpGuard = await requireStepUp();

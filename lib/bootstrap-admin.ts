@@ -22,6 +22,23 @@ import { log } from "./logger";
  *    랜덤 생성 비번도 mustChangePassword=true 라 로그인 후 `/account` 에서 즉시 변경 필요.
  */
 
+/**
+ * 환경변수 `SYSTEM_ADMIN_EMAIL` 로 지정된 부트스트랩 시스템 관리자 계정인지 판별.
+ *
+ * 이 계정은 운영 락아웃 방지를 위한 "보호 계정" — 사용자 관리 화면에서 숨기고,
+ * 권한/상태 변경(PATCH)·삭제(DELETE)를 서버에서 차단한다. 변경이 필요하면 env 또는
+ * DB 를 직접 다뤄야 한다 (실수로 비활성화/권한 회수해 락아웃되는 사고 방지).
+ *
+ * env 미설정이면 보호 대상 없음(false). 비교는 lowercase + trim 정규화.
+ */
+export function isProtectedSystemAdminEmail(
+  email: string | null | undefined
+): boolean {
+  const target = process.env.SYSTEM_ADMIN_EMAIL?.toLowerCase().trim();
+  if (!target || !email) return false;
+  return email.toLowerCase().trim() === target;
+}
+
 // 프로세스당 1회만 시도. serverless cold start 마다 1회 검사 — 비용 무시 가능.
 let bootstrapDone = false;
 
