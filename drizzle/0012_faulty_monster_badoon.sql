@@ -1,0 +1,19 @@
+CREATE INDEX `idx_api_rate_log_window` ON `api_rate_log` (`scope`,`identifier`,`attempted_at`);--> statement-breakpoint
+CREATE INDEX `idx_audit_logs_org` ON `audit_logs` (`org_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_audit_logs_resource` ON `audit_logs` (`resource_type`,`resource_id`);--> statement-breakpoint
+CREATE INDEX `idx_auth_attempts_ident` ON `auth_attempts` (`identifier`,`attempted_at`);--> statement-breakpoint
+CREATE INDEX `idx_candidate_attachments_candidate` ON `candidate_attachments` (`candidate_id`);--> statement-breakpoint
+CREATE INDEX `idx_candidates_org` ON `candidates` (`org_id`);--> statement-breakpoint
+CREATE INDEX `idx_candidates_job` ON `candidates` (`job_id`);--> statement-breakpoint
+CREATE INDEX `idx_candidates_job_content_hash` ON `candidates` (`job_id`,`resume_content_hash`);--> statement-breakpoint
+CREATE INDEX `idx_interview_schedules_candidate` ON `interview_schedules` (`candidate_id`);--> statement-breakpoint
+CREATE INDEX `idx_interview_schedules_job` ON `interview_schedules` (`job_id`);--> statement-breakpoint
+CREATE INDEX `idx_interview_sessions_candidate` ON `interview_sessions` (`candidate_id`);--> statement-breakpoint
+CREATE INDEX `idx_job_postings_org` ON `job_postings` (`org_id`);--> statement-breakpoint
+CREATE INDEX `idx_notifications_user` ON `notifications` (`user_id`,`read_at`);--> statement-breakpoint
+CREATE INDEX `idx_org_join_requests_org` ON `org_join_requests` (`org_id`,`status`);--> statement-breakpoint
+CREATE INDEX `idx_screening_jobs_status` ON `screening_jobs` (`status`,`not_before`);--> statement-breakpoint
+CREATE INDEX `idx_screening_jobs_candidate` ON `screening_jobs` (`candidate_id`);--> statement-breakpoint
+CREATE INDEX `idx_sessions_user` ON `sessions` (`user_id`);--> statement-breakpoint
+CREATE INDEX `idx_token_ledger_org` ON `token_ledger` (`org_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_users_org` ON `users` (`org_id`);

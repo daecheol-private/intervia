@@ -82,7 +82,10 @@ export const users = sqliteTable("users", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 법인 멤버 목록 / 법인별 사용자 집계. (email 은 별도 unique.)
+  orgIdx: index("idx_users_org").on(t.orgId),
+}));
 
 export const passwordResets = sqliteTable("password_resets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -126,7 +129,10 @@ export const sessions = sqliteTable("sessions", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 사용자별 세션 목록 (내 세션 / admin 강제 로그아웃).
+  userIdx: index("idx_sessions_user").on(t.userId),
+}));
 
 export const orgJoinRequests = sqliteTable("org_join_requests", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -146,7 +152,10 @@ export const orgJoinRequests = sqliteTable("org_join_requests", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // org_admin 합류 요청 목록 (대기중 필터).
+  orgStatusIdx: index("idx_org_join_requests_org").on(t.orgId, t.status),
+}));
 
 export const jobPostings = sqliteTable("job_postings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -198,7 +207,10 @@ export const jobPostings = sqliteTable("job_postings", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 대시보드 — 법인별 공고 목록.
+  orgIdx: index("idx_job_postings_org").on(t.orgId),
+}));
 
 /**
  * 사용자별 공고 즐겨찾기. 개인 별표 — 같은 법인이라도 멤버마다 별표 상태 다름.
@@ -370,7 +382,16 @@ export const candidates = sqliteTable("candidates", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 공고 상세 후보자 목록 / 법인별 집계 — 가장 빈번한 조회.
+  orgIdx: index("idx_candidates_org").on(t.orgId),
+  jobIdx: index("idx_candidates_job").on(t.jobId),
+  // 워커의 내용 해시 중복 탐지 (같은 공고 내 동일 내용).
+  jobContentHashIdx: index("idx_candidates_job_content_hash").on(
+    t.jobId,
+    t.resumeContentHash
+  ),
+}));
 
 /**
  * 후보자별 첨부 파일 — 이력서 외에 경력기술서·포트폴리오·자기소개서 등.
@@ -402,7 +423,10 @@ export const candidateAttachments = sqliteTable("candidate_attachments", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 후보자 상세 — 후보자별 첨부 목록.
+  candidateIdx: index("idx_candidate_attachments_candidate").on(t.candidateId),
+}));
 
 /**
  * 범용 API rate limit 기록. scope 별 sliding window 카운팅.
@@ -417,7 +441,14 @@ export const apiRateLog = sqliteTable("api_rate_log", {
   attemptedAt: text("attempted_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 매 민감 요청마다 COUNT(*) sliding-window 조회 — 가장 빈번한 스캔.
+  windowIdx: index("idx_api_rate_log_window").on(
+    t.scope,
+    t.identifier,
+    t.attemptedAt
+  ),
+}));
 
 /**
  * 로그인 시도 기록 — Rate limit / 무차별 대입 방어.
@@ -439,7 +470,10 @@ export const authAttempts = sqliteTable("auth_attempts", {
   attemptedAt: text("attempted_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 로그인마다 email/ip 별 최근 실패 횟수 조회 (무차별 대입 방어).
+  identIdx: index("idx_auth_attempts_ident").on(t.identifier, t.attemptedAt),
+}));
 
 export const screeningJobs = sqliteTable("screening_jobs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -468,7 +502,12 @@ export const screeningJobs = sqliteTable("screening_jobs", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 워커 claim 핫패스 — status='queued' AND not_before<=now 스캔 (매분 cron + self-chain).
+  statusIdx: index("idx_screening_jobs_status").on(t.status, t.notBefore),
+  // enqueue 중복 체크 / 후보자 활성 job 조회.
+  candidateIdx: index("idx_screening_jobs_candidate").on(t.candidateId),
+}));
 
 /**
  * 서류평가 결과 캐시 — 동일 입력(같은 공고 평가기준 + 같은 이력서 내용)은 같은 점수를 재사용.
@@ -640,7 +679,15 @@ export const auditLogs = sqliteTable("audit_logs", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 법인별 감사 조회 (admin) + 시간범위.
+  orgIdx: index("idx_audit_logs_org").on(t.orgId, t.createdAt),
+  // 후보자 폐기 시 PII redact 대상 행 조회 (redactCandidateAuditPii).
+  resourceIdx: index("idx_audit_logs_resource").on(
+    t.resourceType,
+    t.resourceId
+  ),
+}));
 
 /**
  * 자동화 의사결정에 대한 이의제기 기록 (PIPA §37의2).
@@ -716,7 +763,10 @@ export const interviewSessions = sqliteTable("interview_sessions", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 후보자 상세에서 세션 조회. (accessToken 은 별도 unique 인덱스.)
+  candidateIdx: index("idx_interview_sessions_candidate").on(t.candidateId),
+}));
 
 /**
  * 1차 면접 스케쥴. 면접관이 가능한 시간 슬롯을 제시하고, 후보자가 메일 링크로 선택.
@@ -789,7 +839,11 @@ export const interviewSchedules = sqliteTable("interview_schedules", {
   updatedAt: text("updated_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 후보자 상세 / 공고 스케쥴 조회.
+  candidateIdx: index("idx_interview_schedules_candidate").on(t.candidateId),
+  jobIdx: index("idx_interview_schedules_job").on(t.jobId),
+}));
 
 /**
  * LLM 이 생성하는 면접 질문지 구조.
@@ -961,6 +1015,8 @@ export const tokenLedger = sqliteTable("token_ledger", {
   idemUq: uniqueIndex("token_ledger_idem_uq")
     .on(t.orgId, t.reason, t.refType, t.refId)
     .where(sql`${t.refType} is not null and ${t.refType} != 'manual_refund'`),
+  // 법인별 토큰 사용 내역 / 메트릭 집계.
+  orgIdx: index("idx_token_ledger_org").on(t.orgId, t.createdAt),
 }));
 
 export const tokenPricing = sqliteTable("token_pricing", {
@@ -1037,7 +1093,10 @@ export const notifications = sqliteTable("notifications", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 헤더 종 아이콘 — 페이지 로드마다 사용자별 미읽음 조회.
+  userIdx: index("idx_notifications_user").on(t.userId, t.readAt),
+}));
 
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;

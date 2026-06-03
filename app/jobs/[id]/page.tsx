@@ -1017,17 +1017,19 @@ export default function JobDetailPage() {
       return;
     }
     const data = (await r.json()) as {
+      queued?: number;
       results: { candidateId: number; status: string; reason?: string }[];
     };
-    const sent = data.results.filter((x) => x.status === "sent").length;
+    const sending = data.results.filter((x) => x.status === "sending").length;
     const skipped = data.results.filter((x) => x.status === "skipped").length;
-    const failed = data.results.filter((x) => x.status === "failed").length;
     notify(
-      `AI 면접 메일 발송 결과: 성공 ${sent}건${skipped > 0 ? ` / 건너뜀 ${skipped}건` : ""}${failed > 0 ? ` / 실패 ${failed}건` : ""}`,
-      { tone: failed > 0 ? "warn" : "success", title: "AI 면접 발송 결과" }
+      `AI 면접 메일 ${sending}건 발송을 시작했습니다${skipped > 0 ? ` (건너뜀 ${skipped}건)` : ""}.\n발송 완료까지 잠시 걸릴 수 있으며, 목록의 '발송' 시각으로 확인할 수 있습니다.`,
+      { tone: "success", title: "AI 면접 발송 요청 완료" }
     );
     setSelected(new Set());
     void loadCandidates();
+    // 백그라운드 발송 직후엔 아직 미반영 — 잠시 후 한 번 더 갱신해 발송 시각 표시.
+    setTimeout(() => void loadCandidates(), 5000);
   };
 
   const bulkAdvance = async (newStage: Candidate["stage"], targetIds: number[]) => {

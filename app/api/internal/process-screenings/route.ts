@@ -38,6 +38,16 @@ const MAX_JOBS_PER_RUN = Number(
   process.env.SCREENING_WORKER_MAX_JOBS ?? DEFAULT_CONCURRENCY
 );
 
+// 벽시계 가드 — maxDuration(120s) 안에 함수 끝의 self-chain 코드까지 반드시 도달하도록,
+// 이 시간이 지나면 새 잡을 더 claim 하지 않고 정상 종료한다. (1건 ~35-40s 이므로 70s 에
+// 멈춰도 진행 중 1건이 끝나면 ~110s — self-chain 여유 확보.)
+//
+// 왜 필요한가: MAX_JOBS_PER_RUN 이 동시성보다 크게 설정돼 있으면(예: env 의
+// SCREENING_WORKER_MAX_JOBS=100) 16동시성으로 100건 = ~220s > 120s → 함수가
+// self-chain 전에 죽고 큐가 cron(매분)·cleanupStuck(5분)까지 정체된다.
+// 시간 가드가 있으면 env 값과 무관하게 항상 self-chain 으로 끊김 없이 이어진다.
+const WALL_CLOCK_BUDGET_MS = 70_000;
+
 /**
  * 큐 워커. 동시성 N, 최대 M 건 처리 후 종료.
  * 종료 시점에 큐에 남아 있으면 자신을 다시 호출 (self-chain).
@@ -121,6 +131,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
 
   const workerId = "w_" + randomBytes(4).toString("hex");
+  const startedAt = Date.now();
   const stats: RunStats = {
     processed: 0,
     succeeded: 0,
@@ -141,7 +152,10 @@ export async function POST(req: Request) {
   // 각 워커는 no_job(더 가져올 잡 없음)을 만나면 종료. atomicClaimNext 가 전역·법인별
   // cap 을 지키므로, 슬롯을 막 비운 워커가 곧바로 다음 잡을 채워 항상 N 개가 돈다.
   async function workerLoop() {
-    while (stats.processed < MAX_JOBS_PER_RUN) {
+    while (
+      stats.processed < MAX_JOBS_PER_RUN &&
+      Date.now() - startedAt < WALL_CLOCK_BUDGET_MS
+    ) {
       const r = await processOne(workerId);
       if (r === "no_job") return;
       stats.processed++;

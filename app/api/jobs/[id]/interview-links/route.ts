@@ -33,8 +33,31 @@ import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { MAX_INTERVIEW_EMAILS_PER_CANDIDATE, isJobExpired } from "@/lib/job-lifecycle";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
+import { after } from "next/server";
 
 export const runtime = "nodejs";
+// 백그라운드 발송(after)이 maxDuration 안에 끝나도록 충분히 큰 값.
+// 50명 × ~2s 를 동시성 8 로 보내면 ~13s — 여유.
+export const maxDuration = 120;
+
+/** 동시성 제한 병렬 실행 — 직렬이면 50통 발송이 줄줄이 느려진다. */
+async function mapWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>
+): Promise<void> {
+  let i = 0;
+  const runners = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (i < items.length) {
+        const idx = i++;
+        await fn(items[idx]);
+      }
+    }
+  );
+  await Promise.all(runners);
+}
 
 export async function POST(
   req: Request,
@@ -119,9 +142,21 @@ export async function POST(
 
   const results: {
     candidateId: number;
-    status: "sent" | "skipped" | "failed";
+    status: "sending" | "skipped";
     reason?: string;
   }[] = [];
+
+  // 동기 단계: 자격 검증 + 세션/토큰 생성. 실제 메일 발송은 백그라운드(after)로 분리해
+  // HTTP 응답을 즉시 반환한다 (50통 직렬 SMTP 발송이 요청을 1~2분 붙잡던 문제 해소).
+  type SendTask = {
+    candidateId: number;
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+    stage: Stage;
+  };
+  const tasks: SendTask[] = [];
 
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
 
@@ -169,14 +204,11 @@ export async function POST(
 
     const token = generateToken();
     const expiresAt = addDays(new Date(), days).toISOString();
-    const [session] = await db
-      .insert(interviewSessions)
-      .values({
-        candidateId: c.id,
-        accessToken: token,
-        expiresAt,
-      })
-      .returning();
+    await db.insert(interviewSessions).values({
+      candidateId: c.id,
+      accessToken: token,
+      expiresAt,
+    });
 
     // 토큰 차감은 지원자가 면접을 실제 시작할 때 수행 (consent). 링크 발급은 무료.
 
@@ -188,41 +220,77 @@ export async function POST(
       expiresAt: formatKstDateTime(expiresAt),
       orgName,
     });
-
-    try {
-      await sendMail({ to: c.email, ...mail, orgId: job.orgId, audience: "candidate" });
-      await db
-        .update(candidates)
-        .set({
-          interviewEmailCount: sql`${candidates.interviewEmailCount} + 1`,
-          lastInterviewEmailSentAt: new Date().toISOString(),
-          stage:
-            c.stage === "applied" || c.stage === "screened" ? "ai_pending" : c.stage,
-        })
-        .where(eq(candidates.id, c.id));
-      results.push({ candidateId: c.id, status: "sent" });
-    } catch (e) {
-      results.push({
-        candidateId: c.id,
-        status: "failed",
-        reason: e instanceof Error ? e.message : String(e),
-      });
-    }
+    tasks.push({
+      candidateId: c.id,
+      to: c.email,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+      stage: c.stage,
+    });
+    results.push({ candidateId: c.id, status: "sending" });
   }
 
-  logAudit(req, {
-    actor: me!,
-    action: "interview.send_email",
-    resourceType: "job" as const,
-    resourceId: jobId,
-    orgId: job.orgId,
-    metadata: {
-      kind: "interview_link_bulk",
-      sent: results.filter((r) => r.status === "sent").length,
-      skipped: results.filter((r) => r.status === "skipped").length,
-      failed: results.filter((r) => r.status === "failed").length,
-    },
-  });
+  const skippedCount = results.filter((r) => r.status === "skipped").length;
+  const orgId = job.orgId; // 위 가드(!job.orgId → 400)로 number 확정.
 
-  return Response.json({ ok: true, results });
+  // 백그라운드 발송 — 응답을 막지 않는다. 발송 성공 시에만 카운터 증가(재발송 한도)
+  // → 실패해도 슬롯이 소진되지 않아 HR 이 재발송 가능. 발송 완료는 목록의
+  //   lastInterviewEmailSentAt(발송 시각)로 반영된다.
+  if (tasks.length > 0) {
+    after(async () => {
+      let sent = 0;
+      let failed = 0;
+      await mapWithConcurrency(tasks, 8, async (t) => {
+        try {
+          await sendMail({
+            to: t.to,
+            subject: t.subject,
+            html: t.html,
+            text: t.text,
+            orgId,
+            audience: "candidate",
+          });
+          await db
+            .update(candidates)
+            .set({
+              interviewEmailCount: sql`${candidates.interviewEmailCount} + 1`,
+              lastInterviewEmailSentAt: new Date().toISOString(),
+              stage:
+                t.stage === "applied" || t.stage === "screened"
+                  ? "ai_pending"
+                  : t.stage,
+            })
+            .where(eq(candidates.id, t.candidateId));
+          sent++;
+        } catch (e) {
+          failed++;
+          console.error(
+            "[interview-links] background send failed",
+            t.candidateId,
+            e instanceof Error ? e.message : String(e)
+          );
+        }
+      });
+      logAudit(req, {
+        actor: me!,
+        action: "interview.send_email",
+        resourceType: "job" as const,
+        resourceId: jobId,
+        orgId,
+        metadata: { kind: "interview_link_bulk", sent, failed, skipped: skippedCount },
+      });
+    });
+  } else {
+    logAudit(req, {
+      actor: me!,
+      action: "interview.send_email",
+      resourceType: "job" as const,
+      resourceId: jobId,
+      orgId,
+      metadata: { kind: "interview_link_bulk", sent: 0, failed: 0, skipped: skippedCount },
+    });
+  }
+
+  return Response.json({ ok: true, queued: tasks.length, results });
 }

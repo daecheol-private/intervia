@@ -9,7 +9,10 @@ import { addDays } from "./utils";
 export const SESSION_COOKIE = "session";
 const SESSION_DAYS = 14;
 // last_seen 갱신 빈도 — 매 요청마다 쓰면 DB 부하. 최소 간격(초) 이상 차이 나면 update.
-const LAST_SEEN_UPDATE_INTERVAL_SEC = 60;
+// SQLite/Turso 는 단일 writer 라 전 법인 쓰기가 직렬화됨 → 인증된 모든 요청이 세션
+// write 를 유발하면 쓰기 경합의 큰 축이 된다. 5분 간격이면 "현재 디바이스 마지막 활동"
+// 표시 정밀도는 5분 단위로만 떨어지고(허용), 세션 write 는 ~5배 감소.
+const LAST_SEEN_UPDATE_INTERVAL_SEC = 300;
 
 // 2026 권장: bcrypt cost 12. 기존 cost=10 으로 만든 해시는 verify 시 자동 호환.
 const BCRYPT_COST = 12;

@@ -85,6 +85,13 @@
       "when": 1780464000967,
       "tag": "0011_luxuriant_veda",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1780505868447,
+      "tag": "0012_faulty_monster_badoon",
+      "breakpoints": true
     }
   ]
 }

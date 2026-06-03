@@ -152,7 +152,7 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `INTERNAL_API_SECRET` | 32바이트 hex |
 | `MASTER_ENCRYPTION_KEY` | 32바이트 hex (SMTP 비밀번호 등 암호화 키) |
 | `SCREENING_WORKER_CONCURRENCY` | `16` (LLM 대기는 논블로킹 I/O — CPU 코어 수 무관. 코드 기본값도 16. Vertex 쿼터 여유 시 상향 가능) |
-| `SCREENING_WORKER_MAX_JOBS` | `40` |
+| `SCREENING_WORKER_MAX_JOBS` | **미설정 권장**(= concurrency 와 동일, 1실행 1라운드). 동시성보다 크게 잡으면(예: 100) 1실행이 maxDuration(120s)을 넘겨 함수가 self-chain 전에 죽고 큐가 cron(매분)까지 정체된다. 워커에 70s 벽시계 가드가 있어 이제 멈추진 않지만, 동시성과 어긋난 큰 값은 self-chain 횟수만 늘릴 뿐 이득 없음 → 비워두거나 `SCREENING_WORKER_CONCURRENCY` 와 같은 값으로. |
 | `NEXT_PUBLIC_BLOB_CLIENT_UPLOAD` | `1` (이력서 100MB 직접 업로드 활성화 — 프로덕션에서만 `1`) |
 
 ---
