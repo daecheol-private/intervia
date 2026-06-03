@@ -16,6 +16,8 @@ export const MODELS = {
   interviewEval: "gemini-2.5-flash",
   // 1차 면접 질문지 생성 — 이력서·서류평가·AI면접 평가 종합. 동기 호출(버튼 클릭).
   questionGen: "gemini-2.5-flash",
+  // 법인 중복 등록 탐지 — 가입 제출 시 입력 법인명 vs 기존 법인 교차표기(한글↔영문)·약칭 매칭.
+  orgMatch: "gemini-2.5-flash",
 } as const;
 
 export type LlmTask = keyof typeof MODELS;
@@ -70,6 +72,8 @@ const THINKING_BUDGET: Record<LlmTask, number | undefined> = {
   interview: 128,
   interviewEval: undefined,
   questionGen: undefined,
+  // 짧은 분류 작업 — thinking 불필요. 가입 동기 호출이라 지연 최소화.
+  orgMatch: 0,
 };
 
 const TRANSIENT_PATTERNS =

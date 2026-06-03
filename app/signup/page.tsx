@@ -37,6 +37,15 @@ type OrgSearchResult = {
   emailDomain: string | null;
 };
 
+// /api/orgs/match 응답 — 중복 등록 의심 법인 (결정적 + LLM)
+type MatchCandidate = {
+  id: number;
+  name: string;
+  bizRegistrationNo: string | null;
+  emailDomain: string | null;
+  reason?: string;
+};
+
 type AdminInfo = { email: string; name: string };
 type MatchedOrgFull = NonNullable<CheckResponse["matchedOrgs"]>[number];
 type Stage =
@@ -46,6 +55,7 @@ type Stage =
   | { kind: "create" }
   | { kind: "search"; results: OrgSearchResult[]; q: string }
   | { kind: "choose_match"; orgs: MatchedOrgFull[] }
+  | { kind: "match_suggest"; orgs: MatchCandidate[] }
   | {
       kind: "done";
       title: string;
@@ -175,7 +185,7 @@ export default function SignupPage() {
     });
   };
 
-  const submitCreate = async () => {
+  const submitCreate = async (force = false) => {
     setErr("");
     if (!name || !password || !orgName) {
       setErr("법인명/이름/비밀번호 필수");
@@ -195,6 +205,31 @@ export default function SignupPage() {
       setErr("만 14세 이상만 가입할 수 있습니다.");
       return;
     }
+
+    // 중복 법인 탐지 — 제출 직전 1회 (결정적 + LLM). "강행" 시 건너뜀.
+    // 매칭 호출 실패는 가입을 막지 않음(graceful) — 등록 진행.
+    if (!force) {
+      setBusy(true);
+      try {
+        const mres = await fetch("/api/orgs/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orgName, bizNo: bizNo || undefined }),
+        });
+        if (mres.ok) {
+          const { matches } = (await mres.json()) as { matches: MatchCandidate[] };
+          if (matches && matches.length > 0) {
+            setBusy(false);
+            setStage({ kind: "match_suggest", orgs: matches });
+            return;
+          }
+        }
+      } catch {
+        /* graceful — 매칭 실패해도 등록 진행 */
+      }
+      setBusy(false);
+    }
+
     setBusy(true);
     const res = await fetch("/api/orgs", {
       method: "POST",
@@ -504,6 +539,69 @@ export default function SignupPage() {
             </div>
           )}
 
+          {stage.kind === "match_suggest" && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
+                <strong>이미 등록된 것으로 보이는 법인이 있습니다.</strong> 같은
+                회사라면 아래에서 합류 요청을 보내세요 (중복 법인 등록 시
+                데이터·권한이 분리됩니다). 본인 회사가 아니면 새 법인으로 등록할
+                수 있습니다.
+              </div>
+              <ul className="space-y-2">
+                {stage.orgs.map((o) => (
+                  <li
+                    key={o.id}
+                    className="border border-slate-200 rounded-lg p-3 hover:bg-slate-50"
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-slate-900">
+                            {o.name}
+                          </span>
+                          {o.reason && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-200">
+                              {o.reason}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {o.bizRegistrationNo
+                            ? `사업자번호 ${o.bizRegistrationNo}`
+                            : "사업자번호 미등록"}
+                          {o.emailDomain ? ` · ${o.emailDomain}` : ""}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() =>
+                          enterJoinFromSearch({ id: o.id, name: o.name })
+                        }
+                        className="shrink-0 px-3 py-1.5 text-xs bg-primary hover:bg-primary-deep text-white rounded-lg"
+                      >
+                        합류 요청
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => submitCreate(true)}
+                  disabled={busy}
+                  className={secondaryBtn}
+                >
+                  {busy ? "처리 중..." : "그래도 새 법인으로 등록"}
+                </button>
+                <button
+                  onClick={() => setStage({ kind: "create" })}
+                  className={secondaryBtn}
+                >
+                  뒤로
+                </button>
+              </div>
+            </div>
+          )}
+
           {stage.kind === "create" && (
             <div className="space-y-3">
               {!emailDomainIsPublic && (
@@ -568,7 +666,7 @@ export default function SignupPage() {
                 onAge={setAgeOver14}
               />
               <div className="flex gap-2">
-                <button onClick={submitCreate} disabled={busy} className={primaryBtn}>
+                <button onClick={() => submitCreate()} disabled={busy} className={primaryBtn}>
                   {busy ? "처리 중..." : "법인 등록 및 가입"}
                 </button>
                 <button onClick={() => setStage({ kind: "choose" })} className={secondaryBtn}>
