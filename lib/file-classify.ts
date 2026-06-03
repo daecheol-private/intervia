@@ -5,7 +5,12 @@
  * ZIP 안에 묶어 올렸을 때, 파일명 prefix·키워드로 같은 사람의 파일끼리 묶음.
  */
 
-export type FileKind = "resume" | "portfolio" | "cover_letter" | "other";
+export type FileKind =
+  | "resume"
+  | "career_history"
+  | "portfolio"
+  | "cover_letter"
+  | "other";
 
 /**
  * 2~4자 한글이지만 사람 이름이 아닌 직무·부서·고용형태·일반 명사.
@@ -45,12 +50,21 @@ const KIND_KEYWORDS: ReadonlyArray<{ kind: FileKind; patterns: RegExp[] }> = [
     patterns: [/포트폴리오/, /포\s*폴/, /작품(?:집)?/, /portfolio/i, /works?\b/i, /samples?\b/i],
   },
   {
+    // 경력기술서 — 이력서와 함께 상세검토하는 별도 문서. resume 보다 먼저 매칭해야
+    // "경력기술서" 가 resume 의 부분 패턴에 잡히지 않는다.
+    kind: "career_history",
+    patterns: [
+      /경력기술서/,
+      /경\s*력\s*기\s*술\s*서/,
+      /경\s*력\s*서/,
+      /career[\s_-]?(?:history|description)/i,
+    ],
+  },
+  {
     kind: "resume",
     patterns: [
       /이력서/,
       /이력기술서/,
-      /경력기술서/,
-      /경\s*력\s*서/,
       /프로필/,
       /resume/i,
       /\bcv\b/i,
@@ -169,6 +183,8 @@ function resumeScore(name: string, folder?: string): number {
   if (/이력서/.test(stem)) score += 1000;
   else if (folder && /이력서/.test(folder)) score += 500;
   else if (kind === "resume") score += 200;
+  // 경력기술서는 이력서가 없을 때 메인 이력서로 채택(other·포폴보다 우선), 단 진짜 이력서엔 밀림.
+  else if (kind === "career_history") score += 150;
 
   // 파싱 가능한 확장자 가중
   if (e === "pdf") score += 50;

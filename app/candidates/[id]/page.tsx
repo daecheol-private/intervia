@@ -48,6 +48,7 @@ type Candidate = {
     requirement_gate?: {
       applies?: boolean;
       verdict?: "pass" | "fail" | "unknown";
+      severity?: "hard" | "soft";
       missing?: string[];
       reason?: string;
     };
@@ -922,7 +923,7 @@ function InfoCell({ label, value }: { label: string; value: string | null }) {
 
 type Attachment = {
   id: number;
-  kind: "resume" | "portfolio" | "cover_letter" | "other";
+  kind: "resume" | "career_history" | "portfolio" | "cover_letter" | "other";
   originalName: string;
   mime: string | null;
   sizeBytes: number;
@@ -1205,11 +1206,13 @@ function AttachmentsPanel({ candidateId }: { candidateId: number }) {
   if (extras.length === 0) return null;
 
   const kindLabel = {
+    career_history: "경력기술서",
     portfolio: "포트폴리오",
     cover_letter: "자기소개서",
     other: "기타",
   } as const;
   const kindColor = {
+    career_history: "bg-primary-soft text-primary-deep border-primary/40",
     portfolio: "bg-accent-soft text-accent-deep border-accent/40",
     cover_letter: "bg-info-soft text-info border-info/30",
     other: "bg-surface-alt text-ink-soft border-border-default",
@@ -1218,11 +1221,15 @@ function AttachmentsPanel({ candidateId }: { candidateId: number }) {
   return (
     <Section title="첨부 파일" collapsible={false}>
       <p className="text-xs text-slate-500 mb-3">
-        업로드 시 함께 올라온 포트폴리오·자기소개서 등. 사람 면접관 참고용이며 AI 평가/면접에는 사용되지 않습니다.
+        업로드 시 함께 올라온 경력기술서·자기소개서·포트폴리오 등. 텍스트 추출이 가능한 문서(경력기술서·자기소개서 등)는 AI 서류평가에 함께 반영되며, 이미지 등 추출 불가 파일은 사람 면접관 참고용입니다.
       </p>
       <ul className="space-y-2">
         {extras.map((a) => {
-          const k = a.kind as "portfolio" | "cover_letter" | "other";
+          const k = a.kind as
+            | "career_history"
+            | "portfolio"
+            | "cover_letter"
+            | "other";
           return (
             <li
               key={a.id}
@@ -1366,18 +1373,25 @@ function RequirementGateBadge({
   // 필수 요건 미충족(fail)·판단보류(unknown)만 노출. pass/미해당은 표시 안 함.
   if (!gate.applies || gate.verdict === "pass" || !gate.verdict) return null;
   const isFail = gate.verdict === "fail";
-  const wrap = isFail
+  // soft(학력 등 경력으로 상쇄 가능) 는 결격이 아니라 "참고"로 — danger 대신 warning 톤.
+  const isHardFail = isFail && gate.severity !== "soft";
+  const isSoftFail = isFail && gate.severity === "soft";
+  const wrap = isHardFail
     ? "border-danger/40 bg-danger-soft/60"
     : "border-warning/40 bg-warning-soft/60";
-  const titleClr = isFail ? "text-danger" : "text-warning";
+  const titleClr = isHardFail ? "text-danger" : "text-warning";
+  const title = isHardFail
+    ? "⚠ 필수 요건 미충족 — 결격 가능"
+    : isSoftFail
+      ? "필수 요건 일부 미충족 — 경력으로 보완 가능"
+      : "필수 요건 확인 필요";
+  const note = isHardFail ? "점수 상한 적용" : isSoftFail ? "최고 등급 제한" : null;
   return (
     <div className={`border rounded-lg px-4 py-3 ${wrap}`}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className={`text-sm font-semibold ${titleClr}`}>
-          {isFail ? "⚠ 필수 요건 미충족 — 결격 가능" : "필수 요건 확인 필요"}
-        </span>
-        {isFail && (
-          <span className="text-xs text-danger tabular-nums">점수 상한 적용</span>
+        <span className={`text-sm font-semibold ${titleClr}`}>{title}</span>
+        {note && (
+          <span className={`text-xs ${titleClr} tabular-nums`}>{note}</span>
         )}
       </div>
       {gate.missing && gate.missing.length > 0 && (

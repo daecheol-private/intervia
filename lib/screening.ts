@@ -263,6 +263,8 @@ type ScreeningResult = {
   requirement_gate?: {
     applies?: boolean;
     verdict?: "pass" | "fail" | "unknown";
+    // 미충족(fail) 강도 — hard: 면허·법정자격 등 진짜 결격 / soft: 학력 등 경력으로 상쇄 가능.
+    severity?: "hard" | "soft";
     missing?: string[];
     reason?: string;
   };
@@ -354,10 +356,13 @@ const SCREENING_SCHEMA = {
       properties: {
         applies: { type: Type.BOOLEAN },
         verdict: { type: Type.STRING, enum: ["pass", "fail", "unknown"] },
+        severity: { type: Type.STRING, enum: ["hard", "soft"] },
         missing: { type: Type.ARRAY, items: { type: Type.STRING } },
         reason: { type: Type.STRING },
       },
-      propertyOrdering: ["applies", "verdict", "missing", "reason"],
+      // severity 를 필수로 — verdict=fail 시 코드가 hard/soft 별로 다른 캡을 적용하므로 항상 존재해야 함.
+      required: ["verdict", "severity"],
+      propertyOrdering: ["applies", "verdict", "severity", "missing", "reason"],
     },
     requirement_coverage: {
       type: Type.ARRAY,
@@ -474,9 +479,14 @@ const FOCUS_STRONG_BONUS = 12; // strong_pass → 가점
 const FOCUS_FAIL_PENALTY = -12; // fail → 감점
 const FOCUS_FATAL_CAP = 15; // fatal_fail(필수/배제 조건 위반)만 하드캡 유지 — 진짜 결격 사유
 
-// JD 본문에 명시된 필수/결격 요건 미충족(requirement_gate.verdict=fail) 시 하드캡.
-// HR 가이드 fatal(15)보다는 약간 높게 — "결격에 가깝지만 면접 여지" 수준. unknown 은 감점 안 함.
+// JD 본문에 명시된 필수/결격 요건 미충족(requirement_gate.verdict=fail) 시 캡.
+// severity 로 강도를 나눈다 (LLM 판정):
+//  · hard — 면허·국가자격·법정요건 등 없으면 직무 수행 자체가 불가한 진짜 결격 → 40 (비추천).
+//  · soft — 학력 수준 등 강한 실무경력으로 상쇄 가능한 명목 요건 → 84 (추천까지 허용, 강력추천만 차단).
+// 왜: 프롬프트가 "실무경력 ≫ 학력"(prompts.ts)을 명시하는데, 학력 미충족 하나로 12년 실무 후보를
+// 40 으로 떨구던 모순을 막는다. 결격 배너는 점수와 무관하게 항상 떠 채용담당자가 인지한다. unknown 은 감점 안 함.
 const REQUIREMENT_GATE_CAP = 40;
+const REQUIREMENT_GATE_SOFT_CAP = 84; // 강력추천(85) 직전 — 명시 요건 미충족이면 최고 등급만 막고 추천은 허용.
 
 // 변별력 보정 — 가중평균은 중앙으로 수렴해 후보 간 변별이 약해진다.
 // 모집단 중앙값(≈60) 을 기준으로 편차를 SPREAD_FACTOR 배 확대해, 상위는 위로·하위는 아래로 벌린다.
@@ -524,7 +534,9 @@ function recommendationFor(score: number): ScreeningResult["recommendation"] {
 
 /**
  * 종합 점수를 코드에서 직접 재계산 — LLM 이 뱉은 score 를 신뢰하지 않는다.
- * raw = 6축 가중평균(누락 축은 가중치에서 제외 후 정규화) + level_match 페널티 → clamp.
+ * 순서: 6축 가중평균(누락 축은 가중치 제외 후 정규화) → spread 확대 → 보너스/캡(confidence·
+ * focus·구체성·도메인·약한핵심축·필수요건) → **맨 마지막에 직급/연차 페널티** → clamp.
+ * 페널티를 최후에 둬 spread 포화(100)·focus 보너스에 가려지지 않게 한다(오버스펙 ≤95/언더 ≤90).
  * → "6축은 낮은데 종합은 높은" 모순을 구조적으로 차단하고 점수 일관성을 보장.
  * breakdown 이 전혀 없으면 LLM score 로 폴백.
  */
@@ -563,13 +575,14 @@ function recomputeScore(result: ScreeningResult): {
   // 변별력 보정: 6축 가중평균을 50 기준으로 확대(spread)해 분포를 넓힌다.
   // breakdown 이 없어 LLM score 폴백인 경우엔 확대하지 않는다(원점수 신뢰 불가).
   const raw = totalW > 0 ? clampScore(spreadScore(avg)) : avg;
-  // 페널티는 감점만 — under=-10 / over=-5 / fit=0. 범위 밖 값은 방어적으로 클램프.
-  const rawPenalty =
-    typeof result.level_match?.penalty === "number"
-      ? result.level_match.penalty
-      : 0;
-  const penalty = Math.max(-10, Math.min(0, rawPenalty));
-  let score = clampScore(raw + penalty);
+  // 직급/연차 페널티는 LLM 이 준 penalty 값이 아니라 fit 으로 코드가 직접 산출한다 —
+  // over=-5 / under=-10 / fit=0. (LLM 이 fit=over 인데 penalty 를 0 으로 비우는 불일치 차단)
+  // 적용은 *맨 마지막*(아래)에서. 여기서 빼면 spread 포화(100)·focus 보너스(+12)에 가려진다.
+  const lm = result.level_match;
+  const levelPenalty = lm?.fit === "under" ? -10 : lm?.fit === "over" ? -5 : 0;
+  // 표시 배지(level_match.penalty)와 실제 적용값을 일치시키려 저장 리포트도 정규화.
+  if (lm) lm.penalty = levelPenalty;
+  let score = raw;
 
   // confidence 디스카운트 — 다수 축이 low(근거 빈약·추정)면 "인상은 좋으나 검증 불가"로 감점.
   if (b) {
@@ -623,11 +636,18 @@ function recomputeScore(result: ScreeningResult): {
     }
   }
 
-  // JD 명시 필수 요건 미충족 → 결격 수준 하드캡. (unknown/pass 는 변동 없음)
+  // JD 명시 필수 요건 미충족 → severity 별 캡. hard=결격(40) / soft=추천 상한(84). (unknown/pass 는 변동 없음)
+  // severity 누락(구버전 응답 등)은 보수적으로 hard 취급.
   const rg = result.requirement_gate;
   if (rg?.applies && rg.verdict === "fail") {
-    score = Math.min(score, REQUIREMENT_GATE_CAP);
+    const cap =
+      rg.severity === "soft" ? REQUIREMENT_GATE_SOFT_CAP : REQUIREMENT_GATE_CAP;
+    score = Math.min(score, cap);
   }
+
+  // 직급/연차 페널티는 *맨 마지막*에 최종 점수에서 직접 감점한다 — spread 포화(100)·focus
+  // 보너스(+12)에 가려지지 않게. (오버스펙이면 종합 최대 95, 언더스펙이면 최대 90)
+  score = clampScore(score + levelPenalty);
 
   return { score, recommendation: recommendationFor(score) };
 }

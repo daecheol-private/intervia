@@ -370,10 +370,12 @@ export const candidates = sqliteTable("candidates", {
 });
 
 /**
- * 후보자별 첨부 파일 — 이력서 외에 포트폴리오·자기소개서 등.
+ * 후보자별 첨부 파일 — 이력서 외에 경력기술서·포트폴리오·자기소개서 등.
  *
- * `kind=resume` 은 메인 이력서 (1개). LLM 평가/면접에는 candidate.resumeMaskedText 사용,
- * 첨부 파일은 사람 면접관이 다운로드해서 참고만.
+ * `kind=resume` 은 메인 이력서 (1개, candidate.resumeMaskedText 로 평가).
+ * 그 외 텍스트 추출 가능한 첨부(career_history·cover_letter·일부 other)는 마스킹 후
+ * 서류평가 프롬프트에 함께 포함된다(screening.ts). 이미지 등 추출 불가 파일만 사람 참고용.
+ * career_history(경력기술서)·resume 가 1순위 상세검토, portfolio 는 낮은 비중.
  *
  * 합·불 결정 시 메인 이력서와 함께 즉시 폐기.
  */
@@ -382,8 +384,9 @@ export const candidateAttachments = sqliteTable("candidate_attachments", {
   candidateId: integer("candidate_id")
     .notNull()
     .references(() => candidates.id, { onDelete: "cascade" }),
+  // SQLite text enum 은 타입 레벨만 — CHECK 제약 없어 값 추가에 마이그레이션 불필요.
   kind: text("kind", {
-    enum: ["resume", "portfolio", "cover_letter", "other"],
+    enum: ["resume", "career_history", "portfolio", "cover_letter", "other"],
   })
     .notNull()
     .default("other"),
