@@ -368,7 +368,7 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 | memo | TEXT NULL | |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
-중복 방지 규칙 (코드 단): `chargeFeature` 는 `(org_id, reason, ref_type, ref_id)` 가 같은 row 있으면 no-op. `refundFeature` 도 같은 키로 환불 row 있으면 no-op.
+중복 방지 규칙: `chargeFeature`/`refundFeature`/`grantWelcomeBonus`/`applyChargePayment` 는 `(org_id, reason, ref_type, ref_id)` 멱등. 코드 fast-path(SELECT) + **DB 부분 유니크 인덱스 `token_ledger_idem_uq`** (`ref_type` non-null & ≠ `'manual_refund'`) 로 동시 중복 요청의 이중 차감/적립까지 DB 레벨 차단 (`writeLedgerIdempotent`). 반복 허용 항목(`admin_adjust` ref_type=null, `manual_refund`)은 부분 인덱스 예외.
 
 ## token_pricing
 

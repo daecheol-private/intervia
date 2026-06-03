@@ -1,10 +1,33 @@
 import type { NextConfig } from "next";
 
+// 전역 보안 응답 헤더. 앱 동작에 영향 없는 안전 범위만 적용.
+// (스크립트/스타일 CSP 는 inline 해시·nonce 검증이 필요해 별도 작업으로 분리 — 여기선 frame-ancestors 만)
+const securityHeaders = [
+  // 클릭재킹 방어 — 면접/관리 페이지의 cross-origin iframe 임베드 차단.
+  { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  // MIME 스니핑 차단 (업로드/다운로드 라우트 보호).
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  // cross-origin 이동 시 경로(면접 토큰) 미노출 — origin 만 전송.
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+  // camera·geolocation 차단. microphone 은 미지정(기본 self) — 면접 음성입력 유지.
+  { key: "Permissions-Policy", value: "camera=(), geolocation=()" },
+];
+
 const nextConfig: NextConfig = {
   experimental: {
     // 로컬 dev 의 FormData 직접 업로드 경로 본문 한도. 코드 측 MAX_FILE_SIZE / MAX_ZIP_SIZE (100MB) 와 맞춤.
     // 운영(Vercel) 은 NEXT_PUBLIC_BLOB_CLIENT_UPLOAD=1 로 Blob 직업로드 + manifest(JSON 작음) 경로라 무관.
     proxyClientMaxBodySize: "100mb",
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: securityHeaders,
+      },
+    ];
   },
 };
 

@@ -76,6 +76,9 @@ export const users = sqliteTable("users", {
   // 2FA (TOTP) — AES-256-GCM 으로 암호화된 base32 시크릿. enabled_at null 이면 미활성.
   totpSecret: text("totp_secret"),
   totpEnabledAt: text("totp_enabled_at"),
+  // TOTP replay 방어 — 마지막으로 검증 성공한 timestep(counter). 이하(또는 같은) counter
+  // 코드는 재사용 거부 (RFC 6238 권고). null 이면 아직 검증 이력 없음.
+  lastTotpCounter: integer("last_totp_counter"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
@@ -951,7 +954,14 @@ export const tokenLedger = sqliteTable("token_ledger", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 멱등 차감/환불/보너스/결제는 (orgId, reason, refType, refId) 가 유일해야 한다.
+  // 동시 중복 요청의 이중 차감/이중 적립을 DB 레벨에서 차단 (race backstop).
+  // 반복 허용 항목(admin_adjust=refType null, 수동환불=manual_refund)은 부분 인덱스로 제외.
+  idemUq: uniqueIndex("token_ledger_idem_uq")
+    .on(t.orgId, t.reason, t.refType, t.refId)
+    .where(sql`${t.refType} is not null and ${t.refType} != 'manual_refund'`),
+}));
 
 export const tokenPricing = sqliteTable("token_pricing", {
   featureKey: text("feature_key", {

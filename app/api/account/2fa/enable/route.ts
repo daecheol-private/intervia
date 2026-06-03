@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { verifyCode } from "@/lib/totp";
+import { verifyAndConsumeTotp } from "@/lib/totp-verify";
 import { encrypt } from "@/lib/crypto";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   if (!secret || !code)
     return new Response("secret 과 code 필수", { status: 400 });
 
-  if (!verifyCode(secret, code))
+  if (!(await verifyAndConsumeTotp(me.id, secret, code)))
     return new Response("코드가 올바르지 않습니다. Authenticator 앱 시간이 동기화되어 있는지 확인하세요.", {
       status: 400,
     });

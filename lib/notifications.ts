@@ -10,7 +10,7 @@
 import { db } from "./db";
 import { notifications, users, jobInterviewers, jobPostings } from "./schema";
 import { and, desc, eq, isNull, isNotNull, inArray, sql } from "drizzle-orm";
-import { sendMail, isSmtpAvailable, wrapEmailCard } from "./mailer";
+import { sendMail, isSmtpAvailable, wrapEmailCard, escapeHtml } from "./mailer";
 
 export type NotificationType =
   | "ai_interview_done"
@@ -124,12 +124,12 @@ export async function notifyJobInterviewers(
     if (excludeSet.has(r.userId)) continue;
     const html = wrapEmailCard({
       innerHtml: `
-        <h1 style="font-size:18px;margin:24px 0 8px;color:#0f172a;">${r.name}님, 안녕하세요.</h1>
+        <h1 style="font-size:18px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(r.name)}님, 안녕하세요.</h1>
         <p style="color:#475569;line-height:1.6;margin:0 0 16px;">
-          담당 공고 <strong style="color:#0f172a;">${job?.title ?? ""}</strong> 에서 알림이 도착했습니다.
+          담당 공고 <strong style="color:#0f172a;">${escapeHtml(job?.title ?? "")}</strong> 에서 알림이 도착했습니다.
         </p>
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:14px;color:#0f172a;line-height:1.6;margin:0 0 20px;">
-          ${input.title}
+          ${escapeHtml(input.title)}
         </div>
         <p style="text-align:center;margin:0 0 16px;">
           <a href="${fullUrl}" style="display:inline-block;background:#0d4f3c;color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">자세히 보기</a>

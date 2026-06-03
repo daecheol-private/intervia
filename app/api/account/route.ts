@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { and, eq, ne, count } from "drizzle-orm";
 import { getCurrentUser, verifyPassword, clearSessionCookie } from "@/lib/auth";
-import { verifyCode } from "@/lib/totp";
+import { verifyAndConsumeTotp } from "@/lib/totp-verify";
 import { decrypt } from "@/lib/crypto";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
@@ -56,7 +56,7 @@ export async function DELETE(req: Request) {
   if (u.totpEnabledAt && u.totpSecret) {
     if (!code)
       return new Response("2단계 인증 코드를 입력하세요.", { status: 400 });
-    if (!verifyCode(decrypt(u.totpSecret), code))
+    if (!(await verifyAndConsumeTotp(me.id, decrypt(u.totpSecret), code)))
       return new Response("인증 코드가 올바르지 않습니다.", { status: 401 });
   }
 

@@ -100,7 +100,7 @@ export async function grantWelcomeBonus(
     const b = await getBalance(orgId);
     return { granted: 0, balance: b };
   }
-  const balance = await writeLedger({
+  const { balance, applied } = await writeLedgerIdempotent({
     orgId,
     delta: WELCOME_BONUS_TOKENS,
     reason: "admin_adjust",
@@ -109,7 +109,7 @@ export async function grantWelcomeBonus(
     userId,
     memo: `법인 최초 등록 무료 체험 ${WELCOME_BONUS_TOKENS} 토큰`,
   });
-  return { granted: WELCOME_BONUS_TOKENS, balance };
+  return { granted: applied ? WELCOME_BONUS_TOKENS : 0, balance };
 }
 
 /**
@@ -147,7 +147,7 @@ export async function applyChargePayment(args: {
     const b = await getBalance(args.orgId);
     return { alreadyApplied: false, base: 0, bonus: 0, balance: b };
   }
-  const balance = await writeLedger({
+  const { balance, applied } = await writeLedgerIdempotent({
     orgId: args.orgId,
     delta: total,
     reason: "charge",
@@ -159,6 +159,10 @@ export async function applyChargePayment(args: {
         ? `${args.amountKrw.toLocaleString()}원 충전 (기본 ${base} + 보너스 ${bonus} = ${total} 토큰, 보너스 ${Math.round(bonusRatio * 100)}%)`
         : `${args.amountKrw.toLocaleString()}원 충전 (${base} 토큰)`,
   });
+  // race — 동시 webhook 이 먼저 적립한 경우 이중 적립 방지
+  if (!applied) {
+    return { alreadyApplied: true, base: 0, bonus: 0, balance };
+  }
   return { alreadyApplied: false, base, bonus, balance };
 }
 
@@ -212,6 +216,62 @@ async function writeLedger(args: {
 }
 
 /**
+ * 멱등 ledger 적재 — INSERT 를 먼저 시도(token_ledger_idem_uq 부분 유니크 인덱스가 게이트).
+ * UNIQUE 위반이면 이미 적용된 것 → **지갑 변경 없이** applied=false 반환 (동시 중복 요청 race 의
+ * 이중 차감/이중 적립 차단). 성공한 호출만 지갑을 원자적으로 갱신하고 balanceAfter 를 보정한다.
+ *
+ * 대상: chargeFeature / refundFeature / grantWelcomeBonus / applyChargePayment
+ * (모두 refType 가 non-null 이고 'manual_refund' 가 아니라 인덱스 커버 범위).
+ */
+async function writeLedgerIdempotent(args: {
+  orgId: number;
+  delta: number;
+  reason: LedgerReason;
+  refType: string;
+  refId: number;
+  userId?: number | null;
+  memo?: string | null;
+}): Promise<{ balance: number; applied: boolean }> {
+  await ensureWallet(args.orgId);
+  let ledgerId: number;
+  try {
+    const ins = await db
+      .insert(tokenLedger)
+      .values({
+        orgId: args.orgId,
+        delta: args.delta,
+        reason: args.reason,
+        refType: args.refType,
+        refId: args.refId,
+        balanceAfter: 0, // 지갑 갱신 후 보정
+        createdByUserId: args.userId ?? null,
+        memo: args.memo ?? null,
+      })
+      .returning({ id: tokenLedger.id });
+    ledgerId = ins[0].id;
+  } catch (e) {
+    if (/unique constraint/i.test(String(e))) {
+      return { balance: await getBalance(args.orgId), applied: false };
+    }
+    throw e;
+  }
+  const updated = await db
+    .update(tokenWallets)
+    .set({
+      balance: sql`${tokenWallets.balance} + ${args.delta}`,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    })
+    .where(eq(tokenWallets.orgId, args.orgId))
+    .returning({ balance: tokenWallets.balance });
+  const next = updated[0]?.balance ?? 0;
+  await db
+    .update(tokenLedger)
+    .set({ balanceAfter: next })
+    .where(eq(tokenLedger.id, ledgerId));
+  return { balance: next, applied: true };
+}
+
+/**
  * 기능 사용 시 차감. pricing 시점 기준. 잔액 마이너스 허용 (후불).
  * 이미 동일 (refType, refId, reason) 으로 차감된 적 있으면 중복 차감 방지.
  */
@@ -241,7 +301,7 @@ export async function chargeFeature(args: {
 
   const cost = await getPricing(args.feature);
   const prevBalance = await getBalance(args.orgId);
-  const balance = await writeLedger({
+  const { balance, applied } = await writeLedgerIdempotent({
     orgId: args.orgId,
     delta: -cost,
     reason: args.feature,
@@ -250,6 +310,10 @@ export async function chargeFeature(args: {
     userId: args.userId,
     memo: args.memo,
   });
+  // race — 동시 요청이 먼저 차감함. 중복 차감 아님.
+  if (!applied) {
+    return { cost: 0, balance, alreadyCharged: true };
+  }
   // 잔액이 양수 → 0 이하로 떨어지는 순간 1회만 알림 (스팸 방지)
   if (prevBalance > 0 && balance <= 0) {
     void (async () => {
@@ -316,7 +380,7 @@ export async function refundFeature(args: {
   }
 
   const amount = -charge.delta; // delta는 음수
-  const balance = await writeLedger({
+  const { balance, applied } = await writeLedgerIdempotent({
     orgId: args.orgId,
     delta: amount,
     reason: "refund",
@@ -325,7 +389,7 @@ export async function refundFeature(args: {
     userId: args.userId,
     memo: args.memo ?? `refund for ${args.feature}`,
   });
-  return { refunded: amount, balance };
+  return { refunded: applied ? amount : 0, balance };
 }
 
 /**

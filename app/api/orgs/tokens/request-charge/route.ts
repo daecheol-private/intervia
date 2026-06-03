@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { users, organizations } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { getBalance } from "@/lib/tokens";
-import { sendMail, wrapEmailCard, EMAIL_BRAND } from "@/lib/mailer";
+import { sendMail, wrapEmailCard, EMAIL_BRAND, escapeHtml } from "@/lib/mailer";
 
 export const runtime = "nodejs";
 
@@ -53,7 +53,7 @@ export async function POST() {
     if (!a.email) continue;
     const innerHtml = `
       <h2 style="margin:8px 0 16px;font-size:18px;color:${EMAIL_BRAND.ink};line-height:1.4;">
-        ${a.name || "관리자"} 님, ${me!.name} 님이 토큰 충전을 요청했습니다
+        ${escapeHtml(a.name || "관리자")} 님, ${escapeHtml(me!.name)} 님이 토큰 충전을 요청했습니다
       </h2>
       <p style="margin:0 0 16px;color:#475569;line-height:1.6;font-size:14px;">
         같은 법인의 멤버가 토큰 잔액 부족으로 충전을 요청했습니다.<br/>
@@ -63,13 +63,13 @@ export async function POST() {
         <tr>
           <td style="padding:14px 16px;font-size:12px;color:#64748b;width:90px;">요청자</td>
           <td style="padding:14px 16px;font-size:13px;color:${EMAIL_BRAND.ink};font-weight:600;">
-            ${me!.name} <span style="color:#94a3b8;font-weight:400;">&lt;${me!.email}&gt;</span>
+            ${escapeHtml(me!.name)} <span style="color:#94a3b8;font-weight:400;">&lt;${escapeHtml(me!.email)}&gt;</span>
           </td>
         </tr>
         <tr>
           <td style="padding:14px 16px;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;">법인</td>
           <td style="padding:14px 16px;font-size:13px;color:${EMAIL_BRAND.ink};border-top:1px solid #e2e8f0;">
-            ${org?.name ?? "-"}
+            ${escapeHtml(org?.name ?? "-")}
           </td>
         </tr>
         <tr>

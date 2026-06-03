@@ -3,7 +3,7 @@ import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { createSession, setSessionCookie } from "@/lib/auth";
 import { verifyLoginChallenge } from "@/lib/login-challenge";
-import { verifyCode } from "@/lib/totp";
+import { verifyAndConsumeTotp } from "@/lib/totp-verify";
 import { decrypt } from "@/lib/crypto";
 import { recordAttempt, extractIp } from "@/lib/auth-attempts";
 import { logAudit } from "@/lib/audit";
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     });
 
   const secret = decrypt(user.totpSecret);
-  const ok = verifyCode(secret, code);
+  const ok = await verifyAndConsumeTotp(user.id, secret, code);
   const ip = extractIp(req);
   const userAgent = req.headers.get("user-agent");
 

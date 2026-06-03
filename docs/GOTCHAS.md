@@ -104,6 +104,49 @@ if (!r.ok) return new Response(r.errors.join("\n"), { status: 400 });
 
 UI 쪽은 `app/password-strength.tsx` 의 `<PasswordStrength>` 컴포넌트 사용.
 
+## 0-0-3. 보안 컨벤션 (2026-06-03 보안 점검 반영)
+
+회귀 방지용 — 새 코드 작성 시 아래 패턴을 반드시 따를 것.
+
+### (a) 메일 HTML 에 사용자 입력 → `escapeHtml` 필수
+메일 빌더에서 후보자명·공고명·가입자명·법인명 등 사용자 제어 값을 템플릿 리터럴로 보간할 땐
+반드시 `import { escapeHtml } from "@/lib/mailer"` 후 `${escapeHtml(value)}`. 누락 시 이력서
+파일명/이름에 심은 `<a href>` 가 법인 SMTP 발신 메일로 렌더 → 피싱. (text 버전은 비-HTML 이라 제외)
+
+### (b) 외부 URL fetch → SSRF 가드
+사용자가 준 URL 을 서버가 fetch 하면 안 됨(내부망·메타데이터 169.254.169.254 도달). 패턴:
+- 채용 포털 등 임의 URL: `lib/job-url-import.ts` 의 `assertPublicUrl()`(사설/루프백/링크로컬 IP 차단
+  + 수동 리다이렉트 hop 재검증)을 거치는 `fetchWithTimeout` 만 사용.
+- Vercel Blob URL: `blob.vercel-storage.com`(+`BLOB_ALLOWED_HOSTS`) 호스트 화이트리스트 검증
+  후 fetch (`app/api/uploads/candidate/[id]` 와 manifest 업로드 경로 참고).
+
+### (c) 보안 응답 헤더
+`next.config.ts` 의 `headers()` 가 전역 적용 — CSP `frame-ancestors`(클릭재킹), X-Frame-Options,
+nosniff, Referrer-Policy(면접 토큰 Referer 유출 차단), HSTS, Permissions-Policy. **microphone 은
+막지 않음**(면접 음성입력). 스크립트/스타일 CSP 는 미적용(별도 작업 필요).
+
+### (d) TOTP 검증 → replay 방어 필수
+TOTP 코드 검증은 `verifyCode` 직접 호출 금지. `import { verifyAndConsumeTotp } from "@/lib/totp-verify"`
+사용 — 검증 성공한 timestep 을 `users.last_totp_counter` 에 기록하고 같은/과거 코드 재사용을 거부.
+
+### (e) 토큰 차감/적립 멱등성
+`chargeFeature`/`refundFeature`/`grantWelcomeBonus`/`applyChargePayment` 는 `writeLedgerIdempotent`
+(INSERT 먼저 → `token_ledger_idem_uq` 부분 유니크 인덱스 위반 시 지갑 미변경)로 동시 중복 요청의
+이중 차감/적립을 차단. 새 멱등 차감 추가 시 동일 패턴(non-null refType + refId) 사용. 반복 허용
+항목(admin_adjust refType=null, manual_refund)은 인덱스 예외라 `writeLedger`/`refundTokens` 그대로.
+
+### (f) 비밀번호 변경 → 세션 회전
+`change-password` 는 변경 후 **다른 기기 세션 전체 무효화 + 현재 토큰 회전**(탈취 세션 차단).
+`password-reset/confirm` 과 동일 수준 유지.
+
+### (g) cron/internal 인증 — fail-open 금지
+cron/internal 라우트 `authorize` 는 `x-vercel-cron` 헤더 우회를 반드시 `&& !secret` 로 묶을 것
+(시크릿 설정 시 헤더 위조 차단). Vercel cron 은 `Authorization: Bearer ${CRON_SECRET}` 로 인증.
+
+### (h) 로그인 next 리다이렉트 → 상대경로만
+`?next=` 같은 리다이렉트 파라미터는 내부 상대경로만 허용: `/^\/(?![/\\])/.test(next)`.
+외부 절대 URL(`//evil`·`https://evil`) 차단(오픈 리다이렉트 피싱).
+
 ## 0-0. SQLite CURRENT_TIMESTAMP 와 JS toISOString() 포맷 불일치
 
 **증상**: timestamp 컬럼을 `gte/lte` 로 비교했을 때 모든 row 가 false 또는 true 로 일관되게 잘못 나옴.

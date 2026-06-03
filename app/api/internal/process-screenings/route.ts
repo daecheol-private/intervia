@@ -50,7 +50,8 @@ async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.INTERNAL_API_SECRET;
   const header = req.headers.get("x-internal-secret");
   if (secret && header === secret) return null;
-  if (req.headers.get("x-vercel-cron") === "1") return null;
+  // internal 은 cron(X-Internal-Secret)·self-chain 만 호출. 시크릿 설정 시 헤더 위조 우회 차단.
+  if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
   const me = await getCurrentUser();
   if (me?.role === "system_admin") return null;
   return new Response("권한 없음", { status: 401 });

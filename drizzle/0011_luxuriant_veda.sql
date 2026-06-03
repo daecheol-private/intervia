@@ -1,0 +1,2 @@
+ALTER TABLE `users` ADD `last_totp_counter` integer;--> statement-breakpoint
+CREATE UNIQUE INDEX `token_ledger_idem_uq` ON `token_ledger` (`org_id`,`reason`,`ref_type`,`ref_id`) WHERE "token_ledger"."ref_type" is not null and "token_ledger"."ref_type" != 'manual_refund';

@@ -332,6 +332,16 @@ export async function POST(
     if (!Array.isArray(manifest.blobs) || manifest.blobs.length === 0)
       return new Response("파일 없음", { status: 400 });
 
+    // SSRF 방어 — manifest 의 blob URL 은 클라이언트가 보냄. Vercel Blob 도메인만 허용.
+    // (다운로드 라우트 /api/uploads/candidate/[id] 와 동일 화이트리스트)
+    const allowedBlobHosts = new Set<string>([
+      "blob.vercel-storage.com",
+      ...(process.env.BLOB_ALLOWED_HOSTS ?? "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    ]);
+
     // 각 blob 을 다운로드 — ZIP 처리·magic byte 검증·텍스트 추출 위해 Buffer 필요.
     // 단, 비-ZIP 파일은 storedKey 를 유지하여 서버에서 재업로드하지 않음.
     for (const b of manifest.blobs) {
@@ -343,6 +353,22 @@ export async function POST(
           `파일이 너무 큽니다: ${leaf} (${(b.size / 1024 / 1024).toFixed(1)}MB, 최대 ${MAX_FILE_SIZE / 1024 / 1024}MB)`,
           { status: 413 }
         );
+      }
+      let blobHost = "";
+      try {
+        const u = new URL(b.url);
+        if (u.protocol !== "https:") throw new Error("not https");
+        blobHost = u.host.toLowerCase();
+      } catch {
+        return new Response("업로드 파일 URL 이 올바르지 않습니다.", { status: 400 });
+      }
+      if (
+        ![...allowedBlobHosts].some(
+          (h) => blobHost === h || blobHost.endsWith("." + h)
+        )
+      ) {
+        log.warn("blob_fetch_blocked_ssrf", { host: blobHost });
+        return new Response("허용되지 않은 파일 위치입니다.", { status: 502 });
       }
       const res = await fetch(b.url);
       if (!res.ok) {

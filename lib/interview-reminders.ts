@@ -12,7 +12,7 @@
 import { db } from "./db";
 import { interviewSchedules, candidates, jobPostings } from "./schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { sendMail, isSmtpAvailable, wrapEmailCard } from "./mailer";
+import { sendMail, isSmtpAvailable, wrapEmailCard, escapeHtml } from "./mailer";
 import { getJobInterviewerEmails } from "./notifications";
 
 const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -89,25 +89,25 @@ export async function sendInterviewerReminders(): Promise<{
       const locationRow = r.modeOnline
         ? `<strong>방식</strong> 온라인${
             r.onlineMeetingUrl
-              ? ` · <a href="${r.onlineMeetingUrl}" style="color:#0d4f3c;word-break:break-all;">미팅 링크</a>`
+              ? ` · <a href="${escapeHtml(r.onlineMeetingUrl)}" style="color:#0d4f3c;word-break:break-all;">미팅 링크</a>`
               : ""
           }`
         : `<strong>방식</strong> 오프라인${
             r.address
-              ? ` · ${r.address}${r.addressDetail ? ` ${r.addressDetail}` : ""}`
+              ? ` · ${escapeHtml(r.address)}${r.addressDetail ? ` ${escapeHtml(r.addressDetail)}` : ""}`
               : ""
           }`;
 
       for (const iv of interviewers) {
         const html = wrapEmailCard({
           innerHtml: `
-            <h1 style="font-size:18px;margin:24px 0 8px;color:#0f172a;">${iv.name}님, 면접 일정 안내드립니다.</h1>
+            <h1 style="font-size:18px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(iv.name)}님, 면접 일정 안내드립니다.</h1>
             <p style="color:#475569;line-height:1.6;margin:0 0 16px;">
-              담당 공고 <strong style="color:#0f172a;">${r.jobTitle}</strong> 의 면접이
+              담당 공고 <strong style="color:#0f172a;">${escapeHtml(r.jobTitle)}</strong> 의 면접이
               <strong style="color:#0f172a;">약 24시간 후</strong> 진행될 예정입니다.
             </p>
             <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:14px;color:#0f172a;line-height:1.8;margin:0 0 20px;">
-              <strong>후보자</strong> ${r.candidateName}<br>
+              <strong>후보자</strong> ${escapeHtml(r.candidateName)}<br>
               <strong>일시</strong> ${slotLabel}<br>
               ${locationRow}
             </div>

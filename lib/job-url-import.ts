@@ -10,6 +10,8 @@
  *   6. 양쪽 결과 머지 (다중 패스 voting 대신 2차 우선)
  */
 import * as cheerio from "cheerio";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -134,23 +136,86 @@ export function detectSite(url: string): string | undefined {
   }
 }
 
+/** SSRF 방어 — 사설/루프백/링크로컬/메타데이터 대역 IP 차단 여부. */
+function isBlockedIp(ip: string): boolean {
+  if (isIP(ip) === 4) {
+    const o = ip.split(".").map(Number);
+    if (o[0] === 0 || o[0] === 10 || o[0] === 127) return true; // 0/8, 10/8, 127/8(loopback)
+    if (o[0] === 169 && o[1] === 254) return true; // 169.254/16 link-local (클라우드 메타데이터)
+    if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return true; // 172.16/12
+    if (o[0] === 192 && o[1] === 168) return true; // 192.168/16
+    if (o[0] === 100 && o[1] >= 64 && o[1] <= 127) return true; // 100.64/10 CGNAT
+    return false;
+  }
+  const v = ip.toLowerCase();
+  if (v === "::1" || v === "::") return true; // loopback / unspecified
+  if (v.startsWith("fe80")) return true; // link-local
+  if (v.startsWith("fc") || v.startsWith("fd")) return true; // unique-local fc00::/7
+  const m = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/); // IPv4-mapped
+  if (m) return isBlockedIp(m[1]);
+  return false;
+}
+
+/**
+ * 외부 fetch 전 URL 검증 — http/https 만, 호스트가 사설/내부 대역으로 해석되면 차단.
+ * 공고 URL·본문 이미지 fetch 가 내부망·메타데이터(169.254.169.254)에 도달하는 SSRF 를 막는다.
+ */
+async function assertPublicUrl(raw: string): Promise<void> {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new Error("올바르지 않은 URL 입니다.");
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:")
+    throw new Error("http/https URL 만 허용됩니다.");
+  const host = u.hostname;
+  if (isIP(host)) {
+    if (isBlockedIp(host)) throw new Error("내부 주소로의 요청은 차단됩니다.");
+    return;
+  }
+  let addrs: Array<{ address: string }>;
+  try {
+    addrs = await lookup(host, { all: true });
+  } catch {
+    throw new Error("호스트를 확인할 수 없습니다.");
+  }
+  for (const a of addrs)
+    if (isBlockedIp(a.address))
+      throw new Error("내부 주소로의 요청은 차단됩니다.");
+}
+
 async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  const headers = {
+    // 브라우저처럼 보이게 — 일부 사이트는 봇 차단
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    ...(init?.headers ?? {}),
+  };
   try {
-    return await fetch(url, {
-      ...init,
-      signal: ctrl.signal,
-      headers: {
-        // 브라우저처럼 보이게 — 일부 사이트는 봇 차단
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        ...(init?.headers ?? {}),
-      },
-    });
+    // 리다이렉트를 수동 추적하며 각 hop 을 SSRF 재검증 (리다이렉트 기반 우회 차단). 최대 5 hop.
+    let current = url;
+    for (let hop = 0; hop < 5; hop++) {
+      await assertPublicUrl(current);
+      const res = await fetch(current, {
+        ...init,
+        signal: ctrl.signal,
+        redirect: "manual",
+        headers,
+      });
+      const loc = res.headers.get("location");
+      if (res.status >= 300 && res.status < 400 && loc) {
+        current = new URL(loc, current).toString();
+        continue;
+      }
+      return res;
+    }
+    throw new Error("리다이렉트가 너무 많습니다.");
   } finally {
     clearTimeout(t);
   }

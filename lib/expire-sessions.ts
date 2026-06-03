@@ -10,7 +10,7 @@ import {
 import { and, eq, lt, sql, isNull, inArray } from "drizzle-orm";
 import { refundFeature } from "./tokens";
 import { purgeOnDecision } from "./candidate-stage";
-import { sendMail, isSmtpAvailable, wrapEmailCard } from "./mailer";
+import { sendMail, isSmtpAvailable, wrapEmailCard, escapeHtml } from "./mailer";
 
 /**
  * 만료 시점이 지난 면접 세션 정리.
@@ -245,11 +245,11 @@ async function notifyInterviewersOnAutoReject(
       innerHtml: `
         <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">자동 불합격 처리 알림</h1>
         <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 16px;">
-          <strong style="color:#0f172a;">${job.title}</strong> 공고에서 다음 후보자들의 링크가 만료되어 자동으로 불합격 처리되었습니다.
+          <strong style="color:#0f172a;">${escapeHtml(job.title)}</strong> 공고에서 다음 후보자들의 링크가 만료되어 자동으로 불합격 처리되었습니다.
         </p>
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
           <ul style="font-size:13px;color:#0f172a;line-height:1.8;margin:0;padding-left:18px;">
-${group.items.map((c) => `            <li>${c.name} <span style="color:#64748b;">— ${reasonLabel[c.reason ?? ""] ?? c.reason ?? "사유 미상"}</span></li>`).join("\n")}
+${group.items.map((c) => `            <li>${escapeHtml(c.name)} <span style="color:#64748b;">— ${reasonLabel[c.reason ?? ""] ?? c.reason ?? "사유 미상"}</span></li>`).join("\n")}
           </ul>
         </div>
       `,

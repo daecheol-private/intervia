@@ -68,22 +68,40 @@ export function generateCode(secret: string, time = Date.now()): string {
   return String(code % 1_000_000).padStart(6, "0");
 }
 
-/** ±window 윈도우(기본 ±1 → ±30초) 검증. 타이밍 공격 방지. */
+/**
+ * ±window 윈도우(기본 ±1 → ±30초) 검증 후, 매칭된 timestep(counter) 를 반환 (없으면 null).
+ * `after` 가 주어지면 그 이하 counter 는 건너뛴다 — 이미 사용한 코드 재사용(replay) 차단.
+ * 타이밍 공격 방지를 위해 timingSafeEqual 사용.
+ */
+export function verifyCodeReturningCounter(
+  secret: string,
+  inputCode: string,
+  opts?: { window?: number; after?: number }
+): number | null {
+  const window = opts?.window ?? 1;
+  const after = opts?.after;
+  const clean = inputCode.replace(/\D/g, "");
+  if (clean.length !== 6) return null;
+  const now = Date.now();
+  for (let w = -window; w <= window; w++) {
+    const time = now + w * 30_000;
+    const counter = Math.floor(time / 1000 / 30);
+    if (after !== undefined && counter <= after) continue; // replay 방어
+    const candidate = generateCode(secret, time);
+    const a = Buffer.from(candidate);
+    const b = Buffer.from(clean);
+    if (a.length === b.length && timingSafeEqual(a, b)) return counter;
+  }
+  return null;
+}
+
+/** ±window 윈도우 검증 (boolean). replay 방어가 필요하면 `verifyCodeReturningCounter` 사용. */
 export function verifyCode(
   secret: string,
   inputCode: string,
   window = 1
 ): boolean {
-  const clean = inputCode.replace(/\D/g, "");
-  if (clean.length !== 6) return false;
-  const now = Date.now();
-  for (let w = -window; w <= window; w++) {
-    const candidate = generateCode(secret, now + w * 30_000);
-    const a = Buffer.from(candidate);
-    const b = Buffer.from(clean);
-    if (a.length === b.length && timingSafeEqual(a, b)) return true;
-  }
-  return false;
+  return verifyCodeReturningCounter(secret, inputCode, { window }) !== null;
 }
 
 /**

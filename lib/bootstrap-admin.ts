@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { users } from "./schema";
 import { eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { hashPassword } from "./auth";
 import { log } from "./logger";
 
@@ -14,13 +15,12 @@ import { log } from "./logger";
  * 환경변수:
  *  - `SYSTEM_ADMIN_EMAIL` (필수) — 관리자 로그인 이메일
  *  - `SYSTEM_ADMIN_NAME` (선택) — 표시 이름. 기본 "시스템 관리자"
- *  - `SYSTEM_ADMIN_INITIAL_PASSWORD` (선택) — 초기 비밀번호. 기본 "changeme"
+ *  - `SYSTEM_ADMIN_INITIAL_PASSWORD` (선택) — 초기 비밀번호. 미설정 시 강력한
+ *    랜덤 비밀번호를 1회 생성해 로그(warn)에 노출한다 (배포 로그에서 확인 후 즉시 변경).
  *
- * ⚠️ 초기 비밀번호("changeme")는 약한 비밀번호다. 로그인 후 `/account` 에서
- *    즉시 변경해야 한다. (변경 화면은 비밀번호 정책 — 10자·3종·HIBP — 을 강제)
+ * ⚠️ 약한 공통 기본값("changeme")은 제거됨 — 이메일만 알면 추측 로그인되는 위험.
+ *    랜덤 생성 비번도 mustChangePassword=true 라 로그인 후 `/account` 에서 즉시 변경 필요.
  */
-
-const DEFAULT_INITIAL_PASSWORD = "changeme";
 
 // 프로세스당 1회만 시도. serverless cold start 마다 1회 검사 — 비용 무시 가능.
 let bootstrapDone = false;
@@ -44,8 +44,9 @@ export async function ensureSystemAdmin(): Promise<void> {
       return;
     }
 
-    const password =
-      process.env.SYSTEM_ADMIN_INITIAL_PASSWORD || DEFAULT_INITIAL_PASSWORD;
+    const provided = process.env.SYSTEM_ADMIN_INITIAL_PASSWORD;
+    // 미설정 시 144bit 랜덤 비번 생성 (base64url ~24자 — 추측 불가). 약한 공통 기본값 제거.
+    const password = provided || randomBytes(18).toString("base64url");
     const name = process.env.SYSTEM_ADMIN_NAME?.trim() || "시스템 관리자";
     const passwordHash = await hashPassword(password);
 
@@ -59,15 +60,17 @@ export async function ensureSystemAdmin(): Promise<void> {
       isAdmin: true,
       // 부트스트랩 계정은 이메일 인증을 거치지 않으므로 즉시 인증 처리 (로그인 가능).
       emailVerifiedAt: new Date().toISOString(),
-      // 임시 비밀번호("changeme") — 로그인 후 변경 전까지 전역 오버레이로 차단.
+      // 임시 비밀번호 — 로그인 후 변경 전까지 전역 오버레이로 차단.
       mustChangePassword: true,
     });
 
     bootstrapDone = true;
     log.warn("system_admin_bootstrapped", {
       email,
-      usingDefaultPassword:
-        !process.env.SYSTEM_ADMIN_INITIAL_PASSWORD,
+      // 비번 미설정 시에만 생성값을 1회 노출 (배포 로그 확인용). 설정했으면 노출 안 함.
+      ...(provided
+        ? {}
+        : { generatedInitialPassword: password }),
       note: "초기 비밀번호로 system_admin 생성됨 — 로그인 후 /account 에서 즉시 변경 필요",
     });
   } catch (e) {

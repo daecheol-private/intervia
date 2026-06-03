@@ -3,7 +3,7 @@ import { passwordResets, users } from "./schema";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { addDays } from "./utils";
-import { sendMail, EMAIL_BRAND, wrapEmailCard } from "./mailer";
+import { sendMail, EMAIL_BRAND, wrapEmailCard, escapeHtml } from "./mailer";
 
 const TOKEN_TTL_HOURS = 1; // 1시간 유효 — 짧게.
 
@@ -19,7 +19,7 @@ export function buildPasswordResetEmail(opts: {
       innerHtml: `
         <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">비밀번호 재설정</h1>
         <p style="color:#475569;line-height:1.6;margin:0 0 24px;">
-          <strong style="color:#0f172a;">${userName}</strong> 님, Intervia 계정의 비밀번호 재설정 요청을 받았습니다.<br>
+          <strong style="color:#0f172a;">${escapeHtml(userName)}</strong> 님, Intervia 계정의 비밀번호 재설정 요청을 받았습니다.<br>
           아래 버튼을 눌러 새 비밀번호를 설정해 주세요.
         </p>
         <p style="text-align:center;margin:0 0 16px;">

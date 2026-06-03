@@ -10,7 +10,9 @@ import { PasswordInput } from "@/app/components/PasswordInput";
 export default function LoginPage() {
   const router = useRouter();
   const search = useSearchParams();
-  const next = search.get("next") || "/";
+  // 오픈 리다이렉트 방어 — 내부 상대경로(`/...`)만 허용. `//evil`·`/\evil`·`https://evil` 차단.
+  const rawNext = search.get("next") || "/";
+  const next = /^\/(?![/\\])/.test(rawNext) ? rawNext : "/";
   const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
   const [form, setForm] = useState({ email: "", password: "", name: "" });
   const [busy, setBusy] = useState(false);

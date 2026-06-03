@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser, verifyPassword } from "@/lib/auth";
-import { verifyCode } from "@/lib/totp";
+import { verifyAndConsumeTotp } from "@/lib/totp-verify";
 import { decrypt } from "@/lib/crypto";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
   if (!(await verifyPassword(password, u.passwordHash)))
     return new Response("비밀번호가 일치하지 않습니다.", { status: 401 });
-  if (!verifyCode(decrypt(u.totpSecret), code))
+  if (!(await verifyAndConsumeTotp(me.id, decrypt(u.totpSecret), code)))
     return new Response("인증 코드가 올바르지 않습니다.", { status: 401 });
 
   await db

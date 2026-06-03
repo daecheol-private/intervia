@@ -136,7 +136,7 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | ~~`GOOGLE_API_KEY`~~ | **더 이상 사용 안 함** (직접 Gemini API 제거, 2026-05-26). 기존 등록값은 제거해도 무방. |
 | `SYSTEM_ADMIN_EMAIL` | **설정 시 첫 요청에서 이 이메일로 `system_admin` 계정 자동 생성** (`lib/bootstrap-admin.ts`). 운영 전 반드시 설정 |
 | `SYSTEM_ADMIN_NAME` | (선택) 부트스트랩 관리자 표시 이름. 기본 `시스템 관리자` |
-| `SYSTEM_ADMIN_INITIAL_PASSWORD` | (선택) 부트스트랩 관리자 초기 비밀번호. 기본 **`changeme`**. ⚠️ 로그인 직후 비밀번호 변경이 **강제됨** — 변경 전까지 전역 오버레이로 모든 화면 차단 (정책: 10자·3종·HIBP) |
+| `SYSTEM_ADMIN_INITIAL_PASSWORD` | (선택) 부트스트랩 관리자 초기 비밀번호. **미설정 시 144bit 랜덤 비번 자동 생성 → 배포 로그(warn `system_admin_bootstrapped` 의 `generatedInitialPassword`)에 1회 노출** (약한 공통 기본값 제거). 운영은 직접 지정 권장. ⚠️ 로그인 직후 변경 **강제** (정책: 10자·3종·HIBP) |
 | `TURSO_DATABASE_URL` | `libsql://xxx.turso.io` |
 | `TURSO_AUTH_TOKEN` | `eyJhbGc...` |
 | `BLOB_READ_WRITE_TOKEN` | (Blob 생성 시 자동) |

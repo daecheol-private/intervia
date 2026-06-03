@@ -174,6 +174,25 @@ export const EMAIL_BRAND = {
   ink: "#0f1a14",
 };
 
+/**
+ * 메일 HTML 에 사용자 입력(후보자 이름·공고명·가입자 이름 등)을 보간하기 전 이스케이프.
+ * 누락 시 이력서 파일명/이름에 심은 `<a href>` 등이 법인 SMTP 발신 메일로 렌더되어
+ * 피싱(HTML/링크 인젝션)이 가능하다. 속성 컨텍스트까지 막기 위해 " ' 도 포함.
+ */
+export function escapeHtml(s: string): string {
+  return String(s ?? "").replace(
+    /[<>&"']/g,
+    (c) =>
+      ({
+        "<": "&lt;",
+        ">": "&gt;",
+        "&": "&amp;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c]!
+  );
+}
+
 export function emailBrandHeader(): string {
   return `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
     <td width="36" valign="middle" style="width:36px;padding:0;">
@@ -241,9 +260,9 @@ ${url}
 
   const html = wrapEmailCard({
     innerHtml: `
-      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${candidateName}님, 안녕하세요.</h1>
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(candidateName)}님, 안녕하세요.</h1>
       <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
-        <strong style="color:#0f172a;">${jobTitle}</strong> 포지션에 지원해 주셔서 감사합니다.<br>
+        <strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> 포지션에 지원해 주셔서 감사합니다.<br>
         아래 버튼을 통해 AI 면접을 진행해 주시기 바랍니다.
       </p>
       <p style="text-align:center;margin:0 0 16px;">
