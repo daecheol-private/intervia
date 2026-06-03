@@ -115,3 +115,15 @@ export function isValidEmail(email: string): boolean {
 export function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
 }
+
+/**
+ * 사업자번호 마스킹 — 인증 전(공개) 응답에서 전체 번호 노출 방지.
+ * XXX-XX-XXXXX 중 세무서·구분(앞 5자리)만 남기고 일련번호(뒤 5자리)는 가린다.
+ * 법인 식별(중복 등록 안내)에는 충분하되, 사칭·사기에 쓰일 전체 번호는 넘기지 않음.
+ */
+export function maskBizNo(biz: string | null | undefined): string | null {
+  if (!biz) return null;
+  const digits = biz.replace(/\D/g, "");
+  if (digits.length < 10) return "****";
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-*****`;
+}

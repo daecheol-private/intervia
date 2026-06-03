@@ -12,6 +12,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/site-info";
 import { extractIp } from "@/lib/auth-attempts";
 import { notifyOrgAdmins } from "@/lib/notifications";
+import { sendVerificationMail } from "@/lib/email-verify";
 
 export const runtime = "nodejs";
 
@@ -74,8 +75,11 @@ export async function POST(req: Request) {
   const passwordHash = await hashPassword(password);
   const now = new Date().toISOString();
 
-  // 합류 요청은 별도 이메일 인증 불요 — 법인 관리자의 승인이 본인확인 역할을 함.
-  // (신규 법인 생성은 인증 메일 필요. 거기에는 검토할 사람이 없으므로.)
+  // 메일함 소유 확인 — 합류 요청에도 인증 메일을 보낸다.
+  // 이유: 타인의 회사 이메일로 합류 요청을 넣고 부주의한 관리자의 승인만 노리는
+  //       사칭을 막기 위함. 진짜 메일함 주인에게 "X 법인 합류 시도" 알림이 가고,
+  //       관리자 화면에는 메일 소유 검증 여부가 표시된다(승인 판단 신호).
+  //       최종 합류 가부는 여전히 법인 관리자 승인이 결정한다.
   // 사전 UI 단계에서 이미 이메일 중복은 검증됨 — DB UNIQUE 충돌만 안전하게 처리.
   let user;
   try {
@@ -115,6 +119,21 @@ export async function POST(req: Request) {
     status: "pending",
   });
 
+  // 메일함 소유 확인용 인증 메일 — 실제 주인에게 합류 시도를 통지. best-effort.
+  const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+  let mailSent = true;
+  try {
+    await sendVerificationMail({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      baseUrl: base,
+    });
+  } catch (e) {
+    console.error("join-request verification mail failed", e);
+    mailSent = false;
+  }
+
   void notifyOrgAdmins(orgId, {
     type: "join_request",
     title: `${name} (${normalizedEmail}) 님이 합류를 요청했습니다`,
@@ -125,8 +144,7 @@ export async function POST(req: Request) {
   return Response.json({
     ok: true,
     status: "pending",
-    // mailSent 필드는 호환성을 위해 유지하되 항상 true (인증 메일 발송 단계가 없음).
-    mailSent: true,
+    mailSent,
   });
 }
 
@@ -168,6 +186,8 @@ export async function GET(req: Request) {
       decidedAt: orgJoinRequests.decidedAt,
       userEmail: users.email,
       userName: users.name,
+      // 메일 소유 검증 여부 — 승인 화면에서 "미확인" 경고 표시용.
+      userEmailVerifiedAt: users.emailVerifiedAt,
       orgName: organizations.name,
     })
     .from(orgJoinRequests)

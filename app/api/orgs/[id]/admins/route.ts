@@ -1,11 +1,12 @@
 /**
- * 가입 전 안내용 — 특정 법인의 org_admin 목록 (이름·이메일 부분 마스킹 + 마지막 접속).
+ * 가입 전 안내용 — 특정 법인의 org_admin 목록 (이름·이메일 부분 마스킹).
  *
  * 비로그인 접근 허용. 검색을 통해 법인을 알아낸 뒤 합류 단계에서 담당자 정보 표시용.
  * 분당 5회 제한 (enumeration 차단).
+ * lastSeenAt(접속 시각)은 노출하지 않음 — 인증 전 활동 시간대 정찰 차단.
  */
 import { db } from "@/lib/db";
-import { users, sessions } from "@/lib/schema";
+import { users } from "@/lib/schema";
 import { sql, desc } from "drizzle-orm";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -30,11 +31,6 @@ export async function GET(
     .select({
       email: users.email,
       name: users.name,
-      lastSeenAt: sql<string | null>`(
-        SELECT MAX(${sessions.lastSeenAt})
-        FROM ${sessions}
-        WHERE ${sessions.userId} = ${users.id}
-      )`,
     })
     .from(users)
     .where(
@@ -46,7 +42,6 @@ export async function GET(
   const masked = rows.map((r) => ({
     email: maskEmail(r.email),
     name: maskName(r.name),
-    lastSeenAt: r.lastSeenAt,
   }));
   return Response.json(masked);
 }

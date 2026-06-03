@@ -5,12 +5,18 @@ import {
   getEmailDomain,
   isPublicDomain,
   isValidEmail,
+  maskBizNo,
   normalizeEmail,
 } from "@/lib/email-domain";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  // 인증 전 계정·법인·담당자 정찰 차단 — IP 기준 분당 10회.
+  const limited = await rateLimit(req, "check-email", { limit: 10, windowSec: 60 });
+  if (limited) return limited;
+
   const { email } = (await req.json().catch(() => ({}))) as { email?: string };
   if (!email) return new Response("email 필수", { status: 400 });
   if (!isValidEmail(email))
@@ -64,18 +70,13 @@ export async function POST(req: Request) {
     );
 
   // 각 매칭 법인의 org_admin 정보 마스킹해서 반환.
-  const { sessions } = await import("@/lib/schema");
+  // lastSeenAt(접속 시각)은 의도적으로 노출하지 않음 — 인증 전 활동 시간대 정찰 차단.
   const enriched = await Promise.all(
     matchedOrgs.map(async (org) => {
       const rows = await db
         .select({
           email: users.email,
           name: users.name,
-          lastSeenAt: sql<string | null>`(
-            SELECT MAX(${sessions.lastSeenAt})
-            FROM ${sessions}
-            WHERE ${sessions.userId} = ${users.id}
-          )`,
         })
         .from(users)
         .where(
@@ -85,10 +86,10 @@ export async function POST(req: Request) {
         .limit(3);
       return {
         ...org,
+        bizRegistrationNo: maskBizNo(org.bizRegistrationNo),
         admins: rows.map((r) => ({
           email: maskEmail(r.email),
           name: maskName(r.name),
-          lastSeenAt: r.lastSeenAt,
         })),
       };
     })

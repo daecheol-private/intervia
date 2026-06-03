@@ -14,7 +14,7 @@ type CheckResponse = {
   domain?: string | null;
   isPublicDomain?: boolean;
   matchedOrg?: { id: number; name: string } | null;
-  admins?: Array<{ email: string; name: string; lastSeenAt: string | null }>;
+  admins?: Array<{ email: string; name: string }>;
   matchedOrgs?: Array<{
     id: number;
     name: string;
@@ -24,7 +24,7 @@ type CheckResponse = {
       | "pending_review"
       | "rejected";
     bizRegistrationNo: string | null;
-    admins: Array<{ email: string; name: string; lastSeenAt: string | null }>;
+    admins: Array<{ email: string; name: string }>;
   }>;
   suggestion?: "login" | "join" | "create_or_search" | "choose_match";
 };
@@ -36,7 +36,7 @@ type OrgSearchResult = {
   emailDomain: string | null;
 };
 
-type AdminInfo = { email: string; name: string; lastSeenAt: string | null };
+type AdminInfo = { email: string; name: string };
 type MatchedOrgFull = NonNullable<CheckResponse["matchedOrgs"]>[number];
 type Stage =
   | { kind: "check" }
@@ -934,17 +934,6 @@ function Banner({ children }: { children: React.ReactNode }) {
   );
 }
 
-function fmtSince(s: string | null): string {
-  if (!s) return "접속 기록 없음";
-  const d = new Date(s.includes("T") ? s : s.replace(" ", "T") + "Z");
-  if (Number.isNaN(d.getTime())) return s.slice(0, 10);
-  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  if (days <= 0) return "오늘 접속";
-  if (days < 30) return `${days}일 전 접속`;
-  if (days < 90) return `${Math.floor(days / 7)}주 전 접속`;
-  return `${Math.floor(days / 30)}개월 전 접속 — 비활성 의심`;
-}
-
 function AdminContactsPanel({
   org,
   admins,
@@ -1005,7 +994,6 @@ function AdminContactsPanel({
                 <span className="font-medium">{a.name}</span>{" "}
                 <span className="text-slate-500">{a.email}</span>
               </div>
-              <span className="text-[10px] text-slate-400">{fmtSince(a.lastSeenAt)}</span>
             </li>
           ))}
         </ul>

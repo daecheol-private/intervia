@@ -36,17 +36,26 @@ async function authBody(
   if (!candidate)
     return { ok: false, res: new Response("후보자 없음", { status: 404 }) };
 
-  // 본인 확인 — candidates.email 존재 시 입력값과 매칭. 미존재 시 토큰만으로 통과 (관용).
-  if (candidate.email) {
-    if (!emailFromInput || emailFromInput.toLowerCase() !== candidate.email.toLowerCase()) {
-      return {
-        ok: false,
-        res: new Response(
-          "본인 확인 실패: 면접 안내 메일을 받으신 이메일을 입력해 주세요.",
-          { status: 403 }
-        ),
-      };
-    }
+  // 본인 확인 — candidates.email 과 입력 이메일이 일치해야 통과.
+  // 등록된 이메일이 없으면 토큰만으로는 본인을 확인할 수 없으므로 거부(fail-safe).
+  // (이전: 이메일 없으면 토큰만으로 통과 — 링크 전달·유출 시 제3자가 열람·삭제 가능했음.)
+  if (!candidate.email) {
+    return {
+      ok: false,
+      res: new Response(
+        "본인 확인을 진행할 수 없습니다 (등록된 이메일이 없습니다). 채용 담당자에게 문의해 주세요.",
+        { status: 403 }
+      ),
+    };
+  }
+  if (!emailFromInput || emailFromInput.toLowerCase() !== candidate.email.toLowerCase()) {
+    return {
+      ok: false,
+      res: new Response(
+        "본인 확인 실패: 면접 안내 메일을 받으신 이메일을 입력해 주세요.",
+        { status: 403 }
+      ),
+    };
   }
   return { ok: true, candidate, sessionId: session.id };
 }

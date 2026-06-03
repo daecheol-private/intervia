@@ -30,7 +30,11 @@ if (limited) return limited;
 | `setup` | 5 | IP 기준 |
 | `change-password` | 5 | userId 기준 |
 | `resend-verification` | 3 | IP 기준 (계정 enum 방지) |
+| `check-email` | 10 | IP 기준 (가입 전 계정·법인·담당자 정찰 방지) |
+| `org-search` | 20 | IP 기준 (법인 디렉토리·사업자번호 대량 스크래핑 방지) |
+| `org-admins` | 5 | IP 기준 (담당자 enumeration 방지) |
 | `send-email` | 5 | userId 기준 |
+| `self-view` / `self-delete` | 5 / 3 | 면접 토큰 기준 (후보자 본인열람/삭제) |
 | `llm-screen` | 30 | userId 기준 (단건) |
 | `llm-bulk-screen` | 5 | userId 기준 (1회당 ≤500건) |
 
@@ -146,6 +150,23 @@ cron/internal 라우트 `authorize` 는 `x-vercel-cron` 헤더 우회를 반드�
 ### (h) 로그인 next 리다이렉트 → 상대경로만
 `?next=` 같은 리다이렉트 파라미터는 내부 상대경로만 허용: `/^\/(?![/\\])/.test(next)`.
 외부 절대 URL(`//evil`·`https://evil`) 차단(오픈 리다이렉트 피싱).
+
+### (i) 사회공학 하드닝 (2026-06-03 사회공학 점검 반영)
+사람의 신뢰를 악용하는 표면. 회귀 방지용 — 새 코드에서 동일 패턴 유지.
+
+- **인증 전 정보 최소화**: 가입 전(비로그인) 응답에 정찰용 데이터를 넘기지 말 것.
+  - 접속 시각(`lastSeenAt`)은 가입 전 응답에 **절대 노출 금지** — 관리자 활동 시간대 정찰·표적 공격 단서. (`check-email`, `orgs/[id]/admins`)
+  - 사업자번호는 전체 노출 X — `maskBizNo()`(`lib/email-domain.ts`, `XXX-XX-*****`)로 마스킹. 식별 점수 계산엔 원본, 출력만 마스킹.
+  - 담당자 이메일·이름은 `maskEmail`/`maskName` 으로만.
+  - 비로그인 정찰 라우트(`check-email`/`org-search`/`org-admins`)는 **rate limit 필수**(위 표).
+- **후보자 메일 = 피싱 방어 신호 포함**: 후보자(외부·미인증)에게 가는 메일(`buildInterviewEmail`)은 반드시
+  ① **발신 법인명**을 본문에 노출(어느 회사인지 확인 가능), ② "비밀번호·결제·금융정보·주민번호·신분증을 요구하지 않는다 + 링크 본인 전용" 안전 안내. 발송 라우트는 법인명을 조회해 `orgName` 으로 전달.
+- **법인 SMTP 발신주소 정합성**: `orgs/smtp` PUT 은 `fromEmail` 도메인이 인증된 SMTP 계정 도메인 또는
+  가입 시 검증된 회사 도메인(`organizations.emailDomain`)과 일치하는지 검증. 불일치 시 400 — 타사(유명기업) 도메인 사칭 발송 차단.
+- **합류 요청 = 메일함 소유 통지**: `orgs/join-requests` POST 는 인증 메일을 발송해 실제 메일함 주인에게
+  합류 시도를 통지(사칭 조기 발견). 승인 화면(`/org/members?tab=requests`)에 `userEmailVerifiedAt` 기반 "메일 소유 미확인" 경고를 띄움. 최종 승인은 여전히 org_admin 이 결정.
+- **토큰-only 본인확인 금지**: 면접 토큰 기반 후보자 본인 라우트(`interview/[token]/me`)는 등록 이메일이
+  없으면 토큰만으로 통과시키지 말 것(링크 전달·유출 시 제3자 열람). 이메일 미보유면 403(fail-safe).
 
 ## 0-0. SQLite CURRENT_TIMESTAMP 와 JS toISOString() 포맷 불일치
 

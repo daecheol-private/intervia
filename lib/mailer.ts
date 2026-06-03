@@ -237,13 +237,19 @@ export function buildInterviewEmail(opts: {
   jobTitle: string;
   url: string;
   expiresAt: string;
+  /** 면접을 발송한 채용 법인명. 후보자가 발신 주체를 확인할 수 있게 본문에 노출 (피싱 식별). */
+  orgName?: string | null;
 }): { subject: string; html: string; text: string } {
-  const { candidateName, jobTitle, url, expiresAt } = opts;
-  const subject = `[Intervia 면접 안내] ${jobTitle}`;
+  const { candidateName, jobTitle, url, expiresAt, orgName } = opts;
+  const sender = orgName?.trim() || null;
+  const subject = sender
+    ? `[${sender}] AI 면접 안내 — ${jobTitle}`
+    : `[Intervia 면접 안내] ${jobTitle}`;
+  const senderLine = sender ? `${sender} 채용팀` : "채용 담당자";
   const text = `안녕하세요 ${candidateName}님,
 
-${jobTitle} 포지션에 지원해 주셔서 감사합니다.
-아래 링크를 통해 AI 면접을 진행해 주시기 바랍니다.
+${senderLine}의 ${jobTitle} 포지션에 지원해 주셔서 감사합니다.
+아래 링크를 통해 AI 면접(제공: Intervia)을 진행해 주시기 바랍니다.
 
 ${url}
 
@@ -254,6 +260,11 @@ ${url}
 * 충분한 시간과 집중할 수 있는 환경에서 진행해 주세요.
 * 답변에 외부 도구(ChatGPT 등)의 복사·붙여넣기를 다량 사용하면 평가 리포트에 표시될 수 있습니다.
 
+[안전 안내]
+* 본 면접은 비밀번호·결제·금융정보·주민등록번호·신분증 사본을 절대 요구하지 않습니다.
+* 위 링크는 본인 전용이며, 타인에게 전달하지 마세요.
+* 요청한 적이 없거나 의심스러우면 지원하신 회사에 직접 문의해 주세요.
+
 내 정보 보기 / 평가 조회: ${url}/me
 
 감사합니다.`;
@@ -262,7 +273,7 @@ ${url}
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(candidateName)}님, 안녕하세요.</h1>
       <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
-        <strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> 포지션에 지원해 주셔서 감사합니다.<br>
+        ${sender ? `<strong style="color:#0f172a;">${escapeHtml(sender)}</strong> 채용팀의 ` : ""}<strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> 포지션에 지원해 주셔서 감사합니다.<br>
         아래 버튼을 통해 AI 면접을 진행해 주시기 바랍니다.
       </p>
       <p style="text-align:center;margin:0 0 16px;">
@@ -280,8 +291,14 @@ ${url}
         • 답변에 <strong>외부 도구(ChatGPT 등)의 복사·붙여넣기</strong>를 다량 사용하면 평가 리포트에 표시될 수 있습니다.<br>
         • 링크 만료: <strong>${expiresAt}</strong>
       </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;font-size:12px;color:#92400e;line-height:1.6;margin-top:12px;">
+        <div style="font-weight:700;margin-bottom:4px;">🔒 안전 안내</div>
+        • 본 면접은 <strong>비밀번호·결제·금융정보·주민등록번호·신분증 사본</strong>을 절대 요구하지 않습니다.<br>
+        • 위 링크는 <strong>본인 전용</strong>이며 타인에게 전달하지 마세요.<br>
+        • 요청한 적이 없거나 의심스러우면 ${sender ? `<strong>${escapeHtml(sender)}</strong>에 ` : "지원하신 회사에 "}직접 문의해 주세요.
+      </div>
     `,
-    footer: `<a href="${url}/me" style="color:#64748b;text-decoration:underline;">내 정보 보기 / 평가 조회</a><br><br>본 메일은 Intervia 시스템에서 자동 발송되었습니다.`,
+    footer: `<a href="${url}/me" style="color:#64748b;text-decoration:underline;">내 정보 보기 / 평가 조회</a><br><br>본 메일은 ${sender ? `${escapeHtml(sender)}의 채용 절차를 위해 ` : ""}Intervia 시스템에서 자동 발송되었습니다.`,
   });
 
   return { subject, html, text };

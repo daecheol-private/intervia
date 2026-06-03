@@ -26,6 +26,7 @@ type JoinRequest = {
   decidedAt: string | null;
   userEmail: string;
   userName: string;
+  userEmailVerifiedAt: string | null;
   orgName: string;
 };
 
@@ -501,6 +502,18 @@ function RequestsTab({ onChanged }: { onChanged: () => void }) {
               <div className="text-xs text-slate-500 mt-1">
                 {r.orgName} · {formatLocalDateTime(r.createdAt, { format: { second: "2-digit" } })}
               </div>
+              {r.status === "pending" && (
+                r.userEmailVerifiedAt ? (
+                  <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+                    ✓ 메일 소유 확인됨
+                  </div>
+                ) : (
+                  <div className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 leading-relaxed">
+                    ⚠ 메일 소유 미확인 — 요청자가 인증 메일을 아직 확인하지 않았습니다.
+                    본인·재직 여부를 직접 확인한 뒤 승인하세요.
+                  </div>
+                )
+              )}
             </div>
             {r.status === "pending" ? (
               <div className="flex gap-2 shrink-0">

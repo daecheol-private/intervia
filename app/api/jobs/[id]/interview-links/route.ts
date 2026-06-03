@@ -17,6 +17,7 @@ import {
   candidates,
   interviewSessions,
   jobPostings,
+  organizations,
 } from "@/lib/schema";
 import { eq, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -104,6 +105,13 @@ export async function POST(
     );
   }
 
+  // 발신 법인명 — 면접 메일 본문에 노출 (후보자 피싱 식별).
+  const [org] = await db
+    .select({ name: organizations.name })
+    .from(organizations)
+    .where(eq(organizations.id, job.orgId));
+  const orgName = org?.name ?? null;
+
   const targets = await db
     .select()
     .from(candidates)
@@ -178,6 +186,7 @@ export async function POST(
       jobTitle: job.title,
       url,
       expiresAt: formatKstDateTime(expiresAt),
+      orgName,
     });
 
     try {

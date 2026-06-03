@@ -15,6 +15,8 @@
 import { db } from "@/lib/db";
 import { organizations } from "@/lib/schema";
 import { sql } from "drizzle-orm";
+import { rateLimit } from "@/lib/rate-limit";
+import { maskBizNo } from "@/lib/email-domain";
 
 export const runtime = "nodejs";
 
@@ -36,6 +38,10 @@ function normalize(s: string): string {
 }
 
 export async function GET(req: Request) {
+  // 인증 없이 노출되는 법인 디렉토리 — 대량 스크래핑(고객사·사업자번호 수집) 차단.
+  const limited = await rateLimit(req, "org-search", { limit: 20, windowSec: 60 });
+  if (limited) return limited;
+
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") || "").trim();
   if (q.length < 2) return Response.json([]);
@@ -80,7 +86,11 @@ export async function GET(req: Request) {
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 20)
-    .map(({ score: _s, ...rest }) => rest);
+    // 전체 사업자번호는 노출하지 않음 — 식별용 마스킹본만. (매칭 점수 계산엔 원본 사용)
+    .map(({ score: _s, bizRegistrationNo, ...rest }) => ({
+      ...rest,
+      bizRegistrationNo: maskBizNo(bizRegistrationNo),
+    }));
 
   return Response.json(scored);
 }

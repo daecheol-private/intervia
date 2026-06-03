@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { interviewSessions, candidates, jobPostings } from "@/lib/schema";
+import { interviewSessions, candidates, jobPostings, organizations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
@@ -124,11 +124,21 @@ export async function POST(
   const url = `${base}/interview/${session.accessToken}`;
   const expires = formatKstDateTime(session.expiresAt);
 
+  // 발신 법인명 — 후보자가 발신 주체를 확인할 수 있게 메일 본문에 노출 (피싱 식별).
+  const [org] =
+    candidate.orgId != null
+      ? await db
+          .select({ name: organizations.name })
+          .from(organizations)
+          .where(eq(organizations.id, candidate.orgId))
+      : [];
+
   const mail = buildInterviewEmail({
     candidateName: candidate.name,
     jobTitle: job.title,
     url,
     expiresAt: expires,
+    orgName: org?.name ?? null,
   });
 
   // 사전 체크 — 법인/환경변수 어디에도 SMTP 가 없으면 친절히 안내

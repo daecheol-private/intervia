@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { orgSmtpConfigs } from "@/lib/schema";
+import { orgSmtpConfigs, organizations } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
@@ -77,6 +77,30 @@ export async function PUT(req: Request) {
     return new Response("host / authUser / fromEmail 필수", { status: 400 });
   if (!Number.isFinite(port) || port < 1 || port > 65535)
     return new Response("port 가 올바르지 않습니다", { status: 400 });
+
+  // 발신 주소(fromEmail) 도메인 정합성 — 인증된 SMTP 계정 도메인 또는 가입 시 검증된
+  // 회사 도메인과 일치해야 함. 타사(예: 유명 기업) 도메인을 사칭한 발신을 차단.
+  // 허용 도메인을 하나도 특정할 수 없으면(둘 다 도메인 없음) best-effort 로 통과.
+  const fromDomain = fromEmail.split("@")[1]?.toLowerCase() ?? "";
+  if (!fromDomain)
+    return new Response("fromEmail 형식이 올바르지 않습니다", { status: 400 });
+  const authUserDomain = authUser.includes("@")
+    ? authUser.split("@")[1]?.toLowerCase()
+    : null;
+  const [orgRow] = await db
+    .select({ emailDomain: organizations.emailDomain })
+    .from(organizations)
+    .where(eq(organizations.id, orgId));
+  const allowedDomains = new Set(
+    [authUserDomain, orgRow?.emailDomain?.toLowerCase()].filter(Boolean)
+  );
+  if (allowedDomains.size > 0 && !allowedDomains.has(fromDomain)) {
+    return new Response(
+      `발신 이메일 도메인(@${fromDomain})은 SMTP 계정 도메인 또는 검증된 회사 도메인과 일치해야 합니다. ` +
+        `회사 도메인으로 발송하려면 가입 시 등록한 회사 도메인 이메일을 사용하거나 운영자에게 도메인 검증을 요청하세요.`,
+      { status: 400 }
+    );
+  }
 
   // 기존 설정 가져와서 authPass 미지정 시 보존
   const [existing] = await db
