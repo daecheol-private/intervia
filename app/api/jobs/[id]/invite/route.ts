@@ -4,8 +4,10 @@
  * 정책:
  *  - 발신자는 해당 공고의 법인 멤버여야 함
  *  - 최대 20개 이메일/요청, 분당 1회 (rate limit)
- *  - 같은 이메일에 미사용·미만료 초대가 이미 있으면 그 토큰 재사용 (스팸 방지)
- *  - 이미 같은 법인 멤버인 이메일은 발송 스킵 (status='already_member')
+ *  - 같은 공고·같은 이메일에 미사용·미만료 초대가 있으면 그 토큰 재사용 (스팸 방지).
+ *    jobId 로 스코프하지 않으면 다른 공고를 공유해도 옛 초대가 재사용되어 받는 사람이
+ *    엉뚱한 공고 면접관으로 추가됨.
+ *  - 이미 같은 법인 멤버인 이메일은 멤버 선택과 동일하게 면접관 등록 + 알림 메일 (memberResults).
  *  - 이미 다른 법인 소속 이메일은 발송 스킵 (status='other_org') — 수락 시점에 어차피 거절되므로 미리 차단
  */
 import { db } from "@/lib/db";
@@ -108,8 +110,7 @@ export async function POST(
     error?: string;
   }[] = [];
 
-  // 멤버 선택: 같은 법인 멤버를 면접관으로 자동 등록 + 알림 메일.
-  // 외부 이메일 초대와 응답 형식 통일 위해 results 배열에 같이 누적.
+  // 멤버 선택 + "이메일이 이미 같은 법인 멤버" 두 경로 공용 결과 누적.
   const memberResults: {
     userId: number;
     email: string;
@@ -117,6 +118,59 @@ export async function POST(
     status: "assigned" | "already_assigned" | "skipped_other_org" | "failed";
     error?: string;
   }[] = [];
+
+  // 같은 법인 멤버를 이 공고 면접관으로 등록 + 알림 메일. 멱등(onConflictDoNothing).
+  // 멤버 선택과 이메일 매칭이 같은 사람을 가리켜도 한 번만 처리하도록 userId 로 중복 차단.
+  const jobUrl = `${base}/jobs/${jobId}`;
+  const handledUserIds = new Set<number>();
+  const assignAsInterviewer = async (m: {
+    id: number;
+    email: string;
+    name: string;
+  }) => {
+    if (handledUserIds.has(m.id)) return;
+    handledUserIds.add(m.id);
+    const inserted = await db
+      .insert(jobInterviewers)
+      .values({
+        jobId,
+        userId: m.id,
+        assignedByUserId: me!.id,
+      })
+      .onConflictDoNothing()
+      .returning({ userId: jobInterviewers.userId });
+    const wasAlready = inserted.length === 0;
+    const mail = buildInterviewerAssignedEmail({
+      inviterName: me!.name,
+      orgName,
+      jobTitle: job.title,
+      url: jobUrl,
+    });
+    try {
+      await sendMail({
+        to: m.email,
+        ...mail,
+        orgId: job.orgId,
+        audience: "org",
+      });
+      memberResults.push({
+        userId: m.id,
+        email: m.email,
+        name: m.name,
+        status: wasAlready ? "already_assigned" : "assigned",
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      memberResults.push({
+        userId: m.id,
+        email: m.email,
+        name: m.name,
+        status: "failed",
+        error: msg,
+      });
+    }
+  };
+
   if (memberIds.length > 0) {
     const memberRows = await db
       .select({
@@ -127,7 +181,6 @@ export async function POST(
       })
       .from(users)
       .where(inArray(users.id, memberIds));
-    const jobUrl = `${base}/jobs/${jobId}`;
     for (const m of memberRows) {
       if (m.orgId !== job.orgId) {
         memberResults.push({
@@ -138,57 +191,22 @@ export async function POST(
         });
         continue;
       }
-      // 면접관 등록 — 멱등 (onConflictDoNothing)
-      const inserted = await db
-        .insert(jobInterviewers)
-        .values({
-          jobId,
-          userId: m.id,
-          assignedByUserId: me!.id,
-        })
-        .onConflictDoNothing()
-        .returning({ userId: jobInterviewers.userId });
-      const wasAlready = inserted.length === 0;
-      const mail = buildInterviewerAssignedEmail({
-        inviterName: me!.name,
-        orgName,
-        jobTitle: job.title,
-        url: jobUrl,
-      });
-      try {
-        await sendMail({
-          to: m.email,
-          ...mail,
-          orgId: job.orgId,
-          audience: "org",
-        });
-        memberResults.push({
-          userId: m.id,
-          email: m.email,
-          name: m.name,
-          status: wasAlready ? "already_assigned" : "assigned",
-        });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        memberResults.push({
-          userId: m.id,
-          email: m.email,
-          name: m.name,
-          status: "failed",
-          error: msg,
-        });
-      }
+      await assignAsInterviewer({ id: m.id, email: m.email, name: m.name });
     }
   }
 
   for (const email of parsed.valid) {
-    // 이미 같은 법인 active 멤버 → 스킵
+    // 이미 같은 법인 멤버 → 계정 선택과 동일하게 면접관 등록 + 알림 메일.
     const [existingMember] = await db
-      .select({ id: users.id, orgId: users.orgId })
+      .select({ id: users.id, name: users.name, orgId: users.orgId })
       .from(users)
       .where(eq(users.email, email));
     if (existingMember && existingMember.orgId === job.orgId) {
-      results.push({ email, status: "already_member" });
+      await assignAsInterviewer({
+        id: existingMember.id,
+        email,
+        name: existingMember.name,
+      });
       continue;
     }
     // 이미 다른 법인 소속 → 수락 시점에 거절되므로 발송 자체를 스킵 (혼란 방지)
@@ -197,7 +215,9 @@ export async function POST(
       continue;
     }
 
-    // 미사용·미만료 토큰 재사용
+    // 같은 공고·같은 이메일의 미사용·미만료 토큰만 재사용.
+    // jobId 로 스코프하지 않으면 다른 공고 공유 시 옛 초대가 재사용되어
+    // 받는 사람이 엉뚱한 공고 면접관으로 추가됨 (공유 기능 버그).
     const [existingInvite] = await db
       .select()
       .from(orgInvites)
@@ -205,6 +225,7 @@ export async function POST(
         and(
           eq(orgInvites.orgId, job.orgId),
           eq(orgInvites.email, email),
+          eq(orgInvites.jobId, jobId),
           isNull(orgInvites.usedAt),
           gt(orgInvites.expiresAt, new Date().toISOString())
         )

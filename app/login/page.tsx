@@ -158,11 +158,11 @@ export default function LoginPage() {
           <h1 className="text-xl font-bold text-slate-900">
             {setupRequired ? "초기 관리자 계정 생성" : "로그인"}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {setupRequired
-              ? "최초 1회 관리자 계정을 생성합니다."
-              : "Intervia 관리자 페이지"}
-          </p>
+          {setupRequired && (
+            <p className="text-sm text-slate-500 mt-1">
+              최초 1회 관리자 계정을 생성합니다.
+            </p>
+          )}
         </div>
 
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
