@@ -55,12 +55,17 @@ export async function GET(
         .where(eq(jobPostings.id, inv.jobId))
     : [];
 
+  // 모든 초대는 공고 공유로 발급된다(jobId 항상 세팅). 공고 삭제 시 FK set null 로
+  // jobId 가 비므로, jobId 가 null = 공유된 공고가 삭제됨. 랜딩에서 안내 배너용.
+  const jobDeleted = inv.jobId == null;
+
   return Response.json({
     token: inv.token,
     orgId: inv.orgId,
     orgName: org?.name ?? "법인",
     emailMasked: maskEmail(inv.email),
     job,
+    jobDeleted,
     expiresAt: inv.expiresAt,
   });
 }

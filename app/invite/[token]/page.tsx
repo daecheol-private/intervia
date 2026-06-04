@@ -11,6 +11,7 @@ type InviteInfo = {
   orgName: string;
   emailMasked: string;
   job?: { id: number; title: string; position: string };
+  jobDeleted?: boolean;
   expiresAt: string;
 };
 
@@ -92,6 +93,18 @@ export default function InvitePage() {
             <div className="text-xs text-slate-500 mt-0.5">
               {info.job.position}
             </div>
+          </div>
+        )}
+
+        {info.jobDeleted && (
+          <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="text-sm font-semibold text-amber-800">
+              공유된 공고가 삭제되었습니다
+            </div>
+            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+              그래도 <strong>{info.orgName}</strong> 채용 시스템에 합류하시겠어요?
+              합류 후 다른 공고에 면접관으로 참여할 수 있습니다.
+            </p>
           </div>
         )}
 
