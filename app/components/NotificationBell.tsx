@@ -10,6 +10,7 @@ import {
   Building2,
   AlertTriangle,
   CheckCheck,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 
@@ -19,7 +20,8 @@ type NotificationType =
   | "join_request"
   | "low_balance"
   | "new_org"
-  | "candidate_appeal";
+  | "candidate_appeal"
+  | "announcement";
 
 type Notification = {
   id: number;
@@ -37,6 +39,7 @@ const ICON_MAP: Record<NotificationType, LucideIcon> = {
   low_balance: Coins,
   new_org: Building2,
   candidate_appeal: AlertTriangle,
+  announcement: Megaphone,
 };
 
 const POLL_MS = 60_000; // 60초마다 폴링

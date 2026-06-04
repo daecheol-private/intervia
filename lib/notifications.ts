@@ -21,7 +21,8 @@ export type NotificationType =
   | "candidate_appeal"
   | "schedule_confirmed"
   | "schedule_counter_proposed"
-  | "schedule_withdrawn";
+  | "schedule_withdrawn"
+  | "announcement";
 
 export type CreateNotificationInput = {
   userId: number;
@@ -180,6 +181,43 @@ export async function notifyOrgAdmins(
     admins.map((a) => a.id),
     input
   );
+}
+
+/**
+ * 운영 공지 — 전체 활성 사용자에게 인앱 알림 fanout.
+ * system_admin 이 `/admin/announcements` 에서 발송. 강제 모달 없이 알림 벨/목록에만 노출.
+ * 발송 시점의 active 사용자에게만 전달 (이후 가입자는 미수신 — 공지는 시점성 메시지).
+ * @returns 발송된 수신자 수.
+ */
+export async function broadcastAnnouncement(input: {
+  title: string;
+  href?: string;
+}): Promise<number> {
+  const recipients = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.status, "active"));
+  const ids = recipients.map((r) => r.id);
+  const href = input.href?.trim() || "/notifications";
+  // 한 INSERT 의 바인딩 변수 한도(SQLite 999) 회피 — 100명씩 끊어 발송.
+  const CHUNK = 100;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    await createNotificationFanout(ids.slice(i, i + CHUNK), {
+      type: "announcement",
+      title: input.title,
+      href,
+    });
+  }
+  return ids.length;
+}
+
+/** 전체 활성 사용자 수 — 공지 발송 폼의 예상 수신자 표시용. */
+export async function activeUserCount(): Promise<number> {
+  const [r] = await db
+    .select({ c: sql<number>`COUNT(*)` })
+    .from(users)
+    .where(eq(users.status, "active"));
+  return Number(r?.c ?? 0);
 }
 
 /** 시스템 관리자 전원에게 fanout. */

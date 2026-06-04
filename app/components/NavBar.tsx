@@ -25,6 +25,7 @@ import {
   X,
   Home,
   LifeBuoy,
+  Megaphone,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 import LogoutButton from "../logout-button";
@@ -83,6 +84,7 @@ function buildSections(role: Role): NavSection[] {
         { href: "/admin/orgs", label: "법인", Icon: Building2 },
         { href: "/admin/users", label: "사용자", Icon: Users2 },
         { href: "/admin/candidates", label: "후보자", Icon: Users },
+        { href: "/admin/announcements", label: "공지", Icon: Megaphone },
         { href: "/admin/pricing", label: "단가", Icon: DollarSign },
         { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
         { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
@@ -175,6 +177,7 @@ export function NavBar({
                       { href: "/admin/orgs", label: "법인", Icon: Building2 },
                       { href: "/admin/users", label: "사용자", Icon: Users2 },
                       { href: "/admin/candidates", label: "후보자", Icon: Users },
+                      { href: "/admin/announcements", label: "공지", Icon: Megaphone },
                       { href: "/admin/pricing", label: "단가", Icon: DollarSign },
                       { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
                       { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },

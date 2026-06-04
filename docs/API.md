@@ -30,6 +30,8 @@
 | GET | `/api/admin/appeals` | 🔒 🏢 (admin) | 자동화 의사결정 이의제기 개요 (PIPA §37의2). system_admin=전체 / org_admin=자기 법인. query: `status`(pending/reviewed/resolved/rejected). pending 우선 정렬 + `pendingCount`. DPO 알림 메일이 링크하는 `/admin/appeals` 페이지 데이터 소스 |
 | GET | `/api/admin/inquiries` | 🔒 👑 (sysadmin) | 고객센터 문의 인박스 — **system_admin 전용**. query: `status`(open/in_progress/resolved). open 우선 정렬 + `openCount` |
 | PATCH | `/api/admin/inquiries/[id]` | 🔒 👑 (sysadmin) | 문의 상태/답변 업데이트 — **system_admin 전용**. body: `{status?, adminNote?}`. resolved 전환 시 resolved_at/by 세팅. adminNote 는 고객 문의 내역에 노출 |
+| GET | `/api/admin/announcements` | 🔒 👑 (sysadmin) | 공지 발송 폼용 — 예상 수신자(활성 사용자) 수 `{activeUsers}` |
+| POST | `/api/admin/announcements` | 🔒 👑 (sysadmin) | 운영 공지 발송. body: `{title(2~200자), href?(내부 경로 '/'시작)}`. 전체 활성 사용자에게 인앱 알림(type=`announcement`) fanout. 응답 `{sent}`. 발송 시점 활성 사용자만 수신·회수 없음 |
 | GET | `/api/admin/metrics` | 🔒 🏢 (admin) | 운영 메트릭 — totals / stages / queue / interviews / tokenUsage / perOrg / recentCrossOrg |
 | GET | `/api/health` | 🌐 | DB·env 헬스체크. 200 정상 / 503 실패. 외부 모니터링 호환 |
 
