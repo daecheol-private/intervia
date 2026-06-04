@@ -1740,7 +1740,7 @@ export default function JobDetailPage() {
                         <CandidateScores c={c} />
                       </div>
                       {c.screeningReport?.summary && (
-                        <p className="text-sm text-slate-600 mt-2 line-clamp-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                        <p className="text-sm text-slate-600 mt-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
                           <HL text={c.screeningReport.summary} />
                         </p>
                       )}
@@ -1851,7 +1851,7 @@ export default function JobDetailPage() {
                         <CandidateScores c={c} />
                       </div>
                       {c.screeningReport?.summary && (
-                        <p className="text-sm text-slate-600 mt-2 line-clamp-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                        <p className="text-sm text-slate-600 mt-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
                           <HL text={c.screeningReport.summary} />
                         </p>
                       )}
@@ -1988,7 +1988,7 @@ export default function JobDetailPage() {
                         <CandidateScores c={c} />
                       </div>
                       {c.screeningReport?.summary && (
-                        <p className="text-sm text-slate-600 mt-2 line-clamp-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                        <p className="text-sm text-slate-600 mt-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
                           <HL text={c.screeningReport.summary} />
                         </p>
                       )}
