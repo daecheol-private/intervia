@@ -15,12 +15,22 @@ export default function LoginPage() {
   const next = /^\/(?![/\\])/.test(rawNext) ? rawNext : "/";
   const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
   const [form, setForm] = useState({ email: "", password: "", name: "" });
+  const [rememberId, setRememberId] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [needsVerify, setNeedsVerify] = useState(false);
   const [info, setInfo] = useState("");
   const [totpChallenge, setTotpChallenge] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState("");
+
+  // 저장된 이메일(ID) 불러오기 — 체크박스 사용 시 다음 방문에 자동 입력
+  useEffect(() => {
+    const saved = localStorage.getItem("intervia.savedEmail");
+    if (saved) {
+      setForm((f) => ({ ...f, email: saved }));
+      setRememberId(true);
+    }
+  }, []);
 
   useEffect(() => {
     void fetch("/api/auth/status")
@@ -41,6 +51,12 @@ export default function LoginPage() {
     if (!form.email || !form.password || (setupRequired && !form.name)) {
       setErr("필수 항목을 모두 입력하세요.");
       return;
+    }
+    // ID 저장 선택에 따라 이메일 보관/삭제
+    if (rememberId) {
+      localStorage.setItem("intervia.savedEmail", form.email);
+    } else {
+      localStorage.removeItem("intervia.savedEmail");
     }
     setBusy(true);
     const url = setupRequired ? "/api/auth/setup" : "/api/auth/login";
@@ -238,6 +254,18 @@ export default function LoginPage() {
             />
             {setupRequired && <PasswordStrength password={form.password} />}
           </Field>
+
+          {!setupRequired && (
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                checked={rememberId}
+                onChange={(e) => setRememberId(e.target.checked)}
+              />
+              ID 저장
+            </label>
+          )}
 
           {err && (
             <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
