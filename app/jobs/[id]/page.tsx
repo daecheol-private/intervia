@@ -280,24 +280,44 @@ export default function JobDetailPage() {
     }
     // 사전 크기 검증 — 서버 도달 전 차단
     const MB = 1024 * 1024;
-    const MAX_ZIP = 100 * MB;
-    const MAX_FILE = 100 * MB;
+    const MAX_ZIP = 100 * MB; // ZIP 컨테이너 하드 한도
+    const MAX_FILE = 10 * MB; // 개별 파일 한도 — 초과 시 해당 파일만 제외 (동영상 삽입된 PPT 등)
     const MAX_TOTAL = 100 * MB;
 
-    const tooLarge: string[] = [];
+    // ZIP 이 하드 한도를 넘으면 컨테이너라 부분 제외가 불가 → 배치 전체 중단
+    const oversizeZips: string[] = [];
     for (const { file, relativePath } of entries) {
-      const isZip = relativePath.toLowerCase().endsWith(".zip");
-      const limit = isZip ? MAX_ZIP : MAX_FILE;
-      if (file.size > limit) {
-        tooLarge.push(
-          `· ${relativePath} (${formatMB(file.size)}) — ${isZip ? "ZIP 최대 100MB" : "파일 최대 100MB"} 초과`
+      if (relativePath.toLowerCase().endsWith(".zip") && file.size > MAX_ZIP) {
+        oversizeZips.push(
+          `· ${relativePath} (${formatMB(file.size)}) — ZIP 최대 ${formatMB(MAX_ZIP)} 초과`
         );
       }
     }
-    if (tooLarge.length > 0) {
+    if (oversizeZips.length > 0) {
       notify(
-        `다음 파일이 크기 제한을 초과해 업로드를 시작하지 않았습니다.\n\n${tooLarge.join("\n")}\n\n원본 ZIP/파일을 작게 분할하거나 압축률을 높여 다시 시도해 주세요.`,
-        { tone: "warn", title: "파일 크기 초과" }
+        `다음 압축 파일이 크기 제한을 초과해 업로드를 시작하지 않았습니다.\n\n${oversizeZips.join("\n")}\n\nZIP 을 작게 분할하거나 압축률을 높여 다시 시도해 주세요.`,
+        { tone: "warn", title: "ZIP 크기 초과" }
+      );
+      return;
+    }
+
+    // 개별 파일(비-ZIP)이 10MB 를 넘으면 해당 파일만 빼고 나머지는 업로드.
+    // (동영상이 삽입된 PPT 등. ZIP 안의 파일은 서버가 동일 기준으로 제외)
+    const excludedLarge: string[] = [];
+    entries = entries.filter(({ file, relativePath }) => {
+      const isZip = relativePath.toLowerCase().endsWith(".zip");
+      if (!isZip && file.size > MAX_FILE) {
+        excludedLarge.push(`${relativePath} (${formatMB(file.size)})`);
+        return false;
+      }
+      return true;
+    });
+    if (entries.length === 0) {
+      notify(
+        `업로드할 파일이 모두 10MB 를 초과해 제외되었습니다.\n\n${excludedLarge
+          .map((n) => `· ${n}`)
+          .join("\n")}`,
+        { tone: "warn", title: "10MB 초과 — 업로드 없음" }
       );
       return;
     }
@@ -489,6 +509,13 @@ export default function JobDetailPage() {
     setUploading(false);
     setUploadProgress(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (excludedLarge.length > 0) {
+      lines.push(
+        `ℹ️ 10MB 초과 ${excludedLarge.length}개 제외: ${excludedLarge
+          .slice(0, 3)
+          .join(", ")}${excludedLarge.length > 3 ? " 외" : ""}`
+      );
+    }
     if (lines.length > 0) {
       const hasWarn = lines.some((l) => l.includes("⚠️"));
       notify(lines.join("\n"), {
@@ -1464,6 +1491,7 @@ export default function JobDetailPage() {
         <ul className="text-xs text-slate-500 mt-3 space-y-1 text-left inline-block">
           <li>· PDF · DOCX · HWP · 이미지 · ZIP 지원</li>
           <li>· 여러 파일 한 번에, 폴더 드래그도 가능</li>
+          <li>· 개별 파일 10MB 초과는 자동 제외 (동영상 삽입된 PPT 등)</li>
           <li>
             · 한 응시자에 이력서 + 포트폴리오를 함께 올리려면 응시자 이름 폴더로 묶어주세요
             <br />

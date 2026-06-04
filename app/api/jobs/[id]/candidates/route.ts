@@ -193,8 +193,10 @@ export async function GET(
   return Response.json(result);
 }
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB per file
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB per file (blob 다운로드/안전 상한)
 const MAX_ZIP_SIZE = 100 * 1024 * 1024; // 100MB for ZIP
+// 개별 첨부 1건 상한. 초과 시 그 파일만 제외(배치 전체는 진행) — 동영상 삽입된 PPT 등
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB
 const RESUME_EXTS = new Set(["pdf", "docx"]);
 const ATTACHMENT_EXTS = new Set([
   "pdf",
@@ -442,8 +444,15 @@ export async function POST(
           entryCount: entries.length,
           sample: entries.slice(0, 5).map((x) => x.path),
         });
-        for (const en of entries)
+        for (const en of entries) {
+          // ZIP 안의 개별 파일도 10MB 초과면 제외 (동영상 삽입된 PPT 등)
+          if (en.buf.length > MAX_ATTACHMENT_SIZE) {
+            const leaf = en.name.split(/[/\\]/).pop() ?? en.name;
+            skippedTooLarge.push(`${leaf} (${(en.buf.length / 1024 / 1024).toFixed(1)} MB)`);
+            continue;
+          }
           collected.push({ name: en.name, buf: en.buf, path: en.path });
+        }
         if (f.storedKey) zipKeysToCleanup.push(f.storedKey);
       } catch (err) {
         if (err instanceof ZipExtractError) {
@@ -467,7 +476,7 @@ export async function POST(
         skippedUnsupported.push(leaf);
         continue;
       }
-      if (f.size > MAX_FILE_SIZE) {
+      if (f.size > MAX_ATTACHMENT_SIZE) {
         skippedTooLarge.push(`${leaf} (${(f.size / 1024 / 1024).toFixed(1)} MB)`);
         continue;
       }
