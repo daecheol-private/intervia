@@ -56,7 +56,7 @@ export default async function RootLayout({
           isDev={process.env.NODE_ENV !== "production"}
         />
         <div className="flex-1 flex flex-col">{children}</div>
-        <Footer />
+        <Footer loggedIn={!!user} />
         {user?.mustChangePassword && (
           <ForcePasswordChange email={user.email} />
         )}

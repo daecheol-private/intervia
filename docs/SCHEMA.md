@@ -217,6 +217,34 @@
 
 후보자는 면접 토큰으로 `/interview/[token]/appeal` 접근 → 제출 시 DPO 메일 알림. PIPA §37의2 에 따라 7영업일 내 답변 의무.
 
+## inquiries
+
+고객센터 문의 / 서비스 불편사항 신고. 고객(법인)·후보자 양쪽 출처를 한 테이블에 통합.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| source | TEXT NOT NULL | `org_user`(로그인 고객) / `candidate`(비로그인 후보자) |
+| category | TEXT NOT NULL | 분류 코드. 허용값·라벨은 `lib/inquiry.ts` |
+| message | TEXT NOT NULL | 내용 (5~5000자) |
+| contact_email | TEXT NOT NULL | 회신 이메일 (org_user=계정 / candidate=입력값) |
+| org_id | INTEGER NULL | org_user=소속 법인 / candidate=세션의 채용 법인 |
+| user_id | INTEGER NULL | org_user 제출자 |
+| interview_session_id | INTEGER NULL | candidate 출처 세션 |
+| candidate_id | INTEGER NULL | candidate 출처 후보자 |
+| status | TEXT NOT NULL DEFAULT 'open' | open(접수)/in_progress(처리중)/resolved(완료) |
+| admin_note | TEXT NULL | 운영팀 답변 — 고객의 "내 문의 내역"에 노출 |
+| resolved_by_user_id | INTEGER NULL | 완료 처리한 관리자 |
+| resolved_at | TEXT NULL | resolved 전환 시 세팅 (그 외 NULL) |
+| ip / user_agent | TEXT NULL | |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+인덱스: `(status, created_at)`, `(org_id, created_at)`.
+
+- 후보자: 면접 화면/종료 화면 → `/interview/[token]/inquiry` (본인 이메일 매칭 불요 — 막힌 후보자 차단 방지).
+- 고객: `/support` 폼 + 본인 문의 내역. 관리자: `/admin/inquiries` 인박스 — **system_admin 전용**(고객센터=운영자 데스크, org_admin 은 제출만). 페이지는 서버 컴포넌트에서 역할 가드 + redirect.
+- 접수 시 지원 이메일(`APPEAL_CONTACT`) 통지 (`lib/inquiry-notify.ts`, 실패해도 제출 성공).
+
 ## consent_logs
 
 후보자 동의 기록 (PIPA §15, §22, §26, §28의8, §37의2).

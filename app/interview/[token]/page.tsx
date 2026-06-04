@@ -342,6 +342,15 @@ export default function InterviewPage() {
             streaming={streaming}
           />
         )}
+        {/* 막힌 후보자가 종료 화면에 도달하지 못해도 쓸 수 있는 상시 신고 채널 */}
+        <div className="mt-2 text-right">
+          <a
+            href={`/interview/${token}/inquiry`}
+            className="text-[11px] text-slate-400 hover:text-slate-600 underline"
+          >
+            문제가 있나요? 신고 / 문의
+          </a>
+        </div>
       </div>
 
       {/* Chat container */}

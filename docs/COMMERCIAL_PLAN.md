@@ -16,7 +16,8 @@
 | 4. UX / 차별화 | 7 | 5 | 71% |
 | 6. 시스템 관리자 운영 기능 | 16 | 10 | 63% |
 | 7. 디자인 시스템 리뉴얼 (Forest+Ivory) | 4 | 1 | 25% |
-| **합계** | **67** | **50** | **75%** |
+| 8. 고객센터 / 문의 접수 | 5 | 5 | 100% |
+| **합계** | **72** | **55** | **76%** |
 
 마일스톤:
 - **M1 — Phase 1 완료** = 외부 후보자에게 링크 뿌릴 수 있는 법적·보안 최소선
@@ -586,3 +587,20 @@
   - **스코어카드 차수 태그**: `interviewer_notes.round` 컬럼 추가(마이그레이션 `0007`). notes POST 가 round 저장(미지정 시 stage 에서 추론), GET 반환. `InterviewerNotesPanel` 에 1차/2차 토글 + 메모별 차수 배지 + 요약 차수별 건수.
   - **불합격 미통보 일괄 발송**: 후보 목록 API 에 `decisionEmailCount` 노출. jobs/[id] 목록에 "📭 통보 미발송" 배지 + 상단 배너(미발송 N명 + 불합격 필터 + 일괄 발송). `decision-mail` 라우트 6-worker 루프.
   - **법인 채용 현황 대시보드**: `GET /api/org/funnel` (outcome 분리 집계 — 진행 stage 분포 + 결정 outcome 분포 + 총계·최근·활성공고·평균점수). 신규 `/org/dashboard` (KPI + 파이프라인 바 + 결정 현황). NavBar org_admin 메뉴에 "채용 현황" 추가.
+
+---
+
+## Phase 8 — 고객센터 / 문의 접수 (2026-06-04)
+
+**배경**: 고객(법인 HR)이 제품 안에서 버그·결제·사용법을 문의할 채널, 후보자가 면접 중 오류를 신고할 채널이 없었음. 기존 appeal 은 PIPA §37의2 자동화 의사결정 이의제기로 범위가 좁아 일반 불편사항을 못 받음.
+
+- [x] **8-1** `inquiries` 테이블 (마이그레이션 `0013`, source=org_user/candidate 통합) + `lib/inquiry.ts` 상수/라벨 + audit 액션 `inquiry.submit`/`inquiry.status_change`. Turso + 로컬 적용.
+- [x] **8-2** 후보자 신고: `POST /api/interview/[token]/inquiry` (본인 이메일 매칭 불요 — 막힌 후보자 차단 방지, RL IP 3/분) + `/interview/[token]/inquiry` 페이지 + 면접 화면 상시 "문제 신고" 링크.
+- [x] **8-3** 고객 문의: `POST/GET /api/support/inquiries` (RL 사용자당 5/분) + `/support` 폼 + 본인 문의 내역(상태·답변).
+- [x] **8-4** 관리자 인박스: `GET /api/admin/inquiries` + `PATCH /api/admin/inquiries/[id]` (**system_admin 전용** — 고객센터=운영자 데스크) + `/admin/inquiries` (서버 컴포넌트 역할 가드 + redirect, 상태 토글 + 답변, open 우선). 답변은 고객 문의 내역에 노출.
+- [x] **8-5** 진입점: NavBar(sysadmin "문의함" / org "고객센터" / 모바일 공통) + Footer "고객센터"(로그인 시) + 접수 시 지원 이메일 통지 (`lib/inquiry-notify.ts`).
+
+검증: tsc 통과(소스 0 에러), dev 서버에서 후보자 신고·고객 문의 접수·관리자 답변→고객 내역 반영 풀 라운드트립 확인.
+
+- 2026-06-04 — **Phase 8 고객센터 5건 묶음 완료**. `inquiries` 단일 테이블로 고객/후보자 출처 통합, 후보자(`/interview/[token]/inquiry`)·고객(`/support`)·관리자(`/admin/inquiries`) 3채널 + 지원 메일 통지. appeal 패턴 재사용(인박스·통지·감사). 마이그레이션 0013 Turso+로컬 적용.
+- 2026-06-04 — **Phase 8 보강 2건**. ① `/admin/inquiries` **system_admin 전용**으로 잠금(서버 컴포넌트 역할 가드 + redirect, API 403). 고객센터=운영자 데스크, org_admin 은 `/support` 제출만. ② `/support`·`/admin/inquiries` **게시판+팝업 리디자인** — 행당 1줄 테이블(누적 대비), `/support` 는 "문의하기" 버튼→폼 모달, 양쪽 행 클릭→상세 모달(관리자는 상태 토글+답변). 공용 `app/components/Modal.tsx` 신규.

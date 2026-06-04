@@ -24,6 +24,7 @@ import {
   Menu,
   X,
   Home,
+  LifeBuoy,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 import LogoutButton from "../logout-button";
@@ -53,7 +54,10 @@ function buildSections(role: Role): NavSection[] {
   if (role !== "system_admin") {
     sections.push({
       label: null,
-      items: [{ href: "/", label: "대시보드", Icon: Home }],
+      items: [
+        { href: "/", label: "대시보드", Icon: Home },
+        { href: "/support", label: "고객센터", Icon: LifeBuoy },
+      ],
     });
   }
   if (role === "org_admin") {
@@ -83,6 +87,7 @@ function buildSections(role: Role): NavSection[] {
         { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
         { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
         { href: "/admin/appeals", label: "이의제기", Icon: Scale },
+        { href: "/admin/inquiries", label: "문의함", Icon: LifeBuoy },
         { href: "/admin/locks", label: "잠금", Icon: Lock },
       ],
     });
@@ -152,6 +157,7 @@ export function NavBar({
                     { href: "/org/smtp", label: "메일 서버", Icon: Mail },
                     { href: "/org/zoom", label: "화상 면접(줌)", Icon: Video },
                     { href: "/org/settings", label: "법인 설정", Icon: Settings },
+                    { href: "/support", label: "고객센터", Icon: LifeBuoy },
                   ]}
                 />
               )}
@@ -173,6 +179,7 @@ export function NavBar({
                       { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
                       { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
                       { href: "/admin/appeals", label: "이의제기", Icon: Scale },
+                      { href: "/admin/inquiries", label: "문의함", Icon: LifeBuoy },
                       { href: "/admin/locks", label: "잠금", Icon: Lock },
                     ]}
                   />

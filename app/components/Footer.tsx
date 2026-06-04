@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function Footer() {
+export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   const pathname = usePathname() ?? "";
   // 후보자 토큰 페이지에서는 면접/일정 UI 가 viewport 를 꽉 채워야 하므로 푸터 숨김.
   if (
@@ -17,6 +17,11 @@ export function Footer() {
       <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-ink-soft">
         <div>© {new Date().getFullYear()} Intervia · 대표 강대철</div>
         <div className="flex gap-4">
+          {loggedIn && (
+            <Link href="/support" className="hover:text-ink hover:underline">
+              고객센터
+            </Link>
+          )}
           <Link href="/privacy" className="hover:text-ink hover:underline">
             개인정보 처리방침
           </Link>

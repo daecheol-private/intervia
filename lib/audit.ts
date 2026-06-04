@@ -39,6 +39,8 @@ export type AuditAction =
   | "consent.submit"
   | "appeal.submit"
   | "appeal.status_change"
+  | "inquiry.submit"
+  | "inquiry.status_change"
   | "user.role_change"
   | "user.status_change"
   | "user.email_verify"

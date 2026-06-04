@@ -1098,6 +1098,53 @@ export const notifications = sqliteTable("notifications", {
   userIdx: index("idx_notifications_user").on(t.userId, t.readAt),
 }));
 
+/**
+ * 고객센터 문의 / 서비스 불편사항 신고.
+ *
+ * source 로 두 출처를 한 테이블에 통합:
+ *   "org_user"  — 로그인한 고객(org_admin/member)의 버그·결제·사용법 문의. userId/orgId 세팅.
+ *   "candidate" — 비로그인 후보자가 면접 토큰 페이지에서 올린 진행 오류·접속 문제 신고.
+ *                 interviewSessionId/candidateId/orgId(세션의 채용 법인) 세팅.
+ *
+ * 처리: system_admin(전체) / org_admin(본인 법인) 이 /admin/inquiries 인박스에서 상태 관리.
+ * 알림: 접수 시 지원 이메일(APPEAL_CONTACT)로 통지 — 실패해도 제출은 성공.
+ */
+export const inquiries = sqliteTable("inquiries", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  source: text("source", { enum: ["org_user", "candidate"] }).notNull(),
+  // 분류 코드 — source 별 허용값은 lib/inquiry.ts 에서 검증. 라벨도 거기서 매핑.
+  category: text("category").notNull(),
+  message: text("message").notNull(),
+  // 회신용 연락 이메일 (org_user = 계정 이메일, candidate = 입력값).
+  contactEmail: text("contact_email").notNull(),
+  // 출처별 컨텍스트 (nullable).
+  orgId: integer("org_id"),
+  userId: integer("user_id"),
+  interviewSessionId: integer("interview_session_id"),
+  candidateId: integer("candidate_id"),
+  status: text("status", {
+    enum: ["open", "in_progress", "resolved"],
+  })
+    .notNull()
+    .default("open"),
+  adminNote: text("admin_note"),
+  resolvedByUserId: integer("resolved_by_user_id"),
+  resolvedAt: text("resolved_at"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+}, (t) => ({
+  // 인박스 — 상태별 + 최신순 조회.
+  statusIdx: index("idx_inquiries_status").on(t.status, t.createdAt),
+  // 법인별 인박스 (org_admin 본인 법인 필터).
+  orgIdx: index("idx_inquiries_org").on(t.orgId, t.createdAt),
+}));
+
+export type Inquiry = typeof inquiries.$inferSelect;
+export type NewInquiry = typeof inquiries.$inferInsert;
+
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 

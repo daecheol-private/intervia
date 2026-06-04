@@ -28,6 +28,8 @@
 |---|---|---|---|
 | GET | `/api/admin/audit` | 🔒 🏢 (admin) | 감사 로그 조회. query: `days`, `action`, `orgId` |
 | GET | `/api/admin/appeals` | 🔒 🏢 (admin) | 자동화 의사결정 이의제기 개요 (PIPA §37의2). system_admin=전체 / org_admin=자기 법인. query: `status`(pending/reviewed/resolved/rejected). pending 우선 정렬 + `pendingCount`. DPO 알림 메일이 링크하는 `/admin/appeals` 페이지 데이터 소스 |
+| GET | `/api/admin/inquiries` | 🔒 👑 (sysadmin) | 고객센터 문의 인박스 — **system_admin 전용**. query: `status`(open/in_progress/resolved). open 우선 정렬 + `openCount` |
+| PATCH | `/api/admin/inquiries/[id]` | 🔒 👑 (sysadmin) | 문의 상태/답변 업데이트 — **system_admin 전용**. body: `{status?, adminNote?}`. resolved 전환 시 resolved_at/by 세팅. adminNote 는 고객 문의 내역에 노출 |
 | GET | `/api/admin/metrics` | 🔒 🏢 (admin) | 운영 메트릭 — totals / stages / queue / interviews / tokenUsage / perOrg / recentCrossOrg |
 | GET | `/api/health` | 🌐 | DB·env 헬스체크. 200 정상 / 503 실패. 외부 모니터링 호환 |
 
@@ -90,10 +92,13 @@
 | POST | `/api/interview/[token]/chat` | 🎫 | 스트리밍 응답. **동의 없으면 403 `{code:"consent_required"}`** |
 | POST | `/api/interview/[token]/complete` | 🎫 | 평가 LLM + 저장. **동의 없으면 403** |
 | POST | `/api/interview/[token]/appeal` | 🎫 | 자동화 의사결정 이의제기. body: `{email, reason}`. 본인 이메일 매칭 + 사유 10~5000자. DPO 알림 메일 (실패해도 제출 성공). Rate limit IP 3/분 |
+| POST | `/api/interview/[token]/inquiry` | 🎫 | 면접 중 문제 신고/문의. body: `{email, category, message}`. 본인 이메일 매칭 **불요**(막힌 후보자 차단 방지) + 내용 5~5000자. 지원 메일 통지 (실패해도 제출 성공). Rate limit IP 3/분 |
 | POST | `/api/interview/[token]/me` | 🎫 | 후보자 본인 데이터 열람 (PIPA §35). body: `{email}` 본인 확인 후 보유 항목 요약 |
 | DELETE | `/api/interview/[token]/me` | 🎫 | 후보자 본인 데이터 즉시 폐기 (PIPA §36). body: `{email}`. 이력서 본문·파일·전화 삭제, 평가 결과 보존 |
 | GET | `/api/candidates/[id]/appeals` | 🔒 🏢 | 후보자별 이의제기 목록 |
 | PATCH | `/api/candidates/[id]/appeals/[appealId]` | 🔒 🏢 | 상태/내부메모 업데이트. status: pending/reviewed/resolved/rejected |
+| POST | `/api/support/inquiries` | 🔒 | 로그인 고객 고객센터 문의 접수. body: `{category, message}`. 회신 이메일=계정 이메일. Rate limit 사용자당 5/분 |
+| GET | `/api/support/inquiries` | 🔒 | 본인이 접수한 문의 내역(상태·답변 포함) |
 
 ## 이메일 / 업로드
 
