@@ -83,8 +83,15 @@ export const PROCESSORS: readonly Processor[] = [
     retention: "조회 즉시 (저장 안 됨)",
   },
   {
-    name: "SMTP 발송 서버 (법인별 설정)",
-    purpose: "면접 안내 메일 발송",
+    name: "Resend (Resend, Inc.)",
+    purpose: "시스템 기본 이메일 발송 (면접 안내·결과 통보·계정 인증 메일)",
+    items: "후보자·사용자 이메일 주소 및 메일 본문",
+    country: "미국",
+    retention: "발송 처리 즉시 (본문 미보관, 발송 로그는 Resend 정책에 따름)",
+  },
+  {
+    name: "법인 자체 SMTP 서버 (법인이 등록한 경우)",
+    purpose: "면접 안내·결과 통보 메일 발송 (법인이 자체 SMTP 등록 시 Resend 대신 사용)",
     items: "후보자 이메일 주소, 면접 안내 본문",
     country: "법인이 등록한 SMTP 서버 위치",
     retention: "발송 즉시 (SMTP 서버 정책에 따름)",
@@ -92,9 +99,9 @@ export const PROCESSORS: readonly Processor[] = [
 ] as const;
 
 /** 정책 본문 versioning — 본문 변경 시 effective date 올림. */
-export const PRIVACY_EFFECTIVE_DATE = "2026-05-26";
+export const PRIVACY_EFFECTIVE_DATE = "2026-06-05";
 export const TERMS_EFFECTIVE_DATE = "2026-05-22";
 
 /** 가입 시 동의 시점 기록용 버전 식별자. 본문 개정 시 함께 갱신. */
-export const PRIVACY_VERSION = "1.2.0-2026-05-26"; // 모든 LLM Vertex 서울 통합 — Google 미국 처리 항목 제거
+export const PRIVACY_VERSION = "1.3.0-2026-06-05"; // 시스템 기본 메일 발송 수탁자 Resend Inc.(미국) 명시 + 국외이전에 메일 단계 추가
 export const TERMS_VERSION = "1.1.1-2026-05-22";

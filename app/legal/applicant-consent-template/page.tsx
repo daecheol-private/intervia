@@ -29,6 +29,7 @@ export default function ApplicantConsentTemplatePage() {
    - Google Cloud (서울 리전 asia-northeast3, 대한민국) — 서류 평가·AI 면접 채팅·면접 평가 AI 호출 (Gemini), 응답 처리 후 즉시 폐기 (학습 미사용)
    - Vercel Inc. (미국) — 호스팅 및 이력서 파일 보관
    - Turso (일본 도쿄) — 데이터베이스
+   - Resend (미국) — 시스템 기본 면접 안내·결과 통보 메일 발송 (지원자 이메일 주소·메일 본문)
 
 2) 처리 항목
    - 이력서·자기소개서·포트폴리오 본문 (식별 가능한 정보를 자동 마스킹 처리하여 AI 에 전달)
@@ -40,7 +41,7 @@ export default function ApplicantConsentTemplatePage() {
 
 4) 국외 이전
    - AI 처리(서류 평가·면접 채팅·면접 평가)는 모두 Google Cloud 서울 리전에서 처리되어 AI 단계의 국외이전이 발생하지 않습니다.
-   - 인프라 단계 이전: Vercel Inc. (미국, 호스팅·이력서 파일), Turso (일본 도쿄, 데이터베이스)
+   - 인프라 단계 이전: Vercel Inc. (미국, 호스팅·이력서 파일), Turso (일본 도쿄, 데이터베이스), Resend (미국, 메일 발송)
    - 이전 시점·방법: 서비스 이용 전 과정에서 HTTPS 로 전송·저장
    - 보유 기간: 합·불 결정 시점 즉시 폐기 (이력서 원본·파일), 공고 종결 +14일 후 자동 삭제 (평가 결과)
 
@@ -69,6 +70,7 @@ which we have contracted as a data processor, as follows:
    - Google Cloud (Seoul region asia-northeast3, Republic of Korea) — Resume screening / AI interview chat / interview evaluation AI (Gemini), no training use, discarded after response
    - Vercel Inc. (USA) — Hosting and resume file storage
    - Turso (Tokyo, Japan) — Database
+   - Resend (USA) — System default email delivery (interview invitations / result notifications)
 
 2) Data Items
    - Resume / CV / cover letter / portfolio (PII masked before AI invocation)
@@ -83,7 +85,7 @@ which we have contracted as a data processor, as follows:
    - All AI processing (resume screening / interview chat / interview evaluation)
      is performed in the Seoul region; no cross-border transfer at the AI stage.
    - Infrastructure-level transfer: Vercel Inc. (USA, hosting & file storage),
-     Turso (Tokyo, Japan, database)
+     Turso (Tokyo, Japan, database), Resend (USA, email delivery)
    - Method: HTTPS throughout service usage
    - Retention: Disposal upon hiring decision (resume original/files),
      +14 days after job closure (evaluation results)

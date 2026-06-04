@@ -1,8 +1,9 @@
 import nodemailer from "nodemailer";
 import { db } from "./db";
-import { orgSmtpConfigs } from "./schema";
+import { orgSmtpConfigs, organizations } from "./schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "./crypto";
+import { SITE_INFO } from "./site-info";
 
 type Transporter = ReturnType<typeof nodemailer.createTransport>;
 
@@ -118,6 +119,12 @@ function resolveMailOverride(audience: MailAudience): string | null {
   return null;
 }
 
+/** "이름 <addr@x>" 또는 "addr@x" 형태에서 이메일 주소만 추출. */
+function extractEmailAddress(from: string): string {
+  const m = from.match(/<([^>]+)>/);
+  return (m ? m[1] : from).trim();
+}
+
 export async function sendMail({
   to,
   subject,
@@ -127,12 +134,28 @@ export async function sendMail({
   audience = "candidate",
   attachments,
 }: SendMailParams) {
-  const { transporter, from } = await resolveSmtp(orgId);
+  const { transporter, from, source } = await resolveSmtp(orgId);
+  // 시스템 기본(Resend 등 env) 발송이고 후보자 대상이면 발신 표시이름에 법인명을 노출
+  // → 후보자가 받은편지함에서 어느 회사 채용인지 바로 식별 (도메인은 intervia.kr 유지).
+  // 법인이 자체 SMTP 를 등록한 경우(source==="org")는 회사 도메인·표시이름을 그대로 둔다.
+  let finalFrom: string | { name: string; address: string } = from;
+  if (source === "env" && audience === "candidate" && orgId) {
+    const [org] = await db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, orgId));
+    if (org?.name) {
+      finalFrom = {
+        name: `${org.name} 채용팀 (${SITE_INFO.serviceName})`,
+        address: extractEmailAddress(from),
+      };
+    }
+  }
   const override = resolveMailOverride(audience);
   const finalTo = override ?? to;
   const finalSubject = override ? `[DEV→${to}] ${subject}` : subject;
   await transporter.sendMail({
-    from,
+    from: finalFrom,
     to: finalTo,
     subject: finalSubject,
     html,

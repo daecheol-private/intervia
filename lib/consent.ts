@@ -19,7 +19,8 @@ import { eq, desc } from "drizzle-orm";
 // 1.3.0 — 서류평가는 Vertex AI 한국 리전(asia-northeast3) 처리로 §28의8 미적용. 국외이전은 면접 단계만 해당
 // 1.4.0 — 모든 LLM 호출을 Vertex AI 서울 리전으로 통합 (flash). 국외이전 동의 항목 제거.
 // 1.5.0 — 면접 무결성 행태정보(붙여넣기·타이핑·화면이탈·복사시도) 수집 동의 항목 신설 + collection_use 에 나이·학력 명시 (PIPA §15)
-export const CONSENT_VERSION = "1.5.0-2026-06-03";
+// 1.6.0 — 시스템 기본 메일 발송 수탁자 Resend Inc.(미국) 명시. 메일 단계 국외이전(§28의8) 을 처리위탁 동의에 반영.
+export const CONSENT_VERSION = "1.6.0-2026-06-05";
 
 export type ConsentItem = {
   key: string;
@@ -60,8 +61,8 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     required: true,
     title: "처리위탁 동의",
     description:
-      "다음 업체에 처리위탁됩니다: Google Cloud Korea (AI 평가·면접, 서울 asia-northeast3), Vercel Inc. (호스팅·파일 저장, 미국), Turso (DB, 일본 도쿄), SMTP 메일 발송 업체(법인별 상이). " +
-      "Vercel·Turso 로의 국외이전은 PIPA §28의8 에 따라 본 동의에 포함됩니다. 거부 시 면접 진행 불가. 각 수탁자와의 처리위탁계약(DPA) 사본은 처리방침 §5 에서 확인 가능합니다.",
+      "다음 업체에 처리위탁됩니다: Google Cloud Korea (AI 평가·면접, 서울 asia-northeast3), Vercel Inc. (호스팅·파일 저장, 미국), Turso (DB, 일본 도쿄), Resend (시스템 기본 메일 발송, 미국 — 법인이 자체 SMTP 를 등록한 경우 해당 서버). " +
+      "Vercel·Resend(미국)·Turso(일본) 로의 국외이전은 PIPA §28의8 에 따라 본 동의에 포함됩니다. 거부 시 면접 진행 불가. 각 수탁자와의 처리위탁계약(DPA) 사본은 처리방침 §5 에서 확인 가능합니다.",
     legalBasis: "PIPA §26, §28의8",
   },
   {
