@@ -132,11 +132,13 @@ interviewer/
 - 등급: 85+ 강력추천 / 70+ 추천 / 50+ 보류 / 미만 비추천
 
 ### 8. 회원가입 / 합류 흐름
-- `/signup` 페이지 = 상태머신: 이메일 중복확인 → 도메인 자동매칭 / 멀티 매칭 / 검색 / 신규등록 분기.
-- 도메인 자동매칭 키: `organizations.email_domain`. gmail/naver/Workspace/임시메일 등 공용·SaaS 도메인은 `PUBLIC_EMAIL_DOMAINS` 블랙리스트로 자동매칭 제외 (`lib/email-domain.ts`).
-- **같은 도메인 1:N 허용** — SaaS 메일 공유 케이스 대응. 매칭 결과가 2개 이상이면 사용자가 검증상태(`dart_matched`/`verified`/`pending_review`)와 사업자번호·담당자 정보를 보고 합류할 법인을 선택. `/api/auth/check-email` 응답의 `matchedOrgs` 배열.
-- 법인 검증 4상태: `dart_matched`(자동, 상장·외감), `verified`(운영자 수동), `pending_review`(신규 등록 직후), `rejected`(사칭 판정). 검토 대기·거절 상태 법인은 합류 요청 차단.
-- 운영자 도구: `/admin/orgs` 에서 사후에 SaaS 메일로 판명된 법인의 도메인 매핑 해제 (감사 로그 + step-up 인증).
+- **회사(법인) 도메인 이메일만 가입 가능** — gmail/naver/임시메일 등 공용 도메인(`PUBLIC_EMAIL_DOMAINS`, `lib/email-domain.ts`)은 차단. `check-email` 은 공용 도메인에 `{available:false, reason:"public_email"}` 반환, `POST /api/orgs` 도 서버 측 400 차단. **공용메일 선점으로 인한 도메인 매핑 사각지대·법인 사칭을 원천 제거** (결정: 소기업/공용메일 타겟 제외).
+- **가입 시 사업자번호 불요** — 도메인 메일함 통제(이메일 인증)가 곧 소속 증명. 세금계산서·정산에 필요하면 **법인 설정(`/org/settings`)에서 추후 입력** (`PUT /api/orgs/me/biz`, org_admin, 타 법인 중복 번호 차단).
+- `/signup` 페이지 = 상태머신: 이메일 중복확인 → 도메인 매칭(`organizations.email_domain`) / 멀티 매칭 / 검색 / 신규등록 분기.
+- **같은 도메인 1:N 허용** — (드문) 도메인 공유 케이스 대응. 매칭 결과가 2개 이상이면 사용자가 검증상태·담당자 정보를 보고 합류할 법인을 선택. `/api/auth/check-email` 응답의 `matchedOrgs` 배열.
+- 법인 검증 상태: `dart_matched`(자동, 상장·외감), `verified`(도메인 이메일 인증 기반 **자동 검증** 또는 운영자 수동), `pending_review`(레거시·운영자 생성용 — **신규 가입 경로에선 더 이상 생성 안 됨**), `rejected`(사칭 판정). 검토 대기·거절 상태 법인은 합류 요청 차단.
+- **신규 법인 = 즉시 `verified`** (DART 매칭 시 `dart_matched`) → 같은 도메인 동료가 운영자 검토 없이 바로 합류 요청 가능.
+- 운영자 도구: `/admin/orgs` 에서 사후 도메인 매핑 해제·법인 거절 (감사 로그 + step-up 인증).
 - 신규 법인 등록: `POST /api/orgs` — 트랜잭션(법인+사용자+wallet). **세션은 발급하지 않음** — 이메일 인증 후 로그인.
 - 기존 법인 합류: `POST /api/orgs/join-requests` — user.status=`pending`, 세션 발급 X. org_admin이 `PATCH /api/orgs/join-requests/[id]` 로 승인하면 `active`.
 - **이메일 인증 (필수)**:

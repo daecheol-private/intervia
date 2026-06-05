@@ -114,7 +114,13 @@ export default function SignupPage() {
     }
     const data = (await res.json()) as CheckResponse;
     if (!data.available) {
-      setErr("이미 가입된 이메일입니다. 로그인해주세요.");
+      if (data.reason === "public_email") {
+        setErr(
+          "회사(법인) 이메일로만 가입할 수 있습니다. gmail · naver 등 공용 이메일은 사용할 수 없습니다. 회사 도메인 이메일(you@회사.com)로 다시 시도해 주세요."
+        );
+      } else {
+        setErr("이미 가입된 이메일입니다. 로그인해주세요.");
+      }
       return;
     }
     const list = data.matchedOrgs ?? [];
@@ -189,12 +195,6 @@ export default function SignupPage() {
     setErr("");
     if (!name || !password || !orgName) {
       setErr("법인명/이름/비밀번호 필수");
-      return;
-    }
-    if (emailDomainIsPublic && !bizNo.trim()) {
-      setErr(
-        "공용 이메일 도메인(gmail / naver 등) 으로 법인을 등록할 때는 사업자등록번호가 필수입니다."
-      );
       return;
     }
     if (!acceptTerms || !acceptPrivacy) {
@@ -619,14 +619,6 @@ export default function SignupPage() {
                   </span>
                 </div>
               )}
-              <BizNoVerifier
-                value={bizNo}
-                onChange={setBizNo}
-                required={emailDomainIsPublic}
-                onMatchExisting={(o) =>
-                  enterJoinFromSearch({ id: o.id, name: o.name })
-                }
-              />
               <DartCorpCombobox
                 value={orgName}
                 onChange={setOrgName}
@@ -767,150 +759,6 @@ function Field({
         )}
       </label>
       {children}
-    </div>
-  );
-}
-
-/**
- * 사업자번호 검증 — 입력 후 "확인" 클릭 시:
- *   - 같은 사업자번호로 이미 등록된 법인이 있으면 안내 (합류 권유)
- *   - 국세청 API 설정되어 있으면 활성 사업자인지 검증
- */
-function BizNoVerifier({
-  value,
-  onChange,
-  onMatchExisting,
-  required = false,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onMatchExisting: (org: { id: number; name: string }) => void;
-  required?: boolean;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<
-    | null
-    | {
-        bizNoFormatted: string;
-        registered: boolean | null;
-        status: string | null;
-        apiAvailable: boolean;
-        existingOrg: { id: number; name: string; emailDomain: string | null } | null;
-      }
-  >(null);
-  const [err, setErr] = useState("");
-
-  const verify = async () => {
-    setErr("");
-    setResult(null);
-    if (!value.trim()) {
-      setErr("사업자번호를 입력하세요.");
-      return;
-    }
-    setBusy(true);
-    const r = await fetch("/api/orgs/verify-biz", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bizNo: value }),
-    });
-    setBusy(false);
-    if (!r.ok) {
-      setErr(await r.text());
-      return;
-    }
-    const d = await r.json();
-    if (!d.ok) {
-      setErr(d.reason ?? "검증 실패");
-      return;
-    }
-    onChange(d.bizNoFormatted);
-    setResult(d);
-  };
-
-  return (
-    <div>
-      <Field label={`사업자등록번호 ${required ? "(필수)" : "(권장)"}`}>
-        <div className="flex gap-2">
-          <input
-            className={inputCls}
-            placeholder="000-00-00000"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            aria-required={required || undefined}
-          />
-          <button
-            type="button"
-            onClick={verify}
-            disabled={busy}
-            className="shrink-0 px-3 text-sm bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 disabled:opacity-50"
-          >
-            {busy ? "..." : "확인"}
-          </button>
-        </div>
-        {required ? (
-          <p className="text-xs text-warning mt-1">
-            공용 이메일 도메인(gmail / naver 등) 으로 법인을 등록할 때는 사업자등록번호가 필수입니다.
-            법인 사칭 방지를 위한 가드입니다.
-          </p>
-        ) : (
-          <p className="text-xs text-slate-500 mt-1">
-            사업자번호로 표기 차이("exper" vs "엑스퍼")에 흔들리지 않고 동일 법인을 식별합니다.
-          </p>
-        )}
-      </Field>
-      {err && (
-        <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2 mt-2">
-          {err}
-        </div>
-      )}
-      {result && (
-        <div className="mt-2 space-y-2">
-          {result.existingOrg ? (
-            <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-              <div className="font-semibold text-amber-800">
-                ⚠️ 이미 등록된 법인이 있습니다
-              </div>
-              <div className="text-amber-700 mt-1">
-                <strong>{result.existingOrg.name}</strong> (사업자번호 일치)
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  onMatchExisting({
-                    id: result.existingOrg!.id,
-                    name: result.existingOrg!.name,
-                  })
-                }
-                className="mt-2 text-xs px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium"
-              >
-                이 법인에 합류 요청 보내기
-              </button>
-            </div>
-          ) : (
-            <div className="text-xs bg-primary-soft border border-primary/30 text-primary-deep rounded-lg px-3 py-2">
-              ✓ 사용 가능한 사업자번호입니다.
-            </div>
-          )}
-          {result.apiAvailable && (
-            <div
-              className={
-                "text-xs rounded-lg px-3 py-1.5 border " +
-                (result.registered
-                  ? "bg-primary-soft border-primary/30 text-primary-deep"
-                  : "bg-danger-soft border-danger/30 text-danger")
-              }
-            >
-              국세청 조회: {result.status ?? "결과 없음"}
-              {result.registered === false && " — 가입 진행이 차단될 수 있습니다."}
-            </div>
-          )}
-          {!result.apiAvailable && (
-            <div className="text-[11px] text-slate-400">
-              (국세청 외부 검증 비활성 — 운영자가 API 키 설정 시 활성)
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

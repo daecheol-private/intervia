@@ -36,13 +36,14 @@ export async function POST(req: Request) {
   }
 
   const domain = getEmailDomain(normalized);
+  // 회사(법인) 도메인 이메일만 가입 가능 — gmail/naver 등 공용 이메일은 차단.
+  // 공용메일 선점으로 인한 도메인 매핑 사각지대·법인 사칭을 원천 제거하기 위함.
   if (!domain || isPublicDomain(domain)) {
     return Response.json({
-      available: true,
+      available: false,
+      reason: "public_email",
       domain,
       isPublicDomain: true,
-      matchedOrg: null,
-      suggestion: "create_or_search",
     });
   }
 

@@ -11,6 +11,7 @@ type Org = {
   id: number | null;
   name?: string;
   emailDomain?: string | null;
+  bizRegistrationNo?: string | null;
   officeAddress?: string | null;
   officeAddressDetail?: string | null;
   allowScanOcr?: boolean;
@@ -23,7 +24,9 @@ export default function OrgSettingsPage() {
 
   const [addr, setAddr] = useState("");
   const [detail, setDetail] = useState("");
+  const [bizNo, setBizNo] = useState("");
   const [addrBusy, setAddrBusy] = useState(false);
+  const [bizBusy, setBizBusy] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [msg, setMsg] = useState<{ type: "error" | "success"; text: string } | null>(
     null
@@ -39,6 +42,7 @@ export default function OrgSettingsPage() {
       setOrg(o);
       setAddr(o.officeAddress ?? "");
       setDetail(o.officeAddressDetail ?? "");
+      setBizNo(o.bizRegistrationNo ?? "");
     }
     if (statusRes.ok) {
       const s = await statusRes.json();
@@ -79,6 +83,25 @@ export default function OrgSettingsPage() {
         : o
     );
     setMsg({ type: "success", text: "회사 주소가 저장되었습니다." });
+  };
+
+  const saveBizNo = async () => {
+    setBizBusy(true);
+    setMsg(null);
+    const r = await fetch("/api/orgs/me/biz", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bizRegistrationNo: bizNo.trim() || null }),
+    });
+    setBizBusy(false);
+    if (!r.ok) {
+      setMsg({ type: "error", text: await r.text() });
+      return;
+    }
+    const d = (await r.json()) as { bizRegistrationNo: string | null };
+    setBizNo(d.bizRegistrationNo ?? "");
+    setOrg((o) => (o ? { ...o, bizRegistrationNo: d.bizRegistrationNo } : o));
+    setMsg({ type: "success", text: "사업자등록번호가 저장되었습니다." });
   };
 
   const toggleOcr = async (next: boolean) => {
@@ -142,6 +165,31 @@ export default function OrgSettingsPage() {
               {org.emailDomain && (
                 <Row label="이메일 도메인" value={org.emailDomain} />
               )}
+            </div>
+
+            <div className="pt-4 mt-4 border-t border-slate-100 space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                사업자등록번호
+              </label>
+              <div className="flex gap-2">
+                <input
+                  value={bizNo}
+                  onChange={(e) => setBizNo(e.target.value)}
+                  placeholder="000-00-00000 (선택)"
+                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <button
+                  onClick={saveBizNo}
+                  disabled={bizBusy}
+                  className="shrink-0 px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {bizBusy ? "저장 중..." : "저장"}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                가입에는 필요하지 않습니다. 세금계산서 발행 등 정산에 필요할 때
+                입력하세요. 다른 법인이 사용 중인 번호는 등록할 수 없습니다.
+              </p>
             </div>
 
             <div className="pt-4 mt-4 border-t border-slate-100 space-y-2">

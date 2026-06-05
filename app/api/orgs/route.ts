@@ -63,23 +63,20 @@ export async function POST(req: Request) {
     .where(eq(users.email, normalizedEmail));
   if (dupUser) return new Response("이미 가입된 이메일입니다.", { status: 409 });
 
+  // 회사(법인) 도메인 이메일만 가입 가능 — gmail/naver 등 공용 이메일은 차단.
+  // 도메인 메일함 통제(이메일 인증)가 법인 소속의 증명이 되므로 사업자번호 없이도
+  // 신뢰 가능. 공용메일 선점으로 인한 도메인 매핑 사각지대를 원천 제거한다.
   const detectedDomain = getEmailDomain(normalizedEmail);
-  const requestedDomain = body.emailDomain?.toLowerCase().trim() || null;
-  // 공용 도메인이면 emailDomain 저장 X (자동매칭 방지). 사용자가 명시한 도메인 우선.
-  let emailDomain: string | null = null;
-  if (requestedDomain && !isPublicDomain(requestedDomain)) {
-    emailDomain = requestedDomain;
-  } else if (detectedDomain && !isPublicDomain(detectedDomain)) {
-    emailDomain = detectedDomain;
+  if (!detectedDomain || isPublicDomain(detectedDomain)) {
+    return new Response(
+      "회사(법인) 이메일로만 가입할 수 있습니다. gmail · naver 등 공용 이메일은 사용할 수 없습니다. 회사 도메인 이메일(you@회사.com)로 가입해 주세요.",
+      { status: 400 }
+    );
   }
+  const emailDomain: string = detectedDomain;
 
-  // emailDomain 은 1:N 허용 (SaaS 메일 공유 케이스). 사칭 방지는 사업자번호·DART·운영자 검증 게이트에서.
-  // 단, 같은 도메인에 검증된 법인(dart_matched·verified)이 이미 있으면 사용자에게 알릴 수
-  // 있도록 — 현재는 그냥 진행하고, check-email 단계에서 멀티 매칭 UI 가 안내.
-
-  // 사업자번호 — 정규화 후 같은 번호로 이미 등록된 법인 있으면 차단.
-  // 공용도메인(gmail/naver/...) 으로 등록하는 경우는 도메인 기반 검증이 불가하므로
-  // 사업자번호를 **필수** 로 강제 (법인 사칭 방지 — PIPA·이용약관 §5 사전 보호).
+  // 사업자번호 — 가입 시 **선택**(세금계산서 등 필요 시 추후 법인 설정에서 입력).
+  // 입력된 경우에만: 정규화 → 중복 차단 → (DART 매칭 시) 자동 검증 격상.
   const {
     normalizeBizNo,
     formatBizNo,
@@ -88,13 +85,6 @@ export async function POST(req: Request) {
   } = await import("@/lib/business-registry");
   const { findDartCorpByBizno } = await import("@/lib/dart-corps");
   let canonicalBizNo: string | null = null;
-  const isPublicDomainSignup = emailDomain == null;
-  if (!body.bizRegistrationNo && isPublicDomainSignup) {
-    return new Response(
-      "공용 이메일 도메인(gmail / naver 등) 으로 법인을 등록할 때는 사업자등록번호가 필수입니다. 사업자번호 없이 가입하려면 회사 도메인 이메일을 사용해주세요.",
-      { status: 400 }
-    );
-  }
   if (body.bizRegistrationNo) {
     const norm = normalizeBizNo(body.bizRegistrationNo);
     if (!norm)
@@ -134,14 +124,12 @@ export async function POST(req: Request) {
     }
   }
 
-  // 검증 상태 결정:
-  //  - DART 매칭 됨 → dart_matched (자동 검증)
-  //  - DART 미매칭이나 사업자번호 있음 → pending_review (운영자 수동 검토 대기)
-  //  - 회사 도메인 이메일 사용 + 사업자번호 없음 → pending_review
-  //  - (공용도메인 + 사업자번호 없음은 이미 위에서 400 차단)
-  let verificationStatus: "dart_matched" | "pending_review" = "pending_review";
-  let verifiedAt: string | null = null;
-  let verificationNote: string | null = null;
+  // 검증 상태 결정 — 회사 도메인 이메일만 가입 가능하므로 도메인 통제가 곧 소속 증명.
+  //  - 기본: verified (도메인 이메일 인증 기반 자동 검증) → 같은 도메인 동료가 바로 합류 가능
+  //  - 사업자번호가 DART 등록 법인과 매칭 → dart_matched 로 격상
+  let verificationStatus: "dart_matched" | "verified" = "verified";
+  let verifiedAt: string | null = new Date().toISOString();
+  let verificationNote: string | null = `회사 도메인 이메일 인증 (자동): ${emailDomain}`;
   if (canonicalBizNo) {
     const dartHit = findDartCorpByBizno(canonicalBizNo);
     if (dartHit) {
@@ -162,17 +150,6 @@ export async function POST(req: Request) {
       verificationNote,
     })
     .returning();
-
-  // 검토 대기 상태면 시스템 관리자 알림
-  if (verificationStatus === "pending_review") {
-    const { notifySystemAdmins } = await import("@/lib/notifications");
-    void notifySystemAdmins({
-      type: "new_org",
-      title: `신규 법인 등록 — '${orgName}' 검증 대기 (사업자번호: ${canonicalBizNo ?? "없음"})`,
-      href: "/admin/orgs",
-      payload: { orgId: org.id, orgName, bizno: canonicalBizNo },
-    });
-  }
 
   const passwordHash = await hashPassword(password);
   const now = new Date().toISOString();

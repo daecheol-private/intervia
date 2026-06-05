@@ -25,6 +25,7 @@ export async function GET() {
     id: org.id,
     name: org.name,
     emailDomain: org.emailDomain,
+    bizRegistrationNo: org.bizRegistrationNo,
     officeAddress: org.officeAddress,
     officeAddressDetail: org.officeAddressDetail,
     allowScanOcr: org.allowScanOcr,
