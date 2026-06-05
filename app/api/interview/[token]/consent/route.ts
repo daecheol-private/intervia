@@ -6,10 +6,9 @@
  * 모든 필수 항목 true 여야 200. 부족하면 400 + missing[].
  * 인증: 토큰만 (후보자는 비로그인). 토큰 자체가 인증 수단.
  *
- * 토큰 차감: 지원자가 동의하고 면접을 실제 시작하는 이 시점에 interview 1건 과금.
- *   (면접 링크 생성·발송 시점이 아님 — 보내고도 응하지 않은 링크는 무료.)
- *   refType/refId = interview_session/session.id → complete 의 평가실패 자동환불과 짝.
- *   chargeFeature 는 (orgId,feature,refType,refId) 멱등 — 새로고침·재동의 시 중복 차감 X.
+ * 토큰 과금: 면접은 후차감(서류평가와 동일 모델). 동의·시작 시점엔 과금하지 않고,
+ *   complete(또는 reevaluate)에서 면접 진행+평가가 성공적으로 끝난 시점에만 interview 1건 차감.
+ *   (평가 실패·면접 미응답·미시작 만료는 과금 없음 → 별도 환불 로직 불필요.)
  */
 import { db } from "@/lib/db";
 import { interviewSessions, consentLogs, candidates } from "@/lib/schema";
@@ -20,7 +19,6 @@ import {
 } from "@/lib/consent";
 import { extractIp } from "@/lib/auth-attempts";
 import { rateLimit } from "@/lib/rate-limit";
-import { chargeFeature } from "@/lib/tokens";
 
 export const runtime = "nodejs";
 
@@ -103,18 +101,7 @@ export async function POST(
     );
   }
 
-  // 토큰 차감 — 지원자가 동의하고 면접을 실제 시작하는 시점에 과금 (링크 생성 시 아님).
-  // 멱등 (orgId,interview,interview_session,session.id) — 재동의·새로고침 시 중복 차감 X.
-  // 후불제: 잔액 부족해도 차감(음수 허용) 후 진행 — 지원자를 막지 않고 법인에 부족 알림.
-  if (candidate?.orgId) {
-    await chargeFeature({
-      orgId: candidate.orgId,
-      feature: "interview",
-      refType: "interview_session",
-      refId: session.id,
-      memo: "AI 면접 시작 (지원자 동의)",
-    });
-  }
+  // 면접 과금은 후차감 — 여기(동의/시작)서는 과금하지 않는다. complete 에서 평가 성공 시 1건 차감.
 
   // boolean 으로 정제 (다른 타입 거름)
   const cleaned: Record<string, boolean> = {};

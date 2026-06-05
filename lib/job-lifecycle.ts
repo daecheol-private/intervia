@@ -17,15 +17,14 @@ import {
   candidateAttachments,
   appealLogs,
   consentLogs,
-  tokenWallets,
-  tokenLedger,
   interviewSessions as sessions,
   interviewSchedules as schedules,
   organizations,
+  inquiries,
 } from "./schema";
 import { and, count, eq, lt, sql } from "drizzle-orm";
 import { deleteFile } from "./storage";
-import { getBalance, getPricing } from "./tokens";
+import { getBalance, getPricing, writeLedgerIdempotent } from "./tokens";
 import { buildDecisionEmail, purgeOnDecision } from "./candidate-stage";
 import { sendMail } from "./mailer";
 import { redactCandidateAuditPii } from "./audit";
@@ -147,21 +146,19 @@ export async function extendJob(args: {
         code: "insufficient_tokens",
         message: `잔액 부족 — 필요 ${totalCost} 토큰 (현재 ${balanceBefore})`,
       };
-    // 직접 wallet 업데이트 + ledger 기록. job_extend 는 tokens.ts 단가 테이블에 없으므로
-    // chargeFeature 우회. extensionCount 를 ref 에 포함시켜 중복 차감 방지.
-    const newBalance = balanceBefore - totalCost;
-    await db
-      .update(tokenWallets)
-      .set({ balance: newBalance, updatedAt: sql`CURRENT_TIMESTAMP` })
-      .where(eq(tokenWallets.orgId, args.orgId));
-    await db.insert(tokenLedger).values({
+    // H1 — 원자적 차감 + 멱등. 기존엔 SELECT 한 balanceBefore 로 절대값을 덮어써서
+    // (a) 동시 연장 따닥, (b) 연장과 다른 차감(서류평가 후차감 등)의 동시성에서
+    // 한쪽 차감이 증발해 원장-지갑이 불일치할 수 있었다. writeLedgerIdempotent 로 일원화:
+    // wallet 은 `balance + delta` 원자 증분, ledger 는 INSERT-first 멱등.
+    // refType 에 연장 회차를 포함해 다회 연장은 각각 별 거래로 과금하고,
+    // 같은 회차 동시 따닥은 token_ledger_idem_uq 가 이중 차감을 차단한다.
+    await writeLedgerIdempotent({
       orgId: args.orgId,
       delta: -totalCost,
       reason: "job_extend",
-      refType: "job_extension",
+      refType: `job_extension:${nextExtCount}`,
       refId: args.jobId,
-      balanceAfter: newBalance,
-      createdByUserId: args.userId,
+      userId: args.userId,
       memo: `공고 #${args.jobId} ${EXTENSION_DAYS}일 연장 #${nextExtCount} (보관 이력서 ${candidateCount}명 × ${perResume})`,
     });
   }
@@ -555,15 +552,21 @@ export async function purgePiiAfterClose(): Promise<{
       t.id,
       sess.map((s) => s.id)
     ).catch((e) => console.error(`purgePii: audit redact failed (cid=${t.id})`, e));
-    // appeal / consent — PII 마스킹 후 유지 (감사·법적 추적용. candidate_id 는 dangling FK가 되지만 의도된 동작)
+    // appeal / consent / inquiry — PII 마스킹 후 유지 (감사·법적 추적용. candidate_id 는 dangling FK가 되지만 의도된 동작)
+    // H7 — appeal.reason / inquiry.message·contactEmail 은 후보자가 직접 쓴 자유서술이라
+    //      직접 식별자(이름·연락처)가 섞일 수 있다. 행 삭제 후 평문 잔존을 막기 위해 폐기.
     await db
       .update(appealLogs)
-      .set({ email: "[purged]", ip: null, userAgent: null })
+      .set({ email: "[purged]", reason: "[purged]", ip: null, userAgent: null })
       .where(eq(appealLogs.candidateId, t.id));
     await db
       .update(consentLogs)
       .set({ ip: null, userAgent: null })
       .where(eq(consentLogs.candidateId, t.id));
+    await db
+      .update(inquiries)
+      .set({ message: "[purged]", contactEmail: "[purged]", ip: null, userAgent: null })
+      .where(eq(inquiries.candidateId, t.id));
     // candidates 행 삭제 → cascade 로 interview_sessions / interviewer_notes /
     // interviewer_assignments / candidate_attachments / screening_jobs 모두 정리
     await db.delete(candidates).where(eq(candidates.id, t.id));
@@ -617,12 +620,17 @@ export async function deleteUnresolvedExpiredJobs(): Promise<{
       );
       await db
         .update(appealLogs)
-        .set({ email: "[purged]", ip: null, userAgent: null })
+        .set({ email: "[purged]", reason: "[purged]", ip: null, userAgent: null })
         .where(eq(appealLogs.candidateId, c.id));
       await db
         .update(consentLogs)
         .set({ ip: null, userAgent: null })
         .where(eq(consentLogs.candidateId, c.id));
+      // H7 — 후보자 자유서술 PII(문의 내용·회신 이메일) 폐기.
+      await db
+        .update(inquiries)
+        .set({ message: "[purged]", contactEmail: "[purged]", ip: null, userAgent: null })
+        .where(eq(inquiries.candidateId, c.id));
     }
     await db.delete(jobPostings).where(eq(jobPostings.id, t.id));
   }

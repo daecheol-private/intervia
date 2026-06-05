@@ -7,6 +7,7 @@
  * href 는 내부 경로('/'로 시작)만 허용 — 오픈 리다이렉트/외부 링크 방지. 미입력 시 /notifications.
  */
 import { getCurrentUser } from "@/lib/auth";
+import { requirePasswordChanged } from "@/lib/tenant";
 import { broadcastAnnouncement, activeUserCount } from "@/lib/notifications";
 
 export const runtime = "nodejs";
@@ -17,6 +18,8 @@ async function requireSysAdmin(): Promise<Response | null> {
   const me = await getCurrentUser();
   if (!me) return new Response("로그인 필요", { status: 401 });
   if (me.role !== "system_admin") return new Response("권한 없음", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
   return null;
 }
 

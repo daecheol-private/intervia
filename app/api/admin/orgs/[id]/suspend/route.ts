@@ -12,7 +12,7 @@
  * 세션 강제 만료: 정지 시 해당 법인 모든 세션 delete.
  */
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { organizations, users, sessions } from "@/lib/schema";
@@ -29,6 +29,8 @@ export async function POST(
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음 (시스템 관리자 전용)", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const { id } = await params;
   const orgId = Number(id);
@@ -93,6 +95,8 @@ export async function DELETE(
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음 (시스템 관리자 전용)", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const { id } = await params;
   const orgId = Number(id);

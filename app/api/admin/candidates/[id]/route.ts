@@ -7,7 +7,7 @@
  *   - confirm: 후보자 이메일 또는 이름 (실수 방지)
  */
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { requireStepUp } from "@/lib/step-up";
 import { logAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
@@ -26,6 +26,8 @@ export async function DELETE(
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음 (시스템 관리자 전용)", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const stepUpGuard = await requireStepUp();
   if (stepUpGuard) return stepUpGuard;

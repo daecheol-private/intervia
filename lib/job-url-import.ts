@@ -221,6 +221,44 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Respon
   }
 }
 
+/**
+ * 응답 본문을 스트림으로 읽으며 누적 바이트가 maxBytes 를 넘으면 즉시 중단.
+ * arrayBuffer() 는 응답 전체를 메모리에 올린 뒤에야 크기를 알 수 있어, 공격자가
+ * 수 GB 응답을 보내면 크기 검사 전에 메모리가 소진된다 → 스트리밍 한도로 선제 차단.
+ */
+async function readBodyWithLimit(res: Response, maxBytes: number): Promise<Buffer> {
+  // 빠른 경로 — Content-Length 가 이미 한도를 넘으면 다운로드 자체를 거부.
+  const cl = res.headers.get("content-length");
+  if (cl && Number(cl) > maxBytes) {
+    throw new Error("응답이 너무 큽니다.");
+  }
+  // body 가 없으면(스트림 미지원) 기존 arrayBuffer 폴백 + 크기 검사.
+  if (!res.body) {
+    const ab = await res.arrayBuffer();
+    if (ab.byteLength > maxBytes) throw new Error("응답이 너무 큽니다.");
+    return Buffer.from(ab);
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error("응답이 너무 큽니다.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks);
+}
+
 /** HTML 본문 추출 — 광고/네비/스크립트 제거 후 텍스트화. */
 function extractMainText(html: string): { text: string; imageUrls: string[] } {
   const $ = cheerio.load(html);
@@ -273,9 +311,9 @@ async function downloadAsInlineParts(
       if (!r.ok) continue;
       const mime = (r.headers.get("content-type") ?? "").split(";")[0].trim();
       if (!SUPPORTED_IMAGE_TYPES.has(mime)) continue;
-      const ab = await r.arrayBuffer();
-      if (ab.byteLength < IMAGE_MIN_BYTES || ab.byteLength > IMAGE_MAX_BYTES) continue;
-      const b64 = Buffer.from(ab).toString("base64");
+      const buf = await readBodyWithLimit(r, IMAGE_MAX_BYTES);
+      if (buf.byteLength < IMAGE_MIN_BYTES || buf.byteLength > IMAGE_MAX_BYTES) continue;
+      const b64 = buf.toString("base64");
       out.push({ inlineData: { mimeType: mime, data: b64 } });
     } catch {
       /* skip */
@@ -387,10 +425,13 @@ export async function importJobFromUrl(rawUrl: string): Promise<ImportedJob> {
   const res = await fetchWithTimeout(normalizedUrl);
   if (!res.ok)
     throw new Error(`페이지를 가져오지 못했습니다 (HTTP ${res.status}).`);
-  const ab = await res.arrayBuffer();
-  if (ab.byteLength > MAX_HTML_BYTES)
+  let htmlBuf: Buffer;
+  try {
+    htmlBuf = await readBodyWithLimit(res, MAX_HTML_BYTES);
+  } catch {
     throw new Error("페이지가 너무 큽니다 (2MB 초과).");
-  const html = Buffer.from(ab).toString("utf8");
+  }
+  const html = htmlBuf.toString("utf8");
 
   let { text, imageUrls } = extractMainText(html);
 
@@ -402,9 +443,7 @@ export async function importJobFromUrl(rawUrl: string): Promise<ImportedJob> {
         headers: { Referer: normalizedUrl },
       });
       if (!r.ok) continue;
-      const eab = await r.arrayBuffer();
-      if (eab.byteLength > MAX_HTML_BYTES) continue;
-      const eHtml = Buffer.from(eab).toString("utf8");
+      const eHtml = (await readBodyWithLimit(r, MAX_HTML_BYTES)).toString("utf8");
       const { text: eText, imageUrls: eImgs } = extractMainText(eHtml);
       // 짧은 페이지면 무시 (네비 fragment 등)
       if (eText.length < 200) continue;

@@ -12,7 +12,7 @@
  *   - to 가 disabled 면 거부
  */
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { users, organizations } from "@/lib/schema";
@@ -29,6 +29,8 @@ export async function POST(
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음 (시스템 관리자 전용)", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const { id } = await params;
   const orgId = Number(id);

@@ -72,7 +72,10 @@ async function ocrPdfToText(buf: Buffer): Promise<string> {
         { text: prompt },
         { inlineData: { mimeType: "application/pdf", data: buf.toString("base64") } },
       ],
-      { task: "screening" }
+      // 55s 하드 타임아웃 — worker maxDuration(120s)·wall-clock 가드(70s) 안에서 OCR 가
+      // 무한정 매달리지 않게. 초과 시 ocrPdfToText 의 catch 가 빈 문자열을 반환하고
+      // 호출부가 기존 "텍스트 추출 실패"(영구 오류 → 환불)로 폴백한다.
+      { task: "screening", timeoutMs: 55_000 }
     );
     return typeof out?.text === "string" ? out.text.trim() : "";
   } catch (e) {

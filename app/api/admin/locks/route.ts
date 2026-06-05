@@ -7,7 +7,7 @@
  * 락아웃 DoS (공격자가 타인 이메일로 의도적 실패 → 계정 잠금) 대응.
  */
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { listLockedIdentifiers } from "@/lib/auth-attempts";
 
 export const runtime = "nodejs";
@@ -18,6 +18,8 @@ export async function GET() {
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const rows = await listLockedIdentifiers();
   return Response.json(rows);

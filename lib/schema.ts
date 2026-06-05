@@ -391,6 +391,12 @@ export const candidates = sqliteTable("candidates", {
     t.jobId,
     t.resumeContentHash
   ),
+  // H4 — 같은 공고에 바이트 동일 이력서(resume_hash) 중복 업로드를 DB 레벨에서 차단.
+  //      업로드 dedup 이 (job_id, resume_hash) SELECT-then-INSERT 라 서로 다른 두 요청이
+  //      동시에 업로드하면 둘 다 통과하던 race 를 부분 유니크 인덱스로 막는다.
+  jobResumeHashUq: uniqueIndex("candidates_job_resume_hash_uq")
+    .on(t.jobId, t.resumeHash)
+    .where(sql`${t.resumeHash} is not null`),
 }));
 
 /**
@@ -507,6 +513,12 @@ export const screeningJobs = sqliteTable("screening_jobs", {
   statusIdx: index("idx_screening_jobs_status").on(t.status, t.notBefore),
   // enqueue 중복 체크 / 후보자 활성 job 조회.
   candidateIdx: index("idx_screening_jobs_candidate").on(t.candidateId),
+  // H5 — 후보자당 활성(queued/processing/paused) job 은 1개만 허용. 같은 후보를 동시에
+  //      enqueue 하면 check-then-insert race 로 활성 job 2개가 생겨 이중 평가·이중 과금
+  //      (chargeScreeningSuccess refId=job.id 라 멱등 안 걸림)되던 문제를 DB 레벨에서 차단.
+  activeCandidateUq: uniqueIndex("screening_jobs_active_candidate_uq")
+    .on(t.candidateId)
+    .where(sql`${t.status} in ('queued','processing','paused')`),
 }));
 
 /**

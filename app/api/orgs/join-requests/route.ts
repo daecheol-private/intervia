@@ -6,6 +6,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import {
   isValidEmail,
   normalizeEmail,
+  getEmailDomain,
 } from "@/lib/email-domain";
 import { validatePassword } from "@/lib/password-policy";
 import { rateLimit } from "@/lib/rate-limit";
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
     .select({
       id: organizations.id,
       verificationStatus: organizations.verificationStatus,
+      emailDomain: organizations.emailDomain,
     })
     .from(organizations)
     .where(eq(organizations.id, orgId));
@@ -72,6 +74,21 @@ export async function POST(req: Request) {
   }
 
   const normalizedEmail = normalizeEmail(email);
+
+  // 합류 신청 이메일 도메인이 이 법인의 회사 도메인과 일치하는지 검증.
+  // 이유: 신규 법인은 즉시 verified 라서, 아무 회사 도메인 사용자가 임의 법인에
+  //       합류 요청을 넣고 부주의한 관리자의 승인만 노리는 사칭/탈취를 막기 위함.
+  // 단 emailDomain 미설정(null/빈값) 레거시 법인은 건너뛴다 — 기존 동작 유지(회귀 방지).
+  if (org.emailDomain && org.emailDomain.trim()) {
+    const reqDomain = getEmailDomain(normalizedEmail);
+    if (reqDomain !== org.emailDomain.toLowerCase().trim()) {
+      return new Response(
+        "이 법인의 회사 이메일 도메인과 일치하지 않습니다. 본인 회사 이메일로 합류를 요청해주세요.",
+        { status: 403 }
+      );
+    }
+  }
+
   const passwordHash = await hashPassword(password);
   const now = new Date().toISOString();
 

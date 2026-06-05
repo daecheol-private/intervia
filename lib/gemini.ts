@@ -192,20 +192,38 @@ export async function generateJSONMultimodal<T>(
     | { text: string }
     | { inlineData: { mimeType: string; data: string } }
   >,
-  opts?: { task?: LlmTask }
+  opts?: { task?: LlmTask; timeoutMs?: number }
 ): Promise<T> {
   const task: LlmTask = opts?.task ?? "screening";
+  // OCR(스캔 PDF) 등 멀티모달 호출은 SDK 기본 타임아웃(1분)이 worker maxDuration(120s)에
+  // 근접해, 평가까지 겹치면 함수가 self-chain 전에 강제종료될 수 있다. 호출부가 timeoutMs 를
+  // 주면 httpOptions.timeout(서버 인지 타임아웃) + AbortController(클라이언트 하드 실링)를
+  // 함께 걸어, 응답이 늦으면 transient 오류로 즉시 끊고 큐가 백오프 재시도하게 한다.
   return withRetry(
     async () => {
-      const result = await clientFor(task).models.generateContent({
-        model: MODELS[task],
-        contents: [{ role: "user", parts: parts as never }],
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-        },
-      });
-      return parseJsonResponse<T>(result);
+      const config: Record<string, unknown> = {
+        responseMimeType: "application/json",
+        temperature: 0.2,
+      };
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      if (opts?.timeoutMs) {
+        config.httpOptions = { timeout: opts.timeoutMs };
+        const ctrl = new AbortController();
+        timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
+        config.abortSignal = ctrl.signal;
+      }
+      try {
+        const result = await clientFor(task).models.generateContent({
+          model: MODELS[task],
+          contents: [{ role: "user", parts: parts as never }],
+          config: config as Parameters<
+            ReturnType<typeof clientFor>["models"]["generateContent"]
+          >[0]["config"],
+        });
+        return parseJsonResponse<T>(result);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     },
     { op: "generateJSONMultimodal", task }
   );

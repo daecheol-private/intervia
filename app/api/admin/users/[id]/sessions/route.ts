@@ -3,7 +3,7 @@
  * 본인 자신은 대상 제외 (실수로 본인 락아웃 방지).
  */
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/schema";
@@ -20,6 +20,8 @@ export async function DELETE(
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음 (시스템 관리자 전용)", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const { id } = await params;
   const targetId = Number(id);

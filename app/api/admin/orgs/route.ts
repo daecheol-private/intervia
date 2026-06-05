@@ -7,7 +7,7 @@ import {
 } from "@/lib/schema";
 import { eq, sql, desc, count } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 
@@ -17,6 +17,8 @@ export async function GET() {
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const orgs = await db
     .select({

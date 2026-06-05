@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { tokenWallets, tokenLedger, tokenPricing } from "./schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 
 export type FeatureKey =
   | "job_post"
@@ -13,6 +13,7 @@ export type LedgerReason =
   | "resume_upload"
   | "interview"
   | "interview_question_gen"
+  | "job_extend"
   | "refund"
   | "admin_adjust";
 
@@ -223,7 +224,7 @@ async function writeLedger(args: {
  * 대상: chargeFeature / refundFeature / grantWelcomeBonus / applyChargePayment
  * (모두 refType 가 non-null 이고 'manual_refund' 가 아니라 인덱스 커버 범위).
  */
-async function writeLedgerIdempotent(args: {
+export async function writeLedgerIdempotent(args: {
   orgId: number;
   delta: number;
   reason: LedgerReason;
@@ -331,6 +332,46 @@ export async function chargeFeature(args: {
     })();
   }
   return { cost, balance, alreadyCharged: false };
+}
+
+/**
+ * 후차감(성공마다) — 같은 (feature, refId) 에 대해 작업이 성공할 때마다 **매번** 차감한다.
+ * 기존 차감 횟수 N 을 세어 회차별 refType(`{baseRefType}` / `{baseRefType}_re{N}`)으로 분리하므로
+ * 재평가/재생성이 성공할 때마다 1건씩 과금된다(첫 성공 N=0 → baseRefType 그대로).
+ * 같은 회차의 동시 중복 요청은 token_ledger_idem_uq 가 이중 차감을 차단(멱등 백스톱).
+ *
+ * 1회성(공고 생성 등)은 기존 chargeFeature 를 그대로 쓰고, 재평가/재생성이 매번 과금되어야
+ * 하는 기능(AI 면접 평가·면접 문제 생성)만 이 함수를 쓴다.
+ */
+export async function chargeRepeatable(args: {
+  orgId: number;
+  feature: FeatureKey;
+  baseRefType: string;
+  refId: number;
+  userId?: number | null;
+  memo?: string | null;
+}): Promise<{ cost: number; balance: number; alreadyCharged: boolean }> {
+  const prior = await db
+    .select({ c: sql<number>`COUNT(*)` })
+    .from(tokenLedger)
+    .where(
+      and(
+        eq(tokenLedger.orgId, args.orgId),
+        eq(tokenLedger.reason, args.feature),
+        eq(tokenLedger.refId, args.refId),
+        lt(tokenLedger.delta, 0)
+      )
+    );
+  const n = Number(prior[0]?.c ?? 0);
+  const refType = n === 0 ? args.baseRefType : `${args.baseRefType}_re${n}`;
+  return chargeFeature({
+    orgId: args.orgId,
+    feature: args.feature,
+    refType,
+    refId: args.refId,
+    userId: args.userId,
+    memo: args.memo,
+  });
 }
 
 /**

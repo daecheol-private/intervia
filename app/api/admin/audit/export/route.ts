@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { auditLogs, users, organizations } from "@/lib/schema";
 import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 
@@ -26,6 +26,8 @@ export async function GET(req: Request) {
   if (guard) return guard;
   if (me!.role === "member")
     return new Response("권한 없음", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const url = new URL(req.url);
   const daysBack = Math.min(Number(url.searchParams.get("days") ?? 30), 365);

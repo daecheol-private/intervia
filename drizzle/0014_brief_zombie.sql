@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX `candidates_job_resume_hash_uq` ON `candidates` (`job_id`,`resume_hash`) WHERE "candidates"."resume_hash" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX `screening_jobs_active_candidate_uq` ON `screening_jobs` (`candidate_id`) WHERE "screening_jobs"."status" in ('queued','processing','paused');

@@ -2,11 +2,11 @@
  * AI 면접 평가 재시도 (M3).
  *
  * 운영 시나리오: LLM 응답 JSON 파싱 실패·timeout 으로 evaluation=null 인 세션을
- * 같은 transcript 로 다시 평가. H3 에서 실패 시 환불됐으므로 본 라우트는 chargeFeature
- * 로 다시 차감 후 generateJSON 호출. 재시도 실패 시 또 환불.
+ * 같은 transcript 로 다시 평가. 면접은 후차감 — 재평가가 성공한 시점에만 interview 1건
+ * 과금(멱등, refId=session.id). 실패 시 과금 없음(환불도 불필요).
  *
  * 인증: 로그인 사용자 + ownsOrg + 잠금 가드.
- * 멱등: 이미 evaluation 이 채워져 있으면 409.
+ * 재평가는 성공할 때마다 매번 과금(chargeRepeatable). 이미 평가 완료된 세션도 재평가 가능(덮어쓰기).
  */
 import { db } from "@/lib/db";
 import {
@@ -24,7 +24,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { generateJSON } from "@/lib/gemini";
 import { buildSummaryPrompt } from "@/lib/prompts";
 import { computeTranscriptStats } from "@/lib/interview-signals";
-import { chargeFeature, refundFeature } from "@/lib/tokens";
+import { chargeRepeatable } from "@/lib/tokens";
 import {
   requirePositiveBalance,
   insufficientTokensResponse,
@@ -84,12 +84,8 @@ export async function POST(
       { status: 409 }
     );
   }
-  if (session.evaluation) {
-    return new Response(
-      "이미 평가가 완료되었습니다. 재평가가 필요하면 면접 종결 후 새 면접을 진행해 주세요.",
-      { status: 409 }
-    );
-  }
+  // 이미 평가 완료된 세션도 재평가 허용(덮어쓰기). 재평가 성공 시 매번 과금되므로
+  // 운영자의 명시적 재실행에만 발생한다(아래 rate limit 10/분 + 성공 시 후차감).
   if (!session.messages || session.messages.length < 2) {
     return new Response("대화가 충분하지 않아 재평가할 수 없습니다.", {
       status: 400,
@@ -101,18 +97,6 @@ export async function POST(
     isSystemAdmin: me!.role === "system_admin",
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);
-
-  // 토큰 차감 (멱등) — H3 에서 환불된 ledger 다음에 재차감.
-  if (candidate.orgId) {
-    await chargeFeature({
-      orgId: candidate.orgId,
-      feature: "interview",
-      refType: "interview_session",
-      refId: session.id,
-      userId: me!.id,
-      memo: `평가 재시도 by ${me!.email}`,
-    });
-  }
 
   const orgRow = job.orgId
     ? (
@@ -157,6 +141,18 @@ export async function POST(
       .set({ evaluation })
       .where(eq(interviewSessions.id, session.id));
 
+    // 후차감 — 재평가가 성공할 때마다 매번 1건 과금 (chargeRepeatable 회차 분리).
+    if (candidate.orgId) {
+      await chargeRepeatable({
+        orgId: candidate.orgId,
+        feature: "interview",
+        baseRefType: "interview_session",
+        refId: session.id,
+        userId: me!.id,
+        memo: `AI 면접 재평가 완료 by ${me!.email}`,
+      });
+    }
+
     logAudit(req, {
       actor: me!,
       action: "interview.reevaluate",
@@ -172,29 +168,12 @@ export async function POST(
       `[interview/reevaluate] LLM 평가 재실패 (session ${session.id}):`,
       msg
     );
-    // 실패 시 다시 환불 (멱등 — refundFeature 는 동일 ledger 에 이미 환불 있으면 no-op)
-    let refunded = 0;
-    if (candidate.orgId) {
-      try {
-        const r = await refundFeature({
-          orgId: candidate.orgId,
-          feature: "interview",
-          refType: "interview_session",
-          refId: session.id,
-          userId: me!.id,
-          memo: `재평가 실패 자동 환불: ${msg.slice(0, 80)}`,
-        });
-        refunded = r.refunded;
-      } catch (re) {
-        console.error("[interview/reevaluate] refund failed:", re);
-      }
-    }
+    // 후차감 모델 — 재평가 실패 시 과금 자체가 없으므로 환불 불필요. 다시 시도하면 된다.
     return Response.json(
       {
         ok: false,
         error: "재평가에 실패했습니다. 잠시 후 다시 시도해 주세요.",
         detail: msg,
-        refunded,
       },
       { status: 500 }
     );

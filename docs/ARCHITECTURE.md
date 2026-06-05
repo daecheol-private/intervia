@@ -149,12 +149,12 @@ interviewer/
 
 ### 9. 토큰 / 결제
 - 법인별 지갑 (`token_wallets`) + 변동 감사 로그 (`token_ledger`). 단가는 `token_pricing` (system_admin 수정).
-- 차감 시점: 공고 생성·면접 링크 발급은 **선차감**. **서류 평가는 후차감** — 워커가 평가 성공한 시점에 `chargeScreeningSuccess`(refType=`screening_job`). 오류/재시도는 과금 안 됨 → 환불 불필요. 재평가는 새 job 이라 성공마다 1건 과금.
-- 환불: 공고 5분 내 삭제 시 자동 (`refundFeature`). (서류 평가는 후차감이라 환불 대상 아님.)
+- 차감 시점: 공고 생성은 **선차감**. **서류 평가·AI 면접은 후차감** — 서류는 워커가 평가 성공 시 `chargeScreeningSuccess`(refType=`screening_job`), AI 면접은 `complete`/`reevaluate` 에서 평가 성공 시 `chargeFeature(interview, interview_session)` 1건(멱등 refId=session.id). 동의·시작·링크 발급 시점엔 과금 X. 오류/재시도/면접 미응답/미시작 만료는 과금 안 됨 → 환불 불필요. **재평가/재생성은 성공할 때마다 매번 과금** — 서류는 새 `screening_jobs.id`, AI 면접·면접 문제 생성은 `chargeRepeatable`(`lib/tokens.ts`)이 기존 차감 횟수를 세어 회차별 refType(`{base}` / `{base}_re{N}`)으로 분리. 같은 회차 동시 따닥은 `token_ledger_idem_uq` 멱등.
+- 환불: 공고 5분 내 삭제 시 자동 (`refundFeature`). (서류 평가·AI 면접은 후차감이라 환불 대상 아님.)
 - **마이너스 허용 (후불 정책)** — 잔액 0 이하여도 기능은 계속 동작, `/org/tokens` 에 경고 배너만.
 - 단가 변경은 **호출 시점 기준** 적용 (소급 X).
 - 결제 시스템은 미연동. `payment_orders` 테이블만 스텁. system_admin이 `/admin/orgs` 에서 수동 충전.
-- **만료 환불 cron**: `/api/cron/expire-interviews` 가 시간당(`0 * * * *`) 호출 — `expires_at < now` 이고 `status='pending'` (미시작) 인 세션만 환불 후 `expired` 처리. `in_progress` 만료는 환불 X. Vercel Cron + `CRON_SECRET` 헤더 인증.
+- **만료 정리 cron**: `/api/cron/expire-interviews` 가 시간당(`0 * * * *`) 호출 — `expires_at < now` 세션을 `expired` 처리. `pending`(AI 미시작) 만료는 자동 불합격(`ai_link_expired`). **면접은 후차감이라 만료 환불 없음**(미시작/미평가는 과금된 적 없음). Vercel Cron + `CRON_SECRET` 헤더 인증.
 
 ### 11. 이력서 평가 흐름 — 마스킹 + 사용자 확인 게이트 + 자동 폐기
 

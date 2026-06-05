@@ -4,7 +4,7 @@
  * 정책:
  *  - 동일 email: 15분 내 5회 실패 → 15분 잠금
  *  - 동일 IP:    15분 내 20회 실패 → 15분 잠금 (다수 계정 무차별 공격 차단)
- *  - 성공 시 그 email/ip 의 실패 기록 reset
+ *  - 성공 시 그 email 의 실패 기록만 reset (IP 기록은 유지 → IP 방어 보존)
  *  - 30일 경과 기록은 cron 으로 정리
  *
  * 보안 노트:
@@ -36,7 +36,8 @@ function windowStart(): string {
 }
 
 /**
- * 시도 기록. success=true 이면 그 identifier 의 이전 실패 row 삭제 (잠금 해제 효과).
+ * 시도 기록. success=true 이면 그 email 의 이전 실패 row 만 삭제 (email 잠금 해제 효과).
+ * IP 실패 기록은 유지 — 정상계정 로그인으로 IP brute-force 방어를 우회하지 못하게.
  */
 export async function recordAttempt(opts: {
   email: string;
@@ -56,7 +57,10 @@ export async function recordAttempt(opts: {
   }
   await db.insert(authAttempts).values(rows);
 
-  // 2) 성공 시 그 email/ip 의 과거 실패 기록 삭제 → 잠금 즉시 해제
+  // 2) 성공 시 그 email 의 과거 실패 기록만 삭제 → 정상 사용자 email 잠금 즉시 해제.
+  //    단, IP(kind='ip') 실패 기록은 유지(자연 만료에 맡김). 공격자가 자기 정상계정으로
+  //    중간중간 로그인 성공시켜 IP 카운터를 리셋, IP 기반 다계정 brute-force 방어를
+  //    무력화하는 것을 막기 위함.
   if (opts.success) {
     await db
       .delete(authAttempts)
@@ -67,17 +71,6 @@ export async function recordAttempt(opts: {
           eq(authAttempts.success, false)
         )
       );
-    if (opts.ip) {
-      await db
-        .delete(authAttempts)
-        .where(
-          and(
-            eq(authAttempts.identifier, opts.ip),
-            eq(authAttempts.kind, "ip"),
-            eq(authAttempts.success, false)
-          )
-        );
-    }
   }
 }
 

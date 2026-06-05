@@ -11,7 +11,7 @@ import { generateJSON } from "@/lib/gemini";
 import { buildSummaryPrompt } from "@/lib/prompts";
 import { hasValidConsent } from "@/lib/consent";
 import { notifyJobInterviewers } from "@/lib/notifications";
-import { refundFeature } from "@/lib/tokens";
+import { chargeRepeatable } from "@/lib/tokens";
 import { computeTranscriptStats } from "@/lib/interview-signals";
 
 export const runtime = "nodejs";
@@ -29,6 +29,13 @@ export async function POST(
   if (session.status === "completed" && session.evaluation) {
     return Response.json(session.evaluation);
   }
+  // 만료된 세션 차단 — 만료 토큰으로 평가 생성·덮어쓰기 방지 (consent 라우트와 일관).
+  // 단 위의 멱등(이미 completed+evaluation) 케이스는 만료여도 그대로 반환.
+  if (
+    session.status === "expired" ||
+    new Date(session.expiresAt) < new Date()
+  )
+    return new Response("만료된 면접 링크입니다.", { status: 410 });
   if (session.messages.length < 2)
     return new Response("대화가 충분하지 않음", { status: 400 });
 
@@ -152,6 +159,18 @@ export async function POST(
       .set({ evaluation })
       .where(eq(interviewSessions.id, session.id));
 
+    // 후차감 — 면접 진행+평가가 성공적으로 끝난 시점에만 과금 (서류평가와 동일 모델).
+    // chargeRepeatable: 재평가가 성공할 때마다 매번 1건씩 과금된다(complete=1회차, reevaluate=2회차…).
+    if (job?.orgId) {
+      await chargeRepeatable({
+        orgId: job.orgId,
+        feature: "interview",
+        baseRefType: "interview_session",
+        refId: session.id,
+        memo: "AI 면접 평가 완료",
+      });
+    }
+
     if (nextStage === "ai_evaluated") {
       void notifyJobInterviewers(candidate!.jobId, {
         type: "ai_interview_done",
@@ -165,23 +184,8 @@ export async function POST(
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[interview/complete] LLM 평가 실패 (session ${session.id}):`, msg);
-    // H3 — 평가 실패 시 면접 토큰 환불 (멱등). 재시도 시 chargeFeature 가 다시 차감.
-    let refunded = 0;
-    if (job?.orgId) {
-      try {
-        const r = await refundFeature({
-          orgId: job.orgId,
-          feature: "interview",
-          refType: "interview_session",
-          refId: session.id,
-          userId: null,
-          memo: `LLM 평가 실패 자동 환불: ${msg.slice(0, 80)}`,
-        });
-        refunded = r.refunded;
-      } catch (re) {
-        console.error("[interview/complete] refund failed:", re);
-      }
-    }
+    // 후차감 모델 — 평가 실패 시 애초에 과금하지 않았으므로 환불도 불필요(서류평가와 동일).
+    //   운영자가 reevaluate 로 재평가에 성공하면 그 시점에 1건 과금된다.
     // 평가 실패해도 면접 자체는 종료 — 면접관에게 재평가 필요 알림.
     if (nextStage === "ai_evaluated") {
       void notifyJobInterviewers(candidate!.jobId, {
@@ -197,7 +201,6 @@ export async function POST(
         evaluation: null,
         evaluation_error: msg,
         message: "면접은 종료되었으나 자동 평가 생성에 실패했습니다.",
-        refunded,
       },
       { status: 200 }
     );

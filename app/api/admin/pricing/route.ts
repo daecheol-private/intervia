@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { tokenPricing } from "@/lib/schema";
 import { sql, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { getAllPricing } from "@/lib/tokens";
 
 export const runtime = "nodejs";
@@ -29,6 +29,8 @@ export async function PATCH(req: Request) {
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const body = (await req.json().catch(() => ({}))) as Partial<Record<Key, number>>;
 

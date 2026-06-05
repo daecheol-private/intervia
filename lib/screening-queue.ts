@@ -25,32 +25,43 @@ export type EnqueueResult = {
   status: "enqueued" | "already_queued" | "already_processed";
 };
 
-/** 신규 평가 작업 enqueue. 이미 queued/processing 인 후보자는 중복 enqueue 안 함. */
+/** 신규 평가 작업 enqueue. 이미 queued/processing/paused 인 후보자는 중복 enqueue 안 함. */
 export async function enqueueScreening(
   candidateId: number,
   enqueuedByUserId: number | null
 ): Promise<EnqueueResult> {
-  // 활성 job 이 이미 있나? (queued/processing/paused — paused 는 충전 시 재개되므로 중복 생성 금지)
+  const activeFilter = and(
+    eq(screeningJobs.candidateId, candidateId),
+    inArray(screeningJobs.status, ["queued", "processing", "paused"])
+  );
+  // 활성 job 이 이미 있나? (paused 는 충전 시 재개되므로 중복 생성 금지)
   const [existing] = await db
     .select({ id: screeningJobs.id, status: screeningJobs.status })
     .from(screeningJobs)
-    .where(
-      and(
-        eq(screeningJobs.candidateId, candidateId),
-        inArray(screeningJobs.status, ["queued", "processing", "paused"])
-      )
-    );
+    .where(activeFilter);
   if (existing) {
     return { candidateId, jobId: existing.id, status: "already_queued" };
   }
-  const [job] = await db
+  // H5 — 위 SELECT-then-INSERT 는 동시 enqueue 시 둘 다 통과해 활성 job 2개(→이중 평가·이중
+  //      과금)를 만들 수 있다. 부분 유니크 인덱스(screening_jobs_active_candidate_uq) +
+  //      onConflictDoNothing 으로 두 번째 INSERT 를 무시(0 rows)해 DB 레벨에서 차단한다.
+  const inserted = await db
     .insert(screeningJobs)
     .values({
       candidateId,
       enqueuedByUserId: enqueuedByUserId ?? undefined,
     })
+    .onConflictDoNothing()
     .returning({ id: screeningJobs.id });
-  return { candidateId, jobId: job.id, status: "enqueued" };
+  if (inserted.length === 0) {
+    // race 패배 — 동시 요청이 먼저 활성 job 을 만듦. 기존 활성 job 을 조회해 반환.
+    const [now] = await db
+      .select({ id: screeningJobs.id })
+      .from(screeningJobs)
+      .where(activeFilter);
+    return { candidateId, jobId: now?.id, status: "already_queued" };
+  }
+  return { candidateId, jobId: inserted[0].id, status: "enqueued" };
 }
 
 /**
@@ -304,21 +315,35 @@ export async function reconcileBalanceHolds(): Promise<{
  */
 export async function cleanupStuck(): Promise<number> {
   const staleAt = new Date(Date.now() - LOCK_STALE_SECONDS * 1000).toISOString();
-  const r = await db
+  const stuckCond = and(
+    eq(screeningJobs.status, "processing"),
+    or(lt(screeningJobs.lockedAt, staleAt), isNull(screeningJobs.lockedAt))
+  );
+  // H6 — 재시도 상한(MAX_ATTEMPTS)을 이미 넘긴 stuck job 은 queued 로 되돌리면
+  //      claim→죽음→재큐 무한 루프(매 라운드 파싱/LLM 토큰 재소비)에 빠진다.
+  //      기존 cleanupStuck 은 attempts 를 무시하고 무조건 재큐했음 → 상한 초과분은 즉시 final fail.
+  const failed = await db
+    .update(screeningJobs)
+    .set({
+      status: "failed",
+      lockedAt: null,
+      lockedBy: null,
+      lastError: "stuck: 재시도 상한 초과 (worker 반복 비정상 종료)",
+      completedAt: new Date().toISOString(),
+    })
+    .where(and(stuckCond, gte(screeningJobs.attempts, MAX_ATTEMPTS)))
+    .returning({ id: screeningJobs.id });
+  // 상한 이내 stuck 은 정상 복구(queued).
+  const requeued = await db
     .update(screeningJobs)
     .set({
       status: "queued",
       lockedAt: null,
       lockedBy: null,
     })
-    .where(
-      and(
-        eq(screeningJobs.status, "processing"),
-        or(lt(screeningJobs.lockedAt, staleAt), isNull(screeningJobs.lockedAt))
-      )
-    )
+    .where(and(stuckCond, lt(screeningJobs.attempts, MAX_ATTEMPTS)))
     .returning({ id: screeningJobs.id });
-  return r.length;
+  return failed.length + requeued.length;
 }
 
 /** 큐 통계 — UI/모니터링용. */

@@ -4,7 +4,7 @@
  * 헤더 또는 body 에 `confirm: "FORCE-LOGOUT-ALL"` 필수.
  */
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { sessions } from "@/lib/schema";
@@ -18,6 +18,8 @@ export async function POST(req: Request) {
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음 (시스템 관리자 전용)", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const body = (await req.json().catch(() => ({}))) as {
     confirm?: string;

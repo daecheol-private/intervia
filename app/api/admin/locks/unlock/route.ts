@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { adminUnlock } from "@/lib/auth-attempts";
 import { logAudit } from "@/lib/audit";
 
@@ -11,6 +11,8 @@ export async function POST(req: Request) {
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const { email, ip } = (await req.json().catch(() => ({}))) as {
     email?: string;

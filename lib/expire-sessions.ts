@@ -8,7 +8,6 @@ import {
   users,
 } from "./schema";
 import { and, eq, lt, sql, isNull, inArray } from "drizzle-orm";
-import { refundFeature } from "./tokens";
 import { purgeOnDecision } from "./candidate-stage";
 import { sendMail, isSmtpAvailable, wrapEmailCard, escapeHtml } from "./mailer";
 
@@ -23,50 +22,37 @@ export async function expireInterviewSessions(): Promise<{
   aiAutoRejected: number;
   scheduleAutoRejected: number;
 }> {
-  const now = sql`CURRENT_TIMESTAMP`;
-  // 미시작 만료 → 환불 대상 조회
-  const toRefund = await db
-    .select({
-      id: interviewSessions.id,
-      orgId: candidates.orgId,
-    })
-    .from(interviewSessions)
-    .innerJoin(candidates, eq(candidates.id, interviewSessions.candidateId))
+  // 만료 세션 정리. 면접은 후차감 모델이라 만료 환불은 없다(미시작/미평가는 과금된 적 없음).
+  // pending(AI 미시작) 만료는 자동 불합격 처리 대상이라 in_progress 와 분리해 전이시킨다.
+  const expiredPending = await db
+    .update(interviewSessions)
+    .set({ status: "expired" })
     .where(
       and(
         eq(interviewSessions.status, "pending"),
         lt(interviewSessions.expiresAt, sql`CURRENT_TIMESTAMP`)
       )
-    );
+    )
+    .returning({ id: interviewSessions.id });
 
-  // 모든 만료 세션을 expired로 일괄 업데이트 (in_progress 포함)
-  const updated = await db
+  // in_progress 만료는 expired 처리만 (환불 X — 면접을 시작했으므로).
+  const expiredInProgress = await db
     .update(interviewSessions)
     .set({ status: "expired" })
     .where(
       and(
-        lt(interviewSessions.expiresAt, sql`CURRENT_TIMESTAMP`),
-        sql`${interviewSessions.status} IN ('pending', 'in_progress')`
+        eq(interviewSessions.status, "in_progress"),
+        lt(interviewSessions.expiresAt, sql`CURRENT_TIMESTAMP`)
       )
     )
     .returning({ id: interviewSessions.id });
 
-  let refundedCount = 0;
-  for (const row of toRefund) {
-    if (!row.orgId) continue;
-    const { refunded } = await refundFeature({
-      orgId: row.orgId,
-      feature: "interview",
-      refType: "interview_session",
-      refId: row.id,
-      memo: "면접 미시작 만료 자동환불",
-    });
-    if (refunded > 0) refundedCount++;
-  }
-
   // AI면접 미시작 만료 → 후보자 자동 불합격 처리 (outcome=rejected, reason=ai_link_expired).
-  // 이미 outcome 이 설정된 후보는 제외 (멱등).
-  const expiredSessionCandidateIds = toRefund.map((r) => r.id);
+  // 이미 outcome 이 설정된 후보는 제외 (멱등). (변수명은 세션 id 목록 — 이후 inArray 로 조인)
+  const expiredSessionCandidateIds = expiredPending.map((r) => r.id);
+
+  // 면접은 후차감 모델 — 미시작/미평가 세션은 과금된 적이 없어 환불 대상이 없다.
+  const refundedCount = 0;
   let aiAutoRejected = 0;
   if (expiredSessionCandidateIds.length > 0) {
     const cands = await db
@@ -175,9 +161,8 @@ export async function expireInterviewSessions(): Promise<{
     );
   }
 
-  void now;
   return {
-    expiredCount: updated.length,
+    expiredCount: expiredPending.length + expiredInProgress.length,
     refundedCount,
     aiAutoRejected,
     scheduleAutoRejected,

@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { inquiries } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { requireUser } from "@/lib/tenant";
+import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import {
   INQUIRY_STATUSES,
@@ -27,6 +27,8 @@ export async function PATCH(
   if (guard) return guard;
   if (me!.role !== "system_admin")
     return new Response("권한 없음", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
 
   const { id } = await params;
   const iid = Number(id);

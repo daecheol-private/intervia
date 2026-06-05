@@ -28,7 +28,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import { generateJSON } from "@/lib/gemini";
 import { buildInterviewQuestionsPrompt } from "@/lib/prompts";
 import { logAudit } from "@/lib/audit";
-import { chargeFeature } from "@/lib/tokens";
+import { chargeRepeatable } from "@/lib/tokens";
 
 export const runtime = "nodejs";
 
@@ -229,12 +229,12 @@ export async function POST(
       },
     });
 
-  // 후보자당 1회 차감 (멱등). 재생성은 같은 row 덮어쓰기라 추가 차감 없음.
+  // 후차감 — 생성이 성공할 때마다 매번 과금 (재생성도 LLM 비용 발생 → chargeRepeatable 회차 분리).
   if (candidate.orgId) {
-    await chargeFeature({
+    await chargeRepeatable({
       orgId: candidate.orgId,
       feature: "interview_question_gen",
-      refType: "candidate",
+      baseRefType: "candidate",
       refId: cid,
       userId: me!.id,
       memo: `면접 문제 생성 - ${candidate.name ?? ""}`.trim(),

@@ -846,6 +846,7 @@ export default function CandidateDetailPage() {
             session={completedSession}
             onShowTranscript={() => setShowTranscript(true)}
             onRegenerate={createLink}
+            onReevaluated={load}
             disabled={aiStagePassed}
           />
         )}
@@ -2565,8 +2566,8 @@ function InterviewLinkBox({
   );
 }
 
-/** M3 — 면접 종료됐는데 evaluation=null 인 케이스(LLM 평가 실패). 토큰은 H3에서 환불됐고,
- *  재시도 시 본 라우트가 다시 차감 후 재평가. 실패하면 또 환불 (멱등). */
+/** 면접 종료됐는데 evaluation=null 인 케이스(LLM 평가 실패). 면접은 후차감이라 실패 시
+ *  과금된 적이 없다(환불도 없음). 재시도해서 평가가 성공하면 그때 1건 차감된다. */
 function InterviewEvaluationRetry({
   sessionId,
   onShowTranscript,
@@ -2634,9 +2635,9 @@ function InterviewEvaluationRetry({
           AI 평가 생성 실패
         </div>
         <p className="text-amber-900 leading-relaxed">
-          면접은 정상 종료되었으나 AI 평가 JSON 생성에 실패했습니다. 사용된 토큰은
-          자동 환불되었습니다. 아래 버튼으로 재평가를 요청하면 토큰이 다시 차감되며,
-          또 실패하면 환불됩니다.
+          면접은 정상 종료되었으나 AI 평가 JSON 생성에 실패했습니다. 평가에 실패해
+          토큰은 차감되지 않았습니다. 아래 버튼으로 재평가를 요청해 평가가 성공하면
+          그때 토큰이 차감됩니다 (실패하면 과금 없음).
         </p>
       </div>
       <div className="flex gap-2">
@@ -2673,14 +2674,62 @@ function InterviewResult({
   session,
   onShowTranscript,
   onRegenerate,
+  onReevaluated,
   disabled = false,
 }: {
   session: Session;
   onShowTranscript: () => void;
   onRegenerate: () => void;
+  onReevaluated: () => void;
   disabled?: boolean;
 }) {
   const ev = session.evaluation!;
+  const [reBusy, setReBusy] = useState(false);
+  const [reMsg, setReMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
+    null
+  );
+  // 성공한 AI 면접도 재평가 허용 — 같은 대화록 재평가, 성공할 때마다 토큰 차감(후차감).
+  const reevaluate = async () => {
+    if (
+      !(await confirmDialog(
+        "같은 면접 대화록으로 AI 평가를 다시 실행합니다.\n기존 평가 결과는 덮어쓰며, 평가가 성공하면 토큰이 다시 차감됩니다 (실패 시 과금 없음).",
+        { title: "AI 면접 재평가", confirmText: "재평가" }
+      ))
+    )
+      return;
+    setReBusy(true);
+    setReMsg(null);
+    try {
+      const res = await fetch(
+        `/api/interview-sessions/${session.id}/reevaluate`,
+        { method: "POST" }
+      );
+      const raw = await res.text();
+      let data: { ok?: boolean; error?: string; detail?: string } | null = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = null;
+      }
+      if (res.ok && data?.ok) {
+        setReMsg({ kind: "ok", text: "재평가 성공. 잠시 후 결과가 갱신됩니다." });
+        onReevaluated();
+      } else {
+        const base = data?.error ?? raw ?? `재평가 실패 (HTTP ${res.status}).`;
+        setReMsg({
+          kind: "err",
+          text: data?.detail ? `${base}\n(원인: ${data.detail})` : base,
+        });
+      }
+    } catch (e) {
+      setReMsg({
+        kind: "err",
+        text: `재평가 요청 중 오류: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    } finally {
+      setReBusy(false);
+    }
+  };
   return (
     <div className="space-y-5 text-sm">
       <div className="flex items-baseline gap-3 flex-wrap">
@@ -2791,7 +2840,7 @@ function InterviewResult({
         </div>
       )}
 
-      <div className="flex gap-3 pt-3 border-t border-slate-100">
+      <div className="flex gap-3 pt-3 border-t border-slate-100 items-center flex-wrap">
         <button
           onClick={onShowTranscript}
           className="text-xs text-primary hover:underline"
@@ -2806,7 +2855,26 @@ function InterviewResult({
             재면접 링크 발급
           </button>
         )}
+        <button
+          onClick={reevaluate}
+          disabled={reBusy}
+          className="ml-auto shrink-0 text-xs px-3 py-1.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+          title="같은 대화록으로 AI 평가를 다시 실행 (성공 시 토큰 차감)"
+        >
+          {reBusy ? "재평가 중..." : "🔄 재평가"}
+        </button>
       </div>
+      {reMsg && (
+        <div
+          className={`text-xs whitespace-pre-line rounded-lg px-3 py-2 ${
+            reMsg.kind === "ok"
+              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              : "bg-rose-50 text-rose-700 border border-rose-200"
+          }`}
+        >
+          {reMsg.text}
+        </div>
+      )}
     </div>
   );
 }
