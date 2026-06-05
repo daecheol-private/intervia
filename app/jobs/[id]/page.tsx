@@ -3064,7 +3064,7 @@ function ShareButton({
                           : m.status === "already_assigned"
                             ? "이미 면접관 (메일만 발송)"
                             : m.status === "skipped_other_org"
-                              ? "타 법인 — 스킵"
+                              ? "이미 다른 법인 소속이라 초대 불가"
                               : "✗ 실패"}
                       </span>
                     </div>
@@ -3094,7 +3094,7 @@ function ShareButton({
                           : r.status === "already_member"
                             ? "이미 멤버"
                             : r.status === "other_org"
-                              ? "타 법인 — 스킵"
+                              ? "이미 다른 법인 소속이라 초대 불가"
                               : `✗ 실패`}
                       </span>
                     </div>
