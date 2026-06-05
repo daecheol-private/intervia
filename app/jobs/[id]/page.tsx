@@ -3132,6 +3132,7 @@ function LifecyclePanel({
   const [showExtend, setShowExtend] = useState(false);
   const [info, setInfo] = useState<{
     candidateCount: number;
+    totalCandidateCount: number;
     perResume: number;
     totalCost: number;
     extensionDays: number;
@@ -3244,7 +3245,7 @@ function LifecyclePanel({
             {info ? (
               <div className="mt-4 text-sm text-slate-700 space-y-2">
                 <div className="flex justify-between">
-                  <span>현재 등록 후보자</span>
+                  <span>보관 중 이력서</span>
                   <span className="font-medium">
                     {info.candidateCount}명
                   </span>
@@ -3259,8 +3260,15 @@ function LifecyclePanel({
                     {info.totalCost} 토큰
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 mt-3 bg-slate-50 rounded-lg p-3">
-                  종결 예정일이 {info.extensionDays}일 연장됩니다.
+                <div className="text-xs text-slate-500 mt-3 bg-slate-50 rounded-lg p-3 space-y-1">
+                  <div>종결 예정일이 {info.extensionDays}일 연장됩니다.</div>
+                  {info.totalCandidateCount > info.candidateCount && (
+                    <div>
+                      전체 {info.totalCandidateCount}명 중 불합격·지원취소{" "}
+                      {info.totalCandidateCount - info.candidateCount}명은
+                      이력서가 폐기되어 과금에서 제외됩니다.
+                    </div>
+                  )}
                 </div>
                 {!info.allowed && info.reason === "too_early" && (
                   <div className="text-xs text-amber-800 mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -3270,7 +3278,7 @@ function LifecyclePanel({
                 )}
                 {!info.allowed && info.reason === "no_candidates" && (
                   <div className="text-xs text-amber-800 mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                    📋 등록된 이력서가 없어 연장이 불필요합니다. 이력서 등록 후 다시 시도해 주세요.
+                    📋 보관 중인 이력서가 없어 연장이 불필요합니다. (불합격·지원취소 이력서는 보관비용이 없습니다)
                   </div>
                 )}
               </div>

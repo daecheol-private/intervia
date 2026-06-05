@@ -3,7 +3,8 @@
  *
  * 정책 (사용자 결정 2026-05-26):
  *  - 공고 기본 기간 1개월 (30일)
- *  - 1개월(30일) 단위 연장. 연장 시점 (현재 candidates 수) × resume_upload 단가 차감
+ *  - 1개월(30일) 단위 연장. 연장 시점 (보관 중 이력서 수) × resume_upload 단가 차감
+ *    (불합격·지원취소 이력서는 결정 즉시 파일이 폐기되어 보관비용이 없으므로 과금 제외)
  *  - 종결 +7일 → 이력서·포트폴리오 PDF 파일 폐기
  *  - 종결 +14일 → candidates PII 폐기 (job_postings 행은 보존)
  *  - 종결된 공고: 신규 이력서 업로드 불가
@@ -60,8 +61,31 @@ export function extendClosesAt(currentClosesAt: string): string {
 }
 
 /**
- * 공고 1개월 연장. 토큰 = 현재 후보자 수 × resume_upload 단가.
- * 후보자 0명이면 무료.
+ * 연장 과금 대상 이력서 수 — 파일이 아직 보관 중인 이력서만 카운트.
+ * 불합격·지원취소는 결정 즉시 파일이 폐기되므로(purgeOnDecision) 보관비용이 없어 과금 제외.
+ * 과금 대상 = outcome 이 NULL(진행 중) 또는 'hired'(합격) 인 후보.
+ */
+export async function countBillableCandidates(jobId: number): Promise<{
+  billable: number;
+  total: number;
+}> {
+  const [agg] = await db
+    .select({
+      total: count(),
+      billable: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NULL OR ${candidates.outcome} NOT IN ('rejected','withdrawn') THEN 1 ELSE 0 END)`,
+    })
+    .from(candidates)
+    .where(eq(candidates.jobId, jobId));
+  return {
+    billable: Number(agg?.billable ?? 0),
+    total: Number(agg?.total ?? 0),
+  };
+}
+
+/**
+ * 공고 1개월 연장. 토큰 = 보관 중 이력서 수 × resume_upload 단가.
+ * (불합격·지원취소 이력서는 파일이 폐기되어 보관비용이 없으므로 과금 제외)
+ * 보관 중 이력서 0건이면 연장 불가(불필요).
  */
 export async function extendJob(args: {
   jobId: number;
@@ -99,20 +123,18 @@ export async function extendJob(args: {
     }
   }
 
-  const [{ n }] = await db
-    .select({ n: count(candidates.id) })
-    .from(candidates)
-    .where(eq(candidates.jobId, args.jobId));
-  const candidateCount = Number(n ?? 0);
+  const { billable: candidateCount } = await countBillableCandidates(args.jobId);
   const perResume = await getPricing("resume_upload");
   const totalCost = candidateCount * perResume;
 
-  // 가드: 이력서 0건이면 연장 불필요·악용 방지 (미리 연장해두고 이력서 받으면 보관료 회피)
+  // 가드: 보관 중 이력서 0건이면 연장 불필요·악용 방지 (미리 연장해두고 이력서 받으면 보관료 회피).
+  // 불합격·지원취소만 있는 공고도 파일이 이미 폐기되어 보관비용이 없으므로 여기에 해당.
   if (candidateCount === 0) {
     return {
       ok: false,
       code: "no_candidates",
-      message: "등록된 이력서가 없어 연장할 필요가 없습니다. 이력서 등록 후 다시 시도해 주세요.",
+      message:
+        "보관 중인 이력서가 없어 연장이 불필요합니다. (불합격·지원취소 이력서는 이미 폐기되어 보관비용이 없습니다)",
     };
   }
 
@@ -140,7 +162,7 @@ export async function extendJob(args: {
       refId: args.jobId,
       balanceAfter: newBalance,
       createdByUserId: args.userId,
-      memo: `공고 #${args.jobId} ${EXTENSION_DAYS}일 연장 #${nextExtCount} (${candidateCount}명 × ${perResume})`,
+      memo: `공고 #${args.jobId} ${EXTENSION_DAYS}일 연장 #${nextExtCount} (보관 이력서 ${candidateCount}명 × ${perResume})`,
     });
   }
 

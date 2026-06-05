@@ -20,6 +20,7 @@ type CloseCheck = {
 
 type ExtendInfo = {
   candidateCount: number;
+  totalCandidateCount: number;
   perResume: number;
   totalCost: number;
   extensionDays: number;
@@ -202,12 +203,22 @@ function ChoiceBody({
           <div className="text-[11px] text-ink-soft leading-relaxed">
             {extInfo ? (
               <>
-                후보자 <strong>{extInfo.candidateCount}명</strong> ×{" "}
+                보관 중 이력서 <strong>{extInfo.candidateCount}명</strong> ×{" "}
                 {extInfo.perResume} 토큰
                 <br />→ <strong className="text-primary-deep">
                   {extInfo.totalCost} 토큰
                 </strong>{" "}
                 차감
+                {extInfo.totalCandidateCount > extInfo.candidateCount && (
+                  <>
+                    <br />
+                    <span className="text-ink-muted">
+                      (불합격·지원취소{" "}
+                      {extInfo.totalCandidateCount - extInfo.candidateCount}명
+                      제외)
+                    </span>
+                  </>
+                )}
               </>
             ) : (
               "정보 불러오는 중..."

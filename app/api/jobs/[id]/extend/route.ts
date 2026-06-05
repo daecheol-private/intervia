@@ -1,13 +1,15 @@
 /**
- * 공고 1개월 연장 — (현재 후보자 수 × resume_upload 단가) 차감.
+ * 공고 1개월 연장 — (보관 중 이력서 수 × resume_upload 단가) 차감.
+ *  (불합격·지원취소 이력서는 파일이 폐기되어 보관비용이 없으므로 과금 제외)
  */
 import { db } from "@/lib/db";
-import { jobPostings, candidates } from "@/lib/schema";
-import { count, eq } from "drizzle-orm";
+import { jobPostings } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import {
   extendJob,
+  countBillableCandidates,
   EXTENSION_DAYS,
   EXTEND_VISIBLE_WITHIN_DAYS,
 } from "@/lib/job-lifecycle";
@@ -30,12 +32,9 @@ export async function GET(
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId)) return new Response("Not found", { status: 404 });
 
-  const [{ n }] = await db
-    .select({ n: count(candidates.id) })
-    .from(candidates)
-    .where(eq(candidates.jobId, jobId));
+  const { billable: candidateCount, total: totalCandidateCount } =
+    await countBillableCandidates(jobId);
   const perResume = await getPricing("resume_upload");
-  const candidateCount = Number(n ?? 0);
   const dLeft =
     job.status === "active" && job.closesAt
       ? Math.ceil(
@@ -52,6 +51,7 @@ export async function GET(
     : null;
   return Response.json({
     candidateCount,
+    totalCandidateCount,
     perResume,
     totalCost: candidateCount * perResume,
     extensionDays: EXTENSION_DAYS,
