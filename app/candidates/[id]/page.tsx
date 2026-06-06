@@ -214,6 +214,7 @@ export default function CandidateDetailPage() {
     sessions: Session[];
     schedules: Schedule[];
     screeningPhase: "not_started" | "in_queue" | "done" | "failed";
+    screeningError?: string | null;
     rescreening?: boolean;
     screeningActive?: boolean;
   } | null>(null);
@@ -660,9 +661,26 @@ export default function CandidateDetailPage() {
             AI 평가 진행 중...
           </div>
         ) : screeningPhase === "failed" ? (
-          <div className="text-sm text-danger">
-            서류 평가 실패. 아래 🔄 재평가 버튼으로 다시 시도하거나 이력서를 재업로드하세요.
-          </div>
+          /OCR을 활성화/.test(data.screeningError ?? "") ? (
+            <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 space-y-1">
+              <div>
+                <strong>스캔(이미지) PDF로 보여 텍스트를 추출하지 못했습니다.</strong>
+              </div>
+              <div>
+                법인 설정 &gt; <strong>스캔 PDF OCR</strong> 을 활성화하면 평가할 수 있습니다
+                (org_admin 권한 필요). 또는 텍스트가 포함된 PDF로 재업로드하세요.
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-danger">
+              서류 평가 실패. 아래 🔄 재평가 버튼으로 다시 시도하거나 이력서를 재업로드하세요.
+              {data.screeningError && (
+                <span className="block text-xs text-slate-500 mt-1">
+                  사유: {data.screeningError}
+                </span>
+              )}
+            </div>
+          )
         ) : candidate.screeningReport ? (
           <div className="space-y-4 text-sm">
             <div className="flex items-baseline gap-3">

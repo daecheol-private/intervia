@@ -141,30 +141,39 @@ export async function ensureParsed(candidateId: number): Promise<void> {
   // 곧장 실패시키지 않고 Gemini 멀티모달 OCR 로 한 번 더 시도.
   // 단, OCR 은 마스킹 *전* 원본 이력서를 AI 수탁자에 전송하므로(정상 PDF 의
   // "마스킹 후 전송" 원칙과 달라짐) 법인이 명시적으로 허용(allowScanOcr)한 경우만.
-  if (resumeText.length < 30 && extOf(originalName) === "pdf") {
-    const allowed = await orgAllowsScanOcr(c.orgId);
-    if (allowed) {
-      const ocr = await ocrPdfToText(buf);
-      if (ocr.length >= 30) {
-        log.info("resume_ocr_recovered", { candidateId, chars: ocr.length });
-        resumeText = ocr;
-        // 감사 로그 — 마스킹 전 원본이 외부 AI 수탁자로 전송된 사실을 기록(분쟁 시 입증).
-        logAudit(null, {
-          actorRole: "system",
-          action: "candidate.scan_ocr",
-          resourceType: "candidate",
-          resourceId: candidateId,
-          orgId: c.orgId ?? null,
-          metadata: { filename: originalName, chars: ocr.length },
-        });
-      }
+  const isPdf = extOf(originalName) === "pdf";
+  // OCR 허용 여부 — 아래 실패 메시지 분기에서도 재사용하므로 DB 조회는 여기 1회만.
+  const ocrAllowed = isPdf ? await orgAllowsScanOcr(c.orgId) : false;
+  if (resumeText.length < 30 && isPdf && ocrAllowed) {
+    const ocr = await ocrPdfToText(buf);
+    if (ocr.length >= 30) {
+      log.info("resume_ocr_recovered", { candidateId, chars: ocr.length });
+      resumeText = ocr;
+      // 감사 로그 — 마스킹 전 원본이 외부 AI 수탁자로 전송된 사실을 기록(분쟁 시 입증).
+      logAudit(null, {
+        actorRole: "system",
+        action: "candidate.scan_ocr",
+        resourceType: "candidate",
+        resourceId: candidateId,
+        orgId: c.orgId ?? null,
+        metadata: { filename: originalName, chars: ocr.length },
+      });
     }
   }
-  if (resumeText.length < 30)
+  if (resumeText.length < 30) {
+    // 스캔(이미지) PDF 인데 법인이 OCR 미허용 → OCR 을 켜면 평가 가능함을 명시해,
+    // 운영자가 "텍스트 추출 실패"만 보고 막막해하지 않게 한다.
+    // (OCR 허용인데도 빈 결과면 이미 OCR 까지 시도한 것이므로 generic 메시지.)
+    if (isPdf && !ocrAllowed)
+      throw new ScreeningError(
+        "스캔(이미지) PDF로 보여 텍스트를 추출하지 못했습니다. 법인 설정에서 스캔 PDF OCR을 활성화하면 평가할 수 있습니다.",
+        false
+      );
     throw new ScreeningError(
       "이력서 텍스트 추출 실패 (스캔 PDF 또는 빈 파일).",
       false
     );
+  }
 
   const pii = extractPII(resumeText, {
     // 파일명/수동입력으로 이미 사람 이름이 잡혔으면 그걸 힌트로.

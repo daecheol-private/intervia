@@ -2244,6 +2244,7 @@ function shortenError(msg: string | null): string {
   if (/JSON|parse/i.test(msg)) return "AI 응답 형식 오류";
   if (/API key|GOOGLE_API_KEY|GOOGLE_CLOUD_PROJECT|GOOGLE_APPLICATION_CREDENTIALS|UNAUTHENTICATED|invalid key|PERMISSION_DENIED/i.test(msg))
     return "API 키 / 서비스계정 설정 문제 — 관리자 확인 필요";
+  if (/스캔 PDF OCR을 활성화|OCR을 활성화/.test(msg)) return "스캔 PDF — OCR 활성화 필요";
   if (/마스킹|텍스트 없음/.test(msg)) return "이력서 텍스트 추출 실패";
   return msg.length > 60 ? msg.slice(0, 60) + "…" : msg;
 }

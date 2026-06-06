@@ -75,7 +75,7 @@ export async function GET(
   //   done:        screeningReport 가 있음
   //   failed:      마지막 큐가 failed (리포트 없음)
   const [lastJob] = await db
-    .select({ status: screeningJobs.status })
+    .select({ status: screeningJobs.status, lastError: screeningJobs.lastError })
     .from(screeningJobs)
     .where(eq(screeningJobs.candidateId, cid))
     .orderBy(desc(screeningJobs.id))
@@ -124,6 +124,8 @@ export async function GET(
     sessions,
     schedules,
     screeningPhase,
+    // 실패 사유 — 후보 상세에서 "OCR 활성화 필요" 등 구체 안내 표시용.
+    screeningError: screeningPhase === "failed" ? lastJob?.lastError ?? null : null,
     rescreening,
     screeningActive,
   });
