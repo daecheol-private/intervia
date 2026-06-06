@@ -14,6 +14,54 @@ import { log } from "./logger";
 
 type ErrorContext = Record<string, unknown>;
 
+// ── PII 스크럽 (Sentry 는 미국 리전 → 개인정보 섞이면 §28의8 국외이전) ──────────────
+// 전송 직전 error.message·context 의 문자열에서 흔한 PII(이메일·전화·주민번호·면접/일정 토큰)를
+// 마스킹하고, 이름·자유서술성 키는 통째로 드롭한다. 디버깅에 필요한 식별 ID·라우트·액션은 유지.
+// (Vercel 로그에는 원본이 그대로 남아 디버깅엔 지장 없음 — 스크럽은 Sentry/Slack 전송분 한정.)
+const PII_RULES: Array<[RegExp, string]> = [
+  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]"],
+  [/\b\d{6}[-\s]?[1-4]\d{6}\b/g, "[rrn]"],
+  [/\b0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4}\b/g, "[phone]"],
+  [/\b(?:tk|sch)_[A-Za-z0-9]+/g, "[token]"],
+  [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "[uuid]"],
+  [/\b[0-9a-f]{32,}\b/gi, "[hex]"],
+];
+
+function scrubString(s: string): string {
+  let out = s;
+  for (const [re, rep] of PII_RULES) out = out.replace(re, rep);
+  return out.length > 1000 ? out.slice(0, 1000) + "…" : out;
+}
+
+// 값에 자유서술 PII(특히 정규식으로 못 잡는 이름)가 들어가기 쉬운 키 — 통째로 redact.
+const DROP_KEYS = new Set([
+  "email", "phone", "mobile", "tel", "name", "fullname", "firstname", "lastname",
+  "candidatename", "applicantname", "username", "rrn", "ssn", "birth", "dob",
+  "password", "pass", "passwd", "secret", "token", "accesstoken", "authpass", "apikey",
+  "resume", "resumetext", "text", "body", "content", "html", "metadata", "address",
+  "note", "memo", "comment", "message", "query", "q",
+]);
+
+function scrubValue(v: unknown, depth: number): unknown {
+  if (depth > 3) return "[depth]";
+  if (typeof v === "string") return scrubString(v);
+  if (typeof v === "number" || typeof v === "boolean" || v == null) return v;
+  if (Array.isArray(v)) return v.slice(0, 20).map((x) => scrubValue(x, depth + 1));
+  if (typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      const norm = k.toLowerCase().replace(/[^a-z0-9]/g, "");
+      out[k] = DROP_KEYS.has(norm) ? "[redacted]" : scrubValue(val, depth + 1);
+    }
+    return out;
+  }
+  return undefined;
+}
+
+function scrubContext(ctx: ErrorContext): ErrorContext {
+  return scrubValue(ctx, 0) as ErrorContext;
+}
+
 function dsnParts(): {
   ingest: string;
   publicKey: string;
@@ -58,19 +106,19 @@ async function sendToSentry(
       values: [
         {
           type: error.name ?? "Error",
-          value: error.message,
+          value: scrubString(error.message),
           stacktrace: error.stack
             ? {
                 frames: error.stack
                   .split("\n")
                   .slice(1, 20)
-                  .map((line) => ({ filename: line.trim() })),
+                  .map((line) => ({ filename: scrubString(line.trim()) })),
               }
             : undefined,
         },
       ],
     },
-    extra: context,
+    extra: scrubContext(context),
   };
 
   const envelope =
@@ -125,7 +173,7 @@ export function captureCritical(err: unknown, context: ErrorContext = {}): void 
   const errMsg = err instanceof Error ? err.message : String(err);
   void sendToSentry(err instanceof Error ? err : errMsg, context, "fatal");
   void sendToSlack(
-    `🚨 *Intervia critical*: ${errMsg}\nContext: \`${JSON.stringify(context).slice(0, 500)}\``
+    `🚨 *Intervia critical*: ${scrubString(errMsg)}\nContext: \`${JSON.stringify(scrubContext(context)).slice(0, 500)}\``
   );
 }
 

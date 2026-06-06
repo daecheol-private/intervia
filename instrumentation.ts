@@ -24,7 +24,8 @@ export const onRequestError: Instrumentation.onRequestError = async (
   try {
     const { reportError } = await import("@/lib/error-reporter");
     await reportError(err, {
-      path: request.path,
+      // raw request.path 는 면접/일정 토큰·ID 가 박혀 있어 보내지 않는다.
+      // routePath 는 라우트 패턴(예: /api/interview/[token]/chat) — 동적값 없음.
       method: request.method,
       routePath: context.routePath,
       routeType: context.routeType,
