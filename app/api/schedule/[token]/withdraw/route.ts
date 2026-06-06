@@ -21,6 +21,7 @@ export async function POST(
   const { token } = await params;
   const body = (await req.json().catch(() => null)) as {
     note?: string;
+    email?: string;
   } | null;
 
   const [sched] = await db
@@ -32,6 +33,28 @@ export async function POST(
     return Response.json({ ok: true, alreadyWithdrawn: true });
   if (new Date(sched.expiresAt) < new Date() && sched.status !== "selected")
     return new Response("만료된 링크입니다.", { status: 410 });
+
+  // 본인 확인 — 지원 취소는 outcome=withdrawn + purgeOnDecision(이력서 본문·파일 영구 폐기)을
+  // 부르는 파괴적·비가역 액션이다. 토큰만 가진 제3자가 링크 유출·전달만으로 후보자 지원을
+  // 날려버리지 못하도록, 면접 안내를 받은 등록 이메일과 일치해야 진행한다. 등록 이메일이
+  // 없으면 토큰만으로 본인 확인 불가 → 거부(fail-safe). (interview/[token]/me DELETE 와 동일 가드)
+  const [identity] = await db
+    .select({ email: candidates.email })
+    .from(candidates)
+    .where(eq(candidates.id, sched.candidateId));
+  const inputEmail = body?.email?.trim() ?? null;
+  if (!identity?.email) {
+    return new Response(
+      "본인 확인을 진행할 수 없습니다 (등록된 이메일이 없습니다). 채용 담당자에게 문의해 주세요.",
+      { status: 403 }
+    );
+  }
+  if (!inputEmail || inputEmail.toLowerCase() !== identity.email.toLowerCase()) {
+    return new Response(
+      "본인 확인 실패: 면접 안내 메일을 받으신 이메일을 입력해 주세요.",
+      { status: 403 }
+    );
+  }
 
   const now = new Date().toISOString();
   await db

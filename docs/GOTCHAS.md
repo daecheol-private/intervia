@@ -315,6 +315,14 @@ SDK: **`@google/genai`** 단일 (vertexai: true 고정).
 
 **확인**: `node_modules/next/dist/docs/01-app/` 안의 마크다운 문서 직접 읽기. 학습 데이터 기반 추측 금지.
 
+## 3-1. instrumentation.ts — import 체인은 반드시 Edge-safe
+
+**증상**: dev/build 로그에 `A Node.js module is loaded ('node:crypto' ...) which is not supported in the Edge Runtime` + `Import trace: Edge Instrumentation: ./lib/logger.ts → ./lib/error-reporter.ts → ./instrumentation.ts`. Node 런타임은 정상 동작해 헬스체크는 200 이라 놓치기 쉽지만, **onRequestError 가 Edge 런타임(proxy 등)에서 작동 안 하고 운영 빌드 경고**.
+
+**원인**: `instrumentation.ts` 의 `onRequestError` 는 **Node + Edge 양쪽 런타임 모두에 번들**된다. 거기서 (직·간접으로) import 하는 모듈이 `node:*` (예: `node:crypto`) 를 쓰면 Edge Instrumentation 번들이 깨진다. `instrumentation → error-reporter → logger` 체인이 대표적.
+
+**해결**: 이 체인의 모듈은 `node:*` import 금지. 글로벌 Web Crypto 만 사용 (`crypto.randomUUID()` 는 Node 22·Edge 양쪽 글로벌). 현재 `lib/logger.ts`·`lib/error-reporter.ts` 는 `randomBytes` 대신 `crypto.randomUUID().replace(/-/g,"")` 사용. 새 코드를 이 체인에 끌어들일 때 동일 규칙 유지. **검증은 dev 재시작 필수** (instrumentation 은 boot-time 로드라 HMR 안 됨 — proxy.ts 와 동일, §7 참고).
+
 ## 4. pdf-parse v1
 
 **증상**: 업로드 시 `ENOENT: no such file or directory, open '.../test/data/05-versions-space.pdf'`

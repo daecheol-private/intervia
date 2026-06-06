@@ -24,13 +24,18 @@ export async function expireInterviewSessions(): Promise<{
 }> {
   // 만료 세션 정리. 면접은 후차감 모델이라 만료 환불은 없다(미시작/미평가는 과금된 적 없음).
   // pending(AI 미시작) 만료는 자동 불합격 처리 대상이라 in_progress 와 분리해 전이시킨다.
+  //
+  // ⚠️ expiresAt 는 toISOString()(T 구분자 + Z) 로 저장된다. SQLite CURRENT_TIMESTAMP 는
+  // 공백 구분자라 둘을 lexicographic 비교하면(' ' < 'T') 만료 당일분이 다음 날까지 안 잡힌다
+  // (GOTCHAS §0-0). expiresAt 와 같은 ISO 포맷의 now 와 비교해 사전순=시간순을 보장한다.
+  const nowIso = new Date().toISOString();
   const expiredPending = await db
     .update(interviewSessions)
     .set({ status: "expired" })
     .where(
       and(
         eq(interviewSessions.status, "pending"),
-        lt(interviewSessions.expiresAt, sql`CURRENT_TIMESTAMP`)
+        lt(interviewSessions.expiresAt, nowIso)
       )
     )
     .returning({ id: interviewSessions.id });
@@ -42,7 +47,7 @@ export async function expireInterviewSessions(): Promise<{
     .where(
       and(
         eq(interviewSessions.status, "in_progress"),
-        lt(interviewSessions.expiresAt, sql`CURRENT_TIMESTAMP`)
+        lt(interviewSessions.expiresAt, nowIso)
       )
     )
     .returning({ id: interviewSessions.id });
@@ -96,7 +101,7 @@ export async function expireInterviewSessions(): Promise<{
     .from(interviewSchedules)
     .where(
       and(
-        lt(interviewSchedules.expiresAt, sql`CURRENT_TIMESTAMP`),
+        lt(interviewSchedules.expiresAt, nowIso),
         sql`${interviewSchedules.status} IN ('pending', 'counter_proposed')`
       )
     );

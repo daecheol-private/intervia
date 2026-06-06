@@ -154,6 +154,11 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `SCREENING_WORKER_CONCURRENCY` | `16` (LLM 대기는 논블로킹 I/O — CPU 코어 수 무관. 코드 기본값도 16. Vertex 쿼터 여유 시 상향 가능) |
 | `SCREENING_WORKER_MAX_JOBS` | **미설정 권장**(= concurrency 와 동일, 1실행 1라운드). 동시성보다 크게 잡으면(예: 100) 1실행이 maxDuration(120s)을 넘겨 함수가 self-chain 전에 죽고 큐가 cron(매분)까지 정체된다. 워커에 70s 벽시계 가드가 있어 이제 멈추진 않지만, 동시성과 어긋난 큰 값은 self-chain 횟수만 늘릴 뿐 이득 없음 → 비워두거나 `SCREENING_WORKER_CONCURRENCY` 와 같은 값으로. |
 | `NEXT_PUBLIC_BLOB_CLIENT_UPLOAD` | `1` (이력서 100MB 직접 업로드 활성화 — 프로덕션에서만 `1`) |
+| `SENTRY_DSN` | (선택) 오류 추적. 설정 시 instrumentation 이 전 라우트 미처리 예외를 Sentry 로 자동 전송 |
+| `SLACK_WEBHOOK_URL` | (선택) critical 에러 + 운영 알림(ops-alerts) Slack 통지 |
+| `OPS_ALERT_EMAIL` | (선택) 운영 알림 수신 메일. 미설정 시 회사 이메일(`site-info` COMPANY_INFO.email)로 발송 |
+| `OPS_QUEUE_BACKLOG` / `OPS_FAILED_LAST_HOUR` / `OPS_STUCK` / `OPS_BALANCE_FLOOR` | (선택) 운영 알림 임계값. 기본 50 / 20 / 5 / (잔액 알림 비활성). `OPS_BALANCE_FLOOR` 설정 시 최저 잔액이 그 값 이하면 알림 |
+| `HEALTH_TOKEN` | (선택) `/api/health` 상세 모드(큐 통계·env 진단) 토큰. 미설정 시 공개 ping 만 |
 
 ---
 
@@ -251,15 +256,34 @@ Vercel Hobby 는 daily cron 만 지원하므로, 분당/시간당 cron 은 외�
 | Method | POST |
 | Auth Header | `Authorization: Bearer ${CRON_SECRET}` |
 
-#### 5-3. (선택) 원본 폐기 — Vercel cron 이 daily 로 동작하므로 중복이라 추천 X.
+#### 5-3. 운영 알림 (1시간 간격)
+| 항목 | 값 |
+|---|---|
+| Title | Intervia — Ops Alerts |
+| URL | `https://your-app.vercel.app/api/cron/ops-alerts` |
+| Schedule | Every 1 hour |
+| Method | POST |
+| Auth Header | `Authorization: Bearer ${CRON_SECRET}` |
+
+> 큐 적체·평가 실패율 급증·워커 멈춤·비정상 마이너스 잔액을 점검해 임계 초과 시
+> `SLACK_WEBHOOK_URL` + `OPS_ALERT_EMAIL`(미설정 시 회사 이메일)로 통지. 임계값은
+> `OPS_QUEUE_BACKLOG`/`OPS_FAILED_LAST_HOUR`/`OPS_STUCK`/`OPS_BALANCE_FLOOR` env 로 조정.
+
+#### 5-4. (선택) 원본 폐기 — Vercel cron 이 daily 로 동작하므로 중복이라 추천 X.
 
 ### Vercel 자체 cron (Pro)
 `vercel.json` cron — Pro 전환 후 분당 cron 가능:
-- `purge-original` — 매일 03:30 (데이터 폐기, PIPA)
+- `purge-original` — 매일 03:30 (데이터 폐기, PIPA). **`expireInterviewSessions` 안전망도 여기 fold** (외부 cron 누락 대비, 멱등).
 - `process-screenings` — **매분 (`* * * * *`)** 큐 워커 안전망. self-chain 이
   끊겨도 1분 내 복구. (과거 `0 4 * * *` 하루 1회였으나, 큐 정체 시 다음날까지
   멈추는 문제로 매분으로 변경 — 2026-05-31)
 - `interview-reminders` — 매시간 (`0 * * * *`)
+- `ops-alerts` — 매시간 (`0 * * * *`) 운영 알림(큐 적체·실패율·stuck·잔액 점검 → Slack/메일)
+- `expire-interviews` — 매시간 (`0 * * * *`) 만료 세션 자동불합격·만료 PII 폐기. (+ `purge-original`
+  일일 안전망에도 멱등 fold — 둘 다 돌아도 무해)
+
+> **Pro 사용 시 cron-job.org 불필요** — 위 vercel.json cron 5개가 네이티브로 실행된다. §5(cron-job.org)는
+> Hobby(분당/시간당 cron 미지원) 일 때의 대안 가이드이므로 Pro 면 무시.
 
 ### 검증
 - cron-job.org 대시보드에서 각 cronjob 의 history → 200 응답 확인

@@ -10,7 +10,6 @@
  *   captureError(err, { route: "/api/foo", userId: 1 });
  *   captureCritical(err, { ... });   // → Sentry + Slack
  */
-import { randomBytes } from "node:crypto";
 import { log } from "./logger";
 
 type ErrorContext = Record<string, unknown>;
@@ -44,8 +43,9 @@ async function sendToSentry(
   const error =
     err instanceof Error ? err : new Error(typeof err === "string" ? err : String(err));
   // Sentry envelope 는 event_id 가 정확히 32 hex chars 여야 함.
-  // 기존 Math.random 기반은 길이 가변 → "invalid event identifier" 400 발생.
-  const eventId = randomBytes(16).toString("hex");
+  // node:crypto 대신 글로벌 Web Crypto(randomUUID)를 써서 Node·Edge 양쪽 런타임에서 동작
+  // (instrumentation onRequestError 는 edge 런타임에서도 호출될 수 있음).
+  const eventId = crypto.randomUUID().replace(/-/g, "");
 
   const event = {
     event_id: eventId,
@@ -127,4 +127,27 @@ export function captureCritical(err: unknown, context: ErrorContext = {}): void 
   void sendToSlack(
     `🚨 *Intervia critical*: ${errMsg}\nContext: \`${JSON.stringify(context).slice(0, 500)}\``
   );
+}
+
+/**
+ * 전송 완료까지 await 가능한 캡처 — instrumentation `onRequestError` 처럼
+ * 응답 후 함수가 동결돼 fire-and-forget 이 잘릴 수 있는 컨텍스트용.
+ * (Next 문서 권고: onRequestError 내 async 작업은 await 할 것.)
+ */
+export async function reportError(
+  err: unknown,
+  context: ErrorContext = {}
+): Promise<void> {
+  log.error("captured", err, context);
+  await sendToSentry(err instanceof Error ? err : String(err), context, "error");
+}
+
+/**
+ * 운영 알림 — 예외가 아닌 "느린 장애"(큐 적체·실패율 급증 등) 통지. Slack 으로만 보낸다
+ * (Sentry 는 에러 추적용이라 비-에러 지표로 오염시키지 않음). 메일 통지는 호출부(cron)가
+ * mailer 로 별도 처리 — 이 모듈은 edge-safe(글로벌 fetch만) 유지해야 하므로 mailer 미import.
+ */
+export async function notifyOps(text: string): Promise<void> {
+  log.warn("ops_alert", { text: text.slice(0, 500) });
+  await sendToSlack(`📟 *Intervia 운영 알림*\n${text}`);
 }

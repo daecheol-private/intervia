@@ -9,6 +9,7 @@
  */
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { getQueueStats } from "@/lib/screening-queue";
 
 export const runtime = "nodejs";
 
@@ -48,7 +49,15 @@ export async function GET(req: Request) {
     );
   }
 
-  // 상세 모드: 인프라 진단 정보 포함.
+  // 상세 모드: 인프라 진단 정보 포함. (공개 ping 에는 DB 부하를 더하지 않도록 인증 이후에만 조회)
+  // 평가 큐 적체·실패 누적은 "느린 장애" 신호 — DB liveness 만으로는 안 보인다.
+  let queue: Awaited<ReturnType<typeof getQueueStats>> | { error: string };
+  try {
+    queue = await getQueueStats();
+  } catch (e) {
+    queue = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   const result = {
     ok: dbR.ok,
     timestamp: new Date().toISOString(),
@@ -56,6 +65,7 @@ export async function GET(req: Request) {
     version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "dev",
     checks: {
       db: dbR,
+      queue,
       env: {
         google_cloud_project: checkEnv("GOOGLE_CLOUD_PROJECT"),
         google_app_credentials:

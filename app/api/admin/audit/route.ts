@@ -6,6 +6,7 @@ import { auditLogs, users, organizations } from "@/lib/schema";
 import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
+import { sqliteTimestamp } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -33,7 +34,8 @@ export async function GET(req: Request) {
     orgFilter = Number(orgIdParam);
   }
 
-  const since = new Date(Date.now() - daysBack * 86_400_000).toISOString();
+  // createdAt(공백 포맷)과 같은 포맷으로 비교 — toISOString(T)과 섞으면 기준일 당일분 누락(GOTCHAS §0-0).
+  const since = sqliteTimestamp(new Date(Date.now() - daysBack * 86_400_000));
   const conditions: SQL[] = [gte(auditLogs.createdAt, since)];
   if (orgFilter !== null) conditions.push(eq(auditLogs.orgId, orgFilter));
   if (actionFilter) conditions.push(eq(auditLogs.action, actionFilter));

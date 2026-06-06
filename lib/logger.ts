@@ -12,8 +12,10 @@
  * 요청 ID 부착이 필요한 경우:
  *   const reqLog = withRequest(req);
  *   reqLog.info("hit", { foo:1 });   // → 자동으로 req_id 포함
+ *
+ * node 모듈을 import 하지 않는다 — instrumentation.ts(onRequestError) 가 이 로거를
+ * 거쳐 error-reporter 를 쓰므로 Edge 런타임 번들에도 들어간다. 글로벌 Web Crypto 만 사용.
  */
-import { randomBytes } from "node:crypto";
 
 type Level = "debug" | "info" | "warn" | "error";
 
@@ -96,6 +98,6 @@ function readOrCreateRequestId(req: Request): string {
   return (
     req.headers.get("x-request-id") ??
     req.headers.get("x-vercel-id") ??
-    "r_" + randomBytes(4).toString("hex")
+    "r_" + crypto.randomUUID().replace(/-/g, "").slice(0, 8)
   );
 }

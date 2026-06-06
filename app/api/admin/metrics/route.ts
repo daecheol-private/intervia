@@ -18,6 +18,7 @@ import {
 import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
+import { sqliteTimestamp } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -32,7 +33,9 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const days = Math.max(1, Math.min(Number(url.searchParams.get("days") ?? 30), 365));
-  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  // createdAt(CURRENT_TIMESTAMP 공백 포맷)과 같은 포맷으로 비교 — toISOString(T)과 섞으면
+  // 기준일 당일 생성분이 lexicographic gte 에서 누락된다(GOTCHAS §0-0).
+  const since = sqliteTimestamp(new Date(Date.now() - days * 86_400_000));
 
   const isSystemAdmin = me!.role === "system_admin";
   const orgFilter = isSystemAdmin ? null : me!.orgId;

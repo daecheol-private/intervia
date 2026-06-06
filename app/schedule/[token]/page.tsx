@@ -106,13 +106,21 @@ export default function SchedulePage() {
   };
 
   const withdraw = async () => {
-    if (!confirm("지원을 취소하시면 더 이상 면접이 진행되지 않으며, 본인 정보가 폐기됩니다. 계속할까요?"))
+    // 본인 확인 — 지원 취소는 본인 정보가 영구 폐기되는 비가역 액션이라, 면접 안내를 받은
+    // 이메일을 입력받아 서버에서 일치를 검증한다(링크 유출 시 제3자 취소 차단).
+    const email = prompt(
+      "지원을 취소하면 더 이상 면접이 진행되지 않으며 본인 정보가 폐기됩니다 (비가역).\n계속하려면 면접 안내를 받으신 이메일을 입력해 주세요."
+    );
+    if (email == null) return; // 취소
+    if (!email.trim()) {
+      alert("이메일을 입력해 주세요.");
       return;
+    }
     setBusy(true);
     const r = await fetch(`/api/schedule/${token}/withdraw`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ email: email.trim() }),
     });
     setBusy(false);
     if (!r.ok) {

@@ -230,7 +230,10 @@ export async function checkCloseable(jobId: number): Promise<{
   }>;
   pendingDecisionCount: number;
 }> {
-  const now = sql`CURRENT_TIMESTAMP`;
+  // expiresAt 는 toISOString()(T 포맷)로 저장 — CURRENT_TIMESTAMP(공백 포맷)와 비교하면
+  // 만료 당일 세션이 시각과 무관하게 "유효"로 잡혀 HR 의 공고 종결을 부당하게 막는다(GOTCHAS §0-0).
+  // 같은 ISO 포맷의 now 와 비교해 사전순=시간순을 보장.
+  const now = new Date().toISOString();
 
   // AI 면접 링크 — pending/in_progress + 유효
   const aiBlockers = await db

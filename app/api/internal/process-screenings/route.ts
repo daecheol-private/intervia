@@ -13,6 +13,7 @@ import {
   ScreeningError,
 } from "@/lib/screening";
 import { getCurrentUser } from "@/lib/auth";
+import { captureError } from "@/lib/error-reporter";
 
 export const runtime = "nodejs";
 // 최대 실행 시간 120s. 제약: LOCK_STALE_SECONDS(300) 보다 작아야 정상 워커가
@@ -94,7 +95,13 @@ async function processOne(workerId: string): Promise<
     try {
       await chargeScreeningSuccess(claim.jobId, claim.candidateId);
     } catch (chargeErr) {
-      console.error("charge after screening success failed", claim.jobId, chargeErr);
+      // 평가는 성공했는데 과금만 실패 — 매출 누락 신호라 모니터링에 올린다(평가는 롤백 안 함).
+      captureError(chargeErr, {
+        route: "internal/process-screenings",
+        op: "chargeScreeningSuccess",
+        jobId: claim.jobId,
+        candidateId: claim.candidateId,
+      });
     }
     return "success";
   } catch (e) {

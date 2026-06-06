@@ -1,7 +1,8 @@
 import { db } from "./db";
-import { candidates } from "./schema";
+import { candidates, candidateAttachments } from "./schema";
 import { and, eq, lt, sql, isNotNull } from "drizzle-orm";
 import { deleteFile } from "./storage";
+import { deleteAttachmentsForCandidate } from "./candidate-files";
 
 const DEFAULT_PURGE_DAYS = 30;
 
@@ -48,6 +49,12 @@ export async function purgeExpiredOriginals(
         failedFiles++;
       }
     }
+    // 첨부(포트폴리오·자소서 등) 원본 파일·행도 폐기 — 메인 이력서만 지우면 첨부 PII 가
+    // 공고 종결(+7/+14일) 전까지 남아 "+30일 원본 폐기" 가명처리 원칙이 깨진다.
+    await deleteAttachmentsForCandidate(t.id).catch(() => {});
+    await db
+      .delete(candidateAttachments)
+      .where(eq(candidateAttachments.candidateId, t.id));
     await db
       .update(candidates)
       .set({ resumeText: "", resumeMaskedText: null, resumeFilePath: "" })

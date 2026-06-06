@@ -2,6 +2,7 @@ import { purgeExpiredOriginals } from "@/lib/purge-original";
 import { cleanupOldAttempts } from "@/lib/auth-attempts";
 import { cleanupOldRateLog } from "@/lib/rate-limit";
 import { runLifecycleSweep } from "@/lib/job-lifecycle";
+import { expireInterviewSessions } from "@/lib/expire-sessions";
 import { getCurrentUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -27,12 +28,17 @@ export async function GET(req: Request) {
   const purgedAttempts = await cleanupOldAttempts();
   const purgedRateLog = await cleanupOldRateLog();
   const lifecycle = await runLifecycleSweep();
+  // 만료 처리 안전망 — expire-interviews 는 외부 cron(cron-job.org, 매시간)에 의존한다.
+  // 그 등록이 누락/실패하면 만료 세션 자동불합격·만료 PII 폐기가 영원히 안 돈다. 멱등(이미
+  // expired/outcome 설정분은 스킵)이라 일일 cron 에도 끼워 단일 실패점을 제거한다.
+  const expiry = await expireInterviewSessions();
   return Response.json({
     ok: true,
     ...result,
     purgedAttempts,
     purgedRateLog,
     lifecycle,
+    expiry,
   });
 }
 

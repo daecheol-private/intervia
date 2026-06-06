@@ -11,6 +11,16 @@ export function addDays(date: Date, days: number): Date {
 }
 
 /**
+ * JS Date → SQLite CURRENT_TIMESTAMP 와 같은 포맷 문자열("YYYY-MM-DD HH:MM:SS", UTC).
+ * createdAt 처럼 CURRENT_TIMESTAMP 기본값으로 저장된 컬럼과 gte/lte 비교할 때 사용.
+ * toISOString()(T 구분자 + Z)와 섞으면 lexicographic 비교가 경계에서 깨진다(GOTCHAS §0-0).
+ * (auth-attempts.ts / rate-limit.ts 의 동명 내부 헬퍼와 동일 — 공용화.)
+ */
+export function sqliteTimestamp(d: Date): string {
+  return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+}
+
+/**
  * SQLite CURRENT_TIMESTAMP 는 UTC 시각을 "YYYY-MM-DD HH:MM:SS" 형태로 저장
  * (ISO Z 접미사 없음). JavaScript Date() 는 이런 문자열을 로컬 시간으로 잘못
  * 해석하므로, UTC 임을 명시해 파싱한다. 이미 Z·offset 이 있으면 그대로 둠.

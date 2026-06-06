@@ -185,13 +185,12 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
 
 > 비용 일회성 ~70만원 + 월 $20. 매출이 잡혀야 정당화 가능. 첫 계약 임박 시 일괄 진행.
 
-### [ ] D-1. Vercel Pro 전환 (5분, $20/월) ⭐
+### [x] D-1. Vercel Pro 전환 (완료 2026-06-07) ⭐
 - **왜**: Vercel Hobby Plan 약관 §1.2 — "personal, non-commercial use only". B2B SaaS 운영 = 명백한 상업적 사용 = 약관 위반 → 계정 정지 가능.
-- **할 일**: Vercel 대시보드 → Billing → Upgrade to Pro
-- **얻는 것**:
+- **얻은 것**:
   - 상업적 사용 허용 (가장 중요)
   - 함수 timeout 10초 → 60초 (Gemini Pro thinking + stream 안전)
-  - Cron 무제한 (cron-job.org 외부 의존 제거 가능)
+  - Cron 무제한 → `vercel.json` cron 5개 네이티브 실행, **cron-job.org 외부 의존 제거 완료**
   - DDoS 보호
 
 ### [ ] D-2. 통신판매업 신고 (45,000원, 1일)
@@ -269,10 +268,10 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
 | A | 무료 셋업 + 사업자등록 | 6 | 4 (△ A-3 Phase D 연기) |
 | B | 도메인 + stage 외부 테스트 | 4 | 0 |
 | C | DPA + 법적 마무리 | 5 | 0 |
-| D | 첫 고객 약속 시점 | 6 | 1 |
+| D | 첫 고객 약속 시점 | 6 | 2 (D-1 Pro 전환 완료) |
 | E | 결제 시스템 (Claude 처리) | 3 | 0 |
 | 상시 | 운영 안정화 | 4 | 1 |
-| **합계** | | **28** | **6** |
+| **합계** | | **28** | **7** |
 
 ---
 

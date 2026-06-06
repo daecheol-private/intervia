@@ -8,9 +8,10 @@
  *         평가 결과 (점수·추천) 은 채용 통계 목적으로 1년 보존 (처리방침 명시)
  */
 import { db } from "@/lib/db";
-import { interviewSessions, candidates } from "@/lib/schema";
+import { interviewSessions, candidates, candidateAttachments } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { deleteFile } from "@/lib/storage";
+import { deleteAttachmentsForCandidate } from "@/lib/candidate-files";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 
@@ -120,6 +121,13 @@ export async function DELETE(
   const c = auth.candidate;
   // 본문·파일 즉시 폐기. 평가 결과·이름은 채용 통계 목적으로 일부 보존 (처리방침 §3).
   if (c.resumeFilePath) await deleteFile(c.resumeFilePath).catch(() => null);
+  // 첨부(포트폴리오·자소서 등)도 원본 파일 + 행까지 폐기 — 메인 이력서만 지우면 첨부에 담긴
+  // PII 가 남아 정보주체 파기권(PIPA §36)이 반쪽이 된다. (HR 단건/일괄 삭제·결정 폐기는
+  // 이미 첨부를 처리하나 본인 파기 경로만 빠져 있었음.)
+  await deleteAttachmentsForCandidate(c.id).catch(() => null);
+  await db
+    .delete(candidateAttachments)
+    .where(eq(candidateAttachments.candidateId, c.id));
   await db
     .update(candidates)
     .set({

@@ -36,20 +36,18 @@ DELETE FROM organizations WHERE /* 테스트 조건 */;
 > 테스트 조건은 시점에 따라 다름. `created_at < '실제 첫 고객 가입일'` 또는 특정 org_id 기준.
 > `turso db shell intervia-db` 로 접속해서 실행.
 
-### 3. 시크릿 재발급 (DEPLOY.md §3-1 권장)
+### 3. ✅ 시크릿 재발급 — dev/prod 분리 완료 (2026-06-07)
 
-```powershell
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` 로 새 값 생성 후 Vercel + `.env.production.local` 교체.
 
-위 명령으로 새 키 발급 후 다음 환경변수 교체:
-
-| 키 | Vercel 업데이트 | 추가 작업 |
+| 키 | 상태 | 비고 |
 |---|---|---|
-| `CRON_SECRET` | ✅ | cron-job.org 헤더도 동시 갱신 (Pro 가입 전이라면) |
-| `INTERNAL_API_SECRET` | ✅ | 없음 |
-| `HEALTH_TOKEN` | ✅ | 모니터링 도구 헤더 갱신 |
-| `MASTER_ENCRYPTION_KEY` | ⚠️ **DB 비어있을 때만** | 기존 enc 데이터(SMTP 비번 등) 모두 복호화 불가됨. 테스트 청소 직후 시점에 교체. |
+| `CRON_SECRET` | ✅ 분리 완료 | Pro 네이티브 cron이라 Vercel이 헤더 자동 주입 — 외부 동기화 불필요 |
+| `INTERNAL_API_SECRET` | ✅ 분리 완료 | — |
+| `MASTER_ENCRYPTION_KEY` | ✅ 분리 완료 (64 hex) | 2FA 미사용 + 실데이터 없음 시점에 교체 → 깨진 enc 데이터 없음 |
+| `HEALTH_TOKEN` | (선택) | 분리하려면 동일 절차 + 모니터링 도구 헤더 갱신 |
+
+> dev(`.env.local`) ≠ prod(Vercel/`.env.production.local`) 확인 완료. Vercel env 교체 후 **Redeploy 필요**(아래 §D-0 배포로 반영).
 
 ### 4. 테스트 계정 정리
 - 가짜 멤버/관리자 계정 비번 변경 또는 삭제
@@ -60,22 +58,18 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## 🟡 권장 (출시 직후)
 
-### 5. Vercel Pro 가입 + cron 분 단위 전환
-[DEPLOY.md §3-1] 참조 — 상업 트래픽 발생 = Pro 의무.
-
-전환 후 `vercel.json` 수정:
+### 5. ✅ Vercel Pro 전환 완료 (2026-06-07)
+상업 트래픽 = Pro 의무 충족. cron 5개 모두 `vercel.json` 네이티브 실행 → **cron-job.org 불필요**:
 ```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [
-    { "path": "/api/cron/process-screenings", "schedule": "* * * * *" },
-    { "path": "/api/cron/expire-interviews", "schedule": "0 * * * *" },
-    { "path": "/api/cron/purge-original", "schedule": "30 3 * * *" }
-  ]
-}
+"crons": [
+  { "path": "/api/cron/process-screenings", "schedule": "* * * * *" },
+  { "path": "/api/cron/interview-reminders", "schedule": "0 * * * *" },
+  { "path": "/api/cron/ops-alerts",         "schedule": "0 * * * *" },
+  { "path": "/api/cron/expire-interviews",  "schedule": "0 * * * *" },
+  { "path": "/api/cron/purge-original",     "schedule": "30 3 * * *" }
+]
 ```
-
-→ cron-job.org 가입했었다면 jobs 비활성화. 수동 트리거 스크립트(`scripts/process-now.ps1`)는 비상용으로 남겨둘 수 있음.
+→ Vercel cron 인증을 위해 `CRON_SECRET` 이 Vercel 환경변수에 있어야 함. 수동 트리거 스크립트(`scripts/process-now.ps1`)는 비상용으로 유지.
 
 ### 6. Resend Pro 검토
 - Free: 일 100통, 월 3,000통

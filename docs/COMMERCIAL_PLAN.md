@@ -12,12 +12,12 @@
 |---|---|---|---|
 | 1. 법적 안전망 + 보안 | 21 | 18 | 86% |
 | 2. 채용 워크플로우 | 11 | 10 | 91% |
-| 3. 운영 안정성 | 8 | 6 | 75% |
+| 3. 운영 안정성 | 8 | 7 | 88% |
 | 4. UX / 차별화 | 7 | 5 | 71% |
-| 6. 시스템 관리자 운영 기능 | 16 | 10 | 63% |
+| 6. 시스템 관리자 운영 기능 | 16 | 11 | 69% |
 | 7. 디자인 시스템 리뉴얼 (Forest+Ivory) | 4 | 1 | 25% |
 | 8. 고객센터 / 문의 접수 | 5 | 5 | 100% |
-| **합계** | **72** | **55** | **76%** |
+| **합계** | **72** | **57** | **79%** |
 
 마일스톤:
 - **M1 — Phase 1 완료** = 외부 후보자에게 링크 뿌릴 수 있는 법적·보안 최소선
@@ -49,10 +49,10 @@
   - 1인 기업이므로 별도 DPO 지정 의무 없음, 대표자가 책임자
 - [x] **A-6**: 이의제기 수신처 → **DPO 이메일 동일** (`daecheol1983@gmail.com`) (2026-05-16 결정. 향후 트래픽 늘면 별도 메일 분리)
 - [x] **DB**: **Turso 유지** (2026-05-16 결정. Phase 4 출시 직전 재평가)
-- [x] **호스팅**: **Vercel Hobby + cron-job.org** (2026-05-16 결정)
-  - 사유: 테스트 단계에선 비용 0원, 실매출 발생 시 Pro 이전
-  - cron-job.org 무료로 1분/시간 단위 cron 사용 (가이드: `DEPLOY.md` §5)
-  - Vercel cron 은 daily 2개 (data purge / queue safety net) 만
+- [x] **호스팅**: **Vercel Pro** (2026-06-07 전환 완료. 2026-05-16 엔 Hobby+cron-job.org 로 시작했으나 Pro 사용 중으로 변경)
+  - cron 5개 전부 `vercel.json` **네이티브 실행** → **cron-job.org 불필요**:
+    process-screenings(매분) / interview-reminders·ops-alerts·expire-interviews(매시간) / purge-original(매일 03:30)
+  - 상업적 사용 허용 + 함수 timeout 60s (Vertex 응답 여유) + DDoS 보호
 - [x] **A-5**: 후보자 데이터 보유기간 디폴트 → **합·불 결정 시점 즉시 폐기** (2026-05-16 결정)
 - [x] **A-6**: 자동화 의사결정 이의제기 수신처 → **DPO 이메일과 통합** (`daecheol1983@gmail.com`, 1인 기업이라 DPO·이의제기·문의 모두 단일 채널). 2026-05-26 결정. 구현 완료: `lib/site-info.ts` `APPEAL_CONTACT`, `app/interview/[token]/appeal/page.tsx`, `app/api/interview/[token]/appeal/route.ts` 모두 존재. 분리 필요해지는 시점(이의제기 빈도 높아져서 DPO 일반 문의와 섞이면 운영 불편) 까지는 단일 채널 유지.
 - [x] **A-7**: 비밀번호 정책 → **최소 10자 + 영문 대/소/숫자/특수문자 중 3종 이상** (2026-05-16 결정. 2026-05-20 12자 → 10자 완화)
@@ -63,8 +63,8 @@
 - [x] **B-2**: 합·불 통보 메일 템플릿 (2026-06-02 결정) — **현재 기본 템플릿 유지**(`buildDecisionEmail`). 결정 시 커스텀 본문 입력 가능. 법인별 템플릿 저장 기능은 미도입.
 
 ### C. Phase 3 전에 결정
-- [ ] **C-1**: 에러 모니터링 서비스 — Sentry (무료 5k events/월) / Logtail / 자체
-- [ ] **C-2**: 백업 정책 — Turso 자동 백업만? 별도 일일 export?
+- [x] **C-1**: 에러 모니터링 → **Sentry** (DSN 발급 A-4, 2026-06-07 instrumentation 으로 전 라우트 자동 캡처 배선 완료). Slack/메일 운영 알림(ops-alerts)도 추가.
+- [x] **C-2**: 백업 정책 → **Turso PITR(주) + 주간 `turso db dump` 오프사이트(부)** (2026-06-07 결정). serverless export cron 미채택(공식 도구가 더 견고). 절차·복구·분기 드릴은 [RUNBOOK.md](RUNBOOK.md) §4.
 
 ### D. 글로벌 / 향후 (지금 결정 안 해도 됨)
 - [ ] **D-1**: 다국어 (영어/중국어) 우선순위
@@ -84,8 +84,8 @@
 - [ ] **K-3**: **Vercel Blob 토큰**
   - Vercel 대시보드 → Storage → Blob → Create
   - `BLOB_READ_WRITE_TOKEN`
-- [ ] **K-4**: **Vercel 프로젝트** 연결 — **Hobby 티어** (실매출 발생 전까지). cron-job.org 로 cron 보완
-- [ ] **K-4-2**: **cron-job.org 가입 + 3개 cronjob 등록** (가이드: `DEPLOY.md` §5)
+- [x] **K-4**: **Vercel 프로젝트 연결 + Pro 티어** (2026-06-07). cron 은 `vercel.json` 네이티브 실행.
+- [x] **K-4-2**: ~~cron-job.org 등록~~ → **불필요** (Pro 전환으로 vercel.json cron 네이티브). cron-job.org 가이드는 `DEPLOY.md` §5 에 Hobby 대안으로만 유지.
 - [x] **K-5**: **CRON_SECRET / INTERNAL_API_SECRET / MASTER_ENCRYPTION_KEY** → `.env.local` 자동 주입 완료 (2026-05-16)
 - [ ] **K-6**: **SMTP_*** 환경변수 (시스템 기본 메일서버) — 법인 SMTP 미등록 시 폴백.
   - dev: Resend Free + `onboarding@resend.dev` (본인 메일에만 발송, 월 3,000통) — 적용 완료 (2026-05-20)
@@ -326,8 +326,7 @@
   - ✅ `GET /api/admin/metrics?days=N` — 법인/사용자/공고/후보자 카운트, stage 분포, 토큰 사용, 큐 상태, 면접 통계, 법인별 분포, cross-org 추적
   - ✅ `/admin/metrics` UI — system_admin 전체 통계 / org_admin 본인 법인 한정
   - ✅ 네비바 "메트릭" 메뉴 추가
-- [ ] **3-2-2** 백업 검증 — Turso 자동 백업 의존 + 별도 export cron 은 후속
-  - 현재: Turso Free tier 가 7일 PITR 제공. 운영 시작 후 별도 export cron 추가 검토
+- [x] **3-2-2** 백업 검증 (2026-06-07) — 정책 확정(C-2): Turso PITR(주) + 주간 오프사이트 `turso db dump`(부). 복구 절차 + **분기 복구 드릴**(백업 존재 ≠ 복구 가능)을 [RUNBOOK.md](RUNBOOK.md) §4 에 문서화. serverless export cron 은 공식 도구 대비 취약해 미채택.
 - [x] **3-2-3** 환경변수 검증 + `lib/config.ts` 중앙화 (완료 2026-05-16)
   - ✅ `lib/config.ts` — `config()` lazy validation, `checkConfig()` 헬스체크용
   - ✅ 필수: GOOGLE_API_KEY, MASTER_ENCRYPTION_KEY (길이 64 검증)
@@ -447,7 +446,7 @@
 - [ ] **6-C-3**: 메트릭 커스텀 기간/export
 - [ ] **6-C-4**: 토큰 단가 변경 이력 + 영향도 시뮬레이션
 - [ ] **6-C-5**: 공고 강제 종료 (org_admin 무능 시)
-- [ ] **6-C-6**: 운영 알림 채널 — 마이너스 토큰·실패율 급증 → Slack/메일
+- [x] **6-C-6**: 운영 알림 채널 (2026-06-07) — `lib/ops-monitor.ts`(큐 적체·최근 실패율·stuck·비정상 마이너스 잔액 점검) + `/api/cron/ops-alerts`(매시간) → 임계 초과 시 `notifyOps`(Slack) + 운영 메일(`OPS_ALERT_EMAIL`). 임계값 env 조정. error-reporter 는 edge-safe 유지(Slack만), 메일은 cron 라우트가 mailer 로.
 
 ### 공통 보안 원칙
 
@@ -607,3 +606,20 @@
 - 2026-06-04 — **Phase 8 보강 2건**. ① `/admin/inquiries` **system_admin 전용**으로 잠금(서버 컴포넌트 역할 가드 + redirect, API 403). 고객센터=운영자 데스크, org_admin 은 `/support` 제출만. ② `/support`·`/admin/inquiries` **게시판+팝업 리디자인** — 행당 1줄 테이블(누적 대비), `/support` 는 "문의하기" 버튼→폼 모달, 양쪽 행 클릭→상세 모달(관리자는 상태 토글+답변). 공용 `app/components/Modal.tsx` 신규.
 - 2026-06-05 — **메일 발송 수탁자(Resend) 고지 보강** (USER_TODO B-1 후속, 도메인 verify 후 누락분). Resend 도메인 verify 로 시스템 기본 메일이 전체 발송되면서 Resend Inc.(미국)가 후보자 이메일·본문을 처리하는 국외이전 수탁자가 됐으나 고지에서 누락돼 있던 것을 닫음. `lib/site-info.ts` `PROCESSORS` 에 Resend(미국)+법인 자체 SMTP 2항목으로 분리 명시, `PRIVACY_VERSION` 1.3.0 / `CONSENT_VERSION` 1.6.0 bump(기존 동의자 재동의 요구), `/privacy` §5·동의 게이트 처리위탁 항목·`/legal/applicant-consent-template`(한·영) 국외이전에 Resend(미국) 반영. `/legal/ai-evaluation-disclosure` §8 은 AI 수탁자만 필터링이라 변경 없음. tsc 통과.
 - 2026-06-05 — **시스템 기본 메일 발신 표시이름에 법인명 노출**. SMTP 미등록 법인(=Resend 폴백, 다수 케이스)의 후보자 메일에서 발신자가 `Intervia` 단독으로 보이던 것을, 후보자 대상(`audience==="candidate"`) + env 발송(`source==="env"`)일 때 `"○○ 채용팀 (Intervia)" <noreply@intervia.kr>` 형태로 법인명을 앞세워 후보자 식별성·신뢰도 향상(도메인은 intervia.kr 유지, SPF/DKIM 영향 없음). `lib/mailer.ts` `sendMail` 공통 레이어에서 처리(nodemailer 객체형 `{name,address}` — 한글 MIME 인코딩 자동). 법인 자체 SMTP 등록 시(`source==="org"`)는 회사 도메인·표시이름 그대로 유지. org/인증/이의제기 등 `audience==="org"` 메일은 영향 없음. 적용 경로: 면접 링크 발송·합·불 통보. tsc 통과, DB 변경 없음.
+- 2026-06-06 — **모니터링 배선 보강** (출시 준비 ①). Phase 3 에서 만든 Sentry/Slack(error-reporter)·헬스체크가 실제로 거의 연결돼 있지 않던 문제를 해결.
+  - **`instrumentation.ts` 신규** (Next 16 `onRequestError`): 라우트 핸들러·서버 컴포넌트·cron 핸들러의 처리되지 않은 모든 예외를 Sentry 로 자동 전송. 기존엔 `captureError`/`captureCritical` 가 `lib/audit.ts` 한 곳에서만 호출돼 LLM·메일·cron·라우트 실패가 모니터링에 안 잡히고 Vercel 로그에만 묻혔음. 라우트별 try/catch 추가 없이 한 파일로 전 라우트 커버.
+  - **error-reporter·logger Edge-safe 화**: instrumentation import 체인이 Edge 런타임에도 번들되는데 `logger.ts` 가 `node:crypto`(randomBytes)를 써서 Edge Instrumentation 번들이 깨지던 버그 발견·수정 (dev 재시작 검증에서 포착). `crypto.randomUUID()`(글로벌 Web Crypto)로 교체. GOTCHAS §3-1 추가.
+  - **워커 과금 실패 격상**: `process-screenings` 의 평가 성공 후 과금 실패를 `console.error` → `captureError`(매출 누락 신호).
+  - **헬스체크 심화**: `/api/health` 상세 모드(HEALTH_TOKEN)에 평가 큐 통계(queued/processing/failed) 추가 — DB liveness 만으로 안 보이던 큐 적체·실패 누적("느린 장애") 진단. 공개 ping 은 DB 부하 없이 그대로.
+  - 검증: tsc 통과, dev 재시작 후 `✓ Ready` + Edge `node:crypto` 에러 소멸 + proxy(edge)·전 라우트 200 확인. DB 변경 없음.
+- 2026-06-07 — **출시 전 버그 감사** (출시 준비 ③). 치명적 불변식(테넌트격리·과금멱등·인증·PII·동시성) 5클래스를 병렬 감사관으로 전수 점검. 테넌트격리·과금멱등은 발견 0건(매우 견고). 확정된 고가치 버그 5건 수정:
+  - **[P1] 후보자 본인 파기(PIPA §36) 첨부 누락** — `interview/[token]/me` DELETE 가 메인 이력서만 지우고 `candidateAttachments`(포트폴리오·자소서 원본+마스킹본)는 방치했음. `deleteAttachmentsForCandidate` + 행 삭제 추가.
+  - **[P2] +30일 원본 폐기 첨부 누락** — `purgeExpiredOriginals` 도 동일하게 첨부 미폐기 → 첨부 파일·행 폐기 추가.
+  - **[P1/ops] 만료 처리 단일 실패점** — `expireInterviewSessions`(만료 자동불합격·만료 PII 폐기)가 `vercel.json` 에 없고 외부 cron(cron-job.org)에만 의존. 누락 시 영원히 안 돎 → 일일 `purge-original` cron 에 멱등 안전망으로 fold.
+  - **[P2] SQLite 타임스탬프 포맷 불일치(GOTCHAS §0-0)** — `expire-sessions`(3곳)·`job-lifecycle.checkCloseable`(2곳)가 toISOString(T) 저장 `expiresAt` 를 `CURRENT_TIMESTAMP`(공백)와 lexicographic 비교 → 만료 당일분이 최대 ~1일 늦게 처리/공고종결 부당 차단. 같은 ISO 포맷 `now` 와 비교하도록 수정.
+  - 검증: tsc 통과, dev HMR 후 health 200·컴파일 에러 0. DB 변경 없음.
+  - **보고만(미수정, 사용자 판단 필요)**: ① `schedule/[token]/withdraw` 토큰-only 파괴적 폐기(이메일 검증 없음 — 병렬 `me` DELETE 엔 가드 있음; 수정엔 후보자 UI 변경 동반) ② admin `metrics`/`audit`/`audit/export` 의 `since`(toISOString) vs `createdAt`(공백) 경계일 undercount(통계·컴플라이언스 export) ③ `extendJob` 잔액 check-then-charge 비원자(서로 다른 공고 동시 연장 시 소폭 음수 — 후불정책상 손실 아님).
+- 2026-06-07 — **운영 알림 cron** (출시 준비 ②, 6-C-6 완료). `lib/ops-monitor.ts` + `/api/cron/ops-alerts`(매시간). 큐 적체/최근1h 실패/stuck/비정상 마이너스 잔액 임계 점검 → Slack(`notifyOps`)+메일(`OPS_ALERT_EMAIL`). vercel.json·DEPLOY.md §5-3 cron 등록. 로컬 검증: CRON_SECRET 인증 + 메트릭 정상 반환(worstBalance 실값) + 임계 미달 시 무발송. tsc 통과, DB 변경 없음.
+- 2026-06-07 — **감사 보류건 2/3 추가 수정** (사용자 선택). ① `schedule/[token]/withdraw` 에 본인 이메일 확인 가드 추가(`me` DELETE 패턴 — 등록 이메일 일치 강제, 없으면 403 fail-safe) + 후보자 일정 UI 가 `prompt` 로 이메일 입력 → 토큰-only 파괴적 폐기 차단. ② admin `metrics`/`audit`/`audit-export` 의 `since` 를 공용 `sqliteTimestamp`(공백 포맷)로 통일 → `createdAt` 경계일 undercount 제거(`lib/utils.ts` 헬퍼 공용화). 남은 1건(extendJob 잔액 비원자)은 후불정책상 손실 아님 → 보류 유지. tsc 통과, withdraw 404 스모크 정상, DB 변경 없음.
+- 2026-06-07 — **Vercel Pro 전환 확정**. 호스팅 결정·K-4·K-4-2·USER_TODO D-1 갱신. cron 5개(process-screenings 매분 / interview-reminders·ops-alerts·expire-interviews 매시간 / purge-original 매일)를 `vercel.json` 에 모두 등록 → 네이티브 실행, **cron-job.org 의존 제거**. (`expire-interviews` 도 vercel.json 에 추가.)
+- 2026-06-07 — **장애 대응 런북 + 백업 정책** (출시 준비 ④). [RUNBOOK.md](RUNBOOK.md) 신규 — 사고 30초 체크리스트·관측 지점·비상 운영도구 + 장애 유형 9종(전체다운/DB/LLM/큐/메일/Blob/인증/보안/비용)별 증상→확인→조치→복구 + 배포 롤백 + 백업·복구(§4) + 사후. C-2 백업 정책 결정(Turso PITR + 주간 오프사이트 dump, serverless export cron 미채택) + 3-2-2 분기 복구 드릴 문서화. C-1(Sentry)도 closed. CLAUDE.md 빠른참조에 RUNBOOK·LAUNCH_CHECKLIST 링크 추가.
