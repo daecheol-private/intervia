@@ -433,6 +433,12 @@ export default function CandidateDetailPage() {
           s.status === "counter_proposed"
       )
       .sort((a, b) => b.id - a.id)[0] ?? null;
+  // 1차 면접 일정 확정 여부 — 면접 문제 생성 게이트.
+  // 부모 data 에서 직접 계산해 InterviewQuestionsPanel 에 내려준다.
+  // (패널 자체 GET 은 마운트 시점 1회뿐이라, 일정 확정 직후엔 stale → 새로고침 필요해짐)
+  const round1Confirmed = (schedules ?? []).some(
+    (s) => s.round === "round1" && s.status === "selected"
+  );
   const completedSession = sessions.find((s) => s.status === "completed");
   const interviewScore = completedSession?.evaluation?.overall_score ?? null;
   const composite = compositeScore(candidate.screeningScore, interviewScore);
@@ -912,7 +918,10 @@ export default function CandidateDetailPage() {
         </Section>
       )}
 
-      <InterviewQuestionsPanel candidateId={candidate.id} />
+      <InterviewQuestionsPanel
+        candidateId={candidate.id}
+        scheduleConfirmed={round1Confirmed}
+      />
       <AttachmentsPanel candidateId={candidate.id} />
       <InterviewerNotesPanel candidateId={candidate.id} currentStage={candidate.stage} />
       <AppealsPanel candidateId={candidate.id} />
@@ -980,7 +989,13 @@ type QuestionSheetResp = {
   } | null;
 };
 
-function InterviewQuestionsPanel({ candidateId }: { candidateId: number }) {
+function InterviewQuestionsPanel({
+  candidateId,
+  scheduleConfirmed,
+}: {
+  candidateId: number;
+  scheduleConfirmed: boolean;
+}) {
   const [data, setData] = useState<QuestionSheetResp | null>(null);
   const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1021,7 +1036,10 @@ function InterviewQuestionsPanel({ candidateId }: { candidateId: number }) {
   };
 
   const sheet = data?.sheet ?? null;
-  const confirmed = data?.scheduleConfirmed ?? false;
+  // 게이트는 부모가 내려주는 일정 확정 상태를 신뢰 — 일정 확정 직후
+  // 페이지 새로고침 없이 즉시 "면접 문제 생성" 버튼이 활성화되도록.
+  // (자체 GET 의 scheduleConfirmed 는 마운트 시점 값이라 stale 가능)
+  const confirmed = scheduleConfirmed;
 
   return (
     <Section
