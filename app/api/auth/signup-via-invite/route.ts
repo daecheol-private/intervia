@@ -1,21 +1,26 @@
 /**
- * 초대 링크를 통한 신규 가입 — 기존 법인에 합류 요청 없이 즉시 active 멤버로 등록.
+ * 초대 링크를 통한 신규 가입 — 합류 요청(pending) 생성 + 법인담당자 승인 대기.
  *
- * 일반 가입(`/api/orgs`) 은 신규 법인 생성용. 합류 요청(`/api/orgs/join-requests`) 은 승인 대기.
- * 이 엔드포인트는 초대 토큰 검증 후 자동 합류.
+ * 정책(2026-06-08 변경): 공고 공유는 일반 멤버도 할 수 있으므로, 초대 링크로 들어온
+ * 신규 가입자도 **법인담당자 승인을 반드시 거친다**. 승인 시점에 공유 초대(orgInvites)가
+ * honor 되어 해당 공고 면접관으로 자동 등록된다(→ 공고 PIN 없이 후보자·평가 확인 가능,
+ * `app/api/orgs/join-requests/[id]/route.ts` PATCH 참조).
+ * 따라서 여기서는 즉시 active·세션 발급·면접관 등록을 하지 않는다.
  *
- * 이메일은 초대장 이메일로 고정. 가입과 동시에 email_verified_at 채움 (메일 링크 통해 들어왔으므로).
+ * 이메일은 초대장 이메일로 고정. 초대 링크 클릭 자체가 메일함 소유 증명이므로
+ * email_verified_at 을 채운다(별도 인증 메일 불필요). 초대 토큰은 consume 하지 않는다 —
+ * 승인 핸들러가 미사용 초대를 조회해 면접관 등록 + consume 한다.
  */
 import { db } from "@/lib/db";
-import { users, orgInvites, jobInterviewers } from "@/lib/schema";
+import { users, orgInvites, orgJoinRequests } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { hashPassword, createSession, setSessionCookie } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 import { validatePassword } from "@/lib/password-policy";
 import { rateLimit } from "@/lib/rate-limit";
 import { isValidEmail, normalizeEmail } from "@/lib/email-domain";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/site-info";
-import { logAudit } from "@/lib/audit";
 import { extractIp } from "@/lib/auth-attempts";
+import { notifyOrgAdmins } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 
@@ -88,7 +93,9 @@ export async function POST(req: Request) {
       name: userName,
       role: "member",
       orgId: inv.orgId,
-      status: "active",
+      // 승인 전까지 pending — 세션도 발급하지 않는다(로그인 게이트가 pending 차단).
+      status: "pending",
+      // 초대 링크 클릭 = 메일함 소유 증명 → 가입 시점에 인증 완료 처리.
       emailVerifiedAt: nowIso,
       termsAcceptedAt: nowIso,
       termsVersion: TERMS_VERSION,
@@ -101,55 +108,25 @@ export async function POST(req: Request) {
     })
     .returning();
 
-  // 초대 토큰 consume
-  await db
-    .update(orgInvites)
-    .set({ usedAt: nowIso, usedByUserId: user.id })
-    .where(eq(orgInvites.id, inv.id));
+  // 합류 요청 생성 — 법인담당자가 승인하면 active + 공유 공고 면접관 자동 등록.
+  // 초대 토큰은 일부러 consume 하지 않음(승인 시 honor 됨).
+  await db.insert(orgJoinRequests).values({
+    orgId: inv.orgId,
+    userId: user.id,
+    status: "pending",
+  });
 
-  // 초대 발급된 공고가 있으면 면접관 자동 추가
-  if (inv.jobId) {
-    await db
-      .insert(jobInterviewers)
-      .values({
-        jobId: inv.jobId,
-        userId: user.id,
-        assignedByUserId: inv.invitedByUserId,
-      })
-      .onConflictDoNothing();
-  }
-
-  // 세션 생성 + 쿠키 발급
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-  const ua = req.headers.get("user-agent")?.slice(0, 500) ?? null;
-  const sessionToken = await createSession(user.id, { ip, userAgent: ua });
-  await setSessionCookie(sessionToken);
-
-  logAudit(req, {
-    actor: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: "member",
-      orgId: user.orgId,
-      isAdmin: false,
-      status: "active",
-      mustChangePassword: false,
-      sessionToken,
-    },
-    action: "user.status_change" as const,
-    resourceType: "user" as const,
-    resourceId: user.id,
-    orgId: user.orgId,
-    metadata: { kind: "signup_via_invite", inviteId: inv.id, jobId: inv.jobId },
+  void notifyOrgAdmins(inv.orgId, {
+    type: "join_request",
+    title: `${userName} (${email}) 님이 공고 공유로 합류를 요청했습니다`,
+    href: "/org/members?tab=requests",
+    payload: { userId: user.id, orgId: inv.orgId, jobId: inv.jobId },
   });
 
   return Response.json({
     ok: true,
-    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    status: "pending",
     orgId: inv.orgId,
     jobId: inv.jobId,
-    sessionToken,
   });
 }

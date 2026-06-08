@@ -1,13 +1,14 @@
 /**
  * 법인 합류 초대 헬퍼.
  *
- * 정책 (사용자 결정 2026-05-17):
+ * 정책 (2026-06-08 갱신 — 공유는 일반 멤버도 가능하므로 신규 합류는 승인 필수):
  *  - 공고 공유 → 이메일별 토큰 1회용, 7일 만료
- *  - 미가입자: /signup?invite=token 으로 자동 가입 + 즉시 active 멤버 (합류 요청 X)
- *  - 가입자(법인 없음): 로그인 후 자동 합류
+ *  - 미가입자: 초대 링크로 가입 → 합류 요청(pending) → **법인담당자 승인 후** active
+ *  - 가입자(법인 없음): 로그인 후 수락 → 합류 요청(pending) → **법인담당자 승인 후** active
+ *  - 가입자(같은 법인): 즉시 그 공고 면접관으로 등록 (이미 검증된 멤버)
  *  - 가입자(이미 다른 법인): 거절
- *  - 가입자(같은 법인): 무시 (이미 멤버)
- *  - 이메일 매칭: 초대장 이메일과 로그인/가입 이메일 일치해야 consume
+ *  - 승인 시 미사용 초대를 honor → 공유 공고 면접관 자동 등록(공고 PIN 없이 확인 가능)
+ *  - 이메일 매칭: 초대장 이메일과 로그인/가입 이메일 일치해야 함
  */
 import crypto from "node:crypto";
 import { EMAIL_BRAND, wrapEmailCard } from "./mailer";
@@ -99,12 +100,14 @@ export function buildInviteEmail(opts: {
   const subject = `[Intervia] ${orgName} 채용 공고 공유 — ${jobTitle}`;
   const text = `${inviterName}님이 ${orgName}의 채용 공고 "${jobTitle}" 를 공유했습니다.
 
-아래 링크로 접속하면 ${orgName} 채용 시스템에 자동으로 합류됩니다 (별도 승인 절차 없음).
+아래 링크로 가입을 신청하시면, ${orgName} 법인담당자 승인 후 이 공고에
+면접관으로 자동 등록됩니다. (등록되면 공고 비밀번호 없이 후보자·평가를 확인하실 수 있습니다.)
+이미 ${orgName} 소속이라면 로그인 시 바로 이 공고 면접관으로 등록됩니다.
 
 ${url}
 
 · 링크 유효기간: ${expDate}
-· 본 링크는 1회용이며, 초대받은 이메일 주소로만 사용 가능합니다.
+· 본 링크는 초대받은 이메일 주소로만 사용 가능합니다.
 
 Intervia 채용팀`;
   const escapedTitle = jobTitle.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
@@ -118,15 +121,17 @@ Intervia 채용팀`;
         "<strong style="color:#0f172a;">${escapedTitle}</strong>" 를 공유했습니다.
       </p>
       <p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 20px;">
-        아래 버튼을 클릭하면 <strong style="color:#0f172a;">${escapedOrg}</strong> 채용 시스템에 자동으로 합류됩니다 (별도 승인 절차 없음).
+        아래 버튼으로 가입을 신청하시면 <strong style="color:#0f172a;">${escapedOrg}</strong> 법인담당자 승인 후
+        이 공고에 면접관으로 자동 등록됩니다. (공고 비밀번호 없이 후보자·평가 확인 가능)
+        이미 <strong style="color:#0f172a;">${escapedOrg}</strong> 소속이라면 로그인 시 바로 등록됩니다.
       </p>
       <p style="text-align:center;margin:0 0 16px;">
-        <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">합류 + 공고 보기</a>
+        <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">가입 신청 / 로그인</a>
       </p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:13px;color:#475569;line-height:1.6;">
         <div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">안내</div>
         • 링크 유효기간: <strong>${expDate}</strong><br>
-        • 본 링크는 1회용이며, 초대받은 이메일 주소로만 사용 가능합니다.
+        • 본 링크는 초대받은 이메일 주소로만 사용 가능합니다.
       </div>
     `,
     footer: "본 메일은 Intervia 채용 플랫폼에서 발송되었습니다.",

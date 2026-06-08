@@ -19,7 +19,7 @@ export default function NewJobPage() {
     idealProfile: "",
     evaluationFocus: "",
     tone: "중립적인" as "친절한" | "중립적인" | "엄격한",
-    interviewDurationMinutes: 20,
+    interviewDurationMinutes: 10,
     password: "",
   });
 
@@ -239,14 +239,14 @@ export default function NewJobPage() {
         <Field
           label="담당 업무"
           required
-          hint="구체적으로 적을수록 AI 면접관의 질문 품질이 올라갑니다. 100자 이상 권장."
+          hint="구체적으로 적을수록 AI 면접관의 질문 품질이 올라갑니다. 10자 이상 권장."
         >
           <Textarea
             placeholder={`예) - 신규 보안 솔루션의 백엔드 API 설계·개발\n      - 이기종 보안 시스템(SOAR, VPN, NFVO) 연동 모듈 구현\n      - 운영 자동화 스크립트 작성 (Python)`}
             value={form.responsibilities}
             onChange={(v) => setForm({ ...form, responsibilities: v })}
           />
-          <LengthHint value={form.responsibilities} min={100} />
+          <LengthHint value={form.responsibilities} min={10} />
         </Field>
 
         <Field
@@ -259,7 +259,7 @@ export default function NewJobPage() {
             value={form.requirements}
             onChange={(v) => setForm({ ...form, requirements: v })}
           />
-          <LengthHint value={form.requirements} min={80} />
+          <LengthHint value={form.requirements} min={10} />
         </Field>
 
         <Field label="우대사항">

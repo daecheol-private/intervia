@@ -167,7 +167,9 @@ export type FileGroup = {
  *   확장자 가중: .pdf +50, .docx +20 (지원되는 포맷에 한정)
  *   감점: portfolio·cover_letter 분류는 강한 음수 (절대 이력서 아님)
  *
- * 가장 높은 점수의 파일이 메인 이력서.
+ * 가장 높은 점수의 파일이 메인 이력서. 점수가 같으면(예: "이력서_홍길동.pdf"·
+ * "이력서_홍길동2.pdf" 처럼 둘 다 "이력서" 명시) 호출부 sort 의 2차 기준으로
+ * 파일 크기가 큰 쪽을 메인으로 채택한다 (buf.length 내림차순).
  */
 function resumeScore(name: string, folder?: string): number {
   const stem = name.replace(/\.[^./\\]+$/, "");
@@ -222,8 +224,10 @@ export function mergeGroupsByName(groups: FileGroup[]): FileGroup[] {
       .map((g) => ({
         g,
         score: g.resume ? resumeScore(g.resume.name) : -Infinity,
+        // 동점 시 파일 크기 큰 이력서를 메인으로 (groupFiles 와 동일 기준).
+        size: g.resume ? g.resume.buf.length : -1,
       }))
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.score - a.score || b.size - a.size);
     const winner = ranked[0].g;
     const merged: FileGroup = {
       key: winner.key,
@@ -327,7 +331,9 @@ export function groupFiles(files: AcceptedFile[]): FileGroup[] {
   for (const [key, members] of map) {
     const scored = members
       .map((m) => ({ file: m, score: resumeScore(m.name, parentFolderOf(m)) }))
-      .sort((a, b) => b.score - a.score);
+      // 점수 동점(둘 다 "이력서" 명시 등)이면 파일 크기 큰 쪽을 메인 이력서로.
+      // 내용이 더 많은(용량 큰) 파일이 진짜 메인 이력서일 확률이 높다.
+      .sort((a, b) => b.score - a.score || b.file.buf.length - a.file.buf.length);
     const resume = scored[0].file;
     const attachments = members
       .filter((m) => m !== resume)

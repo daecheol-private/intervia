@@ -1,24 +1,29 @@
 /**
- * 초대 수락 — 로그인 상태에서만 호출. 비로그인 신규 가입 흐름은 /signup?invite=token 으로.
+ * 초대 수락 — 로그인 상태에서만 호출. 비로그인 신규 가입 흐름은 signup-via-invite 로.
  *
- * 정책:
+ * 정책 (2026-06-08 — 공유는 일반 멤버도 가능하므로 신규 합류는 승인 필수):
  *  - 로그인 사용자의 이메일이 초대장 이메일과 일치해야 함
- *  - 사용자가 법인 없음 → 그 법인 active 멤버로 합류 (역할 member)
- *  - 사용자가 같은 법인 멤버 → 이미 멤버, 토큰만 consume
+ *  - 사용자가 법인 없음 → 합류 요청(pending) 생성 + 세션 만료, 법인담당자 승인 대기
+ *    (승인 시 미사용 초대 honor → 공유 공고 면접관 자동 등록)
+ *  - 사용자가 같은 법인 멤버 → 토큰 consume + 즉시 그 공고 면접관 등록 (이미 검증된 멤버)
  *  - 사용자가 다른 법인 멤버 → 거절
  *  - system_admin 은 거절 (이미 전체 접근)
  */
 import { db } from "@/lib/db";
-import { orgInvites, users, jobInterviewers } from "@/lib/schema";
+import { orgInvites, users, jobInterviewers, orgJoinRequests } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/auth";
+import {
+  getCurrentUser,
+  deleteSession,
+  clearSessionCookie,
+} from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
-import { logAudit } from "@/lib/audit";
+import { notifyOrgAdmins } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 
 export async function POST(
-  req: Request,
+  _req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const me = await getCurrentUser();
@@ -100,35 +105,30 @@ export async function POST(
     );
   }
 
-  // 법인 없음 → 합류
+  // 법인 없음 → 합류 요청(pending) 생성 + 법인담당자 승인 대기.
+  // 공고 공유는 일반 멤버도 할 수 있으므로 신규 합류는 승인을 거쳐야 한다.
+  // 초대는 consume 하지 않음 — 승인 시 honor 되어 공유 공고 면접관으로 자동 등록.
+  // pending 사용자가 로그인 상태로 남으면 인증 게이트(로그인 시점에만 status 검사)를
+  // 우회하므로, 현재 세션을 만료시켜 승인 후 재로그인하도록 한다.
   await db
     .update(users)
-    .set({ orgId: inv.orgId, role: "member", status: "active" })
+    .set({ orgId: inv.orgId, role: "member", status: "pending" })
     .where(eq(users.id, me!.id));
-  await db
-    .update(orgInvites)
-    .set({ usedAt: new Date().toISOString(), usedByUserId: me!.id })
-    .where(eq(orgInvites.id, inv.id));
-  // 초대 발급된 공고가 있으면 면접관 자동 추가
-  if (inv.jobId) {
-    await db
-      .insert(jobInterviewers)
-      .values({
-        jobId: inv.jobId,
-        userId: me!.id,
-        assignedByUserId: inv.invitedByUserId,
-      })
-      .onConflictDoNothing();
-  }
-
-  logAudit(req, {
-    actor: me!,
-    action: "user.status_change" as const,
-    resourceType: "user" as const,
-    resourceId: me!.id,
+  await db.insert(orgJoinRequests).values({
     orgId: inv.orgId,
-    metadata: { kind: "invite_accept", inviteId: inv.id, jobId: inv.jobId },
+    userId: me!.id,
+    status: "pending",
   });
 
-  return Response.json({ ok: true, code: "joined", orgId: inv.orgId, jobId: inv.jobId });
+  void notifyOrgAdmins(inv.orgId, {
+    type: "join_request",
+    title: `${me!.name} (${me!.email}) 님이 공고 공유로 합류를 요청했습니다`,
+    href: "/org/members?tab=requests",
+    payload: { userId: me!.id, orgId: inv.orgId, jobId: inv.jobId },
+  });
+
+  await deleteSession(me!.sessionToken);
+  await clearSessionCookie();
+
+  return Response.json({ ok: true, code: "pending", orgId: inv.orgId });
 }
