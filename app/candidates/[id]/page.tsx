@@ -524,7 +524,7 @@ export default function CandidateDetailPage() {
           candidate={candidate}
           jobTitle={job.title}
           companyName={companyName ?? null}
-          onChanged={() => void load()}
+          onChanged={() => load()}
           showFullResume={showFullResume}
           setShowFullResume={setShowFullResume}
           rescreening={!!data.rescreening}
@@ -3294,7 +3294,7 @@ function StagePanel({
   candidate: Candidate;
   jobTitle: string;
   companyName?: string | null;
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
   showFullResume: boolean;
   setShowFullResume: (v: boolean) => void;
   rescreening: boolean;
@@ -3521,13 +3521,17 @@ function StagePanel({
     const r = await fetch(`/api/candidates/${candidate.id}/screen`, {
       method: "POST",
     });
-    setRescreenBusy(false);
     if (!r.ok) {
+      setRescreenBusy(false);
       setMsg({ kind: "err", text: await r.text() });
       return;
     }
     setMsg({ kind: "ok", text: "재평가를 시작했습니다. 잠시 후 결과가 갱신됩니다." });
-    onChanged();
+    // load 완료까지 busy 스피너("요청 중…")를 유지한 뒤 해제 → 그 사이 서버가 rescreening=true 를
+    // 반영하므로 "평가 진행 중…" 표시로 끊김 없이 인계된다(버튼이 잠깐 평범한 "재평가"로 깜빡이는 공백 제거).
+    // 이후 부모의 폴링(useEffect)이 4초마다 자동 갱신해 완료 시 점수가 자동 반영된다.
+    await onChanged();
+    setRescreenBusy(false);
   };
 
   return (
@@ -3561,7 +3565,7 @@ function StagePanel({
         {screeningPhase !== "not_started" &&
           (screeningActive || rescreening ? (
             <span className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 rounded-md border border-blue-200 bg-blue-50 text-blue-600 inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
               평가 진행 중...
             </span>
           ) : (
