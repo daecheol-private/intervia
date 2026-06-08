@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import {
   compositeScore,
   recommendationFromScore,
@@ -650,8 +651,9 @@ export default function CandidateDetailPage() {
             <button
               onClick={startScreening}
               disabled={screening}
-              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm inline-flex items-center justify-center gap-1.5"
             >
+              {screening && <Loader2 className="w-4 h-4 animate-spin" />}
               {screening ? "요청 중..." : "AI 검토 요청"}
             </button>
           </div>
@@ -823,8 +825,9 @@ export default function CandidateDetailPage() {
                 <button
                   onClick={createLink}
                   disabled={creating}
-                  className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm"
+                  className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm inline-flex items-center justify-center gap-1.5"
                 >
+                  {creating && <Loader2 className="w-4 h-4 animate-spin" />}
                   {creating ? "처리 중..." : "AI면접 요청"}
                 </button>
               </>
@@ -1080,12 +1083,13 @@ function InterviewQuestionsPanel({ candidateId }: { candidateId: number }) {
             <button
               onClick={generate}
               disabled={generating}
-              className={`px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5 ${
                 sheet
                   ? "border border-slate-300 text-slate-700 hover:bg-slate-50"
                   : "bg-primary hover:bg-primary-deep text-white shadow-sm"
               }`}
             >
+              {generating && <Loader2 className="w-4 h-4 animate-spin" />}
               {generating
                 ? "생성 중... (최대 1분)"
                 : sheet
@@ -2495,8 +2499,9 @@ function InterviewLinkBox({
               ? "AI 면접 전형이 종료되어 재발송할 수 없습니다."
               : undefined
           }
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-primary hover:bg-primary-deep text-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-primary hover:bg-primary-deep text-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-1.5"
         >
+          {sending && <Loader2 className="w-4 h-4 animate-spin" />}
           {sending ? "발송 중..." : "📧 재발송"}
         </button>
       </div>
@@ -2662,8 +2667,9 @@ function InterviewEvaluationRetry({
         <button
           onClick={retry}
           disabled={busy}
-          className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
         >
+          {busy && <Loader2 className="w-4 h-4 animate-spin" />}
           {busy ? "재평가 중..." : "🔄 AI 평가 재시도"}
         </button>
         <button
@@ -2876,9 +2882,10 @@ function InterviewResult({
         <button
           onClick={reevaluate}
           disabled={reBusy}
-          className="ml-auto shrink-0 text-xs px-3 py-1.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+          className="ml-auto shrink-0 text-xs px-3 py-1.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 inline-flex items-center justify-center gap-1"
           title="같은 대화록으로 AI 평가를 다시 실행 (성공 시 토큰 차감)"
         >
+          {reBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           {reBusy ? "재평가 중..." : "🔄 재평가"}
         </button>
       </div>
@@ -3562,8 +3569,9 @@ function StagePanel({
               onClick={() => void rescreen()}
               disabled={rescreenBusy}
               title="공고/평가 가이드 수정 후, 오류 복구, 또는 결과 재확인 시 다시 평가합니다"
-              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 inline-flex items-center justify-center gap-1"
             >
+              {rescreenBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {rescreenBusy ? "요청 중..." : "🔄 재평가"}
             </button>
           ))}
@@ -3865,8 +3873,9 @@ function StagePanel({
               <button
                 onClick={sendDecisionMail}
                 disabled={busy}
-                className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
               >
+                {busy && <Loader2 className="w-4 h-4 animate-spin" />}
                 {busy ? "발송 중..." : "발송"}
               </button>
               <button

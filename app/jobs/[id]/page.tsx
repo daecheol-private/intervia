@@ -12,6 +12,7 @@ import Link from "next/link";
 import { compositeScore, formatKstDateTime, formatLocalDate } from "@/lib/utils";
 import { isEncryptedZipFile } from "@/lib/zip-encrypted-client";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { Loader2 } from "lucide-react";
 import {
   STAGE_META as STAGE_META_SHARED,
   STAGE_RANK as STAGE_RANK_SHARED,
@@ -1146,9 +1147,10 @@ export default function JobDetailPage() {
           <button
             onClick={() => void bulkScreen(screenable.map((c) => c.id))}
             disabled={bulkBusy}
-            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="평가 안 됐거나 실패한 후보를 다시 큐에 넣습니다"
           >
+            {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {bulkBusy ? "처리 중..." : `AI 검토 요청 (${screenable.length})`}
           </button>
         )}
@@ -1156,9 +1158,10 @@ export default function JobDetailPage() {
           <button
             onClick={() => void bulkRescreen(rescreenable.map((c) => c.id))}
             disabled={bulkBusy}
-            className="px-2.5 py-1.5 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+            className="px-2.5 py-1.5 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="이미 평가된 후보를 다시 평가합니다 (공고/평가 가이드 수정 후 등)"
           >
+            {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {bulkBusy ? "처리 중..." : `🔄 재평가 (${rescreenable.length})`}
           </button>
         )}
@@ -1166,9 +1169,10 @@ export default function JobDetailPage() {
           <button
             onClick={() => void bulkInterviewSend(inProgress.map((c) => c.id))}
             disabled={bulkBusy}
-            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="선택된 후보 전원에게 AI 면접 링크 메일 발송"
           >
+            {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {bulkBusy ? "발송 중..." : `📧 AI 면접 발송 (${inProgress.length})`}
           </button>
         )}
@@ -1213,8 +1217,9 @@ export default function JobDetailPage() {
         <button
           onClick={() => void bulkDelete(selectedInBlock)}
           disabled={bulkBusy}
-          className="px-2.5 py-1.5 rounded-lg bg-danger hover:bg-danger/85 text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+          className="px-2.5 py-1.5 rounded-lg bg-danger hover:bg-danger/85 text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
         >
+          {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           {bulkBusy ? "삭제 중..." : `삭제 (${selectedInBlock.length})`}
         </button>
       </div>
@@ -1627,8 +1632,9 @@ export default function JobDetailPage() {
             <button
               onClick={() => void bulkDecisionMail(unnotified.map((c) => c.id))}
               disabled={bulkBusy}
-              className="ml-auto text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50"
+              className="ml-auto text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
             >
+              {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {bulkBusy ? "발송 중..." : "일괄 통보 발송"}
             </button>
           </div>
