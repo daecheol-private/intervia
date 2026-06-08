@@ -123,7 +123,7 @@ export async function POST(
   void notifyOrgAdmins(inv.orgId, {
     type: "join_request",
     title: `${me!.name} (${me!.email}) 님이 공고 공유로 합류를 요청했습니다`,
-    href: "/org/members?tab=requests",
+    href: "/org/members",
     payload: { userId: me!.id, orgId: inv.orgId, jobId: inv.jobId },
   });
 

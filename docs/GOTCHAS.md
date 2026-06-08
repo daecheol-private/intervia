@@ -164,7 +164,7 @@ cron/internal 라우트 `authorize` 는 `x-vercel-cron` 헤더 우회를 반드�
 - **법인 SMTP 발신주소 정합성**: `orgs/smtp` PUT 은 `fromEmail` 도메인이 인증된 SMTP 계정 도메인 또는
   가입 시 검증된 회사 도메인(`organizations.emailDomain`)과 일치하는지 검증. 불일치 시 400 — 타사(유명기업) 도메인 사칭 발송 차단.
 - **합류 요청 = 메일함 소유 통지**: `orgs/join-requests` POST 는 인증 메일을 발송해 실제 메일함 주인에게
-  합류 시도를 통지(사칭 조기 발견). 승인 화면(`/org/members?tab=requests`)에 `userEmailVerifiedAt` 기반 "메일 소유 미확인" 경고를 띄움. 최종 승인은 여전히 org_admin 이 결정.
+  합류 시도를 통지(사칭 조기 발견). 승인 화면(`/org/members` — 멤버 목록 상단의 승인대기 행)에 `emailVerifiedAt` 기반 "메일 소유 미확인" 경고를 승인 버튼 옆에 인라인으로 띄움. 최종 승인은 여전히 org_admin 이 결정.
 - **토큰-only 본인확인 금지**: 면접 토큰 기반 후보자 본인 라우트(`interview/[token]/me`)는 등록 이메일이
   없으면 토큰만으로 통과시키지 말 것(링크 전달·유출 시 제3자 열람). 이메일 미보유면 403(fail-safe).
 

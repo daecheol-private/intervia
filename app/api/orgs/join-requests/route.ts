@@ -154,7 +154,7 @@ export async function POST(req: Request) {
   void notifyOrgAdmins(orgId, {
     type: "join_request",
     title: `${name} (${normalizedEmail}) 님이 합류를 요청했습니다`,
-    href: "/org/members?tab=requests",
+    href: "/org/members",
     payload: { userId: user.id, orgId },
   });
 

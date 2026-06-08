@@ -245,9 +245,9 @@ export default function AdminUsersPage() {
   const statusBadge = (u: Row) =>
     u.status === "pending" ? (
       <Link
-        href="/org/members?tab=requests"
+        href="/org/members"
         className="inline-flex items-center gap-1 text-warning hover:text-warning/80 hover:underline"
-        title="합류 요청 탭으로 이동 — 정식 승인 권장"
+        title="법인 멤버 관리로 이동 — 정식 승인 권장"
       >
         pending
         <span aria-hidden>↗</span>

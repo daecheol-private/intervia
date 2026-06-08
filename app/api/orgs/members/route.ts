@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { users, organizations } from "@/lib/schema";
-import { eq, desc } from "drizzle-orm";
+import { users, organizations, orgJoinRequests } from "@/lib/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 
@@ -36,9 +36,19 @@ export async function GET(req: Request) {
       orgId: users.orgId,
       orgName: organizations.name,
       emailVerifiedAt: users.emailVerifiedAt,
+      // 대기 중인 합류 요청 id (있으면 멤버 목록에서 바로 승인/거절). pending 은 (user,org) 당 최대 1건.
+      joinRequestId: orgJoinRequests.id,
     })
     .from(users)
     .leftJoin(organizations, eq(organizations.id, users.orgId))
+    .leftJoin(
+      orgJoinRequests,
+      and(
+        eq(orgJoinRequests.userId, users.id),
+        eq(orgJoinRequests.orgId, targetOrgId),
+        eq(orgJoinRequests.status, "pending")
+      )
+    )
     .where(eq(users.orgId, targetOrgId))
     .orderBy(desc(users.createdAt));
 
