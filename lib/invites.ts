@@ -11,10 +11,76 @@
  *  - 이메일 매칭: 초대장 이메일과 로그인/가입 이메일 일치해야 함
  */
 import crypto from "node:crypto";
+import { and, eq, isNull, isNotNull, sql } from "drizzle-orm";
+import { db } from "./db";
+import { orgInvites, jobInterviewers, users } from "./schema";
 import { EMAIL_BRAND, wrapEmailCard } from "./mailer";
 
 export const INVITE_EXPIRY_DAYS = 7;
 export const INVITE_MAX_PER_REQUEST = 20;
+
+/**
+ * 공유 공고 초대 honor — 사용자가 어떤 경로로든 그 법인의 **활성 멤버가 되는 순간** 호출.
+ *
+ * 이 사용자 이메일로 그 법인에 발급된 미사용 공고 초대(jobId 보유)를 모두 찾아
+ * jobInterviewers 에 멱등 등록(onConflictDoNothing) + 초대 consume 한다.
+ * → 공고 PIN 없이 후보자·평가를 바로 열람 가능.
+ *
+ * **왜 한 곳에 모으나**: 신규 합류 승인뿐 아니라 "거절 후 멤버 상태 토글로 다시 active",
+ * "관리자 대리 인증으로 active" 등 **활성화 경로가 여러 개**다. 예전엔 honor 가 합류요청
+ * 승인 핸들러에만 있어, 다른 경로로 active 가 되면 면접관 등록이 누락됐다(2026-06-09 버그).
+ * 이제 active 전환 지점마다 이 헬퍼를 호출해 경로 무관하게 보장한다.
+ *
+ * **만료는 보지 않는다** — 활성화 자체가 본인확인이고, 초대 만료는 '링크 자가가입' 보안용이지
+ * 공유 의사 자체의 만료가 아니다(합류 승인이 7일보다 늦을 수 있음).
+ *
+ * fire-and-forget 아님 — 호출처에서 await 해야 등록 완료 후 응답한다. 멱등이라 중복 호출 안전.
+ *
+ * @returns honor 된 jobId 목록 (없으면 빈 배열)
+ */
+export async function honorJobShareInvites(
+  userId: number,
+  orgId: number | null | undefined
+): Promise<number[]> {
+  if (!orgId) return [];
+
+  const [u] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (!u) return [];
+
+  const pending = await db
+    .select()
+    .from(orgInvites)
+    .where(
+      and(
+        eq(orgInvites.orgId, orgId),
+        sql`lower(${orgInvites.email}) = lower(${u.email})`,
+        isNull(orgInvites.usedAt),
+        isNotNull(orgInvites.jobId)
+      )
+    );
+
+  const now = new Date().toISOString();
+  const honored: number[] = [];
+  for (const inv of pending) {
+    await db
+      .insert(jobInterviewers)
+      .values({
+        jobId: inv.jobId!,
+        userId,
+        assignedByUserId: inv.invitedByUserId,
+      })
+      .onConflictDoNothing();
+    await db
+      .update(orgInvites)
+      .set({ usedAt: now, usedByUserId: userId })
+      .where(eq(orgInvites.id, inv.id));
+    honored.push(inv.jobId!);
+  }
+  return honored;
+}
 
 export function generateInviteToken(): string {
   return "inv_" + crypto.randomBytes(20).toString("hex");

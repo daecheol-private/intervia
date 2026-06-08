@@ -3,12 +3,11 @@ import {
   users,
   orgJoinRequests,
   notifications,
-  orgInvites,
-  jobInterviewers,
 } from "@/lib/schema";
-import { and, eq, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { honorJobShareInvites } from "@/lib/invites";
 
 export const runtime = "nodejs";
 
@@ -73,43 +72,10 @@ export async function PATCH(
     .where(eq(users.id, row.userId));
 
   // 승인 시: 이 사용자 이메일로 공유된(미사용) 공고 초대가 있으면 면접관 자동 등록.
-  // 신규 합류는 어느 경로(초대 가입 signup-via-invite / 무소속 수락 invites/accept /
-  // /signup 도메인 매칭)든 모두 이 승인 게이트를 거치므로, 공유 공고 면접관 등록은
-  // 여기 한 곳에서 일괄 처리한다(→ 공고 PIN 없이 후보자·평가 확인 가능).
-  // 만료 여부는 보지 않는다 — 승인은 7일(초대 만료)보다 늦을 수 있고, 초대 만료는
-  // '링크 자가가입' 보안용이지 공유 의사 자체의 만료가 아니다.
+  // (→ 공고 PIN 없이 후보자·평가 확인 가능.) 활성화 경로가 여러 개라 honor 로직은
+  // lib/invites.ts 의 헬퍼 한 곳에 모아 두고, active 전환 지점마다 호출한다.
   if (action === "approve") {
-    const [u] = await db
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.id, row.userId));
-    if (u) {
-      const pendingInvites = await db
-        .select()
-        .from(orgInvites)
-        .where(
-          and(
-            eq(orgInvites.orgId, row.orgId),
-            sql`lower(${orgInvites.email}) = lower(${u.email})`,
-            isNull(orgInvites.usedAt),
-            isNotNull(orgInvites.jobId)
-          )
-        );
-      for (const inv of pendingInvites) {
-        await db
-          .insert(jobInterviewers)
-          .values({
-            jobId: inv.jobId!,
-            userId: row.userId,
-            assignedByUserId: inv.invitedByUserId,
-          })
-          .onConflictDoNothing();
-        await db
-          .update(orgInvites)
-          .set({ usedAt: now, usedByUserId: row.userId })
-          .where(eq(orgInvites.id, inv.id));
-      }
-    }
+    await honorJobShareInvites(row.userId, row.orgId);
   }
 
   // 처리한 사람(본인 + 같은 법인 다른 org_admin) 의 'join_request' 알림 자동 읽음 처리.

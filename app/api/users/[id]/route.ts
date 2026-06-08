@@ -6,6 +6,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import { requireStepUp } from "@/lib/step-up";
 import { logAudit } from "@/lib/audit";
 import { isProtectedSystemAdminEmail } from "@/lib/bootstrap-admin";
+import { honorJobShareInvites } from "@/lib/invites";
 
 export const runtime = "nodejs";
 
@@ -252,6 +253,13 @@ export async function PATCH(
     .set(update)
     .where(eq(users.id, targetId))
     .returning();
+
+  // 사용자가 이 액션으로 active 가 됐다면(상태 토글 disabled/pending→active, 또는 대리 인증
+  // 활성화) 공유 공고 초대를 honor 해 면접관으로 자동 등록한다. 합류요청 승인 핸들러와 동일한
+  // 처리 — 활성화 경로가 갈라져도 면접관 등록이 누락되지 않도록 active 전환 지점마다 호출.
+  if (update.status === "active") {
+    await honorJobShareInvites(targetId, updated.orgId);
+  }
 
   // pending 사용자를 인증과 함께 활성화한 경우: 대기 중인 합류 요청도 승인 처리하고
   // 관련 'join_request' 알림을 읽음 처리한다 (합류 요청 탭 승인과 동일한 후처리).

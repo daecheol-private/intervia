@@ -144,7 +144,11 @@ interviewer/
   - **공고 공유 → 신규 합류는 승인 필수 (2026-06-08)**: 공유는 일반 멤버도 할 수 있으므로, 초대 링크로 들어온 신규 가입자도 법인담당자 승인을 거친다. 경로:
     - 미가입자 초대 가입(`signup-via-invite`): `users.status=pending` + `orgJoinRequests` 생성, **세션·면접관 등록 X**. 초대 링크 클릭=메일함 증명이라 `email_verified_at` 만 즉시 세팅. 초대 토큰은 consume 하지 않음.
     - 무소속 로그인 사용자 수락(`invites/[token]/accept`): 마찬가지로 `pending` + 합류 요청 생성 + **현재 세션 만료**(pending 사용자가 로그인 상태로 남으면 인증 게이트 우회). 같은 법인 멤버는 예외 — 즉시 그 공고 면접관 등록 후 공고로 이동.
-    - **승인 시 공유 초대 honor**: 승인 핸들러가 그 사용자 이메일로 발급된 미사용 `orgInvites`(jobId 보유)를 조회해 `jobInterviewers` 에 자동 등록(멱등) + 초대 consume. `/signup` 도메인 매칭으로 가입한 경우에도 동일하게 honor. 만료는 무시(승인 게이트가 본인확인이고, 초대 만료는 '링크 자가가입' 보안용이지 공유 의사의 만료가 아님).
+    - **active 전환 시 공유 초대 honor** (헬퍼 `lib/invites.ts` `honorJobShareInvites(userId, orgId)`): 그 사용자 이메일로 발급된 미사용 `orgInvites`(jobId 보유)를 조회해 `jobInterviewers` 에 자동 등록(멱등) + 초대 consume. 만료는 무시(활성화 자체가 본인확인이고, 초대 만료는 '링크 자가가입' 보안용이지 공유 의사의 만료가 아님). **사용자가 그 법인의 active 멤버가 되는 모든 경로에서 호출** — 활성화 경로가 갈라져도 면접관 등록이 누락되지 않도록:
+      - 합류요청 승인 `PATCH /api/orgs/join-requests/[id]` (action=approve)
+      - 멤버 상태 변경 `PATCH /api/users/[id]` 에서 status 가 active 로 전환(거절 후 토글 재활성화·대리 이메일 인증 활성화 포함)
+      - `/signup` 도메인 매칭 가입 → 합류요청 승인 경로로 흡수
+      - ⚠️ **회귀 주의 (2026-06-09)**: 예전엔 honor 가 승인 핸들러에만 있어, org_admin 이 합류요청을 거절했다가 멤버 목록에서 상태 토글로 다시 active 시키면(`user.status_change`) 면접관 등록이 누락됐다. 새 active 전환 경로를 추가하면 이 헬퍼 호출을 반드시 같이 챙길 것.
 - **이메일 인증 (필수)**:
   - 두 경로 모두 가입 직후 `lib/email-verify.ts` 의 `sendVerificationMail()` 호출 → `email_verifications` row + 3일 만료 토큰 + 메일 발송.
   - 사용자가 `/verify?token=...` 클릭 → `POST /api/auth/verify-email` → `users.email_verified_at` 세팅.
