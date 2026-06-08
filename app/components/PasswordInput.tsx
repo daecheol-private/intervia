@@ -3,27 +3,29 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
-type Props = {
+// value/onChange 는 제어형으로 고정하고, 나머지 표준 input 속성
+// (placeholder/autoComplete/inputMode/maxLength/required/disabled/onKeyDown/autoFocus 등)은
+// 그대로 통과시켜 일반 비밀번호·공고 PIN·SMTP 시크릿 등 모든 비밀번호 필드에 재사용.
+type Props = Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "type" | "value" | "onChange"
+> & {
   value: string;
   onChange: (v: string) => void;
-  placeholder?: string;
-  autoComplete?: string;
-  className?: string;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 };
 
 export function PasswordInput({
   value,
   onChange,
-  placeholder,
-  autoComplete = "new-password",
   className,
-  onKeyDown,
+  autoComplete = "new-password",
+  ...rest
 }: Props) {
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
       <input
+        {...rest}
         className={
           (className ??
             "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent") +
@@ -31,13 +33,12 @@ export function PasswordInput({
         }
         type={show ? "text" : "password"}
         autoComplete={autoComplete}
-        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
       />
       <button
         type="button"
+        tabIndex={-1}
         onClick={() => setShow((s) => !s)}
         aria-label={show ? "비밀번호 숨기기" : "비밀번호 보기"}
         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 rounded"

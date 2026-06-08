@@ -4,6 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
+import { PasswordInput } from "@/app/components/PasswordInput";
 
 type Form = {
   title: string;
@@ -219,23 +220,22 @@ export default function EditJobPage() {
                 <span className="text-slate-500">잠금 없음</span>
               )}
             </div>
-            <input
+            <PasswordInput
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-widest placeholder:font-sans placeholder:tracking-normal disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               placeholder={
                 form.hasPassword
                   ? "새 비밀번호 (변경 시에만 입력)"
                   : "4자리 숫자"
               }
-              type="password"
               autoComplete="new-password"
               inputMode="numeric"
               maxLength={4}
               disabled={form.clearPassword}
               value={form.password}
-              onChange={(e) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
-                  password: e.target.value.replace(/\D/g, "").slice(0, 4),
+                  password: v.replace(/\D/g, "").slice(0, 4),
                 })
               }
             />

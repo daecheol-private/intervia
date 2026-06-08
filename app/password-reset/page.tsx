@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PasswordStrength } from "@/app/password-strength";
 import { LogoMark } from "@/app/components/Logo";
+import { PasswordInput } from "@/app/components/PasswordInput";
 
 export default function PasswordResetPage() {
   const router = useRouter();
@@ -178,23 +179,21 @@ function ConfirmForm({
           {valid === true && !done && (
             <>
               <Field label="새 비밀번호">
-                <input
+                <PasswordInput
                   className={inputCls}
-                  type="password"
                   autoComplete="new-password"
                   placeholder="10자 이상, 3종 이상 조합"
                   value={pw}
-                  onChange={(e) => setPw(e.target.value)}
+                  onChange={setPw}
                 />
                 <PasswordStrength password={pw} />
               </Field>
               <Field label="새 비밀번호 확인">
-                <input
+                <PasswordInput
                   className={inputCls}
-                  type="password"
                   autoComplete="new-password"
                   value={pw2}
-                  onChange={(e) => setPw2(e.target.value)}
+                  onChange={setPw2}
                   onKeyDown={(e) => e.key === "Enter" && submit()}
                 />
               </Field>

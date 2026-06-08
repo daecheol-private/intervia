@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { PasswordStrength } from "@/app/password-strength";
+import { PasswordInput } from "@/app/components/PasswordInput";
 
 type InviteInfo = {
   token: string;
@@ -287,11 +288,10 @@ function SignupForm({
       </label>
       <label className="block">
         <span className="text-xs text-slate-600">비밀번호</span>
-        <input
+        <PasswordInput
           required
-          type="password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
           className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
         />
         <PasswordStrength password={password} />

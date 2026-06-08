@@ -11,6 +11,7 @@ import { notify, confirmDialog } from "@/app/components/Dialog";
 import Link from "next/link";
 import { compositeScore, formatKstDateTime, formatLocalDate } from "@/lib/utils";
 import { isEncryptedZipFile } from "@/lib/zip-encrypted-client";
+import { PasswordInput } from "@/app/components/PasswordInput";
 import {
   STAGE_META as STAGE_META_SHARED,
   STAGE_RANK as STAGE_RANK_SHARED,
@@ -2650,17 +2651,18 @@ function UnlockPanel({
       <p className="text-sm text-slate-500 mt-1">
         이 공고는 비밀번호로 보호되어 있습니다.
       </p>
-      <input
-        autoFocus
-        type="password"
-        inputMode="numeric"
-        maxLength={4}
-        value={pin}
-        onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-        onKeyDown={(e) => e.key === "Enter" && submit()}
-        className="w-full mt-6 border border-slate-300 rounded-lg px-3 py-3 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary"
-        placeholder="••••"
-      />
+      <div className="mt-6">
+        <PasswordInput
+          autoFocus
+          inputMode="numeric"
+          maxLength={4}
+          value={pin}
+          onChange={(v) => setPin(v.replace(/\D/g, "").slice(0, 4))}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          className="w-full border border-slate-300 rounded-lg px-3 py-3 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary"
+          placeholder="••••"
+        />
+      </div>
       {err && <div className="text-xs text-danger mt-2">{err}</div>}
       <button
         onClick={submit}

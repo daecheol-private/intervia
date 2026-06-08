@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
+import { PasswordInput } from "@/app/components/PasswordInput";
 
 type SmtpConfig = {
   orgId: number;
@@ -201,10 +202,9 @@ export default function OrgSmtpPage() {
             />
           </Row>
           <Row label="비밀번호">
-            <input
-              type="password"
+            <PasswordInput
               value={authPass}
-              onChange={(e) => setAuthPass(e.target.value)}
+              onChange={setAuthPass}
               placeholder={lastChecked ? "변경 시에만 입력" : "앱 비밀번호 권장"}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               autoComplete="new-password"

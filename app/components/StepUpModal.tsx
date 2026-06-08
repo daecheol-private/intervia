@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PasswordInput } from "@/app/components/PasswordInput";
 
 /**
  * 민감 액션 직전 step-up 인증 모달.
@@ -73,14 +74,15 @@ export function StepUpModal({
             10분간 유효합니다.
           </span>
         </div>
-        <input
-          type="password"
-          autoFocus
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          placeholder="비밀번호"
-          className="w-full mt-4 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-        />
+        <div className="mt-4">
+          <PasswordInput
+            autoFocus
+            value={pw}
+            onChange={setPw}
+            placeholder="비밀번호"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
         {err && (
           <div className="mt-2 text-xs text-danger bg-danger-soft border border-danger/30 rounded px-2 py-1.5">
             {err}

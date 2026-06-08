@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { formatKstDateTime, formatLocalDate } from "@/lib/utils";
+import { PasswordInput } from "@/app/components/PasswordInput";
 
 type Job = {
   id: number;
@@ -212,17 +213,18 @@ function PinModal({
             공고 비밀번호 4자리를 입력하세요.
           </p>
         </div>
-        <input
-          autoFocus
-          type="password"
-          inputMode="numeric"
-          maxLength={4}
-          value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-          className="w-full mt-5 border border-slate-300 rounded-lg px-3 py-3 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary"
-          placeholder="••••"
-        />
+        <div className="mt-5">
+          <PasswordInput
+            autoFocus
+            inputMode="numeric"
+            maxLength={4}
+            value={pin}
+            onChange={(v) => setPin(v.replace(/\D/g, "").slice(0, 4))}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            className="w-full border border-slate-300 rounded-lg px-3 py-3 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="••••"
+          />
+        </div>
         {err && <div className="text-xs text-danger mt-2 text-center">{err}</div>}
         <div className="flex gap-2 mt-5">
           <button

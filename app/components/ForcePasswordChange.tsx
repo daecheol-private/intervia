@@ -6,6 +6,7 @@ import {
   passwordMeetsPolicy,
 } from "@/app/password-strength";
 import LogoutButton from "@/app/logout-button";
+import { PasswordInput } from "@/app/components/PasswordInput";
 
 /**
  * 강제 비밀번호 변경 오버레이.
@@ -84,29 +85,23 @@ export function ForcePasswordChange({ email }: { email: string }) {
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               현재(임시) 비밀번호
             </label>
-            <input
+            <PasswordInput
               className={inputCls}
-              type="password"
               autoComplete="current-password"
               value={form.currentPassword}
-              onChange={(e) =>
-                setForm({ ...form, currentPassword: e.target.value })
-              }
+              onChange={(v) => setForm({ ...form, currentPassword: v })}
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               새 비밀번호
             </label>
-            <input
+            <PasswordInput
               className={inputCls}
-              type="password"
               autoComplete="new-password"
               placeholder="10자 이상, 3종 이상 조합"
               value={form.newPassword}
-              onChange={(e) =>
-                setForm({ ...form, newPassword: e.target.value })
-              }
+              onChange={(v) => setForm({ ...form, newPassword: v })}
             />
             <PasswordStrength password={form.newPassword} />
           </div>
@@ -114,12 +109,11 @@ export function ForcePasswordChange({ email }: { email: string }) {
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               새 비밀번호 확인
             </label>
-            <input
+            <PasswordInput
               className={inputCls}
-              type="password"
               autoComplete="new-password"
               value={form.confirm}
-              onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+              onChange={(v) => setForm({ ...form, confirm: v })}
               onKeyDown={(e) => e.key === "Enter" && submit()}
             />
           </div>

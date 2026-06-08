@@ -8,6 +8,7 @@ import {
   passwordMeetsPolicy,
 } from "@/app/password-strength";
 import LogoutButton from "@/app/logout-button";
+import { PasswordInput } from "@/app/components/PasswordInput";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -96,36 +97,29 @@ export default function AccountPage() {
         </h2>
         <div className="space-y-4">
           <Field label="현재 비밀번호">
-            <input
+            <PasswordInput
               className={inputCls}
-              type="password"
               autoComplete="current-password"
               value={form.currentPassword}
-              onChange={(e) =>
-                setForm({ ...form, currentPassword: e.target.value })
-              }
+              onChange={(v) => setForm({ ...form, currentPassword: v })}
             />
           </Field>
           <Field label="새 비밀번호">
-            <input
+            <PasswordInput
               className={inputCls}
-              type="password"
               autoComplete="new-password"
               placeholder="10자 이상, 3종 이상 조합"
               value={form.newPassword}
-              onChange={(e) =>
-                setForm({ ...form, newPassword: e.target.value })
-              }
+              onChange={(v) => setForm({ ...form, newPassword: v })}
             />
             <PasswordStrength password={form.newPassword} />
           </Field>
           <Field label="새 비밀번호 확인">
-            <input
+            <PasswordInput
               className={inputCls}
-              type="password"
               autoComplete="new-password"
               value={form.confirm}
-              onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+              onChange={(v) => setForm({ ...form, confirm: v })}
               onKeyDown={(e) => e.key === "Enter" && submit()}
             />
           </Field>
@@ -247,12 +241,11 @@ function DangerZone({ email }: { email: string }) {
       ) : (
         <div className="space-y-4 border-t border-slate-100 pt-4">
           <Field label="현재 비밀번호">
-            <input
+            <PasswordInput
               className={inputCls}
-              type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
             />
           </Field>
           {twoFa && (
@@ -405,12 +398,11 @@ function TwoFactorPanel() {
           <div className="border-t border-slate-100 pt-4 space-y-3">
             <p className="text-sm text-slate-600 font-medium">2단계 인증 해제</p>
             <Field label="현재 비밀번호">
-              <input
+              <PasswordInput
                 className={inputCls}
-                type="password"
                 autoComplete="current-password"
                 value={pw}
-                onChange={(e) => setPw(e.target.value)}
+                onChange={setPw}
               />
             </Field>
             <Field label="현재 6자리 인증 코드">

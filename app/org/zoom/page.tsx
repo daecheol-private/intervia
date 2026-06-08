@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
+import { PasswordInput } from "@/app/components/PasswordInput";
 
 type ZoomConfig = {
   orgId: number;
@@ -169,10 +170,9 @@ export default function OrgZoomPage() {
               />
             </Row>
             <Row label="Client Secret">
-              <input
-                type="password"
+              <PasswordInput
                 value={clientSecret}
-                onChange={(e) => setClientSecret(e.target.value)}
+                onChange={setClientSecret}
                 placeholder={lastChecked ? "변경 시에만 입력" : "줌 앱의 Client Secret"}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 autoComplete="new-password"
