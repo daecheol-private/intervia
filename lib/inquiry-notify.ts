@@ -1,8 +1,17 @@
 /**
- * 신규 고객센터 문의 접수 시 지원 이메일(APPEAL_CONTACT = DPO/문의 단일 채널)로 통지.
+ * 고객센터 문의 통지 — 접수 통지 + 처리 결과 회신.
  *
- * fire-and-forget 으로 호출 — 실패해도 문의 제출 자체는 성공 응답.
- * SMTP 미설정(법인 + 시스템 모두) 이면 조용히 skip (인박스에는 행이 남으므로 누락 아님).
+ * 접수 시(notifyNewInquiry):
+ *   1) 시스템 관리자(운영자 지원 데스크) 인앱 알림 — SMTP 무관, 항상 시도.
+ *      → 운영자가 로그인하면 알림 벨에 바로 뜸(문의함을 직접 열지 않아도 인지).
+ *   2) 지원 이메일(APPEAL_CONTACT = DPO/문의 단일 채널)로 통지 메일 — SMTP 있을 때만.
+ *
+ * 처리/완료 시(notifyInquiryReply):
+ *   문의자(고객/후보자) 회신용 이메일로 운영팀 답변·처리 상태를 발송.
+ *   → 비로그인 후보자도 처리 결과를 확인할 수 있는 유일한 채널.
+ *
+ * 모두 fire-and-forget 으로 호출 — 실패해도 문의 제출·처리 자체는 성공 응답.
+ * SMTP 미설정이면 메일은 조용히 skip (인박스/내 문의 내역에는 남으므로 누락 아님).
  */
 import {
   sendMail,
@@ -12,7 +21,14 @@ import {
   escapeHtml,
 } from "@/lib/mailer";
 import { APPEAL_CONTACT, SITE_INFO } from "@/lib/site-info";
-import { CATEGORY_LABEL, SOURCE_LABEL, type InquirySource } from "@/lib/inquiry";
+import {
+  CATEGORY_LABEL,
+  SOURCE_LABEL,
+  STATUS_LABEL,
+  type InquirySource,
+  type InquiryStatus,
+} from "@/lib/inquiry";
+import { notifySystemAdmins } from "@/lib/notifications";
 
 export async function notifyNewInquiry(opts: {
   source: InquirySource;
@@ -23,10 +39,24 @@ export async function notifyNewInquiry(opts: {
   orgId?: number | null;
 }): Promise<void> {
   const orgId = opts.orgId ?? null;
-  if (!(await isSmtpAvailable(orgId))) return;
-
   const sourceLabel = SOURCE_LABEL[opts.source];
   const categoryLabel = CATEGORY_LABEL[opts.category] ?? opts.category;
+
+  // 1) 인앱 알림 — 시스템 관리자(운영자) 전원. SMTP 와 무관하게 항상 시도.
+  try {
+    await notifySystemAdmins({
+      type: "new_inquiry",
+      title: `${sourceLabel} 문의 접수 — ${categoryLabel}`,
+      href: "/admin/inquiries",
+      payload: { source: opts.source, category: opts.category, orgId },
+    });
+  } catch (e) {
+    console.error("[inquiry] 인앱 알림 실패:", e);
+  }
+
+  // 2) 지원 이메일 통지 — SMTP 사용 가능할 때만.
+  if (!(await isSmtpAvailable(orgId))) return;
+
   const adminUrl = `${SITE_INFO.baseUrl}/admin/inquiries`;
   const subject = `[${SITE_INFO.serviceName}] ${sourceLabel} 문의 접수 — ${categoryLabel}`;
 
@@ -77,5 +107,81 @@ ${opts.message}
     text,
     orgId,
     audience: "org",
+  });
+}
+
+/**
+ * 문의 처리 결과 회신 — 문의자(고객/후보자)의 회신용 이메일로 발송.
+ *
+ * 운영팀(Intervia)이 답변/처리하는 채널이므로 발신은 항상 시스템 기본 메일(env SMTP).
+ * 법인 SMTP 는 사용하지 않는다(orgId 미전달) — 후보자가 "회사" 가 아닌 "운영팀" 발신으로 인지.
+ * 후보자(candidate)는 별도 계정·조회 화면이 없으므로 이 메일이 유일한 처리 확인 수단.
+ */
+export async function notifyInquiryReply(opts: {
+  source: InquirySource;
+  category: string;
+  status: InquiryStatus;
+  adminNote: string | null;
+  contactEmail: string;
+}): Promise<void> {
+  // env(시스템 기본) SMTP 가용 시에만 발송. 미설정이면 조용히 skip.
+  if (!(await isSmtpAvailable(null))) return;
+
+  const categoryLabel = CATEGORY_LABEL[opts.category] ?? opts.category;
+  const statusLabel = STATUS_LABEL[opts.status];
+  const resolved = opts.status === "resolved";
+  const note = opts.adminNote?.trim() || "";
+
+  const subject = resolved
+    ? `[${SITE_INFO.serviceName}] 문의가 처리 완료되었습니다 — ${categoryLabel}`
+    : `[${SITE_INFO.serviceName}] 문의 처리 상태 안내 — ${categoryLabel}`;
+
+  const headline = resolved
+    ? "문의가 처리 완료되었습니다"
+    : "문의 처리 상태가 변경되었습니다";
+
+  const noteBlock = note
+    ? `
+    <div style="margin:0 0 8px;font-size:12px;color:#64748b;">운영팀 답변</div>
+    <div style="margin:0 0 20px;padding:14px 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;font-size:14px;color:#14532d;line-height:1.7;white-space:pre-wrap;">${escapeHtml(note)}</div>`
+    : "";
+
+  const innerHtml = `
+    <h2 style="margin:8px 0 16px;font-size:18px;color:${EMAIL_BRAND.ink};line-height:1.4;">
+      ${escapeHtml(headline)}
+    </h2>
+    <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:12px;margin:0 0 16px;">
+      <tr>
+        <td style="padding:12px 16px;font-size:12px;color:#64748b;width:80px;">분류</td>
+        <td style="padding:12px 16px;font-size:13px;color:${EMAIL_BRAND.ink};font-weight:600;">${escapeHtml(categoryLabel)}</td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;">처리 상태</td>
+        <td style="padding:12px 16px;font-size:13px;color:${EMAIL_BRAND.ink};font-weight:600;border-top:1px solid #e2e8f0;">${escapeHtml(statusLabel)}</td>
+      </tr>
+    </table>
+    ${noteBlock}
+    <p style="margin:0;font-size:12px;color:#64748b;line-height:1.6;">
+      추가 문의가 있으시면 본 메일에 회신해 주세요.
+    </p>
+  `;
+  const html = wrapEmailCard({
+    innerHtml,
+    footer: `본 메일은 ${SITE_INFO.serviceName} 고객센터 문의 처리 결과로 자동 발송되었습니다.`,
+  });
+  const text = `${headline}
+
+분류: ${categoryLabel}
+처리 상태: ${statusLabel}
+${note ? `\n운영팀 답변:\n${note}\n` : ""}
+추가 문의가 있으시면 본 메일에 회신해 주세요.`;
+
+  await sendMail({
+    to: opts.contactEmail,
+    subject,
+    html,
+    text,
+    orgId: null,
+    audience: opts.source === "candidate" ? "candidate" : "org",
   });
 }

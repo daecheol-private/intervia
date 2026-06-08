@@ -299,6 +299,11 @@ function InquiryDetailModal({
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary leading-relaxed"
               placeholder="처리 결과나 안내를 작성하면 고객의 문의 내역에 답변으로 표시됩니다."
             />
+            <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+              ✉️ <span className="font-medium text-slate-500">완료</span>로
+              변경하거나 답변을 작성해 저장하면, 문의자({row.contactEmail})에게
+              처리 상태·답변이 이메일로 발송됩니다.
+            </p>
           </div>
 
           <div className="flex items-center justify-between gap-2 flex-wrap">

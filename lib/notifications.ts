@@ -22,7 +22,8 @@ export type NotificationType =
   | "schedule_confirmed"
   | "schedule_counter_proposed"
   | "schedule_withdrawn"
-  | "announcement";
+  | "announcement"
+  | "new_inquiry";
 
 export type CreateNotificationInput = {
   userId: number;
