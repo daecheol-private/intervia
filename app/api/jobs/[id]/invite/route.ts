@@ -7,7 +7,8 @@
  *  - 같은 공고·같은 이메일에 미사용·미만료 초대가 있으면 그 토큰 재사용 (스팸 방지).
  *    jobId 로 스코프하지 않으면 다른 공고를 공유해도 옛 초대가 재사용되어 받는 사람이
  *    엉뚱한 공고 면접관으로 추가됨.
- *  - 이미 같은 법인 멤버인 이메일은 멤버 선택과 동일하게 면접관 등록 + 알림 메일 (memberResults).
+ *  - 이미 같은 법인 멤버인 이메일은 멤버 선택과 동일하게 처리 — 면접관 신규 등록 시에만 알림 메일,
+ *    이미 이 공고 면접관이면 메일 미발송 (memberResults).
  *  - 이미 다른 법인 소속 이메일은 발송 스킵 (status='other_org') — 수락 시점에 어차피 거절되므로 미리 차단
  */
 import { db } from "@/lib/db";
@@ -119,7 +120,8 @@ export async function POST(
     error?: string;
   }[] = [];
 
-  // 같은 법인 멤버를 이 공고 면접관으로 등록 + 알림 메일. 멱등(onConflictDoNothing).
+  // 같은 법인 멤버를 이 공고 면접관으로 등록. 멱등(onConflictDoNothing).
+  // 신규 등록 시에만 알림 메일 — 이미 이 공고 면접관이면 메일을 다시 보내지 않는다 (중복 메일 방지).
   // 멤버 선택과 이메일 매칭이 같은 사람을 가리켜도 한 번만 처리하도록 userId 로 중복 차단.
   const jobUrl = `${base}/jobs/${jobId}`;
   const handledUserIds = new Set<number>();
@@ -139,7 +141,17 @@ export async function POST(
       })
       .onConflictDoNothing()
       .returning({ userId: jobInterviewers.userId });
-    const wasAlready = inserted.length === 0;
+    // 이미 이 공고 면접관이면 중복 알림 메일을 보내지 않고 표시만 한다.
+    // (이메일 직접 입력 경로에서도 동일 — 이미 면접관이면 발송 안 함)
+    if (inserted.length === 0) {
+      memberResults.push({
+        userId: m.id,
+        email: m.email,
+        name: m.name,
+        status: "already_assigned",
+      });
+      return;
+    }
     const mail = buildInterviewerAssignedEmail({
       inviterName: me!.name,
       orgName,
@@ -157,7 +169,7 @@ export async function POST(
         userId: m.id,
         email: m.email,
         name: m.name,
-        status: wasAlready ? "already_assigned" : "assigned",
+        status: "assigned",
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

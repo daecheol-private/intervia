@@ -2820,6 +2820,8 @@ function ShareButton({
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<number>>(
     new Set()
   );
+  // 이미 이 공고 면접관인 멤버 id — 멤버 목록에서 "이미 면접관"으로 표시 + 선택 비활성화.
+  const [interviewerIds, setInterviewerIds] = useState<Set<number>>(new Set());
   const [memberLoading, setMemberLoading] = useState(false);
   const [results, setResults] = useState<
     | {
@@ -2847,8 +2849,11 @@ function ShareButton({
       fetch("/api/auth/status").then((r) =>
         r.ok ? r.json() : Promise.resolve({ user: null })
       ),
+      fetch(`/api/jobs/${jobId}/interviewers`).then((r) =>
+        r.ok ? r.json() : Promise.resolve({ interviewers: [] })
+      ),
     ])
-      .then(([list, status]) => {
+      .then(([list, status, interviewerData]) => {
         const rows = Array.isArray(list)
           ? (list as {
               id: number;
@@ -2869,12 +2874,20 @@ function ShareButton({
               role: m.role,
             }))
         );
+        const ivs = Array.isArray(interviewerData?.interviewers)
+          ? (interviewerData.interviewers as { userId: number }[])
+          : [];
+        setInterviewerIds(new Set(ivs.map((r) => r.userId)));
       })
-      .catch(() => setMembers([]))
+      .catch(() => {
+        setMembers([]);
+        setInterviewerIds(new Set());
+      })
       .finally(() => setMemberLoading(false));
-  }, [open]);
+  }, [open, jobId]);
 
   const toggleMember = (id: number) => {
+    if (interviewerIds.has(id)) return; // 이미 면접관은 선택 불가
     setSelectedMemberIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -2972,15 +2985,23 @@ function ShareButton({
                   ) : (
                     <ul className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
                       {members.map((m) => {
-                        const checked = selectedMemberIds.has(m.id);
+                        const already = interviewerIds.has(m.id);
+                        const checked = !already && selectedMemberIds.has(m.id);
                         return (
                           <li key={m.id}>
-                            <label className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                            <label
+                              className={`flex items-center gap-2 px-3 py-2 ${
+                                already
+                                  ? "cursor-default opacity-60"
+                                  : "hover:bg-slate-50 cursor-pointer"
+                              }`}
+                            >
                               <input
                                 type="checkbox"
                                 checked={checked}
+                                disabled={already}
                                 onChange={() => toggleMember(m.id)}
-                                className="w-4 h-4 rounded border-slate-300 accent-primary"
+                                className="w-4 h-4 rounded border-slate-300 accent-primary disabled:opacity-50"
                               />
                               <span className="flex-1 min-w-0">
                                 <span className="text-sm font-medium text-slate-900 truncate block">
@@ -2990,10 +3011,16 @@ function ShareButton({
                                   {m.email}
                                 </span>
                               </span>
-                              {m.role !== "member" && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-soft text-primary-deep font-medium">
-                                  {m.role === "system_admin" ? "최고관리자" : "관리자"}
+                              {already ? (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-alt text-ink-soft border border-border-default font-medium shrink-0">
+                                  이미 면접관
                                 </span>
+                              ) : (
+                                m.role !== "member" && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-soft text-primary-deep font-medium">
+                                    {m.role === "system_admin" ? "최고관리자" : "관리자"}
+                                  </span>
+                                )
                               )}
                             </label>
                           </li>
@@ -3071,7 +3098,7 @@ function ShareButton({
                         {m.status === "assigned"
                           ? "✓ 면접관 추가 + 메일 발송"
                           : m.status === "already_assigned"
-                            ? "이미 면접관 (메일만 발송)"
+                            ? "이미 면접관 (메일 미발송)"
                             : m.status === "skipped_other_org"
                               ? "이미 다른 법인 소속이라 초대 불가"
                               : "✗ 실패"}
