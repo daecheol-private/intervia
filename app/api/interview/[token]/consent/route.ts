@@ -65,7 +65,21 @@ export async function POST(
   // 바꾸지 않으므로 outcome 으로 별도 차단).
   if (candidate?.outcome)
     return new Response("이미 종결된 지원입니다.", { status: 410 });
-  if (candidate?.email) {
+  // 본인확인 게이트(D-1 백스톱) — 등록 이메일이 없으면 토큰만으로 본인을 확인할 수 없으므로 거부.
+  // (정상 흐름에선 interview-link 발급 단계에서 이미 이메일을 요구하지만, legacy/직접 발급 등으로
+  //  무이메일 후보가 도달할 수 있어 동의 시점에도 fail-safe 로 막는다 — me/withdraw/appeal 과 일관.)
+  // 후보자는 스스로 이메일을 고칠 수 없으므로 메시지는 "채용 담당자 문의" 로 안내한다.
+  if (!candidate?.email) {
+    return Response.json(
+      {
+        error:
+          "본인 확인을 진행할 수 없습니다 (등록된 이메일이 없습니다). 채용 담당자에게 문의해 주세요.",
+        code: "email_required",
+      },
+      { status: 403 }
+    );
+  }
+  {
     const provided = (body.email ?? "").trim().toLowerCase();
     const expected = candidate.email.trim().toLowerCase();
     if (!provided) {

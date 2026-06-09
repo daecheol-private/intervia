@@ -11,7 +11,7 @@
 - 시드 내용:
   - 법인 `test-company-a` (도메인 `company-a.test`), `test-company-b` (도메인 `company-b.test`)
   - 사용자: `sysadmin@test-company-a` (system_admin), `admin@company-a.test` (org_admin/test-company-a), `member@company-a.test` (member/test-company-a), `admin@company-b.test` (org_admin/test-company-b)
-  - 비번 모두 `Test1234!`
+  - 비번 모두 `Test1234!aZ` (2026-06-09 C-2: 정책 10자+ 준수값으로 교체)
   - 각 법인 토큰 1000
   - test-company-a 공고 1개(공개), test-company-a 공고 1개(PIN=1234), test-company-b 공고 1개
 

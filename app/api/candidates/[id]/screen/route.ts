@@ -8,6 +8,7 @@ import { enqueueScreening } from "@/lib/screening-queue";
 import { triggerWorker } from "@/lib/worker-trigger";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { parseDbTimestamp } from "@/lib/utils";
 import {
   requirePositiveBalance,
   insufficientTokensResponse,
@@ -52,7 +53,7 @@ export async function POST(
   // 마이그레이션 이전 row 보호: 2026-05-22 이전 createdAt 은 면제 (legacy).
   if (
     !candidate.applicantConsentConfirmedAt &&
-    new Date(candidate.createdAt) >= new Date("2026-05-22")
+    parseDbTimestamp(candidate.createdAt) >= new Date("2026-05-22")
   ) {
     return Response.json(
       {

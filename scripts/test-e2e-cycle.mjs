@@ -19,7 +19,7 @@ import fs from "node:fs/promises";
 
 const BASE = "http://127.0.0.1:3003";
 const ADMIN_EMAIL = "admin@company-a.test";
-const ADMIN_PASS = "Test1234!";
+const ADMIN_PASS = "Test1234!aZ";
 
 const t0 = Date.now();
 function log(msg) {

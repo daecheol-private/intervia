@@ -25,7 +25,7 @@ export function sqliteTimestamp(d: Date): string {
  * (ISO Z 접미사 없음). JavaScript Date() 는 이런 문자열을 로컬 시간으로 잘못
  * 해석하므로, UTC 임을 명시해 파싱한다. 이미 Z·offset 이 있으면 그대로 둠.
  */
-function parseDbTimestamp(iso: string | Date): Date {
+export function parseDbTimestamp(iso: string | Date): Date {
   if (typeof iso !== "string") return iso;
   if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(iso)) {
     return new Date(iso.replace(" ", "T") + "Z");

@@ -14,6 +14,7 @@ import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/site-info";
 import { extractIp } from "@/lib/auth-attempts";
 import { notifyOrgAdmins } from "@/lib/notifications";
 import { sendVerificationMail } from "@/lib/email-verify";
+import { isUniqueViolation } from "@/lib/db-errors";
 
 export const runtime = "nodejs";
 
@@ -121,8 +122,11 @@ export async function POST(req: Request) {
       })
       .returning();
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (/UNIQUE|unique constraint/i.test(msg))
+    // Drizzle/libSQL 은 에러를 감싸므로 최상위 message 에는 "UNIQUE" 가 없고
+    // (예: "Failed query: insert into ..."), 실제 제약 위반은 e.cause(LibsqlError)
+    // 의 message / code(SQLITE_CONSTRAINT_UNIQUE) / rawCode(2067) 에 들어있다.
+    // cause 체인 + code 까지 모두 확인해 중복 이메일을 409 로 처리한다(이전: 최상위 message 만 봐 500).
+    if (isUniqueViolation(e))
       return new Response(
         "이미 가입된 이메일입니다. 로그인해 주세요.",
         { status: 409 }

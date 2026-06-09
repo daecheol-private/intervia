@@ -105,6 +105,20 @@ export async function POST(
     );
   }
 
+  // 본인확인 게이트(D-1) — AI 면접은 등록 이메일로 본인을 확인한다(동의·셀프서비스 라우트와 일관).
+  // 이메일이 없으면 본인확인이 불가하므로 발급 단계에서 막고, HR 에게 이력서 수정으로
+  // 이메일을 추가하도록 안내한다. (이메일 없이는 면접 링크 발송 자체도 불가)
+  if (!candidate.email) {
+    return Response.json(
+      {
+        code: "candidate_email_required",
+        error:
+          "후보자에게 등록된 이메일이 없습니다. 후보자 정보(이력서)를 수정해 이메일을 추가한 뒤 면접 링크를 발급해 주세요.",
+      },
+      { status: 400 }
+    );
+  }
+
   const token = generateToken();
   const expiresAt = addDays(new Date(), days).toISOString();
 

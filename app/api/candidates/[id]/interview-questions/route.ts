@@ -8,8 +8,9 @@
  * 면접관(같은 법인 누구나) 이 버튼을 누르면 LLM 이 질문지를 만들어 후보자당 1건 저장.
  * 재생성하면 같은 row 를 덮어쓴다.
  *
- * 과금: 후보자당 1회 interview_question_gen(기본 5토큰) 차감. chargeFeature 가
- *   (refType="candidate", refId=cid) 기준 멱등이라 재생성 시 추가 차감 없음.
+ * 과금: 생성 성공마다 interview_question_gen(기본 5토큰) **후차감** — chargeRepeatable 로
+ *   회차를 분리(생성 1회차, 재생성 2회차…)하므로 재생성 때마다 매번 과금된다(재생성도 LLM 비용 발생).
+ *   (멱등이 아님 — 단가표에 interview_question_gen 이 없어도 DEFAULT_PRICING=5 로 폴백.)
  */
 import { db } from "@/lib/db";
 import {

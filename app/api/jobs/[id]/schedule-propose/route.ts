@@ -33,6 +33,7 @@ import {
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { isJobExpired } from "@/lib/job-lifecycle";
 import {
   requirePositiveBalance,
   insufficientTokensResponse,
@@ -81,6 +82,23 @@ export async function POST(
   if (!ownsOrg(me!, job.orgId))
     return new Response("Not found", { status: 404 });
   if (!job.orgId) return new Response("법인 없는 공고", { status: 400 });
+
+  // 종결/만료 공고 가드 — interview-link·send-email 과 동일하게 일정 제시도 차단.
+  // (종결된 공고가 계속 면접 일정을 발송하지 못하게 — 라이프사이클 불변식)
+  if (job.status === "closed")
+    return Response.json(
+      { code: "job_closed", message: "종결된 공고입니다. 연장 후 다시 시도해 주세요." },
+      { status: 409 }
+    );
+  if (isJobExpired(job))
+    return Response.json(
+      {
+        code: "job_expired",
+        message:
+          "공고 종결 예정일이 지났습니다. 공고를 연장하거나 종결한 후 다시 시도해 주세요.",
+      },
+      { status: 409 }
+    );
 
   // 잔액 가드
   const balanceGuard = await requirePositiveBalance(job.orgId, {
@@ -172,6 +190,16 @@ export async function POST(
   }[] = [];
 
   for (const cand of targets) {
+    // 종결(합격·불합격·지원취소)된 후보에겐 새 면접 일정을 제시하지 않는다.
+    // (interview-link 와 동일 — outcome 도달 후 일정제시 차단, 상태 불일치 방지)
+    if (cand.outcome) {
+      results.push({
+        candidateId: cand.id,
+        status: "skipped",
+        reason: "이미 종결된 후보자",
+      });
+      continue;
+    }
     if (!cand.email) {
       results.push({
         candidateId: cand.id,

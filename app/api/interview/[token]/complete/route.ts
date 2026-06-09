@@ -16,6 +16,14 @@ import { computeTranscriptStats } from "@/lib/interview-signals";
 
 export const runtime = "nodejs";
 
+// 후보자(무인증 토큰)에게 돌려주는 안전 응답 — 평가 결과(점수·추천·concerns)는 절대 노출하지 않는다.
+// 자동화 의사결정(PIPA §37의2)은 채용 담당자의 인간 검토를 거쳐 통보되므로, 후보자 면접 종료 응답엔
+// 감사 메시지만 담는다. 평가 조회는 인증된 관리자 라우트(/api/candidates/[id] 등)로만.
+const DONE_RESPONSE = {
+  status: "completed" as const,
+  message: "면접이 종료되었습니다. 결과는 채용 담당자가 검토 후 안내해 드립니다.",
+};
+
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ token: string }> }
@@ -27,7 +35,7 @@ export async function POST(
     .where(eq(interviewSessions.accessToken, token));
   if (!session) return new Response("세션 없음", { status: 404 });
   if (session.status === "completed" && session.evaluation) {
-    return Response.json(session.evaluation);
+    return Response.json(DONE_RESPONSE);
   }
   // 만료된 세션 차단 — 만료 토큰으로 평가 생성·덮어쓰기 방지 (consent 라우트와 일관).
   // 단 위의 멱등(이미 completed+evaluation) 케이스는 만료여도 그대로 반환.
@@ -129,7 +137,7 @@ export async function POST(
         payload: { candidateId: candidate!.id, jobId: candidate!.jobId },
       });
     }
-    return Response.json(evaluation);
+    return Response.json(DONE_RESPONSE);
   }
 
   // 4) LLM 평가. 실패해도 session 은 이미 completed → 면접완료 표시 유지.
@@ -180,7 +188,7 @@ export async function POST(
       });
     }
 
-    return Response.json(evaluation);
+    return Response.json(DONE_RESPONSE);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[interview/complete] LLM 평가 실패 (session ${session.id}):`, msg);
@@ -195,14 +203,8 @@ export async function POST(
         payload: { candidateId: candidate!.id, jobId: candidate!.jobId },
       });
     }
-    return Response.json(
-      {
-        status: "completed",
-        evaluation: null,
-        evaluation_error: msg,
-        message: "면접은 종료되었으나 자동 평가 생성에 실패했습니다.",
-      },
-      { status: 200 }
-    );
+    // 후보자에겐 기술 에러(evaluation_error)도 노출하지 않는다 — 안전 응답으로 통일.
+    // 평가 실패 사실/원인은 면접관 알림·서버 로그로만 전달된다.
+    return Response.json(DONE_RESPONSE);
   }
 }

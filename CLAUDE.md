@@ -33,9 +33,9 @@ SDK 단일: **`@google/genai`** (vertexai: true). 분기 없음 — `clientFor(t
 - 배포: [DEPLOY.md](DEPLOY.md)
 - 장애 대응: [docs/RUNBOOK.md](docs/RUNBOOK.md) ← **사고 시 무엇을 보고/누르고/복구하는지** + 백업·복구
 - 출시 직전 체크리스트: [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md)
-- 전체 테스트 케이스: [docs/TEST_CASES.md](docs/TEST_CASES.md) ← **체크박스 기반, 섹션별/전체 테스트 + 회귀(§23)**
-  - 전체 테스트 **재개 가이드**(진행중): [docs/TEST_RESUME.md](docs/TEST_RESUME.md) ← **섹션 0~11 완료, 12부터 이어서**
-  - 전체 테스트 **발견 버그 트래커**: [docs/TEST_BUGS.md](docs/TEST_BUGS.md) ← 전체 테스트 후 일괄 수정
+- 전체 테스트 케이스: [docs/TEST_CASES.md](docs/TEST_CASES.md) ← **체크박스 기반, 섹션별/전체 테스트 + 회귀(§23)**. ✅ 섹션 0~23 완료(412/420, 2026-06-09)
+  - 전체 테스트 **발견·해결 버그 기록**: [docs/TEST_BUGS.md](docs/TEST_BUGS.md) ← 확정버그 6종 + 마스킹 2 + 시드정리 2 **전부 수정완료**. 남은 건 C-3(출시 직전 `MAIL_OVERRIDE_TO` 제거)뿐.
+  - 테스트 방법론: [docs/TEST_PLAN.md](docs/TEST_PLAN.md)
 
 ## 상용화 작업 진행 규칙
 

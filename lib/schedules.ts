@@ -37,6 +37,7 @@ export function validateSlots(slots: unknown): {
   const now = Date.now();
   const max = now + 60 * 24 * 60 * 60 * 1000;
   const out: Slot[] = [];
+  const seen = new Set<string>(); // 동일 (start|end) 중복 슬롯 제거
   for (const s of slots) {
     if (
       typeof s !== "object" ||
@@ -55,8 +56,13 @@ export function validateSlots(slots: unknown): {
       return { ok: false, error: "과거 시각은 제시할 수 없습니다." };
     if (start > max)
       return { ok: false, error: "60일 이내의 시각만 제시 가능합니다." };
+    const key = `${(s as Slot).start}|${(s as Slot).end}`;
+    if (seen.has(key)) continue; // 중복 슬롯은 조용히 무시 (후보자에게 같은 시간 중복 표시 방지)
+    seen.add(key);
     out.push({ start: (s as Slot).start, end: (s as Slot).end });
   }
+  if (out.length === 0)
+    return { ok: false, error: "유효한 면접 가능 시간이 없습니다." };
   return { ok: true, slots: out };
 }
 

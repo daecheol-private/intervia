@@ -7,6 +7,7 @@ import { enqueueScreening } from "@/lib/screening-queue";
 import { triggerWorker } from "@/lib/worker-trigger";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { parseDbTimestamp } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -64,8 +65,10 @@ export async function POST(req: Request) {
   // NOTE: 마스킹 텍스트가 비어 있어도 제외하지 않는다 — 파싱은 워커(ensureParsed)가
   // 평가 직전에 수행하므로 미파싱/파싱실패 후보도 enqueue 대상.
   const CONSENT_REQUIRED_FROM = new Date("2026-05-22");
+  // createdAt 은 SQLite UTC 타임스탬프(Z 없음) — parseDbTimestamp 로 UTC 파싱해야
+  // 경계(컷오프 ±9h)에서 로컬 파싱으로 인한 오분류를 막는다.
   const isConsentMissing = (r: { consentAt: string | null; createdAt: string }) =>
-    !r.consentAt && new Date(r.createdAt) >= CONSENT_REQUIRED_FROM;
+    !r.consentAt && parseDbTimestamp(r.createdAt) >= CONSENT_REQUIRED_FROM;
 
   const enqueued: { candidateId: number; jobId: number }[] = [];
   const skipped: { candidateId: number; reason: string }[] = [];

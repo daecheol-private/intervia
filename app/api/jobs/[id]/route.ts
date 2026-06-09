@@ -8,6 +8,7 @@ import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
 import { deleteCandidateFiles } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
 import { refundFeature } from "@/lib/tokens";
+import { parseDbTimestamp } from "@/lib/utils";
 import {
   generateRequirementChecklist,
   serializeChecklist,
@@ -188,7 +189,10 @@ export async function DELETE(
 
   // 5분 내 삭제 시 자동 환불
   if (existing.orgId) {
-    const ageMs = Date.now() - new Date(existing.createdAt).getTime();
+    // createdAt 은 SQLite CURRENT_TIMESTAMP(UTC, "YYYY-MM-DD HH:MM:SS", Z 없음).
+    // new Date() 기본 파싱은 이를 로컬(KST+9)로 해석해 ageMs 가 항상 ~9h 과대 → 5분 내 환불이
+    // 영영 미발동(로컬/비UTC 서버). parseDbTimestamp 로 UTC 파싱해 바로잡는다.
+    const ageMs = Date.now() - parseDbTimestamp(existing.createdAt).getTime();
     if (ageMs <= REFUND_WINDOW_MS) {
       await refundFeature({
         orgId: existing.orgId,

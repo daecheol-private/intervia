@@ -78,7 +78,7 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
 - **할 일**:
   1. `npm run dev` (로컬 SQLite)
   2. `LOCAL_DB=1 npm run db:seed-test` 로 테스트 시드
-  3. `admin@company-a.test` / `Test1234!` 로그인
+  3. `admin@company-a.test` / `Test1234!aZ` 로그인
   4. 공고 1개 생성 → 토큰 차감 확인
   5. 동의 체크박스 미체크 → 업로드 차단 확인
   6. 동의 체크 + 이력서 PDF 1개 업로드 → 평가 자동 큐 진입

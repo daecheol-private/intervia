@@ -6,7 +6,9 @@ const url = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || "file:
 const authToken = process.env.TURSO_AUTH_TOKEN;
 const db = createClient({ url, authToken });
 
-const PASSWORD = "Test1234!";
+// C-2 — 비번 정책(10자+·3종+) 준수. 기존 "Test1234!"(9자)는 정책 미달이라 일부
+// 정책 검증 테스트(예: TC-4.1.2 동일비번 거부)가 길이 에러에 먼저 막혔다. 정책 통과 값으로 교체.
+const PASSWORD = "Test1234!aZ";
 
 const PRICING = [
   ["job_post", 10],
@@ -39,8 +41,11 @@ async function wipe() {
 }
 
 async function insertOrg(name, domain) {
+  // C-1 — 실제 signup 은 도메인 이메일 인증으로 'verified' 법인을 만든다. 시드도 'verified' 로
+  // 맞춰 합류 happy-path(검증 게이트 통과) 등 테스트가 우회 없이 돌게 한다.
   const r = await db.execute({
-    sql: "INSERT INTO organizations(name, email_domain) VALUES (?, ?)",
+    sql: `INSERT INTO organizations(name, email_domain, verification_status, verified_at)
+          VALUES (?, ?, 'verified', CURRENT_TIMESTAMP)`,
     args: [name, domain],
   });
   return Number(r.lastInsertRowid);
@@ -148,7 +153,7 @@ async function main() {
     pin: null,
   });
 
-  console.log("✅ test seed done — password for all users: Test1234!");
+  console.log(`✅ test seed done — password for all users: ${PASSWORD}`);
 }
 
 main().catch((e) => {

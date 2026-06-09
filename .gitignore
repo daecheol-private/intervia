@@ -67,3 +67,8 @@ next-env.d.ts
 /.tmp-dart/
 drizzle.backup/
 dev.log
+
+# 테스트용 임시 헬퍼·아티팩트 (로컬 전용 — 커밋 금지)
+/scripts/_*
+/scripts/.cookie-*
+/data.db.bak*

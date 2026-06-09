@@ -159,7 +159,13 @@ function escapeRe(s: string): string {
 
 function applyKnown(text: string, known: KnownPII | undefined): string {
   if (!known) return text;
-  if (known.name) text = text.split(known.name).join("[이름]");
+  // B-1 — 1글자 이름(파일명 stem 폴백 등)은 split/join 치환 시 본문 내 모든 해당 글자를
+  // [이름] 으로 바꿔 텍스트를 파괴한다(예: 이름 "a" → "N[이름]me"). 2글자 미만은
+  // 실제 사람 이름이 아닐 가능성이 높고(한글 이름 2~3자, 영문은 더 김) 부작용만 크므로
+  // 치환을 건너뛴다. 실제 PII 는 라벨/정규식/사전 패스가 별도로 처리한다.
+  const knownName = known.name?.trim();
+  if (knownName && knownName.length >= 2)
+    text = text.split(knownName).join("[이름]");
   for (const p of known.phones ?? [])
     if (p) text = text.split(p).join("[전화]");
   for (const e of known.emails ?? [])
@@ -260,6 +266,11 @@ export function maskText(
   const level = opts.level ?? "standard";
   // 0) 입력 내 우리 마스크 토큰 리터럴 무력화 (역주입 방지)
   let out = neutralizeMaskTokens(text);
+  // 0.5) 이메일·전화 선(先)마스킹 (B-2) — 경계가 명확한 연락처 PII 를 라벨 패스 전에 원자적으로
+  //   마스킹한다. 라벨 값 매칭(예: "전화 ...{6,30}")이 뒤따르는 이메일을 일부만 삼켜 ".com" 같은
+  //   TLD 조각을 남기던 사고 방지(라벨이 보는 건 이미 [이메일]/[전화] 토큰). 주소/회사 등 다른
+  //   정규식은 순서를 바꾸지 않는다(이름이 지번 패턴에 먼저 걸리는 부작용 회피) — 그건 3) 에서.
+  out = out.replace(RE_EMAIL, "[이메일]").replace(RE_PHONE, "[전화]");
   // 1) 라벨 먼저 — known/regex 가 만든 토큰 ([이름] 등) 을 라벨이 재해석하는 사고 방지
   if (level === "standard") out = applyLabels(out);
   // 2) known PII (가장 정확) — 라벨이 못 잡은 본문 내 PII 대응

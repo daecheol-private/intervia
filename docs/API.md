@@ -214,7 +214,7 @@ curl -X POST http://localhost:3003/api/auth/check-email \
 # 신규 법인 등록 + 첫 사용자
 curl -c jar.txt -X POST http://localhost:3003/api/orgs \
   -H 'Content-Type: application/json' \
-  -d '{"orgName":"ACME","email":"admin@acme.co.kr","password":"Test1234!","name":"홍길동"}'
+  -d '{"orgName":"ACME","email":"admin@acme.co.kr","password":"Test1234!aZ","name":"홍길동"}'
 
 # 단가 조회
 curl -b jar.txt http://localhost:3003/api/admin/pricing

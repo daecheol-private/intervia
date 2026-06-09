@@ -22,7 +22,7 @@ async function login() {
     },
     body: JSON.stringify({
       email: "admin@company-a.test",
-      password: "Test1234!",
+      password: "Test1234!aZ",
     }),
   });
   if (!r.ok) {
