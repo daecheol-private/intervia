@@ -120,12 +120,18 @@ export async function POST(
     status: "pending",
   });
 
-  void notifyOrgAdmins(inv.orgId, {
-    type: "join_request",
-    title: `${me!.name} (${me!.email}) 님이 공고 공유로 합류를 요청했습니다`,
-    href: "/org/members",
-    payload: { userId: me!.id, orgId: inv.orgId, jobId: inv.jobId },
-  });
+  // 승인해야만 신규 직원이 입장 가능 — 매일 로그인 안 하는 관리자도 메일로 인지.
+  // (자가 합류요청 경로 orgs/join-requests 와 동일하게 email:true)
+  void notifyOrgAdmins(
+    inv.orgId,
+    {
+      type: "join_request",
+      title: `${me!.name} (${me!.email}) 님이 공고 공유로 합류를 요청했습니다`,
+      href: "/org/members",
+      payload: { userId: me!.id, orgId: inv.orgId, jobId: inv.jobId },
+    },
+    { email: true }
+  );
 
   await deleteSession(me!.sessionToken);
   await clearSessionCookie();
