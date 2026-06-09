@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useVoiceInput } from "./use-voice-input";
 import { LogoMark, Logo } from "@/app/components/Logo";
+import { MicHelpModal } from "@/app/components/MicHelpModal";
 
 type Message = { role: "user" | "model"; content: string };
 
@@ -50,6 +51,7 @@ export default function InterviewPage() {
   const [streaming, setStreaming] = useState(false);
   const [ended, setEnded] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [micHelp, setMicHelp] = useState(false);
   // 전체 타이머 fallback — 첫 메시지 전송 시점을 클라이언트가 기록.
   // (서버 startedAt 은 첫 chat 호출 때 기록되지만 info 를 재요청하지 않아 클라이언트엔 null 로 남음.
   //  새로고침 시엔 info 재로드로 서버 startedAt 이 채워져 그쪽이 우선.)
@@ -412,8 +414,15 @@ export default function InterviewPage() {
               </div>
             )}
             {voice.error && (
-              <div className="mb-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-                {voice.error}
+              <div className="mb-2 flex items-start justify-between gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                <span className="leading-relaxed">{voice.error}</span>
+                <button
+                  type="button"
+                  onClick={() => setMicHelp(true)}
+                  className="shrink-0 underline font-medium hover:text-rose-900"
+                >
+                  설정 방법
+                </button>
               </div>
             )}
             <div className="flex gap-2 items-end">
@@ -499,10 +508,21 @@ export default function InterviewPage() {
                 전송
               </button>
             </div>
-            <p className="text-[10px] text-slate-400 mt-1 hidden sm:block">
-              Enter = 전송, Shift+Enter = 줄바꿈
-              {voice.supported && " · 🎙 마이크로 음성 입력 가능 (Chrome·Edge·Safari)"}
-            </p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="text-[10px] text-slate-400 hidden sm:block">
+                Enter = 전송, Shift+Enter = 줄바꿈
+                {voice.supported && " · 🎙 마이크로 음성 입력 가능 (Chrome·Edge·Safari)"}
+              </p>
+              {voice.supported && (
+                <button
+                  type="button"
+                  onClick={() => setMicHelp(true)}
+                  className="text-[11px] text-slate-400 hover:text-primary-deep underline shrink-0"
+                >
+                  마이크가 안 되나요?
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -541,6 +561,8 @@ export default function InterviewPage() {
           </div>
         </div>
       )}
+
+      <MicHelpModal open={micHelp} onClose={() => setMicHelp(false)} />
     </main>
   );
 }
