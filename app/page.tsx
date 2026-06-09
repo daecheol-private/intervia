@@ -1118,7 +1118,7 @@ async function Landing() {
           }}
         />
 
-        <div className="max-w-6xl mx-auto px-6 pt-16 pb-20 sm:pt-24 sm:pb-28 grid lg:grid-cols-[1.1fr_1fr] gap-12 lg:gap-16 items-center">
+        <div className="max-w-6xl mx-auto px-6 pt-16 pb-20 sm:pt-24 sm:pb-28 grid lg:grid-cols-[1.25fr_1fr] gap-12 lg:gap-12 items-center">
           {/* Left — copy */}
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-card border border-border-default text-xs text-ink-soft shadow-sm mb-6">
