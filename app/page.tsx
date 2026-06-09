@@ -13,6 +13,7 @@ import { desc, eq, count, sql, and } from "drizzle-orm";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { isJobUnlocked } from "@/lib/job-lock";
 import { ChatPreview } from "./components/ChatPreview";
+import { HowItWorksCarousel } from "./components/HowItWorksCarousel";
 import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
 import {
   getAllPricing,
@@ -1333,120 +1334,8 @@ async function Landing() {
             </p>
           </div>
 
-          {/* Flow */}
-          <div className="relative">
-            <ol className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              <FlowStep
-                n={1}
-                title="공고 등록"
-                body="직무·자격·선호 인재상 입력. 면접 시간(10·20·30분) 선택."
-                mock={
-                  <div className="text-[10px] space-y-1 text-left">
-                    <div className="font-semibold text-ink">백엔드 개발자</div>
-                    <div className="flex gap-1 flex-wrap">
-                      <MiniTag>경력 3~7년</MiniTag>
-                      <MiniTag>면접 20분</MiniTag>
-                    </div>
-                  </div>
-                }
-              />
-              <FlowStep
-                n={2}
-                title="이력서 업로드 · 평가"
-                body="후보자 이력서 PDF 일괄 업로드 → 자동 마스킹 + AI 서류 평가로 점수·추천 등급 산출."
-                mock={
-                  <div className="relative h-12 text-left">
-                    <div className="absolute left-0 top-0 w-10 h-12 rounded bg-card border border-border-default shadow-sm flex items-center justify-center">
-                      <FileText className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="absolute left-2 top-1 w-10 h-12 rounded bg-card border border-border-default shadow-sm flex items-center justify-center -rotate-3">
-                      <FileText className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="absolute left-4 top-2 w-10 h-12 rounded bg-card border border-border-default shadow-sm flex items-center justify-center rotate-3">
-                      <FileText className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="absolute left-16 top-3 text-[10px] text-ink-soft whitespace-nowrap">
-                      <div className="font-semibold text-primary">+24명</div>
-                      <div>마스킹 완료</div>
-                    </div>
-                  </div>
-                }
-              />
-              <FlowStep
-                n={3}
-                title="AI 채팅 면접"
-                body="선별된 후보자에게 메일 발송. 후보자가 채팅으로 AI 면접에 응답하면 자동 평가."
-                mock={
-                  <div className="space-y-1 text-left">
-                    <div className="text-[10px] px-2 py-1 rounded-lg rounded-bl-sm bg-card border border-border-default inline-block max-w-full">
-                      자기소개 부탁드립니다
-                    </div>
-                    <div className="text-[10px] px-2 py-1 rounded-lg rounded-br-sm bg-primary text-surface inline-block max-w-full ml-6">
-                      5년 차 백엔드 개발자입니다…
-                    </div>
-                  </div>
-                }
-              />
-              <FlowStep
-                n={4}
-                title="면접 일정 조율"
-                body="합격자에게 면접 시간 제시 → 후보자가 선택하거나 역제시. 확정 시 Zoom 회의 자동 생성."
-                mock={
-                  <div className="space-y-1.5 text-left w-full">
-                    <div className="flex items-center gap-1 text-[10px] text-ink-soft">
-                      <CalendarClock className="w-3 h-3 text-primary" />
-                      제시한 면접 시간
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      <MiniTag>6/10 14:00</MiniTag>
-                      <MiniTag>6/11 10:00</MiniTag>
-                    </div>
-                    <div className="text-[9px] text-primary font-semibold">
-                      ↩ 후보자 시간 역제시 가능
-                    </div>
-                  </div>
-                }
-              />
-              <FlowStep
-                n={5}
-                title="대면 면접"
-                body="맞춤 질문지를 자동 생성해 1·2차 대면 면접 진행. 면접관 스코어카드 기록."
-                mock={
-                  <div className="space-y-1 text-left w-full">
-                    <div className="flex items-center gap-1 text-[10px] font-semibold text-ink">
-                      <ClipboardList className="w-3 h-3 text-primary" />
-                      AI 생성 면접 질문지
-                    </div>
-                    <div className="text-[9px] text-ink-soft leading-relaxed">
-                      Q. 대규모 트래픽 처리 경험은?
-                      <br />
-                      Q. 팀 내 갈등 해결 사례는?
-                    </div>
-                  </div>
-                }
-              />
-              <FlowStep
-                n={6}
-                title="합·불 결정 · 통보"
-                body="평가 리포트와 면접 메모를 한 화면에서 비교 후 합·불 결정. 결과 메일 자동 발송."
-                mock={
-                  <div className="flex items-end gap-1.5 h-12">
-                    {[60, 80, 90, 75].map((h, i) => (
-                      <div key={i} className="flex flex-col items-center gap-1 flex-1">
-                        <div
-                          className="w-full rounded-t bg-primary"
-                          style={{ height: `${h}%` }}
-                        />
-                        <span className="text-[9px] text-ink-soft">
-                          {["기술", "경험", "협업", "적합"][i]}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                }
-              />
-            </ol>
-          </div>
+          {/* Flow — 6단계 캐러셀 (스크린샷 목업 + 말풍선 포인트) */}
+          <HowItWorksCarousel />
         </div>
       </section>
 
@@ -1719,43 +1608,6 @@ function LedgerRow({
         {delta}
       </span>
     </div>
-  );
-}
-
-function MiniTag({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-alt text-ink-soft">
-      {children}
-    </span>
-  );
-}
-
-function FlowStep({
-  n,
-  title,
-  body,
-  mock,
-}: {
-  n: number;
-  title: string;
-  body: string;
-  mock: React.ReactNode;
-}) {
-  return (
-    <li className="relative">
-      {/* 번호 원 — 항상 카드 위 중앙. 연결선 위에 z-10 으로 떠 있게 */}
-      <div className="relative z-10 mx-auto w-12 h-12 rounded-full bg-primary text-surface text-base font-bold flex items-center justify-center shadow-md ring-4 ring-surface">
-        {n}
-      </div>
-      <div className="mt-4 rounded-2xl bg-card border border-border-default p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all">
-        {/* mock visual */}
-        <div className="mb-4 rounded-lg bg-surface-alt/70 p-3 min-h-[80px] flex items-center">
-          {mock}
-        </div>
-        <h3 className="text-sm font-semibold text-ink">{title}</h3>
-        <p className="mt-1.5 text-xs text-ink-soft leading-relaxed">{body}</p>
-      </div>
-    </li>
   );
 }
 

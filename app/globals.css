@@ -145,6 +145,12 @@ h4 {
   border-radius: 4px;
 }
 
+/* 캐러셀 네비(< > 화살표·인디케이터)는 둥근/사각 버튼 없이 표시하므로
+   전역 focus 사각 outline 을 제거. (unlayered 라 레이어된 유틸리티보다 우선) */
+.carousel-nav:focus-visible {
+  outline: none;
+}
+
 /* 스크롤바 */
 ::-webkit-scrollbar {
   width: 10px;
