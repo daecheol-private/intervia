@@ -224,6 +224,50 @@ export default function OrgSettingsPage() {
             </div>
           </section>
 
+          {/* 외부 연동 — 메일 서버 / 화상 면접 (네비 드롭다운에서 이리로 이동) */}
+          <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              외부 연동
+            </h2>
+            <p className="text-[11px] text-slate-500 mb-3">
+              필요할 때만 설정하세요. 미설정 시 Intervia 기본값으로 동작합니다.
+            </p>
+            <div className="divide-y divide-slate-100">
+              <Link
+                href="/org/smtp"
+                className="flex items-center justify-between gap-3 py-3 group"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800">
+                    메일 서버 (SMTP)
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    자사 도메인으로 면접 안내·합불 통보 메일을 발송합니다.
+                  </p>
+                </div>
+                <span className="shrink-0 text-slate-400 group-hover:text-primary transition-colors">
+                  →
+                </span>
+              </Link>
+              <Link
+                href="/org/zoom"
+                className="flex items-center justify-between gap-3 py-3 group"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800">
+                    화상 면접 (Zoom)
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    1차 면접 일정이 확정되면 Zoom 회의를 자동으로 생성합니다.
+                  </p>
+                </div>
+                <span className="shrink-0 text-slate-400 group-hover:text-primary transition-colors">
+                  →
+                </span>
+              </Link>
+            </div>
+          </section>
+
           {/* 스캔 PDF AI OCR */}
           <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <div className="flex items-start justify-between gap-3">

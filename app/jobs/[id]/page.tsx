@@ -18,6 +18,8 @@ import {
   STAGE_RANK as STAGE_RANK_SHARED,
   STAGE_WAITER,
   STAGE_LABELS,
+  STAGE_GROUPS,
+  STAGE_GROUP_LABELS,
 } from "@/lib/stage-meta";
 
 type Job = {
@@ -1578,17 +1580,17 @@ export default function JobDetailPage() {
           }
           className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
         >
+          {/* 단계 필터 — 12개 세부 stage 를 4버킷(서류/AI면접/대면/결정)으로 묶어 표시 */}
           <option value="all">단계 전체</option>
-          <option value="applied">지원</option>
-          <option value="screened">서류평가</option>
-          <option value="ai_pending">AI면접 · 대기</option>
-          <option value="ai_evaluated">AI면접 · 평가</option>
-          <option value="round1_candidate">1차 면접 · 후보</option>
-          <option value="round1_scheduling">1차 면접 · 스케쥴 지정</option>
-          <option value="round1_waiting">1차 면접 · 대기</option>
-          <option value="round1_passed">1차 합격</option>
-          <option value="round2_passed">2차 합격</option>
-          <option value="hired">최종 합격</option>
+          {STAGE_GROUPS.map((g) => (
+            <optgroup key={g.group} label={STAGE_GROUP_LABELS[g.group]}>
+              {g.stages.map((s) => (
+                <option key={s} value={s}>
+                  {STAGE_LABELS[s]}
+                </option>
+              ))}
+            </optgroup>
+          ))}
         </select>
         <select
           value={outcomeFilter}

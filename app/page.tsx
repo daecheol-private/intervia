@@ -84,6 +84,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     .select({
       total: count(),
       decided: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('hired','rejected','withdrawn','hold') THEN 1 ELSE 0 END)`,
+      // 첫 실행 가이드용 — AI 면접 단계(발송 후 응시 대기) 이상에 도달한 후보 수.
+      interviewReached: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('ai_pending','ai_evaluated','round1_candidate','round1_scheduling','round1_waiting','round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
     })
     .from(candidates)
     .where(candFilter ?? sql`1=1`);
@@ -340,6 +342,16 @@ async function Dashboard({ me }: { me: CurrentUser }) {
 
   const totalCand = Number(candAgg?.total ?? 0);
   const decidedCount = Number(candAgg?.decided ?? 0);
+  const interviewReached = Number(candAgg?.interviewReached ?? 0);
+
+  // -- 첫 실행 가이드 (신규 법인 온보딩) ----------------------------------
+  // 멤버는 공고 등록 권한이 없을 수 있으나, 첫 사이클 안내 자체는 동일하게 노출.
+  // (system_admin 은 이 Dashboard 에 도달하지 않음 — 운영 대시보드로 리다이렉트)
+  const setup1 = totalJobs > 0; // 공고 등록
+  const setup2 = totalCand > 0; // 이력서 업로드
+  const setup3 = interviewReached > 0; // AI 면접 발송(응시 대기 이상)
+  const setupComplete = setup1 && setup2 && setup3;
+  const firstJobId = jobsWithActions[0]?.id ?? null;
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
@@ -349,9 +361,33 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           안녕하세요, {orgName ? `${orgName} ` : ""}{me.name} 님
         </h1>
         <p className="text-sm text-ink-soft mt-1">
-          오늘의 채용 현황을 한눈에 확인하세요.
+          {totalJobs === 0
+            ? "Intervia 에 오신 걸 환영합니다. 아래 3단계로 첫 채용을 시작해 보세요."
+            : "오늘의 채용 현황을 한눈에 확인하세요."}
         </p>
       </header>
+
+      {/* 공고가 하나도 없으면 KPI/목록 대신 시작 가이드만 — 첫 화면 단순화 */}
+      {totalJobs === 0 ? (
+        <SetupGuide
+          variant="hero"
+          step1={setup1}
+          step2={setup2}
+          step3={setup3}
+          firstJobId={firstJobId}
+        />
+      ) : (
+        <>
+          {/* 셋업 미완 시 상단 슬림 진행 스트립 — 완료되면 사라짐 */}
+          {!setupComplete && (
+            <SetupGuide
+              variant="strip"
+              step1={setup1}
+              step2={setup2}
+              step3={setup3}
+              firstJobId={firstJobId}
+            />
+          )}
 
       {/* 상단 KPI 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
@@ -522,6 +558,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           </div>
         )}
       </section>
+        </>
+      )}
     </main>
   );
 }
@@ -529,6 +567,184 @@ async function Dashboard({ me }: { me: CurrentUser }) {
 // ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
+
+type SetupStep = {
+  n: number;
+  done: boolean;
+  title: string;
+  desc: string;
+  cta: { href: string; label: string; pcOnly: boolean } | null;
+};
+
+/**
+ * 첫 실행 가이드 — 신규 법인이 "공고 → 이력서 → AI 면접" 첫 사이클을 마치도록 안내.
+ * variant="hero": 공고 0개일 때 대시보드 본문을 대체하는 큰 카드.
+ * variant="strip": 일부만 진행됐을 때 대시보드 상단의 슬림 진행 스트립.
+ * 3단계 모두 완료되면 호출 측에서 렌더하지 않음.
+ */
+function SetupGuide({
+  variant,
+  step1,
+  step2,
+  step3,
+  firstJobId,
+}: {
+  variant: "hero" | "strip";
+  step1: boolean;
+  step2: boolean;
+  step3: boolean;
+  firstJobId: number | null;
+}) {
+  const steps: SetupStep[] = [
+    {
+      n: 1,
+      done: step1,
+      title: "공고 만들기",
+      desc: "직무·자격·면접 시간을 입력해 채용 공고를 등록합니다.",
+      cta: { href: "/jobs/new", label: "공고 등록하기", pcOnly: true },
+    },
+    {
+      n: 2,
+      done: step2,
+      title: "이력서 올리기",
+      desc: "지원자 이력서 PDF를 올리면 자동 마스킹 후 AI 서류 평가가 진행됩니다.",
+      cta: firstJobId
+        ? { href: `/jobs/${firstJobId}`, label: "이력서 올리기", pcOnly: false }
+        : null,
+    },
+    {
+      n: 3,
+      done: step3,
+      title: "AI 면접 보내기",
+      desc: "서류를 통과한 지원자에게 링크를 보내면 AI 면접관이 채팅으로 면접을 진행합니다.",
+      cta: firstJobId
+        ? { href: `/jobs/${firstJobId}`, label: "면접 보낼 후보 보기", pcOnly: false }
+        : null,
+    },
+  ];
+  const doneCount = steps.filter((s) => s.done).length;
+  const activeStep = steps.find((s) => !s.done) ?? null;
+
+  if (variant === "strip") {
+    return (
+      <div className="mb-6 rounded-xl border border-primary/20 bg-primary-soft/40 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md bg-primary text-surface tabular-nums">
+            시작 가이드 {doneCount}/3
+          </span>
+          <span className="text-sm text-ink truncate">
+            {activeStep ? (
+              <>
+                다음 단계:{" "}
+                <strong className="font-semibold">{activeStep.title}</strong>
+              </>
+            ) : (
+              "설정 완료"
+            )}
+          </span>
+        </div>
+        {activeStep?.cta && (
+          <Link
+            href={activeStep.cta.href}
+            className="shrink-0 inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface transition-colors"
+          >
+            {activeStep.cta.label}
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <section className="mb-8 rounded-2xl border border-border-default bg-card shadow-sm overflow-hidden">
+      <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-2">
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-soft text-primary-deep text-[11px] font-semibold mb-3">
+          <Sparkles className="w-3 h-3" strokeWidth={2.5} />
+          시작 가이드 · {doneCount}/3 완료
+        </div>
+        <h2 className="text-xl font-bold text-ink">첫 채용, 3단계면 시작돼요</h2>
+        <p className="text-sm text-ink-soft mt-1">
+          아래 순서대로 진행하면 첫 AI 면접까지 한 번에 경험할 수 있어요.
+        </p>
+      </div>
+      <ol className="px-4 sm:px-6 pb-6 pt-4 space-y-2">
+        {steps.map((s) => (
+          <StepRow key={s.n} step={s} active={activeStep?.n === s.n} />
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function StepRow({ step, active }: { step: SetupStep; active: boolean }) {
+  return (
+    <li
+      className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 transition-colors ${
+        step.done
+          ? "border-primary/20 bg-primary-soft/30"
+          : active
+            ? "border-primary/40 bg-card ring-1 ring-primary/20"
+            : "border-border-default bg-surface-alt/40"
+      }`}
+    >
+      <span
+        className={`shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${
+          step.done
+            ? "bg-primary text-surface"
+            : active
+              ? "bg-primary-soft text-primary-deep border border-primary/40"
+              : "bg-surface-alt text-ink-muted border border-border-default"
+        }`}
+      >
+        {step.done ? <Check className="w-4 h-4" strokeWidth={3} /> : step.n}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={`text-sm font-semibold ${
+              step.done ? "text-ink-soft line-through" : "text-ink"
+            }`}
+          >
+            {step.title}
+          </span>
+          {step.done && (
+            <span className="text-[11px] text-primary font-medium">완료</span>
+          )}
+        </div>
+        <p className="text-xs text-ink-soft mt-0.5 leading-relaxed">
+          {step.desc}
+        </p>
+        {active && step.cta && (
+          <div className="mt-2.5">
+            {step.cta.pcOnly ? (
+              <>
+                <Link
+                  href={step.cta.href}
+                  className="hidden sm:inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface transition-colors"
+                >
+                  {step.cta.label}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+                <span className="sm:hidden text-xs text-ink-soft">
+                  공고 등록은 PC(데스크톱)에서 진행해 주세요.
+                </span>
+              </>
+            ) : (
+              <Link
+                href={step.cta.href}
+                className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface transition-colors"
+              >
+                {step.cta.label}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
 
 function KpiCard({
   label,

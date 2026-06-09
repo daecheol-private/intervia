@@ -55,6 +55,55 @@ export const STAGE_LABELS: Record<Stage, string> = {
   withdrawn: "지원취소",
 };
 
+/**
+ * 사용자 노출용 4버킷 그룹 — 12개 세부 stage 를 묶어 첫 사용자의 인지 부담을 낮춘다.
+ * 내부 stage enum 은 그대로 유지하고, 필터/표시 UI 에서만 그룹으로 묶어 보여준다.
+ */
+export type StageGroup = "document" | "ai_interview" | "onsite" | "decision";
+
+export const STAGE_GROUP_LABELS: Record<StageGroup, string> = {
+  document: "서류 전형",
+  ai_interview: "AI 면접",
+  onsite: "대면 면접",
+  decision: "결정",
+};
+
+export const STAGE_GROUP_OF: Record<Stage, StageGroup> = {
+  applied: "document",
+  screened: "document",
+  ai_pending: "ai_interview",
+  ai_evaluated: "ai_interview",
+  round1_candidate: "onsite",
+  round1_scheduling: "onsite",
+  round1_waiting: "onsite",
+  round1_passed: "onsite",
+  round2_passed: "onsite",
+  hired: "decision",
+  rejected: "decision",
+  withdrawn: "decision",
+};
+
+/**
+ * 그룹 순서 + 각 그룹의 파이프라인 stage 목록 (select optgroup 등 UI 용).
+ * 종결 결과(rejected/withdrawn)는 별도 '결과' 필터에서 다루므로 여기 decision 은
+ * 파이프라인상의 '최종 합격(hired)' 만 포함한다.
+ */
+export const STAGE_GROUPS: { group: StageGroup; stages: Stage[] }[] = [
+  { group: "document", stages: ["applied", "screened"] },
+  { group: "ai_interview", stages: ["ai_pending", "ai_evaluated"] },
+  {
+    group: "onsite",
+    stages: [
+      "round1_candidate",
+      "round1_scheduling",
+      "round1_waiting",
+      "round1_passed",
+      "round2_passed",
+    ],
+  },
+  { group: "decision", stages: ["hired"] },
+];
+
 export type StageWaiter = "system" | "hr" | "candidate" | "interviewer" | "none";
 
 export const STAGE_WAITER: Record<Stage, { who: StageWaiter; label: string }> = {

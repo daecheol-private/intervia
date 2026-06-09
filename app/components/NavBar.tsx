@@ -11,7 +11,6 @@ import {
   ChevronDown,
   Coins,
   Users,
-  Mail,
   Users2,
   DollarSign,
   BarChart3,
@@ -19,7 +18,6 @@ import {
   Lock,
   Scale,
   ShieldCheck,
-  Video,
   Settings,
   Menu,
   X,
@@ -156,8 +154,7 @@ export function NavBar({
                     { href: "/org/dashboard", label: "채용 현황", Icon: BarChart3 },
                     { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
                     { href: "/org/members", label: "멤버", Icon: Users },
-                    { href: "/org/smtp", label: "메일 서버", Icon: Mail },
-                    { href: "/org/zoom", label: "화상 면접(줌)", Icon: Video },
+                    // 메일 서버·줌 연동은 법인 설정 > 외부 연동으로 이동 (첫 화면 단순화)
                     { href: "/org/settings", label: "법인 설정", Icon: Settings },
                     { href: "/support", label: "고객센터", Icon: LifeBuoy },
                   ]}

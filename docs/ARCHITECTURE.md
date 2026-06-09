@@ -39,7 +39,7 @@ HR (로그인)
 ```
 interviewer/
 ├── app/
-│   ├── page.tsx                    # 대시보드 (server) — 공고 목록
+│   ├── page.tsx                    # 대시보드 (server) — 첫 실행 가이드 / KPI / 공고 목록
 │   ├── jobs-list.tsx               # 대시보드 클라이언트 컴포넌트 (PIN 모달)
 │   ├── layout.tsx                  # 루트 레이아웃 (server) — 네비바
 │   ├── logout-button.tsx           # 클라이언트 컴포넌트
@@ -235,6 +235,18 @@ interviewer/
 - 파일: `BLOB_READ_WRITE_TOKEN` 있으면 Vercel Blob, 없으면 `./uploads/`
 - `lib/storage.ts`의 `saveFile()` 호출자는 모른다. 반환되는 key가 파일명일 수도, 전체 URL일 수도 있을 뿐.
 
+### 12. 첫 사용자 단순화 (온보딩 · 네비 · 단계 그룹)
+
+신규/방문 사용자의 인지 부담을 낮추기 위한 **표시 계층** 단순화. 핵심 원칙은 **기능 삭제가 아니라 "필요할 때까지 숨김"** — 내부 데이터·라우트·stage enum 은 그대로 두고 첫 사용자의 시야에서만 치운다.
+
+- **대시보드 첫 실행 가이드** (`app/page.tsx` `SetupGuide`): 법인의 "공고 → 이력서 → AI 면접" 첫 사이클 완료 여부로 3스텝 진행도를 계산.
+  - 진행 판정: `setup1`=공고>0, `setup2`=후보>0, `setup3`=stage 가 `ai_pending` 이상 도달(후보자 집계 `interviewReached`).
+  - **공고 0개** → KPI/알림/공고목록 대신 hero 가이드만 노출 (가장 비어 있는 시점에 가장 빽빽하던 화면을 제거).
+  - **일부 진행** → 대시보드 상단에 슬림 진행 스트립(`시작 가이드 N/3` + 다음 단계 CTA). **3스텝 완료** → 자동 숨김.
+  - 서버 렌더, 영속 상태 없음(localStorage 미사용). 공고 등록 CTA 는 기존 정책대로 PC 전용 + 모바일 안내문.
+- **네비 정리** (`app/components/NavBar.tsx`): org_admin "법인" 드롭다운에서 **메일서버(`/org/smtp`)·줌(`/org/zoom`) 제외** → 법인 설정(`/org/settings`) 의 "외부 연동" 섹션으로 이동. 모바일 메뉴는 원래 둘을 숨기고 있어 데스크톱과 일관성도 맞췄다. 미설정 시 Intervia 기본값으로 동작하므로 첫 흐름에서 빠져도 무방(SMTP 는 후보자 상세에서도 맥락 링크로 도달 가능).
+- **단계 필터 4버킷 그룹화** (`app/jobs/[id]/page.tsx` 후보자 필터 `<select>`): 12개 세부 stage 를 `<optgroup>` 4그룹(**서류 전형 / AI 면접 / 대면 면접 / 결정**)으로 묶어 표시. 매핑은 `lib/stage-meta.ts` 의 `STAGE_GROUPS` / `STAGE_GROUP_LABELS` / `STAGE_GROUP_OF` (재사용 가능). 내부 stage enum 과 "전형 단계 현황" 보드(이미 색상 그룹 구분)는 불변.
+
 ## 데이터 흐름 디테일
 
 ### 이력서 업로드 → 서류 평가
@@ -281,6 +293,9 @@ interviewer/
 | `/org/members` | client | 🛡️ | 멤버·합류요청 통합 1테이블. 승인대기(pending) 행이 상단 고정 + 인라인 승인/거절 |
 | `/org/join-requests` | server | 🛡️ | `/org/members` 로 영구 리다이렉트 (호환용) |
 | `/org/tokens` | client | 필요 | - |
+| `/org/settings` | client | 🛡️ | 법인 정보·사업자번호·주소·OCR + **외부 연동(메일서버/줌) 진입점** |
+| `/org/smtp` | client | 🛡️ | 메일 서버(SMTP). 네비 드롭다운 제외 — `/org/settings` 외부 연동에서 진입 |
+| `/org/zoom` | client | 🛡️ | 화상 면접(줌). 네비 드롭다운 제외 — `/org/settings` 외부 연동에서 진입 |
 | `/admin/orgs` | client | 👑 | - |
 | `/admin/users` | client | 👑 | - |
 | `/admin/pricing` | client | 👑 | - |
