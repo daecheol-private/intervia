@@ -109,12 +109,17 @@ export async function POST(
     payload: { candidateId: candidate.id, jobId: candidate.jobId },
   });
   if (candidate.orgId) {
-    void notifyOrgAdmins(candidate.orgId, {
-      type: "candidate_appeal",
-      title: apTitle,
-      href: apHref,
-      payload: { candidateId: candidate.id, jobId: candidate.jobId },
-    });
+    void notifyOrgAdmins(
+      candidate.orgId,
+      {
+        type: "candidate_appeal",
+        title: apTitle,
+        href: apHref,
+        payload: { candidateId: candidate.id, jobId: candidate.jobId },
+      },
+      // PIPA §37의2 이의제기 — 관리자 검토 의무. 메일로도 통지.
+      { email: true }
+    );
   }
 
   return Response.json({ ok: true });

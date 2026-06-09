@@ -155,12 +155,17 @@ export async function POST(req: Request) {
     mailSent = false;
   }
 
-  void notifyOrgAdmins(orgId, {
-    type: "join_request",
-    title: `${name} (${normalizedEmail}) 님이 합류를 요청했습니다`,
-    href: "/org/members",
-    payload: { userId: user.id, orgId },
-  });
+  void notifyOrgAdmins(
+    orgId,
+    {
+      type: "join_request",
+      title: `${name} (${normalizedEmail}) 님이 합류를 요청했습니다`,
+      href: "/org/members",
+      payload: { userId: user.id, orgId },
+    },
+    // 승인해야만 신규 직원이 입장 가능 — 매일 로그인 안 하는 관리자도 메일로 인지.
+    { email: true }
+  );
 
   return Response.json({
     ok: true,

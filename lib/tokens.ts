@@ -320,12 +320,17 @@ export async function chargeFeature(args: {
     void (async () => {
       try {
         const { notifyOrgAdmins } = await import("./notifications");
-        await notifyOrgAdmins(args.orgId, {
-          type: "low_balance",
-          title: `토큰 잔액이 부족합니다 (현재 ${balance} 토큰). 충전이 필요합니다.`,
-          href: "/org/tokens",
-          payload: { orgId: args.orgId, balance },
-        });
+        await notifyOrgAdmins(
+          args.orgId,
+          {
+            type: "low_balance",
+            title: `토큰 잔액이 부족합니다 (현재 ${balance} 토큰). 충전이 필요합니다.`,
+            href: "/org/tokens",
+            payload: { orgId: args.orgId, balance },
+          },
+          // 충전 전까지 메일·평가 기능 정지 — 관리자에게 메일로도 통지.
+          { email: true }
+        );
       } catch {
         /* 알림 실패는 차감 자체에 영향 없음 */
       }
