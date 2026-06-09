@@ -143,6 +143,7 @@ interviewer/
 - 기존 법인 합류: `POST /api/orgs/join-requests` — user.status=`pending`, 세션 발급 X. org_admin이 `PATCH /api/orgs/join-requests/[id]` 로 승인하면 `active`.
   - **공고 공유 → 신규 합류는 승인 필수 (2026-06-08)**: 공유는 일반 멤버도 할 수 있으므로, 초대 링크로 들어온 신규 가입자도 법인담당자 승인을 거친다. 경로:
     - 미가입자 초대 가입(`signup-via-invite`): `users.status=pending` + `orgJoinRequests` 생성, **세션·면접관 등록 X**. 초대 링크 클릭=메일함 증명이라 `email_verified_at` 만 즉시 세팅. 초대 토큰은 consume 하지 않음.
+      - **재방문 가드 (2026-06-10)**: 토큰은 승인 시점에야 consume 되므로 가입~승인 구간엔 링크가 살아 있다. 이때 비로그인 재방문이면 가입 폼을 또 보여주지 않고 "이미 가입됨" 안내를 띄운다. `GET /api/invites/[token]` 이 초대 이메일로 가입한 계정 유무·status 를 `account` 필드로 반환하고, `/invite/[token]` 랜딩이 분기(pending=승인 대기 / active=로그인 후 합류 / disabled=문의). 자기 이메일 가입 여부 노출이라 위험 없음(토큰 소유자=초대받은 본인).
     - 무소속 로그인 사용자 수락(`invites/[token]/accept`): 마찬가지로 `pending` + 합류 요청 생성 + **현재 세션 만료**(pending 사용자가 로그인 상태로 남으면 인증 게이트 우회). 같은 법인 멤버는 예외 — 즉시 그 공고 면접관 등록 후 공고로 이동.
     - **active 전환 시 공유 초대 honor** (헬퍼 `lib/invites.ts` `honorJobShareInvites(userId, orgId)`): 그 사용자 이메일로 발급된 미사용 `orgInvites`(jobId 보유)를 조회해 `jobInterviewers` 에 자동 등록(멱등) + 초대 consume. 만료는 무시(활성화 자체가 본인확인이고, 초대 만료는 '링크 자가가입' 보안용이지 공유 의사의 만료가 아님). **사용자가 그 법인의 active 멤버가 되는 모든 경로에서 호출** — 활성화 경로가 갈라져도 면접관 등록이 누락되지 않도록:
       - 합류요청 승인 `PATCH /api/orgs/join-requests/[id]` (action=approve)

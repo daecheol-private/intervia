@@ -3,8 +3,8 @@
  * 비로그인도 호출 가능 (이메일은 마스킹).
  */
 import { db } from "@/lib/db";
-import { orgInvites, organizations, jobPostings } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { orgInvites, organizations, jobPostings, users } from "@/lib/schema";
+import { eq, sql } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
@@ -59,6 +59,15 @@ export async function GET(
   // jobId 가 비므로, jobId 가 null = 공유된 공고가 삭제됨. 랜딩에서 안내 배너용.
   const jobDeleted = inv.jobId == null;
 
+  // 이미 이 이메일로 가입한 계정이 있으면 상태를 알려준다. 초대는 승인 시점에야
+  // consume 되므로(usedAt), 가입 후 승인 전 구간엔 토큰이 살아 있다. 그때 재방문하면
+  // 가입 폼을 다시 보여주는 대신 "이미 가입됨" 안내를 띄우기 위함(랜딩에서 분기).
+  // 토큰 소유자 = 초대받은 본인이므로 자기 이메일 가입 여부 노출은 위험 없음.
+  const [acct] = await db
+    .select({ status: users.status })
+    .from(users)
+    .where(sql`lower(${users.email}) = lower(${inv.email})`);
+
   return Response.json({
     token: inv.token,
     orgId: inv.orgId,
@@ -67,5 +76,6 @@ export async function GET(
     job,
     jobDeleted,
     expiresAt: inv.expiresAt,
+    account: acct ? { status: acct.status } : null,
   });
 }

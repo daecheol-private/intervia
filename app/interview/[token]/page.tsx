@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useVoiceInput } from "./use-voice-input";
 import { LogoMark, Logo } from "@/app/components/Logo";
 import { MicHelpModal } from "@/app/components/MicHelpModal";
@@ -10,6 +11,7 @@ type Message = { role: "user" | "model"; content: string };
 
 type ConsentItem = {
   key: string;
+  kind: "consent" | "notice";
   required: boolean;
   title: string;
   description: string;
@@ -760,7 +762,10 @@ function ConsentGate({
     setWithdrawn(true);
   };
 
-  const allRequiredChecked = items
+  // 체크 동의 항목과 고지 항목 분리. (kind 미지정 레거시는 동의로 간주)
+  const consentItems = items.filter((i) => i.kind !== "notice");
+  const noticeItems = items.filter((i) => i.kind === "notice");
+  const allRequiredChecked = consentItems
     .filter((i) => i.required)
     .every((i) => checks[i.key]);
   const emailFilled = email.trim().length > 0;
@@ -768,10 +773,13 @@ function ConsentGate({
   const submit = async () => {
     setBusy(true);
     setErr("");
+    // 고지(notice) 항목은 화면에 제시되었고 사용자가 진행했으므로 '확인'으로 기록(감사 증거).
+    const consentsPayload: Record<string, boolean> = { ...checks };
+    for (const it of noticeItems) consentsPayload[it.key] = true;
     const res = await fetch(`/api/interview/${token}/consent`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ consents: checks, email: email.trim() }),
+      body: JSON.stringify({ consents: consentsPayload, email: email.trim() }),
     });
     setBusy(false);
     if (!res.ok) {
@@ -821,7 +829,7 @@ function ConsentGate({
         </header>
 
         <ul className="divide-y divide-slate-100">
-          {items.map((it) => (
+          {consentItems.map((it) => (
             <li key={it.key} className="px-6 py-4">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
@@ -858,6 +866,45 @@ function ConsentGate({
             </li>
           ))}
         </ul>
+
+        {noticeItems.length > 0 && (
+          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60">
+            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              안내 사항 (확인)
+            </div>
+            <ul className="space-y-3">
+              {noticeItems.map((it) => (
+                <li key={it.key}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-slate-900">
+                      {it.title}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-surface-alt text-ink-soft">
+                      고지
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {it.legalBasis}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    {it.description}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[11px] text-slate-500 mt-3">
+              자세한 내용은{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                className="text-primary hover:underline"
+              >
+                개인정보 처리방침
+              </Link>
+              에서 확인하실 수 있습니다.
+            </p>
+          </div>
+        )}
 
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50">
           <div className="mb-4">

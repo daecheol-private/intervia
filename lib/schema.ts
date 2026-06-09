@@ -742,7 +742,8 @@ export const consentLogs = sqliteTable("consent_logs", {
   interviewSessionId: integer("interview_session_id").notNull(),
   candidateId: integer("candidate_id").notNull(),
   consentVersion: text("consent_version").notNull(),
-  // JSON: { collection_use: true, ai_decision: true, processors: true, retention: true, marketing: false, ... }
+  // JSON: { collection_use: true, cross_border: true, ai_decision: true, processors: true, ... }
+  // (키는 CONSENT_VERSION 별로 다를 수 있음 — 고지 항목도 '확인됨' 기록용으로 true 저장)
   consents: text("consents", { mode: "json" })
     .$type<Record<string, boolean>>()
     .notNull(),

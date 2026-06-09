@@ -14,6 +14,8 @@ type InviteInfo = {
   job?: { id: number; title: string; position: string };
   jobDeleted?: boolean;
   expiresAt: string;
+  // 초대 이메일로 이미 가입한 계정이 있으면 그 상태. 없으면 null.
+  account?: { status: "active" | "pending" | "disabled" } | null;
 };
 
 export default function InvitePage() {
@@ -145,6 +147,12 @@ export default function InvitePage() {
               token={token}
               onPending={() => setPending(true)}
             />
+          ) : info.account ? (
+            <AlreadyRegistered
+              orgName={info.orgName}
+              status={info.account.status}
+              token={info.token}
+            />
           ) : mode === "prompt" ? (
             <div className="space-y-3">
               <p className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -175,6 +183,59 @@ export default function InvitePage() {
         </div>
       </div>
     </main>
+  );
+}
+
+// 초대 이메일로 이미 가입한 사람이 링크를 다시 탔을 때. 가입 폼을 또 보여주는 대신
+// 현재 상태를 알려준다(승인 대기 / 이미 가입됨 / 비활성).
+function AlreadyRegistered({
+  orgName,
+  status,
+  token,
+}: {
+  orgName: string;
+  status: "active" | "pending" | "disabled";
+  token: string;
+}) {
+  if (status === "pending") {
+    return (
+      <div className="space-y-3 text-center">
+        <p className="text-sm text-slate-700 bg-amber-50 border border-amber-200 rounded-lg p-4 leading-relaxed">
+          이미 이 이메일로 가입을 신청하셨습니다. 현재{" "}
+          <strong>{orgName}</strong> 법인담당자의 승인을 기다리는 중입니다.
+          승인되면 공유된 공고에 면접관으로 자동 등록됩니다.
+        </p>
+        <p className="text-xs text-slate-500">승인 완료 후 로그인해 주세요.</p>
+        <Link
+          href="/login"
+          className="block w-full text-center px-4 py-3 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm text-slate-700"
+        >
+          로그인 화면으로
+        </Link>
+      </div>
+    );
+  }
+  if (status === "disabled") {
+    return (
+      <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-4 leading-relaxed text-center">
+        이 이메일 계정은 현재 비활성화되어 있습니다. <strong>{orgName}</strong>{" "}
+        법인담당자에게 문의해 주세요.
+      </p>
+    );
+  }
+  // active — 이미 가입 완료된 계정. 로그인하면 이 공고 면접관으로 등록된다.
+  return (
+    <div className="space-y-3 text-center">
+      <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-4 leading-relaxed">
+        이미 가입된 계정입니다. 로그인하시면 공유된 공고에 면접관으로 등록됩니다.
+      </p>
+      <Link
+        href={`/login?next=${encodeURIComponent(`/invite/${token}`)}`}
+        className="block w-full text-center px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
+      >
+        로그인하고 합류하기
+      </Link>
+    </div>
   );
 }
 
