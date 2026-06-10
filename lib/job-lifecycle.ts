@@ -465,8 +465,8 @@ export async function purgePdfsAfterClose(): Promise<{
       and(
         eq(jobPostings.status, "closed"),
         lt(jobPostings.closedAt, cutoff),
-        // 합격자는 입사 절차상 보존 — purge 제외
-        sql`${candidates.outcome} IS NULL OR ${candidates.outcome} != 'hired'`
+        // 합격자는 입사 절차상 보존 — purge 제외 (괄호 필수: and() 가 개별 조건을 감싸지 않아 OR 가 새어나감)
+        sql`(${candidates.outcome} IS NULL OR ${candidates.outcome} != 'hired')`
       )
     );
   let purgedFiles = 0;
@@ -539,8 +539,8 @@ export async function purgePiiAfterClose(): Promise<{
       and(
         eq(jobPostings.status, "closed"),
         lt(jobPostings.closedAt, cutoff),
-        // 합격자는 보존
-        sql`${candidates.outcome} IS NULL OR ${candidates.outcome} != 'hired'`
+        // 합격자는 보존 (괄호 필수: and() 가 개별 조건을 감싸지 않아 OR 가 새어나감)
+        sql`(${candidates.outcome} IS NULL OR ${candidates.outcome} != 'hired')`
       )
     );
 
