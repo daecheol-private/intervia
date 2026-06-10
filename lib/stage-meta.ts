@@ -114,7 +114,7 @@ export const STAGE_WAITER: Record<Stage, { who: StageWaiter; label: string }> = 
   round1_candidate:  { who: "hr",          label: "일정 발송 대기" },
   round1_scheduling: { who: "candidate",   label: "지원자 일정 응답 대기" },
   round1_waiting:    { who: "interviewer", label: "면접 진행 대기" },
-  round1_passed:     { who: "hr",          label: "2차 면접 진행 대기" },
+  round1_passed:     { who: "hr",          label: "2차 진행 결정 대기" },
   round2_passed:     { who: "hr",          label: "최종 결정 대기" },
   hired:             { who: "none",        label: "종결" },
   rejected:          { who: "none",        label: "종결" },

@@ -320,7 +320,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         icon: "↩️",
         title: `[${displayTitle}] 지원자 시간 역제시`,
         count: n,
-        href: `/jobs/${r.jobId}?stage=round1_scheduling`,
+        // pseudo 필터 — 같은 단계의 응답 대기자와 섞이지 않게 역제시 건만 표시
+        href: `/jobs/${r.jobId}?stage=counter_proposed`,
         tone: "amber",
       });
     }

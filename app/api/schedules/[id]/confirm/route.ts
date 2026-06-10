@@ -30,10 +30,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { buildScheduleConfirmedEmail, roundLabel, type Slot } from "@/lib/schedules";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
-import {
-  createNotification,
-  notifyJobInterviewers,
-} from "@/lib/notifications";
+import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
 import { logAudit } from "@/lib/audit";
 
@@ -185,22 +182,9 @@ export async function POST(
     }
   }
 
-  // 인앱 알림
+  // 인앱 알림 — 공고 면접관 전원 fanout (제시자도 면접관에 포함되므로 별도 발송 시 중복)
   const notifTitle = `${cand?.name ?? "후보자"} 님의 ${roundLabel(sched.round)} 면접 시간이 확정되었습니다`;
   const notifHref = `/candidates/${sched.candidateId}`;
-  if (sched.proposedByUserId && sched.proposedByUserId !== me!.id) {
-    try {
-      await createNotification({
-        userId: sched.proposedByUserId,
-        type: "schedule_confirmed",
-        title: notifTitle,
-        href: notifHref,
-        payload: { scheduleId: sched.id, slot: matched },
-      });
-    } catch (e) {
-      console.error("[schedule/confirm] notify proposer failed", e);
-    }
-  }
   try {
     await notifyJobInterviewers(
       sched.jobId,

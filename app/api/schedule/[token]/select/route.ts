@@ -17,10 +17,7 @@ import {
   type Slot,
 } from "@/lib/schedules";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
-import {
-  createNotification,
-  notifyJobInterviewers,
-} from "@/lib/notifications";
+import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
 
 export const runtime = "nodejs";
@@ -147,22 +144,9 @@ export async function POST(
     }
   }
 
-  // 인앱 알림 — 제시한 면접관 + 공고 면접관 전원에게 (중복 시 fanout 에서 두 번 들어가도 무해)
+  // 인앱 알림 — 공고 면접관 전원 fanout (제시자도 면접관에 포함되므로 별도 발송 시 중복)
   const notifTitle = `${cand?.name ?? "후보자"} 님이 ${roundLabel(sched.round)} 면접 시간을 확정했습니다`;
   const notifHref = `/candidates/${sched.candidateId}`;
-  if (sched.proposedByUserId) {
-    try {
-      await createNotification({
-        userId: sched.proposedByUserId,
-        type: "schedule_confirmed",
-        title: notifTitle,
-        href: notifHref,
-        payload: { scheduleId: sched.id, slot: selected },
-      });
-    } catch (e) {
-      console.error("schedule confirm notify proposer failed", e);
-    }
-  }
   try {
     // proposer 는 위에서 풍부한 일정 메일을 이미 받음 — 중복 차단.
     await notifyJobInterviewers(

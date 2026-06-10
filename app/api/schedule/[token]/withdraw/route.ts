@@ -7,10 +7,7 @@ import { interviewSchedules, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { purgeOnDecision } from "@/lib/candidate-stage";
 import { maybeAutoCloseJob } from "@/lib/job-lifecycle";
-import {
-  createNotification,
-  notifyJobInterviewers,
-} from "@/lib/notifications";
+import { notifyJobInterviewers } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 
@@ -104,19 +101,6 @@ export async function POST(
     .where(eq(candidates.id, sched.candidateId));
   const title = `${cand?.name ?? "후보자"} 님이 지원을 취소했습니다`;
   const href = `/candidates/${sched.candidateId}`;
-  if (sched.proposedByUserId) {
-    try {
-      await createNotification({
-        userId: sched.proposedByUserId,
-        type: "schedule_withdrawn",
-        title,
-        href,
-        payload: { scheduleId: sched.id },
-      });
-    } catch (e) {
-      console.error("schedule withdraw notify proposer failed", e);
-    }
-  }
   try {
     await notifyJobInterviewers(sched.jobId, {
       type: "schedule_withdrawn",

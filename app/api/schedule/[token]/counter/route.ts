@@ -6,10 +6,7 @@ import { db } from "@/lib/db";
 import { candidates, interviewSchedules } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { validateSlots } from "@/lib/schedules";
-import {
-  createNotification,
-  notifyJobInterviewers,
-} from "@/lib/notifications";
+import { notifyJobInterviewers } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 
@@ -54,19 +51,6 @@ export async function POST(
     .where(eq(candidates.id, sched.candidateId));
   const title = `${cand?.name ?? "후보자"} 님이 면접 시간을 역제시했습니다`;
   const href = `/candidates/${sched.candidateId}`;
-  if (sched.proposedByUserId) {
-    try {
-      await createNotification({
-        userId: sched.proposedByUserId,
-        type: "schedule_counter_proposed",
-        title,
-        href,
-        payload: { scheduleId: sched.id, slots: check.slots },
-      });
-    } catch (e) {
-      console.error("schedule counter notify proposer failed", e);
-    }
-  }
   try {
     await notifyJobInterviewers(sched.jobId, {
       type: "schedule_counter_proposed",

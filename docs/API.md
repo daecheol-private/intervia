@@ -72,7 +72,7 @@
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| GET | `/api/jobs/[id]/candidates` | 🔑 후보자 목록 + 최근 면접 세션 머지 |
+| GET | `/api/jobs/[id]/candidates` | 🔑 후보자 목록 + 최근 면접 세션 머지 + `round1ScheduleStatus`/`round2ScheduleStatus`(라운드별 최신 활성 스케줄 상태 — 응답 대기 vs 역제시 구분, 1차/2차 대기 그룹 분리용). 목록 페이지는 `?stage=counter_proposed` pseudo 필터로 역제시 건만 표시 가능 (대시보드 역제시 알림 딥링크) |
 | GET | `/api/jobs/[id]/round1-schedule` | 🔑 `stage=round1_waiting` + 확정 schedule(`status=selected`, round1) 조인 → 후보자별 선택 슬롯·온오프라인·주소, 시간 빠른 순. "1차 면접 스케쥴 보기" 팝업용 |
 | POST | `/api/jobs/[id]/schedule-propose` | 🔑 후보자 다수에게 면접 슬롯 제시 + 메일. `round`(round1/round2, 기본 round1) — **round2 는 `round1_passed` 후보만** 가드, stage 변경 없음(round1 은 round1_scheduling 으로 전환) |
 | GET | `/api/org/funnel` | 🔒 🏢 (admin) 법인 채용 퍼널 — 진행 stage 분포(outcome NULL) + 결정 outcome 분포 + 총계·최근 N일·활성공고·진행중 평균 서류점수. `/org/dashboard` 용 |

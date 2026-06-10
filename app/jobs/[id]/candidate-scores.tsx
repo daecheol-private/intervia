@@ -1,7 +1,8 @@
 "use client";
 
 import { compositeScore } from "@/lib/utils";
-import { STAGE_LABELS, STAGE_WAITER } from "@/lib/stage-meta";
+import { STAGE_LABELS } from "@/lib/stage-meta";
+import { effectiveWaiter } from "./badges";
 import type { Candidate } from "./types";
 
 function shortenError(msg: string | null): string {
@@ -192,7 +193,7 @@ export function candidateSearchExtras(c: Candidate): string {
       : null;
   return [
     STAGE_LABELS[c.stage], // 전형: "서류평가" 등
-    STAGE_WAITER[c.stage]?.label, // 태그: "면접 진행 결정 대기" 등
+    effectiveWaiter(c)?.label, // 태그: "면접 진행 결정 대기" 등
     c.screeningReport?.recommendation, // 결과 태그: "강력추천"/"추천"/"보류"/"비추천"
     c.outcome ? OUTCOME_LABELS[c.outcome] : "진행 중", // 결과: "불합격"/"진행 중" 등
     c.screeningScore != null ? `서류 ${c.screeningScore}` : null, // 점수

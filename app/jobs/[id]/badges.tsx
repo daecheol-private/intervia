@@ -123,8 +123,41 @@ const WAITER_META: Record<
   none:        { icon: "—",  color: "bg-surface-alt text-ink-muted border-border-default" },
 };
 
-export function WaitBadge({ stage }: { stage: Candidate["stage"] }) {
-  const w = STAGE_WAITER[stage];
+/** 역제시 상태 — 공이 지원자가 아니라 HR(시간 확정·재제시)에게 있다. */
+export function hasCounterProposal(
+  c: Pick<Candidate, "stage" | "round1ScheduleStatus" | "round2ScheduleStatus">
+): boolean {
+  return (
+    (c.stage === "round1_scheduling" &&
+      c.round1ScheduleStatus === "counter_proposed") ||
+    (c.stage === "round1_passed" && c.round2ScheduleStatus === "counter_proposed")
+  );
+}
+
+/**
+ * 실제 대기 주체 — stage 만으로는 부족한 두 경우를 스케줄 상태로 보정:
+ *  - 역제시(counter_proposed): 지원자 응답 대기가 아니라 HR 확정 대기
+ *  - 2차 면접: stage 변화 없이(round1_passed 유지) round2 스케줄 row 로만 진행
+ */
+export function effectiveWaiter(
+  c: Pick<Candidate, "stage" | "round1ScheduleStatus" | "round2ScheduleStatus">
+): { who: keyof typeof WAITER_META; label: string } {
+  if (hasCounterProposal(c))
+    return { who: "hr", label: "역제시 시간 확정 대기" };
+  if (c.stage === "round1_passed" && c.round2ScheduleStatus) {
+    return c.round2ScheduleStatus === "selected"
+      ? { who: "interviewer", label: "2차 면접 진행 대기" }
+      : { who: "candidate", label: "지원자 일정 응답 대기" };
+  }
+  return STAGE_WAITER[c.stage];
+}
+
+export function WaitBadge({
+  c,
+}: {
+  c: Pick<Candidate, "stage" | "round1ScheduleStatus" | "round2ScheduleStatus">;
+}) {
+  const w = effectiveWaiter(c);
   if (w.who === "none") return null;
   const m = WAITER_META[w.who];
   return (

@@ -3,6 +3,7 @@ import {
   jobPostings,
   candidates,
   interviewSessions,
+  interviewSchedules,
   screeningJobs,
   candidateAttachments,
   userCandidateFavorites,
@@ -151,6 +152,36 @@ export async function GET(
     queuedJobIds.forEach((jid, idx) => positions.set(jid, beforeMine + idx + 1));
   }
 
+  // 면접 스케줄 상태 — 라운드별 최신 활성 row.
+  //  round1: stage=round1_scheduling 에서 pending(응답 대기) vs counter_proposed(역제시) 구분용
+  //  round2: stage 변화 없이(round1_passed 유지) 스케줄 row 로만 진행되므로 1차/2차 대기 구분용
+  const schedRows = ids.length
+    ? await db
+        .select({
+          candidateId: interviewSchedules.candidateId,
+          round: interviewSchedules.round,
+          status: interviewSchedules.status,
+        })
+        .from(interviewSchedules)
+        .where(
+          and(
+            inArray(interviewSchedules.candidateId, ids),
+            inArray(interviewSchedules.status, [
+              "pending",
+              "counter_proposed",
+              "selected",
+            ])
+          )
+        )
+        .orderBy(desc(interviewSchedules.id))
+    : [];
+  const r1ByCandidate = new Map<number, typeof schedRows[number]["status"]>();
+  const r2ByCandidate = new Map<number, typeof schedRows[number]["status"]>();
+  for (const s of schedRows) {
+    const m = s.round === "round2" ? r2ByCandidate : r1ByCandidate;
+    if (!m.has(s.candidateId)) m.set(s.candidateId, s.status);
+  }
+
   // 현재 사용자의 후보자 즐겨찾기 ID 셋
   const favRows = ids.length
     ? await db
@@ -175,6 +206,8 @@ export async function GET(
       // 파싱(텍스트 추출+마스킹) 완료 여부 — UI 가 '분석 중' vs '평가 중' 구분.
       parsed: (maskedLen ?? 0) >= 30,
       favorited: favoritedSet.has(r.id),
+      round1ScheduleStatus: r1ByCandidate.get(r.id) ?? null,
+      round2ScheduleStatus: r2ByCandidate.get(r.id) ?? null,
       latestInterviewStatus: s?.status ?? null,
       latestInterviewScore:
         s?.status === "completed" ? (s.evaluation?.overall_score ?? null) : null,

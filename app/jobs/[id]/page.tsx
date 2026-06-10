@@ -25,6 +25,7 @@ import {
   Tag,
   WaitBadge,
   dimIfClosed,
+  hasCounterProposal,
   stageGroupBorder,
 } from "./badges";
 import { BulkDecisionModal, SchedulePropose } from "./bulk-actions";
@@ -60,13 +61,14 @@ export default function JobDetailPage() {
   // 만료 결정 모달 — 닫아도 페이지 상단 띠는 유지. 다시 열기 가능.
   const [expiredModalDismissed, setExpiredModalDismissed] = useState(false);
   // URL ?stage=screened 로 진입 시 초기 필터 적용. "all" 은 미지정.
-  const [stageFilter, setStageFilter] = useState<Candidate["stage"] | "all">(
-    () => {
-      const s = searchParams.get("stage");
-      if (!s) return "all";
-      return s as Candidate["stage"];
-    }
-  );
+  // "counter_proposed" 는 stage 가 아닌 pseudo 필터 — 대시보드 역제시 알림 딥링크용.
+  const [stageFilter, setStageFilter] = useState<
+    Candidate["stage"] | "all" | "counter_proposed"
+  >(() => {
+    const s = searchParams.get("stage");
+    if (!s) return "all";
+    return s as Candidate["stage"] | "counter_proposed";
+  });
   // outcome 필터: "all"=모두, "in_progress"=진행중(outcome null), 또는 특정 outcome 값
   const [outcomeFilter, setOutcomeFilter] = useState<
     "all" | "in_progress" | "hired" | "rejected" | "withdrawn"
@@ -574,6 +576,8 @@ export default function JobDetailPage() {
     // 빼서 "최종 합격" 박스로 옮겨 표시하므로, 박스 숫자와 목록이 정확히 일치하게 한다.
     if (stageFilter === "hired") {
       if (c.outcome !== "hired") return false;
+    } else if (stageFilter === "counter_proposed") {
+      if (c.outcome != null || !hasCounterProposal(c)) return false;
     } else if (stageFilter !== "all") {
       if (c.stage !== stageFilter || c.outcome === "hired") return false;
     }
@@ -609,8 +613,11 @@ export default function JobDetailPage() {
     | "system"
     | "hr_screened"
     | "hr_ai_eval"
+    | "hr_counter"
     | "hr_round1"
     | "hr_round2"
+    | "r1_interview"
+    | "r2_interview"
     | "external"
     | "closed_hired"
     | "closed_neg";
@@ -618,10 +625,18 @@ export default function JobDetailPage() {
     if (c.outcome === "hired") return "closed_hired";
     if (c.outcome === "rejected" || c.outcome === "withdrawn")
       return "closed_neg";
+    // 역제시 — 응답 대기가 아니라 HR 의 시간 확정 대기 (round1·round2 공통)
+    if (hasCounterProposal(c)) return "hr_counter";
     if (c.stage === "applied") return "system";
     if (c.stage === "screened") return "hr_screened";
     if (c.stage === "ai_evaluated") return "hr_ai_eval";
-    if (c.stage === "round1_passed") return "hr_round1";
+    if (c.stage === "round1_waiting") return "r1_interview";
+    if (c.stage === "round1_passed") {
+      // 2차는 stage 변화 없이 스케줄 row(round2)로만 진행 — 상태로 분기
+      if (c.round2ScheduleStatus === "selected") return "r2_interview";
+      if (c.round2ScheduleStatus != null) return "external"; // pending(응답 대기)
+      return "hr_round1";
+    }
     if (c.stage === "round2_passed") return "hr_round2";
     return "external";
   };
@@ -629,14 +644,21 @@ export default function JobDetailPage() {
     system: 0,
     hr_screened: 1,
     hr_ai_eval: 2,
-    hr_round1: 3,
-    hr_round2: 4,
-    external: 5,
-    closed_hired: 6,
-    closed_neg: 7,
+    hr_counter: 3,
+    hr_round1: 4,
+    hr_round2: 5,
+    r1_interview: 6,
+    r2_interview: 7,
+    external: 8,
+    closed_hired: 9,
+    closed_neg: 10,
   };
   const isHrGroup = (gk: GroupKey) =>
-    gk === "hr_screened" || gk === "hr_ai_eval" || gk === "hr_round1" || gk === "hr_round2";
+    gk === "hr_screened" ||
+    gk === "hr_ai_eval" ||
+    gk === "hr_counter" ||
+    gk === "hr_round1" ||
+    gk === "hr_round2";
   const filtered = [...filteredRaw].sort((a, b) => {
     const ga = GROUP_ORDER[groupOf(a)];
     const gb = GROUP_ORDER[groupOf(b)];
@@ -674,9 +696,12 @@ export default function JobDetailPage() {
     system: { label: "⚙️ AI 평가 진행 중", tone: "text-slate-500" },
     hr_screened: { label: "🔔 서류 검토 · 면접 진행 결정", tone: "text-primary-deep" },
     hr_ai_eval: { label: "🔔 AI 면접 결과 검토", tone: "text-primary-deep" },
+    hr_counter: { label: "↩️ 지원자 시간 역제시 · 확정 필요", tone: "text-primary-deep" },
     hr_round1: { label: "🔔 1차 합격 · 2차 진행 결정", tone: "text-primary-deep" },
     hr_round2: { label: "🔔 2차 합격 · 최종 결정", tone: "text-primary-deep" },
-    external: { label: "⏳ 응답 대기", tone: "text-slate-600" },
+    r1_interview: { label: "🎤 1차 면접 진행 대기", tone: "text-accent-deep" },
+    r2_interview: { label: "🎤 2차 면접 진행 대기", tone: "text-accent-deep" },
+    external: { label: "⏳ 지원자 응답 대기", tone: "text-slate-600" },
     closed_hired: { label: "✓ 종결 · 합격", tone: "text-emerald-700" },
     closed_neg: { label: "✗ 종결", tone: "text-slate-400" },
   };
@@ -1526,6 +1551,10 @@ export default function JobDetailPage() {
               ))}
             </optgroup>
           ))}
+          {/* pseudo 필터 — 대시보드 역제시 알림 딥링크(?stage=counter_proposed)와 동일 */}
+          <optgroup label="스케줄 응답">
+            <option value="counter_proposed">지원자 시간 역제시</option>
+          </optgroup>
         </select>
         <select
           value={outcomeFilter}
@@ -1641,7 +1670,7 @@ export default function JobDetailPage() {
                           {c.outcome ? (
                             <OutcomeBadge outcome={c.outcome} />
                           ) : (
-                            <WaitBadge stage={c.stage} />
+                            <WaitBadge c={c} />
                           )}
                           {c.outcome === "rejected" &&
                             c.decisionEmailCount === 0 &&
@@ -1759,7 +1788,7 @@ export default function JobDetailPage() {
                           {c.outcome ? (
                             <OutcomeBadge outcome={c.outcome} />
                           ) : (
-                            <WaitBadge stage={c.stage} />
+                            <WaitBadge c={c} />
                           )}
                           {c.screeningReport && (
                             <RecBadge rec={c.screeningReport.recommendation} />
@@ -1813,8 +1842,11 @@ export default function JobDetailPage() {
               "system",
               "hr_screened",
               "hr_ai_eval",
+              "hr_counter",
               "hr_round1",
               "hr_round2",
+              "r1_interview",
+              "r2_interview",
               "external",
               "closed_hired",
               "closed_neg",
@@ -1889,7 +1921,7 @@ export default function JobDetailPage() {
                           {c.outcome ? (
                             <OutcomeBadge outcome={c.outcome} />
                           ) : (
-                            <WaitBadge stage={c.stage} />
+                            <WaitBadge c={c} />
                           )}
                           {c.outcome === "rejected" &&
                             c.decisionEmailCount === 0 &&
