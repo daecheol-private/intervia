@@ -129,7 +129,7 @@
 | POST | `/api/candidates/[id]/notes` | 🔒 🏢 | `{scores?, note?, interviewSessionId?}` 메모/스코어카드 작성. 본인 row 생성 |
 | PATCH | `/api/candidates/[id]/notes/[noteId]` | 🔒 🏢 | 본인 작성 메모 수정 |
 | DELETE | `/api/candidates/[id]/notes/[noteId]` | 🔒 🏢 | 본인 작성 메모 삭제 |
-| GET | `/api/jobs/[id]/funnel` | 🔒 🏢 | 공고 채용 깔때기 — `{stages, total, avgScreeningScore, countWithScreeningScore}` |
+| GET | `/api/jobs/[id]/funnel` | 🔒 🏢 | 공고 채용 깔때기 — `{stages, pendingByStage, hrActions, total, avgScreeningScore, countWithScreeningScore, decisionBreakdown, kpi}`. `hrActions` = 스케줄 row 기반 HR 액션 수(`counterProposed` 역제시 확정 대기, `round1PassedUndecided` 2차 진행 미결정 — "오늘 결정할 일" 용) |
 | GET | `/api/jobs/[id]/candidates/export` | 🔒 🏢 | CSV 다운로드 (UTF-8 BOM, 14컬럼) |
 
 ## 서류 평가 큐 (내부/cron)

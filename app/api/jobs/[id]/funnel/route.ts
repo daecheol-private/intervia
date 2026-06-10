@@ -58,6 +58,33 @@ export async function GET(
   const pendingByStage: Record<string, number> = {};
   for (const r of pendingRows) pendingByStage[r.stage] = Number(r.count);
 
+  // "오늘 결정할 일" 중 stage 만으로 셀 수 없는 HR 액션 — 스케줄 row 기반.
+  //  counterProposed: 지원자가 시간을 역제시해 HR 확정/재제시 대기 (round1·round2 공통)
+  //  round1PassedUndecided: 1차 합격인데 아직 2차 스케줄 제시 전 → 진짜 "2차 진행 결정" 대상
+  //    (이미 2차 일정이 돌고 있는 후보는 결정이 끝난 것이므로 제외)
+  const latestSched = (round: "round1" | "round2") => sql`(
+    SELECT s.status FROM interview_schedules s
+    WHERE s.candidate_id = ${candidates.id} AND s.round = ${round}
+      AND s.status IN ('pending','counter_proposed','selected')
+    ORDER BY s.id DESC LIMIT 1
+  )`;
+  const [hrSched] = await db
+    .select({
+      counterProposed: sql<number>`COALESCE(SUM(CASE
+        WHEN ${candidates.stage} = 'round1_scheduling' AND ${latestSched("round1")} = 'counter_proposed' THEN 1
+        WHEN ${candidates.stage} = 'round1_passed' AND ${latestSched("round2")} = 'counter_proposed' THEN 1
+        ELSE 0 END), 0)`,
+      round1PassedUndecided: sql<number>`COALESCE(SUM(CASE
+        WHEN ${candidates.stage} = 'round1_passed' AND ${latestSched("round2")} IS NULL THEN 1
+        ELSE 0 END), 0)`,
+    })
+    .from(candidates)
+    .where(and(eq(candidates.jobId, jobId), sql`${candidates.outcome} IS NULL`));
+  const hrActions = {
+    counterProposed: Number(hrSched?.counterProposed ?? 0),
+    round1PassedUndecided: Number(hrSched?.round1PassedUndecided ?? 0),
+  };
+
   const stages = {
     applied: 0,
     screened: 0,
@@ -169,6 +196,7 @@ export async function GET(
   return Response.json({
     stages,
     pendingByStage,
+    hrActions,
     total: totalCount,
     avgScreeningScore:
       stats?.avgScreen != null

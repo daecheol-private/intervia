@@ -6,6 +6,8 @@ type Funnel = {
   stages: Record<string, number>;
   /** 결정되지 않은(outcome IS NULL) 후보만 stage 별 카운트. "오늘 결정할 일" 계산용. */
   pendingByStage: Record<string, number>;
+  /** stage 만으로 셀 수 없는 HR 액션 — 스케줄 row 기반 (역제시 확정, 2차 진행 미결정). */
+  hrActions?: { counterProposed: number; round1PassedUndecided: number };
   total: number;
   avgScreeningScore: number | null;
   countWithScreeningScore: number;
@@ -151,6 +153,7 @@ export function FunnelPanel({
 
   // -- "오늘 결정할 일" — HR 액션이 필요한 단계 집계 -------------------------
   // pendingByStage(outcome IS NULL 만) 사용 — 이미 종결된 후보는 카운트에서 제외.
+  // 스케줄 기반 항목(역제시 확정, 2차 진행 결정)은 hrActions 사용 — stage 만으로 못 센다.
   const pending = data.pendingByStage ?? {};
   const actionItems: { stage: string; label: string; count: number; tone: string }[] = [
     {
@@ -172,9 +175,15 @@ export function FunnelPanel({
       tone: "bg-primary-soft text-primary-deep border-primary/30 hover:bg-primary-soft/70",
     },
     {
+      stage: "counter_proposed",
+      label: "지원자 역제시 시간 확정",
+      count: data.hrActions?.counterProposed ?? 0,
+      tone: "bg-warning-soft text-warning border-warning/30 hover:bg-warning-soft/70",
+    },
+    {
       stage: "round1_passed",
       label: "2차 면접 진행 결정",
-      count: pending["round1_passed"] ?? 0,
+      count: data.hrActions?.round1PassedUndecided ?? pending["round1_passed"] ?? 0,
       tone: "bg-accent-soft text-accent-deep border-accent/40 hover:bg-accent-soft/70",
     },
     {
