@@ -20,6 +20,7 @@ import {
   MailCheck,
   Check,
   Lock,
+  ScanSearch,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -319,6 +320,7 @@ const SLIDES: Slide[] = [
       "AI 면접관이 답변마다 꼬리질문으로 더 깊이 검증해요.",
       "후보자는 타이핑 또는 음성으로 편하게 답변합니다.",
       "10·20·30분 분량을 자동 조절하고, 끝나면 곧바로 자동 평가.",
+      "붙여넣기·탭 이탈·문체를 분석해 외부 AI 보조 신호를 면접관에게 보고해요.",
     ],
     mockup: (
       <>
@@ -361,6 +363,13 @@ const SLIDES: Slide[] = [
             </span>
             <span className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shrink-0">
               <Send className="w-3 h-3 text-surface" />
+            </span>
+          </div>
+          <div className="relative self-start mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-card border border-border-default">
+            <Pin n={4} className="-top-2.5 -left-2.5" />
+            <ScanSearch className="w-3 h-3 text-warning" />
+            <span className="text-[9px] text-ink-soft">
+              AI 보조 신호 수집 중 · 붙여넣기 0 · 탭 이탈 1
             </span>
           </div>
         </div>

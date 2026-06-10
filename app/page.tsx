@@ -21,9 +21,6 @@ import {
   CHARGE_BONUS_TIERS,
 } from "@/lib/tokens";
 import {
-  FileText,
-  MessagesSquare,
-  BarChart3,
   ShieldCheck,
   Building2,
   Coins,
@@ -33,9 +30,6 @@ import {
   CheckCircle2,
   Workflow,
   Check,
-  CalendarClock,
-  ClipboardList,
-  ScanSearch,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -1175,44 +1169,38 @@ async function Landing() {
         </p>
       </section>
 
-      <section className="max-w-5xl mx-auto px-6 py-20 sm:py-24">
-        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink text-center">
-          채용 사이클의 80%를 자동화합니다
-        </h2>
-        <p className="mt-4 text-base text-ink-soft text-center max-w-xl mx-auto leading-relaxed">
-          이력서 업로드부터 면접 결과 리포트까지, 사람이 매번 할 필요 없는 일을 AI가 처리합니다.
-        </p>
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          <Feature
-            Icon={FileText}
-            title="이력서 자동 평가"
-            body="PDF/DOCX 업로드 즉시 마스킹 + AI 서류 평가. 직무 적합도·강점·우려점 자동 분석. 선호 인재상까지 반영해 점수와 추천 등급 산출."
-          />
-          <Feature
-            Icon={MessagesSquare}
-            title="채팅 기반 AI 면접"
-            body="후보자에게 링크 한 번 발송하면 AI 면접관이 1:1 채팅으로 진행. 10·20·30분 옵션 선택. 꼬리질문으로 깊이 검증."
-          />
-          <Feature
-            Icon={ScanSearch}
-            title="AI 보조 답변 탐지"
-            body="AI 면접 중 붙여넣기·탭 이탈·문체를 분석해 외부 LLM 대리 작성 신호를 수집. 단정하지 않고 면접관에게 객관 수치로 투명하게 보고."
-          />
-          <Feature
-            Icon={CalendarClock}
-            title="면접 일정 조율"
-            body="합격자에게 면접 시간을 제시하면 후보자가 직접 선택하거나 다른 시간을 역제시. 확정 시 Zoom 온라인 회의와 캘린더 초대를 자동 생성·발송."
-          />
-          <Feature
-            Icon={ClipboardList}
-            title="맞춤 면접 질문지 생성"
-            body="이력서·서류 평가·AI 면접 결과를 종합해 1차 대면 면접용 질문지를 자동 작성. 검증 포인트와 꼬리질문까지 제시해 면접관 준비 시간을 단축."
-          />
-          <Feature
-            Icon={BarChart3}
-            title="결과 리포트 + 사람 면접 통합"
-            body="기술·경험·협업·적합성 4영역 점수와 근거. 1·2차 면접관 스코어카드를 한 화면에서 비교. 합·불 결정과 동시에 결과 메일 자동 발송."
-          />
+      <section className="relative overflow-hidden">
+        {/* 배경 — 미세 dot + apricot glow 우측 */}
+        <div
+          aria-hidden
+          className="absolute inset-0 -z-10 opacity-[0.04]"
+          style={{
+            backgroundImage:
+              "radial-gradient(var(--ink) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+          }}
+        />
+        <div
+          aria-hidden
+          className="absolute -z-10 right-0 top-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-accent/15 blur-3xl"
+        />
+
+        <div className="max-w-6xl mx-auto px-6 py-20 sm:py-24">
+          <div className="text-center mb-14">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-card border border-border-default text-[11px] uppercase tracking-widest text-primary font-semibold mb-4">
+              <Workflow className="w-3 h-3" strokeWidth={2.5} />
+              How it works
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
+              채용 사이클의 80%를 자동화합니다
+            </h2>
+            <p className="mt-3 text-sm text-ink-soft">
+              공고 등록부터 합·불 통보까지, 사람이 매번 할 필요 없는 일을 AI가 처리합니다.
+            </p>
+          </div>
+
+          {/* Flow — 6단계 캐러셀 (스크린샷 목업 + 말풍선 포인트) */}
+          <HowItWorksCarousel />
         </div>
       </section>
 
@@ -1304,42 +1292,7 @@ async function Landing() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden">
-        {/* 배경 — 미세 dot + apricot glow 우측 */}
-        <div
-          aria-hidden
-          className="absolute inset-0 -z-10 opacity-[0.04]"
-          style={{
-            backgroundImage:
-              "radial-gradient(var(--ink) 1px, transparent 1px)",
-            backgroundSize: "32px 32px",
-          }}
-        />
-        <div
-          aria-hidden
-          className="absolute -z-10 right-0 top-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-accent/15 blur-3xl"
-        />
-
-        <div className="max-w-6xl mx-auto px-6 py-20 sm:py-24">
-          <div className="text-center mb-14">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-card border border-border-default text-[11px] uppercase tracking-widest text-primary font-semibold mb-4">
-              <Workflow className="w-3 h-3" strokeWidth={2.5} />
-              How it works
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
-              어떻게 동작하나요?
-            </h2>
-            <p className="mt-3 text-sm text-ink-soft">
-              공고 등록부터 합·불 통보까지, 한 흐름으로 채용 사이클이 완성됩니다.
-            </p>
-          </div>
-
-          {/* Flow — 6단계 캐러셀 (스크린샷 목업 + 말풍선 포인트) */}
-          <HowItWorksCarousel />
-        </div>
-      </section>
-
-      <section className="bg-card border-y border-border-default">
+      <section>
         <div className="max-w-5xl mx-auto px-6 py-20 sm:py-24">
           <div className="text-center">
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
@@ -1480,26 +1433,6 @@ type LucideIcon = React.ComponentType<{
   className?: string;
   strokeWidth?: number;
 }>;
-
-function Feature({
-  Icon,
-  title,
-  body,
-}: {
-  Icon: LucideIcon;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="group rounded-2xl bg-card border border-border-default p-6 shadow-sm hover:shadow-md hover:border-primary/30 transition-all">
-      <div className="w-11 h-11 rounded-xl bg-primary-soft flex items-center justify-center group-hover:bg-primary group-hover:text-surface transition-colors">
-        <Icon className="w-5 h-5 text-primary group-hover:text-surface transition-colors" strokeWidth={2} />
-      </div>
-      <h3 className="mt-5 text-base font-semibold text-ink">{title}</h3>
-      <p className="mt-2 text-sm text-ink-soft leading-relaxed">{body}</p>
-    </div>
-  );
-}
 
 function Differ({
   Icon,
