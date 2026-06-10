@@ -49,9 +49,17 @@ interviewer/
 │   ├── jobs/
 │   │   ├── new/page.tsx            # 공고 등록
 │   │   └── [id]/
-│   │       ├── page.tsx            # 공고 상세 (이력서 업로드 + 후보자 리스트)
+│   │       ├── page.tsx            # 공고 상세 메인 (업로드 + 필터 + 후보자 리스트)
+│   │       ├── *.tsx / *.ts        # 2026-06 분리 모듈: types / badges / candidate-scores /
+│   │       │                       #   consent-gate / unlock-panel / share-button / lifecycle-panel /
+│   │       │                       #   bulk-actions / funnel-panel / round1-schedule
 │   │       └── edit/page.tsx       # 공고 수정
-│   ├── candidates/[id]/page.tsx    # 후보자 상세 (서류평가 + 면접 + 결과)
+│   ├── candidates/[id]/            # 후보자 상세 (서류평가 + 면접 + 결과)
+│   │   ├── page.tsx                # 메인 (데이터 로드 + 섹션 조립)
+│   │   └── *.tsx / *.ts            # 2026-06 분리 모듈: types / shared / screening-report /
+│   │                               #   interview-section / schedule-box / question-sheet /
+│   │                               #   attachments-panel / appeals-panel / notes-panel /
+│   │                               #   stage-panel / edit-candidate / assignments-panel(미사용)
 │   ├── interview/[token]/page.tsx  # 면접 채팅 (외부 토큰 기반)
 │   └── api/
 │       ├── auth/                   # login/logout/signup/setup/status/change-password
