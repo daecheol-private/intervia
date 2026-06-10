@@ -30,6 +30,7 @@ import {
 } from "./badges";
 import { BulkDecisionModal, SchedulePropose } from "./bulk-actions";
 import { CandidateScores, candidateSearchExtras } from "./candidate-scores";
+import { Section } from "@/app/candidates/[id]/shared";
 import { ApplicantConsentGate } from "./consent-gate";
 import { FunnelPanel } from "./funnel-panel";
 import { InterviewersInline, LifecyclePanel } from "./lifecycle-panel";
@@ -1334,8 +1335,20 @@ export default function JobDetailPage() {
         }}
       />
 
-      {/* 데스크톱: 동의 게이트 + 업로드 영역 (모바일 완전 숨김 — 업로드는 PC 전용) */}
+      {/* 데스크톱: 동의 게이트 + 업로드 영역 (모바일 완전 숨김 — 업로드는 PC 전용)
+         접힘 상태는 공고별 localStorage 기억 — 업로드가 끝난 공고에서 목록 스크롤 절약 */}
       <div className="hidden sm:block">
+      <Section
+        title="이력서 업로드"
+        storageKey={`job-upload:${jobId}`}
+        summary={
+          uploading
+            ? `업로드 진행 중… ${uploadProgress?.pct ?? 0}%`
+            : !consentConfirmed
+              ? "AI 평가 적용 고지 확인 필요"
+              : undefined
+        }
+      >
       {/* 지원자 동의 확인 게이트 — 업로드 전 필수 (PIPA §15·§26·§28의8·§37의2)
          체크 시 모달로 명시 재확인을 요구해 "무심코 체크" 차단. */}
       <ApplicantConsentGate
@@ -1495,6 +1508,7 @@ export default function JobDetailPage() {
           </div>
         )}
       </div>
+      </Section>
       </div>
       {/* /데스크톱 업로드 영역 */}
 

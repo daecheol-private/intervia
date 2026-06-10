@@ -21,7 +21,7 @@ export function ApplicantConsentGate({
 }) {
   if (confirmed) {
     return (
-      <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-2.5 flex items-center gap-2.5">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-2.5 flex items-center gap-2.5">
         <div className="flex-1 min-w-0 text-xs text-emerald-800">
           <span className="text-emerald-600 mr-1.5" aria-hidden>✓</span>
           AI 평가 적용 고지 확인됨 — 업로드 가능합니다.
@@ -38,7 +38,7 @@ export function ApplicantConsentGate({
   }
 
   return (
-    <div className="mt-6 rounded-lg border-2 border-primary/40 bg-primary-soft/40 px-4 py-3 ring-1 ring-primary/10">
+    <div className="rounded-lg border-2 border-primary/40 bg-primary-soft/40 px-4 py-3 ring-1 ring-primary/10">
       <label className="flex items-start gap-3 cursor-pointer">
         <input
           type="checkbox"

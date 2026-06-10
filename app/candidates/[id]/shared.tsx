@@ -87,14 +87,16 @@ export function Section({
   defaultOpen = true,
   summary,
   collapsible = true,
+  storageKey: storageKeyProp,
 }: {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
   summary?: React.ReactNode;
   collapsible?: boolean;
+  storageKey?: string;
 }) {
-  const storageKey = `cand-section:${title}`;
+  const storageKey = storageKeyProp ?? `cand-section:${title}`;
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => {
     if (!collapsible) return;
