@@ -571,7 +571,7 @@ export async function purgePiiAfterClose(): Promise<{
       .set({ message: "[purged]", contactEmail: "[purged]", ip: null, userAgent: null })
       .where(eq(inquiries.candidateId, t.id));
     // candidates 행 삭제 → cascade 로 interview_sessions / interviewer_notes /
-    // interviewer_assignments / candidate_attachments / screening_jobs 모두 정리
+    // candidate_attachments / screening_jobs 모두 정리
     await db.delete(candidates).where(eq(candidates.id, t.id));
   }
 

@@ -147,11 +147,10 @@
 |---|---|---|
 | id / candidate_id / access_token / status / messages / evaluation / started_at / completed_at / expires_at / created_at | … | |
 
-## interviewer_notes / interviewer_assignments
+## interviewer_notes
 
-사람 면접관 스코어카드·메모 + 배정.
+사람 면접관 스코어카드·메모.
 
-### interviewer_notes
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
 | id | INTEGER PK auto | |
@@ -163,16 +162,7 @@
 | note | TEXT NOT NULL DEFAULT '' | 자유 메모 5000자 이내 |
 | created_at / updated_at | TEXT NOT NULL | |
 
-### interviewer_assignments
-| 컬럼 | 타입 | 비고 |
-|---|---|---|
-| id | INTEGER PK auto | |
-| candidate_id | INTEGER NOT NULL FK candidates(id) ON DELETE CASCADE | |
-| user_id | INTEGER NOT NULL FK users(id) | 배정된 면접관 |
-| assigned_by_user_id | INTEGER NULL FK users(id) | |
-| created_at | TEXT NOT NULL | |
-
-배정은 알림·UI 강조용 — 메모 작성 권한과 별개. 같은 법인 멤버만 배정 가능, 중복 방지.
+(후보자별 면접관 배정 `interviewer_assignments` 는 공고 단위 `job_interviewers` 로 대체되어 2026-06-10 테이블째 제거 — migration 0015)
 
 ## audit_logs
 

@@ -129,9 +129,6 @@
 | POST | `/api/candidates/[id]/notes` | 🔒 🏢 | `{scores?, note?, interviewSessionId?}` 메모/스코어카드 작성. 본인 row 생성 |
 | PATCH | `/api/candidates/[id]/notes/[noteId]` | 🔒 🏢 | 본인 작성 메모 수정 |
 | DELETE | `/api/candidates/[id]/notes/[noteId]` | 🔒 🏢 | 본인 작성 메모 삭제 |
-| GET | `/api/candidates/[id]/assignments` | 🔒 🏢 | 배정된 면접관 목록 |
-| POST | `/api/candidates/[id]/assignments` | 🔒 🏢 | `{userId}` 같은 법인 멤버를 면접관으로 배정 |
-| DELETE | `/api/candidates/[id]/assignments/[aid]` | 🔒 🏢 | 배정 해제 |
 | GET | `/api/jobs/[id]/funnel` | 🔒 🏢 | 공고 채용 깔때기 — `{stages, total, avgScreeningScore, countWithScreeningScore}` |
 | GET | `/api/jobs/[id]/candidates/export` | 🔒 🏢 | CSV 다운로드 (UTF-8 BOM, 14컬럼) |
 

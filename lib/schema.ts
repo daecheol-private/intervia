@@ -623,7 +623,7 @@ export const interviewerNotes = sqliteTable("interviewer_notes", {
  *  2. 초대 링크로 합류한 사용자 — invite.jobId 있으면 그 공고에 자동 추가
  *  3. PIN 알고 잠금 해제한 사용자 — UI "면접관 지정" 버튼으로 본인 직접 추가
  *
- * 후보자별 배정(interviewerAssignments)은 deprecated — 공고 단위로만 관리.
+ * 면접관 배정은 공고 단위로만 관리. (후보자별 배정 기능은 2026-06 제거)
  */
 export const jobInterviewers = sqliteTable(
   "job_interviewers",
@@ -645,28 +645,6 @@ export const jobInterviewers = sqliteTable(
     pk: uniqueIndex("idx_job_interviewers_pk").on(t.jobId, t.userId),
   })
 );
-
-/**
- * 면접관 배정. 채용담당자가 같은 법인 멤버를 후보자 면접관으로 지정.
- * 배정은 알림·UI 강조용 — 메모 작성 권한 자체는 같은 법인 전원 가능.
- *
- * @deprecated 공고별 면접관(jobInterviewers) 으로 대체. 데이터 보존을 위해 테이블은 유지.
- */
-export const interviewerAssignments = sqliteTable("interviewer_assignments", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  candidateId: integer("candidate_id")
-    .notNull()
-    .references(() => candidates.id, { onDelete: "cascade" }),
-  userId: integer("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  assignedByUserId: integer("assigned_by_user_id").references(() => users.id, {
-    onDelete: "set null",
-  }),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(CURRENT_TIMESTAMP)`),
-});
 
 /**
  * 감사 로그 — 민감 액션을 추적. 시스템관리자가 법인 데이터에 접근한 이력 포함 (A-8).
@@ -1194,8 +1172,6 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
 export type InterviewerNote = typeof interviewerNotes.$inferSelect;
 export type NewInterviewerNote = typeof interviewerNotes.$inferInsert;
-export type InterviewerAssignment = typeof interviewerAssignments.$inferSelect;
-export type NewInterviewerAssignment = typeof interviewerAssignments.$inferInsert;
 export type JobInterviewer = typeof jobInterviewers.$inferSelect;
 export type NewJobInterviewer = typeof jobInterviewers.$inferInsert;
 export type InterviewSchedule = typeof interviewSchedules.$inferSelect;

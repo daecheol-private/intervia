@@ -657,11 +657,8 @@
 - [x] **TC-11.3.2** 본인 작성 메모만 PATCH/DELETE, 타인 수정 → 403
   > ✅ member가 admin 메모 수정 → 403.
 
-### 11.4 면접관 배정 (`/assignments`)
-- [x] **TC-11.4.1** 같은 법인 멤버 배정, 중복 배정 → 409
-  > ✅ 배정 200, 중복 → 409 "이미 배정된 면접관".
-- [x] **TC-11.4.2** 배정 해제 동작
-  > ✅ DELETE → 204.
+### 11.4 면접관 배정 (`/assignments`) — 기능 제거 (2026-06-10)
+> 후보자별 배정은 공고 단위 면접관(`job_interviewers`)으로 대체되어 UI·API·테이블 삭제됨 (migration 0015). TC-11.4.1~2 는 제거 전 통과 이력.
 
 ### 11.5 즐겨찾기 / 일괄
 - [x] **TC-11.5.1** favorite 토글(POST/DELETE) 멱등
@@ -671,7 +668,7 @@
 - [x] **TC-11.5.3** 단건 DELETE → 파일+row 삭제, 감사로그
   > ✅ DELETE 154 → 204.
 
-**결과 요약(11):** 15 / 15 — 전부 통과 (11.1.2/11.2.5 코드검증).
+**결과 요약(11):** 15 / 15 — 전부 통과 (11.1.2/11.2.5 코드검증). §11.4 는 이후 기능 제거 (2026-06-10).
 
 ---
 
@@ -1009,7 +1006,7 @@
   > ✅ admin-a POST /api/jobs {orgId:40} → 생성된 공고 org_id=39(A, me.orgId). (route:93-96 — org_admin 은 body.orgId 무시, system_admin 만 지정 가능)
 - [x] **TC-21.5** bulk-delete/bulk-screen에 타 법인 ID 섞으면 **전체 거부**
   > ✅ admin-a bulk-delete [194(A),195(B)] → 403 "권한 없는 후보자 포함", both_alive=2(미삭제). bulk-screen 도 403.
-- [x] **TC-21.6** 면접 세션/일정/메모/배정/첨부도 부모 후보의 org 격리 상속
+- [x] **TC-21.6** 면접 세션/일정/메모/첨부도 부모 후보의 org 격리 상속
   > ✅ admin-a → B후보(195) notes·interview-link·stage·assignments 전부 404 (ownsOrg 상속).
 - [x] **TC-21.7** system_admin은 전 법인 통과하되 cross_org 접근 시 감사로그 마킹
   > ✅ sysadmin → B후보(195) → 200 + audit candidate.view {actor_role:system_admin, org_id:40}. cross_org 마킹 = actor_role=system_admin + 리소스 org_id (대시보드 amber 강조 소스, metrics route:142).

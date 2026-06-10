@@ -52,7 +52,7 @@ SDK 단일: **`@google/genai`** (vertexai: true). 분기 없음 — `clientFor(t
    - `lib/schema.ts` 수정
    - `npm run db:generate` → `drizzle/NNNN_*.sql` 생성
    - 생성된 SQL 검토 (특히 destructive 변경 — DROP/RENAME 은 별도 결정)
-   - `npm run db:migrate` → 로컬 적용
+   - `npm run db:migrate` — ⚠️ env 에 `TURSO_DATABASE_URL` 있으면 **운영 Turso 에 바로 적용**. 로컬만 적용하려면 `$env:LOCAL_DB="1"; npm run db:migrate`
    - 커밋 (`git add drizzle/`)
    - main push → Vercel `vercel-build` 가 자동으로 Turso 에 migration 적용
    - 임시 빠른 dev 만 (운영 영향 없는 실험): `npm run db:push`

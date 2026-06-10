@@ -59,7 +59,7 @@ interviewer/
 │   │   └── *.tsx / *.ts            # 2026-06 분리 모듈: types / shared / screening-report /
 │   │                               #   interview-section / schedule-box / question-sheet /
 │   │                               #   attachments-panel / appeals-panel / notes-panel /
-│   │                               #   stage-panel / edit-candidate / assignments-panel(미사용)
+│   │                               #   stage-panel / edit-candidate
 │   ├── interview/[token]/page.tsx  # 면접 채팅 (외부 토큰 기반)
 │   └── api/
 │       ├── auth/                   # login/logout/signup/setup/status/change-password

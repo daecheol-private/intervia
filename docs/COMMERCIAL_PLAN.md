@@ -276,11 +276,8 @@
   - ✅ `GET/POST /api/candidates/[id]/notes` + `PATCH/DELETE .../[noteId]`
   - ✅ 본인 작성 메모만 수정·삭제, 같은 법인 멤버 조회 가능
   - ✅ UI: `<InterviewerNotesPanel>` — 작성 폼 + 평균 점수 + 4영역 표
-- [x] **2-2-2** 면접관 배정 / 권한 (완료 2026-05-16)
-  - ✅ `interviewer_assignments` 테이블
-  - ✅ `GET/POST /api/candidates/[id]/assignments` + `DELETE .../[aid]`
-  - ✅ 같은 법인 멤버만 배정 가능, 중복 방지
-  - ✅ UI: `<AssignmentsPanel>` — 멤버 선택 드롭다운 + 배정/해제
+- [x] **2-2-2** 면접관 배정 / 권한 (완료 2026-05-16 → **2026-06-10 제거**)
+  - 공고 단위 면접관(`job_interviewers`)으로 대체. `<AssignmentsPanel>` 은 어떤 페이지에도 마운트된 적 없는 미사용 코드여서 컴포넌트·API·테이블 전부 삭제 (migration 0015)
 - [ ] **2-2-3** 면접 일정 슬롯 — Phase 4 차별화로 이동
   - 자체 슬롯 픽커는 외부 도구 (Calendly/Google Calendar) 로 대체 권장
   - 운영 데이터 보고 필요성 재평가 후 결정
@@ -625,3 +622,4 @@
 - 2026-06-07 — **Vercel Pro 전환 확정**. 호스팅 결정·K-4·K-4-2·USER_TODO D-1 갱신. cron 5개(process-screenings 매분 / interview-reminders·ops-alerts·expire-interviews 매시간 / purge-original 매일)를 `vercel.json` 에 모두 등록 → 네이티브 실행, **cron-job.org 의존 제거**. (`expire-interviews` 도 vercel.json 에 추가.)
 - 2026-06-07 — **장애 대응 런북 + 백업 정책** (출시 준비 ④). [RUNBOOK.md](RUNBOOK.md) 신규 — 사고 30초 체크리스트·관측 지점·비상 운영도구 + 장애 유형 9종(전체다운/DB/LLM/큐/메일/Blob/인증/보안/비용)별 증상→확인→조치→복구 + 배포 롤백 + 백업·복구(§4) + 사후. C-2 백업 정책 결정(Turso PITR + 주간 오프사이트 dump, serverless export cron 미채택) + 3-2-2 분기 복구 드릴 문서화. C-1(Sentry)도 closed. CLAUDE.md 빠른참조에 RUNBOOK·LAUNCH_CHECKLIST 링크 추가.
 - 2026-06-10 — **첫 사용자 단순화 3건 묶음 완료** (UX). "기능 삭제가 아니라 필요할 때까지 숨김" 원칙. ① 대시보드 첫 실행 가이드(`app/page.tsx` `SetupGuide`) — 공고/이력서/AI면접 3스텝 진행도. 공고 0개면 KPI/알림/목록 대신 hero 가이드, 일부 진행이면 상단 슬림 스트립, 3스텝 완료 시 자동 숨김(서버 렌더·영속 상태 없음). ② 네비 정리 — org_admin "법인" 드롭다운에서 메일서버(`/org/smtp`)·줌(`/org/zoom`) 제외 → 법인 설정(`/org/settings`) "외부 연동" 섹션으로 이동(모바일 메뉴와 일관). ③ 단계 필터 4버킷 그룹화 — 공고 상세 `<select>` 의 12 stage 를 `<optgroup>`(서류 전형/AI 면접/대면 면접/결정)으로 묶음, 매핑은 `lib/stage-meta.ts` `STAGE_GROUPS`/`STAGE_GROUP_LABELS`(내부 enum 불변). tsc 통과, DB 변경 없음. ARCHITECTURE §12 추가.
+- 2026-06-10 — **미사용 후보자별 면접관 배정 기능 제거** (사용자 결정: 테이블까지 전부 삭제). `<AssignmentsPanel>`(초기 커밋부터 미마운트)·`/api/candidates/[id]/assignments` GET/POST/DELETE·`interviewer_assignments` 테이블 삭제. 공고 단위 `job_interviewers`(잠금 해제 패널 "면접관 지정")가 동일 역할 수행. migration `0015_legal_mesmero`(DROP TABLE) Turso 운영 + 로컬 data.db 양쪽 적용. API.md·SCHEMA.md·TEST_CASES §11.4·ARCHITECTURE 동기화.
