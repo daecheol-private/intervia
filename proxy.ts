@@ -90,6 +90,7 @@ export function proxy(req: NextRequest) {
     pathname.startsWith("/preview/") ||
     pathname.startsWith("/invite/") ||
     pathname.startsWith("/schedule/") ||
+    pathname.startsWith("/unsubscribe/") ||
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/orgs" ||
     pathname.startsWith("/api/orgs/") ||
@@ -114,7 +115,7 @@ export const config = {
   // 단 matcher 에 포함되어야 CSRF 검증도 동작 — api 전반은 포함되어야 함
   matcher: [
     // 인증 가드 대상 경로
-    "/((?!login|signup|privacy|terms|legal|password-reset|verify|interview|invite|schedule|preview|api/auth|api/interview|api/uploads|api/orgs|api/invites|api/schedule|api/cron|api/internal|api/health|_next/static|_next/image|favicon.ico).*)",
+    "/((?!login|signup|privacy|terms|legal|password-reset|verify|interview|invite|schedule|unsubscribe|preview|api/auth|api/interview|api/uploads|api/orgs|api/invites|api/schedule|api/cron|api/internal|api/health|_next/static|_next/image|favicon.ico).*)",
     // CSRF 검증을 위해 api/auth/* 도 매칭 (proxy 내부에서 인증 가드는 스킵)
     "/api/auth/:path*",
     "/api/orgs/:path*",

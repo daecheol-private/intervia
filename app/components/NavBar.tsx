@@ -24,6 +24,7 @@ import {
   Home,
   LifeBuoy,
   Megaphone,
+  Mail,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 import LogoutButton from "../logout-button";
@@ -83,6 +84,7 @@ function buildSections(role: Role): NavSection[] {
         { href: "/admin/users", label: "사용자", Icon: Users2 },
         { href: "/admin/candidates", label: "후보자", Icon: Users },
         { href: "/admin/announcements", label: "공지", Icon: Megaphone },
+        { href: "/admin/marketing", label: "마케팅 메일", Icon: Mail },
         { href: "/admin/pricing", label: "단가", Icon: DollarSign },
         { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
         { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
@@ -111,7 +113,8 @@ export function NavBar({
   // 로그인한 HR 이 우연히 같은 브라우저로 방문해도 후보자 입장의 화면을 보장.
   if (
     pathname.startsWith("/interview/") ||
-    pathname.startsWith("/schedule/")
+    pathname.startsWith("/schedule/") ||
+    pathname.startsWith("/unsubscribe/")
   ) {
     return null;
   }
@@ -175,6 +178,7 @@ export function NavBar({
                       { href: "/admin/users", label: "사용자", Icon: Users2 },
                       { href: "/admin/candidates", label: "후보자", Icon: Users },
                       { href: "/admin/announcements", label: "공지", Icon: Megaphone },
+                      { href: "/admin/marketing", label: "마케팅 메일", Icon: Mail },
                       { href: "/admin/pricing", label: "단가", Icon: DollarSign },
                       { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
                       { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },

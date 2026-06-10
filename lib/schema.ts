@@ -1199,3 +1199,29 @@ export type TokenReason =
   | "job_extend"
   | "refund"
   | "admin_adjust";
+
+// ---------------------------------------------------------------------------
+// 마케팅 메일 수신자 — system_admin 이 등록·발송. 테넌트(org) 무관 시스템 전역.
+export const marketingRecipients = sqliteTable(
+  "marketing_recipients",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    email: text("email").notNull(),
+    // 수신거부 페이지 접근 토큰 — 수신자별 고정, 비로그인 접근.
+    unsubscribeToken: text("unsubscribe_token").notNull(),
+    status: text("status", { enum: ["active", "unsubscribed"] })
+      .notNull()
+      .default("active"),
+    lastSentAt: text("last_sent_at"),
+    unsubscribedAt: text("unsubscribed_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    emailUq: uniqueIndex("marketing_recipients_email_uq").on(t.email),
+    tokenUq: uniqueIndex("marketing_recipients_token_uq").on(t.unsubscribeToken),
+  })
+);
+
+export type MarketingRecipient = typeof marketingRecipients.$inferSelect;

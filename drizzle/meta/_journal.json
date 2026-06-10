@@ -113,6 +113,13 @@
       "when": 1781090023227,
       "tag": "0015_legal_mesmero",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1781095747518,
+      "tag": "0016_powerful_norman_osborn",
+      "breakpoints": true
     }
   ]
 }

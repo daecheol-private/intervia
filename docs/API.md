@@ -163,6 +163,17 @@
 | DELETE | `/api/admin/candidates/[id]` | 👑 🔐 | 후보자 영구 삭제 (PIPA 권리요청). `{reason(5자+), confirm=이메일/이름}`. cross-org |
 | DELETE | `/api/users/[id]` | 👑 🔐 | 계정 영구 삭제. 기본은 **비활성(disabled) 상태만**. `{reason(5자+), confirm=이메일, force?}` — **`force:true` 면 활성/대기 계정도 즉시 삭제**(사용자 관리 "강제 삭제" 버튼; 마지막 org_admin 정리용). 본인·system_admin·**`SYSTEM_ADMIN_EMAIL` 보호 계정** 불가 |
 
+### 마케팅 메일 (`/admin/marketing`)
+
+| 메서드 | 경로 | 권한 | 설명 |
+|---|---|---|---|
+| GET | `/api/admin/marketing` | 👑 | 수신자 전체 목록 |
+| POST | `/api/admin/marketing` | 👑 | `{emails}` 일괄 등록 (줄바꿈/쉼표 구분, 최대 500, 중복·형식오류 자동 제외) |
+| DELETE | `/api/admin/marketing` | 👑 | `{id}` 수신자 삭제 |
+| POST | `/api/admin/marketing/send` | 👑 | `{ids?}` 브로셔 발송. 미지정 시 active 전원. 1회 50건 배치 — 응답의 `remaining` 만큼 재호출. 본문 템플릿: `lib/marketing-brochure.ts` |
+
+공개 수신거부: `/unsubscribe/[token]` (페이지, 비로그인) — 버튼 클릭(서버 액션) 시 status=unsubscribed. 발송 메일 제목에 `(광고)` 자동 포함.
+
 🔐 = step-up 인증(비밀번호 재입력) 필수.
 
 ## 응답 코드 컨벤션

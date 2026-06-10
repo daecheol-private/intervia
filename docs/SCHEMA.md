@@ -402,6 +402,22 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 
 변경 시 **소급 X** — chargeFeature 호출 시점의 pricing 으로 차감.
 
+## marketing_recipients
+
+마케팅 브로셔 메일 수신자. system_admin 전용 — 테넌트(org) 무관 시스템 전역.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK AUTOINCREMENT | |
+| email | TEXT NOT NULL UNIQUE | 소문자 정규화 후 저장 |
+| unsubscribe_token | TEXT NOT NULL UNIQUE | 수신거부 페이지 토큰 (`/unsubscribe/[token]`, 비로그인) |
+| status | TEXT NOT NULL DEFAULT 'active' | active / unsubscribed |
+| last_sent_at | TEXT NULL | 마지막 발송 시각 (ISO) |
+| unsubscribed_at | TEXT NULL | 수신거부 시각 (ISO) |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 (재등록 방지 + 처리 증빙).
+
 ## payment_orders
 
 결제 시스템 스텁. PR-6 시점에는 row 생성 흐름 없음.
