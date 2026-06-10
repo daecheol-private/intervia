@@ -1161,7 +1161,7 @@ async function Landing() {
         <div className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
           <Stat value="75%" label="채용 사이클 단축" sub="평균 2주 → 4일" />
           <Stat value="89%" label="후보자 응답률" sub="채팅 면접 완료 기준" />
-          <Stat value="4.6" suffix="/5" label="AI 평가 정확도" sub="인사담당자 만족도" />
+          <Stat value="4.6" suffix="/5" label="인사담당자 만족도" sub="AI 평가 결과 설문 기준" />
           <Stat value="10분" label="평균 면접 시간" sub="10·20·30분 선택" />
         </div>
         <p className="text-center text-[11px] text-surface/40 pb-6 px-6">
@@ -1262,7 +1262,7 @@ async function Landing() {
             <Differ
               Icon={Coins}
               title="투명한 토큰 과금"
-              body="공고/이력서/면접 단위 단가가 명확. 후불 마이너스 허용으로 토큰 부족해도 중단 없음. 평가 실패 시 자동 환불."
+              body="공고/이력서/면접 단위 단가가 명확. 진행 중인 평가·면접은 잔액이 부족해도 끝까지 완료. 평가 실패 시 과금 없음."
               visual={
                 <div className="space-y-1">
                   <LedgerRow memo="100,000원 충전 (+ 5% 보너스)" delta="+1,050" positive />
@@ -1300,7 +1300,7 @@ async function Landing() {
             </h2>
             <p className="mt-4 text-base text-ink-soft">
               구독료 없음 · 신용카드 등록 없이 무료 체험 ·{" "}
-              <strong className="text-ink">100원 = 1 토큰</strong>
+              <strong className="text-ink">100원 = 1 토큰</strong> (VAT 별도)
             </p>
           </div>
 
@@ -1340,7 +1340,7 @@ async function Landing() {
               </div>
             </div>
             <p className="mt-5 text-[11px] opacity-70 text-center">
-              ※ 위 건수는 무료 체험 토큰을 한 종류에만 썼을 때 기준. 평가 실패는 자동 환불됩니다.
+              ※ 신규 법인 최초 등록 1회 한정. 위 건수는 무료 체험 토큰을 한 종류에만 썼을 때 기준. 평가 실패는 자동 환불됩니다.
             </p>
           </div>
 
@@ -1391,7 +1391,7 @@ async function Landing() {
                 ))}
             </div>
             <p className="mt-4 text-[11px] text-ink-soft text-center">
-              잔액이 부족해도 진행되며(후불 마이너스 허용) 다음 충전 시 자동 정산됩니다.
+              진행 중인 평가·면접은 잔액이 부족해도 끝까지 완료됩니다(부족분은 다음 충전 시 자동 정산). 잔액 0 이하에서는 신규 작업이 제한됩니다.
             </p>
           </div>
         </div>

@@ -58,6 +58,11 @@ const RE_ROAD_ADDR =
   /[가-힣A-Za-z0-9·]+(?:로|길)\s?\d+(?:[-]\d+)?(?:번지?)?(?:\s*,?\s*\d+(?:동|호|층))*/g;
 const RE_JIBUN = /[가-힣]+동\s?\d+(?:[-]\d+)?(?:번지)?/g;
 
+// 나이 인라인 — "(만 35세)" / "만 35세". lib/pii-extract.ts RE_AGE_INLINE 이식 + 비괄호형.
+// "3만 5세"/"35세대" 같은 부분 매칭은 lookaround 로 차단.
+const RE_AGE_INLINE =
+  /\(\s*만\s*\d{1,2}\s*[세歳]\s*\)|(?<![가-힣A-Za-z0-9])만\s*\d{1,2}\s*[세歳](?![가-힣A-Za-z0-9])/g;
+
 // 회사명 — 접미사로 회사 식별
 // "회사명(주)", "(주)회사명", "회사명 주식회사", "회사명 부설연구소" 등
 const RE_COMPANY_SUFFIX =
@@ -110,6 +115,27 @@ const LABELS: LabelRule[] = [
   {
     re: /(직\s*책|직\s*위|직\s*급|Position|Title|Job\s*Title|Role)\s*[:：·▶▷-]?\s*([^\n,/]{2,40})/g,
     token: "[직책]",
+  },
+  // 채용절차법 §4의3 평가 금지 항목 — 라벨형(콜론/공백 구분)만. 본문 문장 오탐 방지 위해 값을 제한.
+  {
+    re: /(나\s*이|만\s*나이|연\s*령|Age)\s*[:：·▶▷-]?\s*(만\s*)?\d{1,2}\s*[세歳]?/g,
+    token: "[나이]",
+  },
+  {
+    re: /(성\s*별|Gender)\s*[:：·▶▷-]?\s*(남성|여성|남자|여자|[Mm]ale|[Ff]emale|남|여|M|F)(?![가-힣A-Za-z])/g,
+    token: "[성별]",
+  },
+  {
+    re: /(결\s*혼\s*여\s*부|혼\s*인\s*여\s*부|혼\s*인\s*상\s*태|결\s*혼\s*상\s*태)\s*[:：·▶▷-]?\s*(기혼|미혼|이혼|사별|별거|유|무)(?![가-힣A-Za-z])/g,
+    token: "[혼인]",
+  },
+  {
+    re: /(종\s*교)\s*[:：·▶▷-]?\s*(무교|없음|무|기독교|개신교|천주교|가톨릭|불교|원불교|이슬람교?|힌두교|유대교|천도교|기타)(?![가-힣A-Za-z])/g,
+    token: "[종교]",
+  },
+  {
+    re: /(가\s*족\s*관\s*계(?!\s*증명서)|가\s*족\s*사\s*항)\s*[:：·▶▷-]?\s*([^\n]{2,60})/g,
+    token: "[가족]",
   },
 ];
 
@@ -192,6 +218,7 @@ function applyBasic(text: string): string {
   return text
     .replace(RE_RRN, "[주민번호]")
     .replace(RE_DOB, "[생년월일]")
+    .replace(RE_AGE_INLINE, "[나이]")
     .replace(RE_PHONE, "[전화]")
     .replace(RE_EMAIL, "[이메일]")
     .replace(RE_URL, "[URL]")
@@ -249,6 +276,7 @@ function applyDicts(text: string): string {
 const MASK_TOKEN_LITERALS = [
   "[이름]","[전화]","[이메일]","[주민번호]","[URL]","[생년월일]",
   "[우편번호]","[주소]","[학교]","[회사]","[지역]","[내선번호]","[나이]",
+  "[성별]","[혼인]","[종교]","[가족]",
 ];
 function neutralizeMaskTokens(text: string): string {
   let out = text;

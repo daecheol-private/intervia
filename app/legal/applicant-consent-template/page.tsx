@@ -34,6 +34,8 @@ export default function ApplicantConsentTemplatePage() {
 2) 처리 항목
    - 이력서·자기소개서·포트폴리오 본문 (식별 가능한 정보를 자동 마스킹 처리하여 AI 에 전달)
    - AI 면접 진행 시 후보자 응답 텍스트 (식별 가능한 정보를 자동 마스킹 처리하여 AI 에 전달)
+   - 스캔(이미지) 형태 이력서는 텍스트 추출(OCR)을 위해 마스킹 전 원본이 AI 수탁자에게
+     전달될 수 있습니다 (OCR 기능을 사용하는 경우)
    - 평가 결과 점수 및 코멘트
 
 3) 처리 목적
@@ -55,7 +57,10 @@ export default function ApplicantConsentTemplatePage() {
 6) 보유 및 이용 기간
    - 합·불 결정 시점에 이력서 원본·마스킹 텍스트는 즉시 폐기
    - 평가 결과는 채용 공고 종결 +14일 후 자동 삭제
-   - 채용절차의 공정화에 관한 법률 §11 에 따른 채용서류 반환·파기 의무 준수
+   - 본 채용서류는 홈페이지·전자우편 등 전자적 방법으로 제출되어 채용절차의 공정화에 관한
+     법률 §11 에 따른 반환 의무 대상이 아니며, 불합격 확정 시 즉시, 늦어도 공고 종결 후
+     14일 이내 파기됩니다 (최종 합격자 정보는 입사 절차 목적으로 보유)
+   - 파기 관련 문의: (채용기업 연락처 기재)
 
 ☐ 위 사항에 동의합니다 (필수, 거부 시 본 채용 지원 불가)`;
 
@@ -169,6 +174,7 @@ which we have contracted as a data processor, as follows:
               <th className="px-3 py-2 text-left">수탁자</th>
               <th className="px-3 py-2 text-left">목적</th>
               <th className="px-3 py-2 text-left">국가</th>
+              <th className="px-3 py-2 text-left">연락처</th>
             </tr>
           </thead>
           <tbody>
@@ -179,6 +185,9 @@ which we have contracted as a data processor, as follows:
                 </td>
                 <td className="px-3 py-2 text-slate-700">{p.purpose}</td>
                 <td className="px-3 py-2 text-slate-700">{p.country}</td>
+                <td className="px-3 py-2 text-slate-700 break-all">
+                  {p.contact}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -208,8 +217,10 @@ which we have contracted as a data processor, as follows:
               A. 안 됩니다. 개인정보보호법은 동의를{" "}
               <strong>명시적 의사표시(체크박스·서명)</strong> 로 받도록 합니다.
               공고 본문에 적어둔 것만으로는 묵시적 동의로 인정되지 않습니다.
-              특히 §28의8 국외이전과 §37의2 자동화 결정은{" "}
-              <strong>별도 동의 항목</strong> 이 필요합니다.
+              특히 §28의8 국외이전은 <strong>별도 동의 항목</strong> 이
+              필요하며, §37의2 자동화 결정은 별도 동의 대신{" "}
+              <strong>AI 평가 활용 사실·기준을 고지하고 거부권·이의제기
+              절차를 보장</strong>해야 합니다.
             </dd>
           </div>
           <div>

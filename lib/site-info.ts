@@ -44,15 +44,19 @@ export type Processor = {
   items: string;
   country: string;
   retention: string;
+  contact: string; // 개인정보 문의처 (이메일 또는 privacy 정책 URL) — §28의8 이전받는 자 연락처
 };
 
 export const PROCESSORS: readonly Processor[] = [
   {
     name: "Google Cloud (Vertex AI · Gemini)",
     purpose: "AI 서류 평가, AI 면접 채팅, 면접 응답 평가",
-    items: "식별가능정보 자동 마스킹 처리한 이력서 텍스트 및 면접 대화록",
+    items:
+      "식별가능정보 자동 마스킹 처리한 이력서 텍스트 및 면접 대화록. " +
+      "스캔(이미지) PDF의 경우 텍스트 추출(OCR)을 위해 마스킹 전 원본이 전달될 수 있음(법인이 OCR을 허용한 경우에 한함)",
     country: "대한민국 (서울 리전 asia-northeast3) — 국외이전 없음",
     retention: "API 요청 처리 즉시 (Google 정책: 학습 미사용)",
+    contact: "https://policies.google.com/privacy",
   },
   {
     name: "Vercel Inc.",
@@ -60,6 +64,7 @@ export const PROCESSORS: readonly Processor[] = [
     items: "서비스 전체 트래픽 및 요청 로그",
     country: "미국",
     retention: "30일 (로그 자동 폐기)",
+    contact: "privacy@vercel.com",
   },
   {
     name: "Turso (chiselstrike, Inc.)",
@@ -67,6 +72,7 @@ export const PROCESSORS: readonly Processor[] = [
     items: "이름·이메일·이력서 정보·평가 결과",
     country: "일본 (도쿄 리전)",
     retention: "본 처리방침의 보유기간 정책과 동일",
+    contact: "https://turso.tech/privacy-policy",
   },
   {
     name: "Vercel Blob",
@@ -74,6 +80,7 @@ export const PROCESSORS: readonly Processor[] = [
     items: "이력서 원본 파일 (PDF/DOCX)",
     country: "미국",
     retention: "합·불 결정 시점 즉시 폐기",
+    contact: "privacy@vercel.com",
   },
   {
     name: "Have I Been Pwned (Troy Hunt)",
@@ -81,6 +88,7 @@ export const PROCESSORS: readonly Processor[] = [
     items: "비밀번호 SHA-1 해시 앞 5자 (비밀번호 자체는 미전송)",
     country: "호주",
     retention: "조회 즉시 (저장 안 됨)",
+    contact: "https://haveibeenpwned.com/Privacy",
   },
   {
     name: "Resend (Resend, Inc.)",
@@ -88,6 +96,7 @@ export const PROCESSORS: readonly Processor[] = [
     items: "후보자·사용자 이메일 주소 및 메일 본문",
     country: "미국",
     retention: "발송 처리 즉시 (본문 미보관, 발송 로그는 Resend 정책에 따름)",
+    contact: "https://resend.com/legal/privacy-policy",
   },
   {
     name: "법인 자체 SMTP 서버 (법인이 등록한 경우)",
@@ -95,13 +104,14 @@ export const PROCESSORS: readonly Processor[] = [
     items: "후보자 이메일 주소, 면접 안내 본문",
     country: "법인이 등록한 SMTP 서버 위치",
     retention: "발송 즉시 (SMTP 서버 정책에 따름)",
+    contact: "법인이 등록한 메일 서버 운영 주체의 문의처",
   },
 ] as const;
 
 /** 정책 본문 versioning — 본문 변경 시 effective date 올림. */
-export const PRIVACY_EFFECTIVE_DATE = "2026-06-05";
-export const TERMS_EFFECTIVE_DATE = "2026-05-22";
+export const PRIVACY_EFFECTIVE_DATE = "2026-06-10";
+export const TERMS_EFFECTIVE_DATE = "2026-06-10";
 
 /** 가입 시 동의 시점 기록용 버전 식별자. 본문 개정 시 함께 갱신. */
-export const PRIVACY_VERSION = "1.3.0-2026-06-05"; // 시스템 기본 메일 발송 수탁자 Resend Inc.(미국) 명시 + 국외이전에 메일 단계 추가
-export const TERMS_VERSION = "1.1.1-2026-05-22";
+export const PRIVACY_VERSION = "1.4.0-2026-06-10"; // 합격자 보유 예외·파기 절차·쿠키 조항·수탁자 지위·영업양도·수탁자 연락처(§28의8)·OCR 원본 전달 고지 추가
+export const TERMS_VERSION = "1.2.0-2026-06-10"; // 약관 개정 절차(제12조)·환불 정책 전면 개정·후불 문구 실동작 일치·재위탁 동의·AI 기본법 이용사업자 지위·해지 시 잔액 정산·장애 보상 추가

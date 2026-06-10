@@ -45,7 +45,7 @@ export const CHARGE_BONUS_TIERS: ReadonlyArray<{
   { minKrw: 0, bonusRatio: 0 },
 ];
 
-/** KRW 금액 → 지급 토큰 (기본 + 보너스) 계산. */
+/** KRW 금액 → 지급 토큰 (기본 + 보너스) 계산. krw 는 공급가액(VAT 제외) 기준. */
 export function calcTokensForKrw(krw: number): {
   base: number;
   bonus: number;

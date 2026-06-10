@@ -13,9 +13,10 @@ const DEFAULT_PURGE_DAYS = 30;
  *  - status in (screened, interviewed, failed)
  *  - created_at < now - N일
  *  - resume_masked_text 또는 resume_file_path 가 남아있음
+ *  - outcome != 'hired' (합격자는 입사 절차상 보존)
  *
  * 평가 결과(screeningReport, evaluation, 점수)는 그대로 보존.
- * — PIPA 가명처리 원칙: 식별 가능성 제거가 목적, 평가 메타 폐기 아님.
+ * — 최소보유 원칙(본문·파일 조기 파기): 식별 가능성 제거가 목적, 평가 메타 폐기 아님.
  * — 원본(resume_text)은 업로드 시점에 이미 저장 안 함.
  */
 export async function purgeExpiredOriginals(
@@ -35,7 +36,9 @@ export async function purgeExpiredOriginals(
     .where(
       and(
         lt(candidates.createdAt, cutoff),
-        isNotNull(candidates.resumeMaskedText)
+        isNotNull(candidates.resumeMaskedText),
+        // 합격자는 입사 절차상 보존 — purge 제외
+        sql`(${candidates.outcome} IS NULL OR ${candidates.outcome} != 'hired')`
       )
     );
 
@@ -50,7 +53,7 @@ export async function purgeExpiredOriginals(
       }
     }
     // 첨부(포트폴리오·자소서 등) 원본 파일·행도 폐기 — 메인 이력서만 지우면 첨부 PII 가
-    // 공고 종결(+7/+14일) 전까지 남아 "+30일 원본 폐기" 가명처리 원칙이 깨진다.
+    // 공고 종결(+7/+14일) 전까지 남아 "+30일 원본 폐기" 최소보유 원칙이 깨진다.
     await deleteAttachmentsForCandidate(t.id).catch(() => {});
     await db
       .delete(candidateAttachments)

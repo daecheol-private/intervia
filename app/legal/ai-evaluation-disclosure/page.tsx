@@ -57,16 +57,20 @@ export default function AiEvaluationDisclosurePage() {
             횟수)를 수집합니다. 이 신호는 채용 담당자의{" "}
             <strong>참고 자료로만</strong> 제공되며, 단독으로 합·불을 결정하지
             않습니다. 정당한 사용(메모 참고 등) 가능성을 전제로 중립적으로
-            표시됩니다.
+            표시됩니다. 행태정보와 별개로, 면접 답변의 문체적 특징에 대한 AI
+            분석(외부 AI 대필 가능성 추정)이 참고 자료로 산출됩니다. 이 분석은
+            단독으로 합격·불합격을 결정하지 않으며, 채용 담당자의 종합 판단
+            자료로만 제공됩니다.
           </li>
           <li>
-            서류·면접 단계 모두 LLM 호출 전에 이름·연락처·이메일·주소·학교·
-            생년월일 등 직접 식별자와{" "}
-            <strong>채용절차법 §4의2 평가 금지 항목</strong>(성별·나이·출신
-            지역·가족관계·종교·정치성향·신체조건·학교명 등)을{" "}
-            <strong>식별 가능한 정보를 자동 마스킹 처리하여 LLM 에 전달</strong>
+            서류·면접 단계 모두 LLM 호출 전에 생년월일·연락처·이메일·주소·
+            학교명·지역명 등 직접 식별자와, 라벨로 표기된{" "}
+            <strong>채용절차법 §4의3 평가 금지 항목</strong>(나이·성별·혼인·
+            종교·가족관계 등)을 <strong>자동 마스킹 처리하여 LLM 에 전달</strong>
             합니다. 마스킹은 정규식·사전 기반 자동 처리로, 사전에 등록되지 않은
-            신규 학교명·회사명·변형 표기 등은 잔존할 가능성이 있습니다.
+            신규 학교명·회사명·변형 표기 등은 잔존할 가능성이 있으며, 마스킹을
+            통과한 표현이 있더라도 평가 모델에 해당 항목의 평가 반영을 금지하는
+            지시를 함께 적용합니다 (이중 방어).
           </li>
         </ul>
       </Section>
@@ -161,7 +165,7 @@ export default function AiEvaluationDisclosurePage() {
           <li>
             <strong>최종 결정</strong>: 채용기업의 권한 있는 담당자가
             시스템에 결정 사유를 기록한 뒤에야 합·불 상태가 확정됩니다.
-            결정 시각·결정자·결정 사유는 감사 로그에 영구 보존됩니다.
+            결정 시각·결정자·결정 사유는 감사 로그에 최장 5년 보존됩니다.
           </li>
         </ol>
       </Section>
@@ -207,7 +211,7 @@ export default function AiEvaluationDisclosurePage() {
 
       <Section n="6" title="평가에서 절대 사용하지 않는 정보 (차별 금지)">
         <p className="text-sm text-slate-700 mb-2">
-          채용절차의 공정화에 관한 법률 §4의2, 남녀고용평등법, 연령차별금지법,
+          채용절차의 공정화에 관한 법률 §4의3, 남녀고용평등법, 연령차별금지법,
           장애인차별금지법, 국가인권위원회법에 따라, 다음 정보는 평가의
           근거·인용·언급에서 모두 제외됩니다.
         </p>
@@ -221,9 +225,11 @@ export default function AiEvaluationDisclosurePage() {
           <li>건강 상태 (직무 수행에 직접 필요한 경우 제외)</li>
         </ul>
         <p className="text-xs text-slate-500 mt-2">
-          위 항목들은 LLM 호출 전 마스킹되고, AI 평가 프롬프트에 명시적인
-          평가 금지 지시가 포함되어 있습니다. 그럼에도 평가 결과에 이러한
-          정보의 흔적이 발견된 경우 §5 의 이의제기 채널로 신고해 주세요.
+          위 항목 중 직접 식별자와 라벨로 표기된 항목은 LLM 호출 전 자동
+          마스킹되며, 마스킹을 통과한 표현이 있더라도 AI 평가 프롬프트의
+          명시적인 평가 금지 지시가 적용됩니다 (이중 방어). 그럼에도 평가
+          결과에 이러한 정보의 흔적이 발견된 경우 §5 의 이의제기 채널로
+          신고해 주세요.
         </p>
       </Section>
 
@@ -233,6 +239,8 @@ export default function AiEvaluationDisclosurePage() {
           <li>평가 결과(점수·코멘트): 채용 공고 종결 +14일 후 자동 삭제</li>
           <li>감사 로그 (결정 시각·결정자·이의제기 기록): 분쟁 대응 목적
             상 최장 5년 보유 (법적 의무 기간 종료 시 폐기)</li>
+          <li>단, 최종 합격자의 정보는 입사 절차 및 인사기록 목적으로
+            채용기업이 삭제할 때까지 보유됩니다.</li>
         </ul>
       </Section>
 
@@ -250,6 +258,7 @@ export default function AiEvaluationDisclosurePage() {
               <th className="px-3 py-2 text-left">수탁자</th>
               <th className="px-3 py-2 text-left">목적</th>
               <th className="px-3 py-2 text-left">국가</th>
+              <th className="px-3 py-2 text-left">연락처</th>
             </tr>
           </thead>
           <tbody className="text-slate-700">
@@ -264,13 +273,25 @@ export default function AiEvaluationDisclosurePage() {
                 </td>
                 <td className="px-3 py-2">{p.purpose}</td>
                 <td className="px-3 py-2">{p.country}</td>
+                <td className="px-3 py-2 break-all">{p.contact}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </Section>
 
-      <Section n="9" title="채용기업에 대한 권고 사항">
+      <Section n="9" title="고영향 인공지능에 관한 책무">
+        <p className="text-sm text-slate-700">
+          본 서비스의 AI 평가 시스템은 「인공지능 발전과 신뢰 기반 조성 등에
+          관한 기본법」상 채용 분야의 <strong>고영향 인공지능</strong>에
+          해당하며, 회사는 같은 법 제34조에 따른 위험관리방안 수립·운영,
+          설명 가능성 확보(본 사전공개 및 §5 의 설명 요구권), 사람의
+          관리·감독(§4 의 인적 검토 절차) 등 사업자 책무를 이행하고 그 내역을
+          문서로 관리합니다.
+        </p>
+      </Section>
+
+      <Section n="10" title="채용기업에 대한 권고 사항">
         <p className="text-sm text-slate-700">
           본 서비스를 도입하는 채용기업은 채용 공고 본문 또는 지원 페이지
           하단에 본 페이지 URL 을 함께 게재할 것을 권고합니다. 사전공개는

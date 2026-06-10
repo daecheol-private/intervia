@@ -30,6 +30,12 @@ export default function PrivacyPage() {
         준수하며, 정보주체의 개인정보를 보호하고 권익을 신속히 처리하기 위해
         다음과 같이 개인정보 처리방침을 수립·공개합니다.
       </p>
+      <p className="text-sm text-slate-700 leading-relaxed mt-3">
+        지원자(후보자)의 개인정보에 관하여는 채용을 진행하는 기업이
+        개인정보처리자이며, 회사는 그로부터 처리를 위탁받은 수탁자의 지위에서
+        본 방침이 정하는 바에 따라 처리합니다. 회원(채용기업 소속 사용자)의
+        계정 정보에 관하여는 회사가 개인정보처리자입니다.
+      </p>
 
       <Section n="1" title="개인정보의 처리 목적">
         <p>
@@ -83,7 +89,7 @@ export default function PrivacyPage() {
         </p>
       </Section>
 
-      <Section n="3" title="개인정보의 처리 및 보유 기간">
+      <Section n="3" title="개인정보의 처리·보유 기간 및 파기">
         <Table>
           <thead>
             <tr>
@@ -114,12 +120,24 @@ export default function PrivacyPage() {
             </tr>
           </tbody>
         </Table>
+        <p className="mt-3">
+          단, 최종 합격자의 정보는 입사 절차 및 인사기록 목적으로 채용기업이
+          삭제할 때까지 보유됩니다.
+        </p>
+        <p>
+          파기 사유가 발생한 개인정보는 지체 없이 파기하며, 전자적 파일은
+          복구할 수 없는 방법으로 영구 삭제하고, 그 외 기록물은 분쇄·소각합니다.
+        </p>
       </Section>
 
       <Section n="4" title="개인정보의 제3자 제공">
         <p>
           회사는 정보주체의 동의 없이 개인정보를 제3자에게 제공하지 않습니다.
           단, 법령에 따라 수사기관의 적법한 요청이 있는 경우는 예외입니다.
+        </p>
+        <p>
+          회사가 영업의 전부 또는 일부를 양도하거나 합병 등으로 개인정보를
+          이전하는 경우 사전에 그 사실을 통지합니다.
         </p>
       </Section>
 
@@ -136,6 +154,7 @@ export default function PrivacyPage() {
               <th>위탁 항목</th>
               <th>처리 국가</th>
               <th>보유 기간</th>
+              <th>연락처</th>
             </tr>
           </thead>
           <tbody>
@@ -146,6 +165,7 @@ export default function PrivacyPage() {
                 <td>{p.items}</td>
                 <td>{p.country}</td>
                 <td>{p.retention}</td>
+                <td className="break-all">{p.contact}</td>
               </tr>
             ))}
           </tbody>
@@ -205,7 +225,19 @@ export default function PrivacyPage() {
         </ul>
       </Section>
 
-      <Section n="9" title="개인정보 보호책임자">
+      <Section n="9" title="쿠키 등 자동수집장치의 설치·운영 및 거부">
+        <p>
+          회사는 로그인 세션 유지를 위한 필수 쿠키(httpOnly 세션 쿠키)만
+          사용하며, 광고·분석 목적의 쿠키는 사용하지 않습니다. 브라우저 설정에서
+          쿠키 저장을 거부할 수 있으나, 거부 시 로그인이 불가합니다.
+        </p>
+      </Section>
+
+      <Section n="10" title="개인정보 보호책임자">
+        <p>
+          개인정보 열람·정정·삭제·처리정지 청구는 아래 개인정보 보호책임자에게
+          할 수 있으며, 회사는 10일 이내에 조치 결과를 통지합니다.
+        </p>
         <Table>
           <tbody>
             <tr>
@@ -224,7 +256,7 @@ export default function PrivacyPage() {
         </Table>
       </Section>
 
-      <Section n="10" title="권익 침해 구제 방법">
+      <Section n="11" title="권익 침해 구제 방법">
         <p>다음 기관에 분쟁 해결·상담을 신청하실 수 있습니다.</p>
         <ul className="list-disc list-inside mt-2 space-y-1">
           <li>개인정보분쟁조정위원회: 1833-6972, www.kopico.go.kr</li>
@@ -234,7 +266,7 @@ export default function PrivacyPage() {
         </ul>
       </Section>
 
-      <Section n="11" title="처리방침의 변경">
+      <Section n="12" title="처리방침의 변경">
         <p>
           본 처리방침은 시행일로부터 적용되며, 법령 및 방침에 따른 변경 내용의
           추가·삭제 및 정정이 있는 경우 변경사항 시행 7일 전 공지합니다.

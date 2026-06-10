@@ -205,7 +205,7 @@ async function notifyInterviewersOnAutoReject(
   }
 
   const reasonLabel: Record<string, string> = {
-    ai_link_expired: "AI면접 링크 만료",
+    ai_link_expired: "AI면접 링크 만료 (응시 기한 경과)",
     schedule_link_expired: "1차 면접 일정 링크 만료",
   };
 
@@ -230,12 +230,13 @@ async function notifyInterviewersOnAutoReject(
       .map((c) => `- ${c.name} (${reasonLabel[c.reason ?? ""] ?? c.reason ?? "사유 미상"})`)
       .join("\n");
     const subject = `[Intervia] ${job.title} 자동 불합격 처리 알림 (${group.items.length}명)`;
-    const text = `다음 후보자들의 면접/일정 링크가 만료되어 자동으로 불합격 처리되었습니다.\n\n${listText}\n\nIntervia`;
+    const text = `다음 후보자들의 면접/일정 링크가 만료되어 자동으로 불합격 처리되었습니다.\n응시 기한 경과에 따른 절차 종료이며 AI 평가 결과에 따른 결정이 아닙니다.\n\n${listText}\n\nIntervia`;
     const html = wrapEmailCard({
       innerHtml: `
         <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">자동 불합격 처리 알림</h1>
         <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 16px;">
           <strong style="color:#0f172a;">${escapeHtml(job.title)}</strong> 공고에서 다음 후보자들의 링크가 만료되어 자동으로 불합격 처리되었습니다.
+          응시 기한 경과에 따른 절차 종료이며 AI 평가 결과에 따른 결정이 아닙니다.
         </p>
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
           <ul style="font-size:13px;color:#0f172a;line-height:1.8;margin:0;padding-left:18px;">

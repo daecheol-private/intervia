@@ -490,7 +490,7 @@
   - **Appeal 이메일 enumeration 차단**: 이메일 불일치 시 정상과 동일한 성공 응답, DB 저장 안 함, 시도는 감사 로그(`appeal.submit_mismatch`).
   - **SSRF host 화이트리스트**: `/api/uploads/candidate/[id]` 가 `blob.vercel-storage.com` 만 허용. `BLOB_ALLOWED_HOSTS` env 로 추가 가능. https 강제.
   - **세션 쿠키 항상 secure**: `NODE_ENV !== "development"` 시 secure=true (Vercel preview/staging 포함).
-  - **채용절차법 §4의2 평가 금지 항목**: `buildSystemPrompt`/`buildScreeningPrompt` 에 성별·나이·출신지·가족관계·종교·정치·학교명·신체조건·부모정보 평가 금지 명시.
+  - **채용절차법 §4의3 평가 금지 항목**: `buildSystemPrompt`/`buildScreeningPrompt` 에 성별·나이·출신지·가족관계·종교·정치·학교명·신체조건·부모정보 평가 금지 명시.
   - **자동화 거부권 동의 + Google 국외이전 단독 분리**: `CONSENT_VERSION` 1.1.0, `ai_decision` 거부 시 영향 명시, `overseas_transfer_google` 단독 항목 신설 (PIPA §28의8).
   - **가입자 약관·정책 동의 시각·버전 기록**: `users` 테이블 `terms_accepted_at/version`, `privacy_accepted_at/version` 4컬럼 추가. `PRIVACY_VERSION`/`TERMS_VERSION` 상수. signup 페이지에 필수 체크박스 + API 검증.
   - **이력서 prompt-injection sanitize**: `sanitizeResumeText()` — 시스템 토큰·역할변경 지시문·"100점/만점/강력추천 강요" 패턴 마스킹. 업로드 시 마스킹 직후 적용.

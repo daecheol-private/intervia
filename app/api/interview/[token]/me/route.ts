@@ -5,7 +5,7 @@
  *
  * GET: 본인 보유 데이터 요약 (이름/이메일/전화/이력서 파일 보유/평가 점수 등)
  * DELETE: 본인 데이터 즉시 폐기 — resume_text/masked/file 모두 즉시 삭제
- *         평가 결과 (점수·추천) 은 채용 통계 목적으로 1년 보존 (처리방침 명시)
+ *         평가 결과는 공고 종결 +14일까지 보유(합격자는 채용기업 삭제 시까지), 분쟁 대응 목적
  */
 import { db } from "@/lib/db";
 import { interviewSessions, candidates, candidateAttachments } from "@/lib/schema";
@@ -74,9 +74,8 @@ export async function POST(
   if (!auth.ok) return auth.res;
 
   const c = auth.candidate;
-  // Low — 후보자 본인 열람에는 점수·추천 등 평가 결과 미노출. 후보자가 점수를 보고
-  // 이의제기 통계 분쟁을 유발하지 않도록 보유 항목 요약만 제공. 평가 설명 요청은
-  // PIPA §37의2 의 이의제기 채널 (/api/interview/[token]/appeal) 로 별도 안내.
+  // §35 열람권에 따라 본인 평가 결과(점수·추천) 포함. 상세 설명·이의는
+  // §37의2 이의제기 채널 (/api/interview/[token]/appeal) 로 안내.
   const safe = {
     name: c.name,
     email: c.email,
@@ -86,6 +85,8 @@ export async function POST(
     careerSummary: c.careerSummary,
     resumeStored: !!c.resumeFilePath,
     maskedTextLength: c.resumeMaskedText?.length ?? 0,
+    screeningScore: c.screeningScore,
+    screeningRecommendation: c.screeningReport?.recommendation ?? null,
     // 진행 상태 — stage 한글 라벨 + outcome (종결 시)
     stage: c.stage,
     outcome: c.outcome,
@@ -119,7 +120,7 @@ export async function DELETE(
   if (!auth.ok) return auth.res;
 
   const c = auth.candidate;
-  // 본문·파일 즉시 폐기. 평가 결과·이름은 채용 통계 목적으로 일부 보존 (처리방침 §3).
+  // 본문·파일 즉시 폐기. 평가 결과·이름은 분쟁 대응 목적으로 일부 보존 (처리방침 §3).
   if (c.resumeFilePath) await deleteFile(c.resumeFilePath).catch(() => null);
   // 첨부(포트폴리오·자소서 등)도 원본 파일 + 행까지 폐기 — 메인 이력서만 지우면 첨부에 담긴
   // PII 가 남아 정보주체 파기권(PIPA §36)이 반쪽이 된다. (HR 단건/일괄 삭제·결정 폐기는
@@ -135,7 +136,8 @@ export async function DELETE(
       resumeMaskedText: null,
       resumeFilePath: "",
       phone: null,
-      // email/name 은 평가 결과와 매칭 위해 보존 (필요 시 후속 옵션)
+      // 잔존 항목(email/name·평가 결과)은 분쟁 대응(채용절차법 §11 파기 의무 이행 입증) 목적
+      // — 공고 종결 +14일 파기 사이클에서 최종 삭제됨
     })
     .where(eq(candidates.id, c.id));
 

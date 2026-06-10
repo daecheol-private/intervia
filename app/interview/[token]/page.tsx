@@ -858,7 +858,7 @@ function ConsentGate({
                       {it.legalBasis}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed whitespace-pre-line">
                     {it.description}
                   </p>
                 </div>

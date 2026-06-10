@@ -8,6 +8,7 @@ import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
 import { deleteCandidateFiles } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
 import { refundFeature } from "@/lib/tokens";
+import { stripBiasedLines } from "@/lib/job-bias-filter";
 import { parseDbTimestamp } from "@/lib/utils";
 import {
   generateRequirementChecklist,
@@ -100,7 +101,10 @@ export async function PUT(
     responsibilities: body.responsibilities,
     requirements: body.requirements,
     idealProfile: typeof body.idealProfile === "string" ? body.idealProfile.slice(0, 3000) : "",
-    evaluationFocus: typeof body.evaluationFocus === "string" ? body.evaluationFocus.slice(0, 3000) : "",
+    // 차별 금지 항목(성별·나이·결혼 등) 포함 라인은 저장 전 제거 (채용절차법 §4의3)
+    evaluationFocus: stripBiasedLines(
+      typeof body.evaluationFocus === "string" ? body.evaluationFocus.slice(0, 3000) : ""
+    ).cleaned,
     tone: body.tone,
     interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
   };

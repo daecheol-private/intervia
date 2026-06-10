@@ -140,7 +140,7 @@ export type OutcomeReason =
 
 export const OUTCOME_REASON_LABELS: Record<OutcomeReason, string> = {
   candidate_withdrew: "지원자가 지원 취소",
-  ai_link_expired: "AI면접 링크 만료",
+  ai_link_expired: "AI면접 링크 만료 (응시 기한 경과 — AI 평가 결과 아님)",
   schedule_link_expired: "1차 면접 일정 링크 만료",
   resume_unfit: "서류 부적합",
   ai_interview_unfit: "AI면접 평가 부적합",

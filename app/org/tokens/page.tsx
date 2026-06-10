@@ -179,7 +179,7 @@ export default function TokensPage() {
           />
         </div>
         <p className="text-[11px] text-slate-500 mt-2">
-          1 토큰 = 100원 기준. 결제 시점 단가로 차감 (이후 가격 변동 영향 없음).
+          1 토큰 = 100원 기준 (VAT 별도). 결제 시점 단가로 차감 (이후 가격 변동 영향 없음).
         </p>
       </section>
 
@@ -188,7 +188,7 @@ export default function TokensPage() {
         <div className="flex items-baseline justify-between gap-2 mb-3">
           <h2 className="text-sm font-semibold text-slate-900">충전 가격</h2>
           <span className="text-[11px] text-slate-500">
-            100원 = 1 토큰 · 많이 충전할수록 보너스 ↑
+            100원 = 1 토큰 (VAT 별도) · 많이 충전할수록 보너스 ↑
           </span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2">

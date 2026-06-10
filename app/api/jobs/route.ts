@@ -11,6 +11,7 @@ import { jobOrgFilter, requireUser } from "@/lib/tenant";
 import { isValidPin } from "@/lib/job-lock";
 import { chargeFeature } from "@/lib/tokens";
 import { defaultClosesAt } from "@/lib/job-lifecycle";
+import { stripBiasedLines } from "@/lib/job-bias-filter";
 import {
   generateRequirementChecklist,
   serializeChecklist,
@@ -110,7 +111,10 @@ export async function POST(req: Request) {
       // 그 사이 체크리스트는 "" 라 이력서 평가는 기존 즉석 분해로 폴백 (정상 동작).
       requirementChecklist: "",
       idealProfile: (body.idealProfile ?? "").toString().slice(0, 3000),
-      evaluationFocus: (body.evaluationFocus ?? "").toString().slice(0, 3000),
+      // 차별 금지 항목(성별·나이·결혼 등) 포함 라인은 저장 전 제거 (채용절차법 §4의3)
+      evaluationFocus: stripBiasedLines(
+        (body.evaluationFocus ?? "").toString().slice(0, 3000)
+      ).cleaned,
       tone: body.tone ?? "중립적인",
       interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
       passwordHash,

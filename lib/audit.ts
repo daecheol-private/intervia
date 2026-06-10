@@ -39,6 +39,9 @@ export type AuditAction =
   | "consent.submit"
   | "appeal.submit"
   | "appeal.status_change"
+  // §37의2 조치 결과 통지 — resolved/rejected 전환 시 후보자 답변 메일 발송 여부 입증용.
+  | "appeal.response_sent"
+  | "appeal.response_send_failed"
   | "inquiry.submit"
   | "inquiry.status_change"
   | "user.role_change"
@@ -92,6 +95,7 @@ const CRITICAL_AUDIT_ACTIONS = new Set<string>([
   "org.smtp_delete",
   "session.revoke_others",
   "appeal.status_change",
+  "appeal.response_send_failed",
   "password_reset.confirm",
   "candidate.scan_ocr",
 ]);

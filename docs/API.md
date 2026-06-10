@@ -98,7 +98,7 @@
 | POST | `/api/interview/[token]/me` | 🎫 | 후보자 본인 데이터 열람 (PIPA §35). body: `{email}` 본인 확인 후 보유 항목 요약 |
 | DELETE | `/api/interview/[token]/me` | 🎫 | 후보자 본인 데이터 즉시 폐기 (PIPA §36). body: `{email}`. 이력서 본문·파일·전화 삭제, 평가 결과 보존 |
 | GET | `/api/candidates/[id]/appeals` | 🔒 🏢 | 후보자별 이의제기 목록 |
-| PATCH | `/api/candidates/[id]/appeals/[appealId]` | 🔒 🏢 | 상태/내부메모 업데이트. status: pending/reviewed/resolved/rejected |
+| PATCH | `/api/candidates/[id]/appeals/[appealId]` | 🔒 🏢 | 상태/답변 업데이트. status: pending/reviewed/resolved/rejected. resolved/rejected 로 전환 시 후보자에게 답변 메일 자동 발송(§37의2 조치 결과 통지, 감사로그 `appeal.response_sent`/`response_send_failed`). 응답 `{ok, emailSent}` |
 | POST | `/api/support/inquiries` | 🔒 | 로그인 고객 고객센터 문의 접수. body: `{category, message}`. 회신 이메일=계정 이메일. Rate limit 사용자당 5/분 |
 | GET | `/api/support/inquiries` | 🔒 | 본인이 접수한 문의 내역(상태·답변 포함) |
 

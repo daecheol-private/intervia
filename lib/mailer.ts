@@ -3,7 +3,7 @@ import { db } from "./db";
 import { orgSmtpConfigs, organizations } from "./schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "./crypto";
-import { SITE_INFO } from "./site-info";
+import { SITE_INFO, APPEAL_CONTACT } from "./site-info";
 
 type Transporter = ReturnType<typeof nodemailer.createTransport>;
 
@@ -253,6 +253,59 @@ export function wrapEmailCard(opts: {
   </table>
 </body>
 </html>`;
+}
+
+/** 이의제기 검토 결과 통지 (PIPA §37의2 조치 결과 통지). resolved/rejected 전환 시 자동 발송. */
+export function buildAppealResponseEmail(opts: {
+  candidateName: string;
+  jobTitle: string | null;
+  status: "resolved" | "rejected";
+  response: string | null;
+  orgName?: string | null;
+}): { subject: string; html: string; text: string } {
+  const { candidateName, jobTitle, status, response, orgName } = opts;
+  const sender = orgName?.trim() || null;
+  const resultLabel = status === "resolved" ? "처리 완료" : "기각 (원평가 유지)";
+  const suffix = jobTitle ? ` — ${jobTitle}` : "";
+  const subject = sender
+    ? `[${sender}] 이의제기 검토 결과 안내${suffix}`
+    : `[Intervia] 이의제기 검토 결과 안내${suffix}`;
+  const answer =
+    response?.trim() ||
+    "검토가 완료되었습니다. 자세한 내용은 아래 연락처로 문의해 주세요.";
+
+  const text = `안녕하세요 ${candidateName}님,
+
+AI 평가 결과에 대해 제출해 주신 이의제기의 검토가 완료되어 결과를 안내드립니다.
+
+검토 결과: ${resultLabel}
+
+[답변 내용]
+${answer}
+
+본 메일은 개인정보 보호법 제37조의2에 따른 조치 결과 통지입니다.
+추가 문의: ${APPEAL_CONTACT.email}
+
+감사합니다.`;
+
+  const html = wrapEmailCard({
+    innerHtml: `
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(candidateName)}님, 안녕하세요.</h1>
+      <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
+        ${jobTitle ? `<strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> 포지션의 ` : ""}AI 평가 결과에 대해 제출해 주신 이의제기의 검토가 완료되어 결과를 안내드립니다.
+      </p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:13px;color:#475569;line-height:1.6;margin-bottom:12px;">
+        <div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">검토 결과</div>
+        <strong style="color:#0f172a;">${resultLabel}</strong>
+      </div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:13px;color:#334155;line-height:1.6;white-space:pre-wrap;">
+        <div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">답변 내용</div>${escapeHtml(answer)}
+      </div>
+    `,
+    footer: `본 메일은 개인정보 보호법 제37조의2에 따른 조치 결과 통지로, ${sender ? `${escapeHtml(sender)}의 채용 절차를 위해 ` : ""}Intervia 시스템에서 자동 발송되었습니다.<br>추가 문의: <a href="mailto:${APPEAL_CONTACT.email}" style="color:#64748b;">${APPEAL_CONTACT.email}</a>`,
+  });
+
+  return { subject, html, text };
 }
 
 export function buildInterviewEmail(opts: {
