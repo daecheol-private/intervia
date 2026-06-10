@@ -1145,7 +1145,7 @@ async function Landing() {
               </Link>
             </div>
             <p className="mt-5 text-xs text-ink-soft">
-              가입 즉시 100토큰(약 10,000원) 제공 · 신용카드 등록 불필요
+              가입 즉시 {WELCOME_BONUS_TOKENS}토큰(약 {welcomeKrw.toLocaleString()}원) 제공 · 신용카드 등록 불필요
             </p>
           </div>
 

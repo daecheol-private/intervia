@@ -86,7 +86,7 @@ export default function PricingPage() {
           시스템 관리자만 변경 가능. 단가는 변경 시점 이후 사용분부터 적용됩니다 (소급 X).
         </p>
         <p className="text-xs text-slate-500 mt-2 bg-slate-50 border border-slate-200 rounded px-3 py-2">
-          기준: <strong>100원 = 1 토큰</strong>. 충전 보너스: 10만원+ 5% · 30만원+ 10% · 50만원+ 15% · 100만원+ 20%. 신규 가입 시 무료 체험 100 토큰 자동 지급.
+          기준: <strong>100원 = 1 토큰</strong>. 충전 보너스: 10만원+ 5% · 30만원+ 10% · 50만원+ 15% · 100만원+ 20%. 신규 가입 시 무료 체험 500 토큰 자동 지급.
         </p>
       </div>
 

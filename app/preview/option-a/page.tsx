@@ -63,7 +63,7 @@ export default function OptionAPage() {
           </button>
         </div>
         <p className="mt-6 text-xs" style={{ color: C.inkSoft }}>
-          가입 즉시 100토큰(약 10,000원) 제공 · 신용카드 등록 불필요
+          가입 즉시 500토큰(약 50,000원) 제공 · 신용카드 등록 불필요
         </p>
       </section>
 
@@ -78,18 +78,18 @@ export default function OptionAPage() {
               법인 첫 등록 시
             </div>
             <div className="mt-2 text-5xl tabular-nums" style={fontSerif}>
-              <span style={{ color: C.primary }}>100</span>{" "}
+              <span style={{ color: C.primary }}>500</span>{" "}
               <span style={{ color: C.ink, fontSize: "0.5em" }}>토큰</span>
             </div>
             <div className="text-sm mt-1" style={{ color: C.inkSoft }}>
-              ≈ 10,000원
+              ≈ 50,000원
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { l: "공고", v: "10건" },
-              { l: "이력서 평가", v: "20건" },
-              { l: "AI 면접", v: "3건" },
+              { l: "공고", v: "50건" },
+              { l: "이력서 평가", v: "250건" },
+              { l: "AI 면접", v: "50건" },
             ].map((x) => (
               <div
                 key={x.l}
