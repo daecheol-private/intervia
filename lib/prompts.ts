@@ -90,6 +90,11 @@ ${f.trim()}
 """`;
 }
 
+/** 컬쳐핏 프로필에 프롬프트에 반영될 내용이 실제로 있는지 (질문지 based_on_culture_fit 플래그용). */
+export function hasCultureFit(profile?: CultureFitProfile | null): boolean {
+  return cultureFitSection(profile) !== "";
+}
+
 function cultureFitSection(profile?: CultureFitProfile | null): string {
   if (!profile) return "";
   const parts: string[] = [];
@@ -892,6 +897,78 @@ ${screeningBlock(screening)}${interviewEvalBlock(interviewEval)}
 ## 분량 가이드
 - 섹션 4~6개, 섹션당 질문 4~7개. 총 24~32개 내외 (면접관이 골라 쓸 수 있도록 넉넉한 질문 풀).
 - **질문 수가 많아져도 추상적·중복 질문으로 채우지 말 것.** 모든 질문은 이력서·평가 근거에 기반한 **서로 다른 검증 포인트**여야 한다. 같은 내용을 표현만 바꿔 반복 금지.
+- followups 는 핵심 질문에만 (전부 달 필요 없음). basis 는 가능한 한 채운다.
+
+## 강조 표기 (UI 가독성)
+- strategy / focus / question / intent 안에서 핵심 키워드는 \`**...**\` (markdown bold) 로 감싸라. 각 항목 1~2개.`;
+}
+
+/**
+ * 2차(임원) 대면 면접 질문지 생성 프롬프트.
+ *
+ * 입력은 1차와 동일(JD + 이력서 + 서류평가 + AI 면접 평가) + 법인 컬쳐핏(인재상) 기준.
+ * 출력 구조도 InterviewQuestionSheet 공용 (저장·UI 재사용).
+ *
+ * 1차와의 차이 — 실무·기술 재검증을 하지 않는다. 임원 관점의 축
+ * (컬쳐핏·인재상 적합성 / 가치관·태도 / 조직 기여 / 성장 잠재력 / 동기·정착)에 집중하고,
+ * 법인이 설정한 컬쳐핏 기준이 있으면 그것을 질문 설계의 중심 축으로 삼는다.
+ */
+export function buildExecutiveInterviewQuestionsPrompt(
+  job: JobInfo,
+  resume: string,
+  screening?: ScreeningContext | null,
+  interviewEval?: InterviewEvalContext | null,
+  cultureFit?: CultureFitProfile | null
+): string {
+  return `너는 ${job.company ?? "한 기업"}의 **임원(경영진)** 이다. 직무·기술 검증은 1차 실무 면접에서 이미 끝났다.
+아래 후보자의 **2차(임원) 면접**에서 임원이 그대로 사용할 질문지를 설계하라.
+
+## 설계 원칙
+- **기술·직무 역량 재검증 질문은 만들지 말 것.** 그건 1차 실무 면접의 몫이다.
+- 임원 면접의 관점 축에 집중한다:
+  · **컬쳐핏·인재상 적합성** — 법인 컬처핏 기준(아래 제공 시)을 질문 설계의 **중심 축**으로 삼는다. 기준의 각 항목이 실제 질문으로 검증되게 하라.
+  · **가치관·일하는 태도** — 갈등·실패·윤리적 판단 상황에서 어떤 선택을 해 온 사람인지.
+  · **조직 기여·협업** — 동료와 조직에 어떤 영향을 주는 사람인지, 함께 일하고 싶은 사람인지.
+  · **성장 잠재력·주도성** — 더 큰 역할을 맡길 수 있는 사람인지.
+  · **입사 동기·장기 정착** — 회사 방향성과의 정렬, 커리어 전환·이직 사유의 일관성.
+- 추상적 질문("우리 인재상에 부합하나요?") 금지. 이 후보자의 **이력서·서류평가·AI 면접 평가에 근거한 구체적·맞춤형 질문**을 만든다.
+- 서류·AI 면접에서 드러난 인성·태도·안정성 관련 우려는 임원이 직접 확인할 질문으로 변환한다.
+- 각 질문에는 임원이 무엇을 보려는지(intent)와, 답변에 따라 더 캘 꼬리질문(followups)을 붙인다.
+- 차별 금지(채용절차법 §4의3): 성별·나이·출신지·학교·가족·종교·신체 등을 묻거나 평가하는 질문 금지. 마스킹 토큰([학교]/[회사] 등)을 사실로 취급 금지.
+
+## 직무 정보 (JD)
+- 직무: ${job.position}
+- 직급/연차: ${job.level}
+- 근무형태: ${job.employmentType}
+- 주요 업무: ${job.responsibilities}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${cultureFitSection(cultureFit)}
+
+## 후보자 이력서 (마스킹됨)
+${resume}
+${screeningBlock(screening)}${interviewEvalBlock(interviewEval)}
+## 출력 형식 (아래 JSON 만. 마크다운/설명/코드블록 금지)
+{
+  "strategy": "이 후보자를 2차(임원) 면접에서 어떻게 검증할지 — 임원용 2~4줄 전략. 컬쳐핏·인재상 관점에서 가장 먼저 확인할 지점 명시.",
+  "sections": [
+    {
+      "title": "섹션 제목 (예: 컬쳐핏·인재상 / 가치관·태도 / 조직 기여·협업 / 성장 잠재력 / 동기·정착)",
+      "focus": "이 섹션으로 확인하려는 핵심 (한 줄)",
+      "questions": [
+        {
+          "question": "후보자 맞춤 구체 질문",
+          "intent": "이 질문으로 무엇을 보려는지 (평가 포인트)",
+          "followups": ["답변에 따라 더 캘 꼬리질문 1~2개"],
+          "basis": "근거 출처 짧게 — 예: '컬쳐핏 기준: ...', '서류평가 우려: ...', 'AI면접: ...', '이력서: ...'"
+        }
+      ]
+    }
+  ],
+  "red_flags": ["임원이 반드시 확인해야 할 우려 신호 2~4개 (선택)"]
+}
+
+## 분량 가이드
+- 섹션 3~5개, 섹션당 질문 3~5개. 총 12~18개 내외 (임원 면접은 1차보다 짧고 밀도 높게).
+- 모든 질문은 이력서·평가·컬쳐핏 기준에 기반한 **서로 다른 검증 포인트**여야 한다. 같은 내용을 표현만 바꿔 반복 금지.
 - followups 는 핵심 질문에만 (전부 달 필요 없음). basis 는 가능한 한 채운다.
 
 ## 강조 표기 (UI 가독성)

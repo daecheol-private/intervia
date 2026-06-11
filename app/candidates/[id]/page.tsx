@@ -267,11 +267,14 @@ export default function CandidateDetailPage() {
           s.status === "counter_proposed"
       )
       .sort((a, b) => b.id - a.id)[0] ?? null;
-  // 1차 면접 일정 확정 여부 — 면접 문제 생성 게이트.
+  // 라운드별 면접 일정 확정 여부 — 면접 문제 생성 게이트.
   // 부모 data 에서 직접 계산해 InterviewQuestionsPanel 에 내려준다.
   // (패널 자체 GET 은 마운트 시점 1회뿐이라, 일정 확정 직후엔 stale → 새로고침 필요해짐)
   const round1Confirmed = (schedules ?? []).some(
     (s) => s.round === "round1" && s.status === "selected"
+  );
+  const round2Confirmed = (schedules ?? []).some(
+    (s) => s.round === "round2" && s.status === "selected"
   );
   const completedSession = sessions.find((s) => s.status === "completed");
   const interviewScore = completedSession?.evaluation?.overall_score ?? null;
@@ -756,7 +759,13 @@ export default function CandidateDetailPage() {
 
       <InterviewQuestionsPanel
         candidateId={candidate.id}
+        round="round1"
         scheduleConfirmed={round1Confirmed}
+      />
+      <InterviewQuestionsPanel
+        candidateId={candidate.id}
+        round="round2"
+        scheduleConfirmed={round2Confirmed}
       />
       <AttachmentsPanel
         candidateId={candidate.id}

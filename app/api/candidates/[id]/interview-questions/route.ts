@@ -1,15 +1,18 @@
 /**
- * 1차 대면 면접 질문지 — 조회(GET) / 생성·재생성(POST).
+ * 대면 면접 질문지 — 조회(GET) / 생성·재생성(POST). `?round=round1|round2` (기본 round1).
+ *   round1 = 1차 실무 면접 (직무·기술 검증 중심)
+ *   round2 = 2차 임원 면접 (컬쳐핏·인재상·가치관 중심 — 법인 컬쳐핏 기준 반영)
  *
- * 게이트: 후보자의 1차 면접 일정이 확정된 경우에만 생성 가능
- *   (interview_schedules 에 round='round1' · status='selected' row 존재).
+ * 게이트: 해당 라운드 면접 일정이 확정된 경우에만 생성 가능
+ *   (interview_schedules 에 round 일치 · status='selected' row 존재).
  *
- * 생성 입력: 이력서(마스킹) + 서류평가(screeningReport) + AI 면접 평가(있으면).
- * 면접관(같은 법인 누구나) 이 버튼을 누르면 LLM 이 질문지를 만들어 후보자당 1건 저장.
+ * 생성 입력: 이력서(마스킹) + 서류평가(screeningReport) + AI 면접 평가(있으면)
+ *   + 법인 컬쳐핏 기준(organizations.culture_fit_profile, 있으면 — 두 라운드 공통).
+ * 면접관(같은 법인 누구나) 이 버튼을 누르면 LLM 이 질문지를 만들어 후보자당 라운드별 1건 저장.
  * 재생성하면 같은 row 를 덮어쓴다.
  *
- * 과금: 생성 성공마다 interview_question_gen(기본 5토큰) **후차감** — chargeRepeatable 로
- *   회차를 분리(생성 1회차, 재생성 2회차…)하므로 재생성 때마다 매번 과금된다(재생성도 LLM 비용 발생).
+ * 과금: 생성 성공마다 interview_question_gen(기본 5토큰) **후차감** — 라운드 구분 없이 동일 단가.
+ *   chargeRepeatable 로 회차를 분리(refId=후보자, 라운드·재생성 합산 회차)하므로 성공 1회당 1건 과금.
  *   (멱등이 아님 — 단가표에 interview_question_gen 이 없어도 DEFAULT_PRICING=5 로 폴백.)
  */
 import { db } from "@/lib/db";
@@ -26,14 +29,26 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
 import { generateJSON } from "@/lib/gemini";
-import { buildInterviewQuestionsPrompt } from "@/lib/prompts";
+import {
+  buildInterviewQuestionsPrompt,
+  buildExecutiveInterviewQuestionsPrompt,
+  hasCultureFit,
+  type CultureFitProfile,
+} from "@/lib/prompts";
 import { logAudit } from "@/lib/audit";
 import { chargeRepeatable } from "@/lib/tokens";
 
 export const runtime = "nodejs";
 
+type Round = "round1" | "round2";
+
+function parseRound(req: Request): Round | null {
+  const r = new URL(req.url).searchParams.get("round") ?? "round1";
+  return r === "round1" || r === "round2" ? r : null;
+}
+
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const me = await getCurrentUser();
@@ -44,6 +59,8 @@ export async function GET(
   const cid = Number(id);
   if (!Number.isFinite(cid))
     return new Response("잘못된 candidate id", { status: 400 });
+  const round = parseRound(req);
+  if (!round) return new Response("잘못된 round", { status: 400 });
 
   const g = await guardCandidate(me!, cid);
   if (!g.ok) return g.res;
@@ -51,16 +68,21 @@ export async function GET(
   const [sheet] = await db
     .select()
     .from(interviewQuestionSheets)
-    .where(eq(interviewQuestionSheets.candidateId, cid));
+    .where(
+      and(
+        eq(interviewQuestionSheets.candidateId, cid),
+        eq(interviewQuestionSheets.round, round)
+      )
+    );
 
-  // 1차 일정 확정 여부 — 버튼 활성/비활성 판단용
+  // 해당 라운드 일정 확정 여부 — 버튼 활성/비활성 판단용
   const [confirmed] = await db
     .select({ id: interviewSchedules.id })
     .from(interviewSchedules)
     .where(
       and(
         eq(interviewSchedules.candidateId, cid),
-        eq(interviewSchedules.round, "round1"),
+        eq(interviewSchedules.round, round),
         eq(interviewSchedules.status, "selected")
       )
     );
@@ -81,6 +103,7 @@ export async function GET(
           questions: sheet.questions,
           basedOnScreening: sheet.basedOnScreening,
           basedOnInterview: sheet.basedOnInterview,
+          basedOnCultureFit: sheet.basedOnCultureFit,
           generatedByName,
           createdAt: sheet.createdAt,
           updatedAt: sheet.updatedAt,
@@ -101,25 +124,27 @@ export async function POST(
   const cid = Number(id);
   if (!Number.isFinite(cid))
     return new Response("잘못된 candidate id", { status: 400 });
+  const round = parseRound(req);
+  if (!round) return new Response("잘못된 round", { status: 400 });
 
   const g = await guardCandidate(me!, cid);
   if (!g.ok) return g.res;
   const { candidate, job } = g;
 
-  // 게이트: 1차 면접 일정이 확정돼야 생성 가능
+  // 게이트: 해당 라운드 면접 일정이 확정돼야 생성 가능
   const [confirmed] = await db
     .select({ id: interviewSchedules.id })
     .from(interviewSchedules)
     .where(
       and(
         eq(interviewSchedules.candidateId, cid),
-        eq(interviewSchedules.round, "round1"),
+        eq(interviewSchedules.round, round),
         eq(interviewSchedules.status, "selected")
       )
     );
   if (!confirmed)
     return new Response(
-      "1차 면접 일정이 확정된 후에 면접 문제를 생성할 수 있습니다.",
+      `${round === "round2" ? "2차" : "1차"} 면접 일정이 확정된 후에 면접 문제를 생성할 수 있습니다.`,
       { status: 409 }
     );
 
@@ -134,11 +159,22 @@ export async function POST(
   const org = candidate.orgId
     ? (
         await db
-          .select({ name: organizations.name })
+          .select({
+            name: organizations.name,
+            cultureFitProfile: organizations.cultureFitProfile,
+          })
           .from(organizations)
           .where(eq(organizations.id, candidate.orgId))
       )[0]
     : null;
+  let cultureFit: CultureFitProfile | null = null;
+  if (org?.cultureFitProfile) {
+    try {
+      cultureFit = JSON.parse(org.cultureFitProfile) as CultureFitProfile;
+    } catch {
+      /* 손상된 JSON 은 미설정으로 취급 */
+    }
+  }
 
   // 가장 최근 완료된 AI 면접 평가 (있으면)
   const [latestCompleted] = await db
@@ -155,27 +191,39 @@ export async function POST(
   const interviewEval = latestCompleted?.evaluation ?? null;
   const screening = candidate.screeningReport ?? null;
 
+  const jobInfo = {
+    company: org?.name ?? undefined,
+    position: job.position,
+    level: job.level,
+    employmentType: job.employmentType,
+    responsibilities: job.responsibilities,
+    requirements: job.requirements,
+    idealProfile: job.idealProfile,
+    evaluationFocus: job.evaluationFocus,
+    tone: job.tone,
+  };
+  const prompt =
+    round === "round2"
+      ? buildExecutiveInterviewQuestionsPrompt(
+          jobInfo,
+          resume,
+          screening,
+          interviewEval,
+          cultureFit
+        )
+      : buildInterviewQuestionsPrompt(
+          jobInfo,
+          resume,
+          screening,
+          interviewEval,
+          cultureFit
+        );
+
   let sheet: InterviewQuestionSheet;
   try {
-    sheet = await generateJSON<InterviewQuestionSheet>(
-      buildInterviewQuestionsPrompt(
-        {
-          company: org?.name ?? undefined,
-          position: job.position,
-          level: job.level,
-          employmentType: job.employmentType,
-          responsibilities: job.responsibilities,
-          requirements: job.requirements,
-          idealProfile: job.idealProfile,
-          evaluationFocus: job.evaluationFocus,
-          tone: job.tone,
-        },
-        resume,
-        screening,
-        interviewEval
-      ),
-      { task: "questionGen" }
-    );
+    sheet = await generateJSON<InterviewQuestionSheet>(prompt, {
+      task: "questionGen",
+    });
   } catch (e) {
     console.error("[interview-questions] generation failed", e);
     return new Response(
@@ -190,34 +238,41 @@ export async function POST(
       { status: 502 }
     );
 
+  const basedOnCultureFit = hasCultureFit(cultureFit);
   const now = new Date().toISOString();
   await db
     .insert(interviewQuestionSheets)
     .values({
       candidateId: cid,
+      round,
       jobId: candidate.jobId,
       orgId: candidate.orgId,
       basedOnScreening: !!screening,
       basedOnInterview: !!interviewEval,
+      basedOnCultureFit,
       questions: sheet,
       generatedByUserId: me!.id,
       createdAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
-      target: interviewQuestionSheets.candidateId,
+      target: [
+        interviewQuestionSheets.candidateId,
+        interviewQuestionSheets.round,
+      ],
       set: {
         jobId: candidate.jobId,
         orgId: candidate.orgId,
         basedOnScreening: !!screening,
         basedOnInterview: !!interviewEval,
+        basedOnCultureFit,
         questions: sheet,
         generatedByUserId: me!.id,
         updatedAt: now,
       },
     });
 
-  // 후차감 — 생성이 성공할 때마다 매번 과금 (재생성도 LLM 비용 발생 → chargeRepeatable 회차 분리).
+  // 후차감 — 생성이 성공할 때마다 매번 과금 (재생성·라운드 추가 생성도 LLM 비용 발생 → chargeRepeatable 회차 분리).
   if (candidate.orgId) {
     await chargeRepeatable({
       orgId: candidate.orgId,
@@ -225,7 +280,7 @@ export async function POST(
       baseRefType: "candidate",
       refId: cid,
       userId: me!.id,
-      memo: `면접 문제 생성 - ${candidate.name ?? ""}`.trim(),
+      memo: `${round === "round2" ? "2차(임원) " : ""}면접 문제 생성 - ${candidate.name ?? ""}`.trim(),
     });
   }
 
@@ -236,8 +291,10 @@ export async function POST(
     resourceId: cid,
     orgId: candidate.orgId,
     metadata: {
+      round,
       basedOnScreening: !!screening,
       basedOnInterview: !!interviewEval,
+      basedOnCultureFit,
       sections: sheet.sections.length,
     },
   });
@@ -247,6 +304,7 @@ export async function POST(
       questions: sheet,
       basedOnScreening: !!screening,
       basedOnInterview: !!interviewEval,
+      basedOnCultureFit,
       generatedByName: me!.name,
       createdAt: now,
       updatedAt: now,

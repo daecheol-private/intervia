@@ -17,7 +17,7 @@
 | office_address | TEXT NULL | 오프라인 면접 시 후보자에게 안내될 회사 주소 (1차 면접 스케쥴 제시에 사용) |
 | office_address_detail | TEXT NULL | 상세 주소 |
 | allow_scan_ocr | INTEGER NOT NULL DEFAULT 0 | **OCR 개인정보 게이트** (boolean) — 스캔 PDF(텍스트 레이어 없음)를 Gemini 멀티모달 OCR 로 처리할지. OCR 은 마스킹 전 **원본** 이력서를 AI 수탁자에 전송하므로 처리방침·동의를 정비한 법인만 ON. OFF 면 스캔 PDF 는 평가 실패 → 재업로드 안내 |
-| culture_fit_profile | TEXT NULL | 법인 전반의 선호 인재상·정성 평가 기준 (`CultureFitProfile` JSON). JD 와 별개로 AI 이력서 평가·면접 질문 생성에 자동 반영. NULL=미설정 |
+| culture_fit_profile | TEXT NULL | 법인 전반의 선호 인재상·정성 평가 기준 (`CultureFitProfile` JSON — 선호 인재상 + 정성 평가 항목 6종). `/org/settings` 에서 입력 — JD 와 별개로 AI 이력서 평가·면접 질문지(1·2차) 생성에 자동 반영. NULL=미설정 |
 | suspended_at | TEXT NULL | 시스템 관리자가 법인을 정지한 시각. NULL=정상. 정지 시 멤버 로그인 차단 + 신규 합류 차단 (진행 중 면접 세션은 종료까지 유지) |
 | suspended_reason | TEXT NULL | 정지 사유 |
 | verification_status | TEXT NOT NULL DEFAULT 'pending_review' | **사칭 방지 게이트** — `dart_matched`(DART 등록 사업자번호 일치 → 자동 검증) / `verified`(운영자 수동 확인) / `pending_review`(DART 미매칭 — 비상장사·신생법인, 운영자 검토 대기) / `rejected`(운영자가 사칭 판단해 거절) |
@@ -485,21 +485,26 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 
 ## interview_question_sheets
 
-1차 대면 면접 질문지. **후보자당 1건** (`candidate_id` UNIQUE — 재생성 시 덮어쓰기).
+대면 면접 질문지 (1차 실무 / 2차 임원). **후보자당 라운드별 1건** (`(candidate_id, round)` UNIQUE — 재생성 시 덮어쓰기).
 
-1차 면접 일정 확정(`interview_schedules` round1 · status='selected') 후 면접관 누구나 생성.
-이력서(마스킹) + 서류평가(`screeningReport`) + AI 면접 평가(`interviewSessions.evaluation`, 있으면)를
-종합해 LLM(task=`questionGen`)이 생성. **`interview_question_gen` 토큰 차감(기본 5)** — 생성 성공 시 후차감,
-재생성도 매번 과금(`chargeRepeatable`, refType `candidate`/`candidate_re{N}`). row 는 1건 upsert 라도 과금은 회차별. (과거 "무료" 서술은 stale)
+해당 라운드 면접 일정 확정(`interview_schedules` round 일치 · status='selected') 후 면접관 누구나 생성.
+이력서(마스킹) + 서류평가(`screeningReport`) + AI 면접 평가(`interviewSessions.evaluation`, 있으면)
++ 법인 컬쳐핏 기준(`organizations.culture_fit_profile`, 있으면 — 두 라운드 공통)을
+종합해 LLM(task=`questionGen`)이 생성. 1차는 `buildInterviewQuestionsPrompt`(직무·기술 검증 중심),
+2차는 `buildExecutiveInterviewQuestionsPrompt`(임원 관점 — 컬쳐핏·인재상·가치관·성장 잠재력 중심).
+**`interview_question_gen` 토큰 차감(기본 5, 라운드 구분 없이 동일 단가)** — 생성 성공 시 후차감,
+재생성·라운드 추가 생성도 매번 과금(`chargeRepeatable`, refType `candidate`/`candidate_re{N}` — 회차는 라운드 합산). (과거 "무료" 서술은 stale)
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
 | id | INTEGER PK auto | |
-| candidate_id | INTEGER NOT NULL UNIQUE FK candidates(id) ON DELETE CASCADE | 후보자당 1건 |
+| candidate_id | INTEGER NOT NULL FK candidates(id) ON DELETE CASCADE | `(candidate_id, round)` UNIQUE |
+| round | TEXT NOT NULL DEFAULT 'round1' | `round1`(1차 실무) / `round2`(2차 임원) |
 | job_id | INTEGER NOT NULL FK job_postings(id) ON DELETE CASCADE | |
 | org_id | INTEGER NULL FK organizations(id) ON DELETE CASCADE | |
 | based_on_screening | INTEGER NOT NULL DEFAULT 0 | 생성 시 서류평가 반영 여부 (boolean) |
 | based_on_interview | INTEGER NOT NULL DEFAULT 0 | 생성 시 AI면접 평가 반영 여부 (boolean) |
+| based_on_culture_fit | INTEGER NOT NULL DEFAULT 0 | 생성 시 법인 컬쳐핏 기준 반영 여부 (boolean) |
 | questions | JSON NOT NULL | `InterviewQuestionSheet` — `{strategy, sections[], red_flags?}`. 섹션별 `{title, focus, questions[{question, intent, followups?, basis?}]}` |
 | generated_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 마지막 생성자 |
 | created_at / updated_at | TEXT NOT NULL | |
@@ -630,7 +635,7 @@ organizations ─< users (org_id, role)
       ├─< job_postings ─< candidates ─< interview_sessions
       │        │             ├─< candidate_attachments
       │        │             ├─< interview_schedules (job_id·org_id 비정규화)
-      │        │             ├─< interview_question_sheets (후보자당 1건)
+      │        │             ├─< interview_question_sheets (후보자당 라운드별 1건)
       │        │             └─< interviewer_notes
       │        └─< job_interviewers >─ users
       └─< (위 모든 자식 CASCADE)

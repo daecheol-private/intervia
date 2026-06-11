@@ -188,7 +188,7 @@ export function AttachmentsPanel({
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value)}
-              className="text-sm border border-slate-300 rounded-md px-2 py-1.5 bg-white text-slate-700"
+              className="h-8 text-sm border border-slate-300 rounded-md px-2 bg-white text-slate-700 shrink-0"
             >
               {KIND_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -200,14 +200,14 @@ export function AttachmentsPanel({
               ref={fileRef}
               type="file"
               accept=".pdf,.docx,.doc,.hwp,.hwpx,.png,.jpg,.jpeg,.pptx,.xlsx,.txt,.md"
-              className="text-sm text-slate-600 file:mr-2 file:px-3 file:py-1.5 file:rounded-md file:border file:border-slate-300 file:bg-white file:text-slate-700 file:text-xs file:cursor-pointer hover:file:bg-slate-50"
+              className="text-sm text-slate-500 file:mr-2 file:h-8 file:px-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:text-slate-700 file:text-sm file:cursor-pointer hover:file:bg-slate-50"
             />
             <button
               onClick={() => void upload()}
               disabled={uploading}
-              className="text-xs px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-white font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 text-sm px-3.5 rounded-md bg-primary hover:bg-primary-deep text-white font-medium disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
             >
-              {uploading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
               {uploading ? "업로드 중..." : "첨부 추가"}
             </button>
           </div>

@@ -5,8 +5,9 @@ import { Loader2 } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { HL, Section } from "./shared";
 
-// ── 1차 대면 면접 질문지 ──────────────────────────────────────────
-// 1차 면접 일정 확정 후 면접관 누구나 생성. 이후 팝업으로 열람.
+// ── 대면 면접 질문지 (1차 실무 / 2차 임원) ──────────────────────────
+// 해당 라운드 면접 일정 확정 후 면접관 누구나 생성. 이후 팝업으로 열람.
+// 2차는 법인 컬쳐핏·인재상 기준(설정 시)을 중심 축으로 생성된다.
 type QuestionSheet = {
   strategy: string;
   sections: Array<{
@@ -27,6 +28,7 @@ type QuestionSheetResp = {
     questions: QuestionSheet;
     basedOnScreening: boolean;
     basedOnInterview: boolean;
+    basedOnCultureFit: boolean;
     generatedByName: string | null;
     createdAt: string;
     updatedAt: string;
@@ -36,32 +38,35 @@ type QuestionSheetResp = {
 export function InterviewQuestionsPanel({
   candidateId,
   scheduleConfirmed,
+  round = "round1",
 }: {
   candidateId: number;
   scheduleConfirmed: boolean;
+  round?: "round1" | "round2";
 }) {
   const [data, setData] = useState<QuestionSheetResp | null>(null);
   const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
+  const isExec = round === "round2";
+  const roundNo = isExec ? "2차" : "1차";
+  const apiUrl = `/api/candidates/${candidateId}/interview-questions?round=${round}`;
+
   const load = async () => {
-    const r = await fetch(`/api/candidates/${candidateId}/interview-questions`);
+    const r = await fetch(apiUrl);
     if (r.ok) setData(await r.json());
   };
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candidateId]);
+  }, [candidateId, round]);
 
   const generate = async () => {
     setGenerating(true);
     setErr(null);
     try {
-      const r = await fetch(
-        `/api/candidates/${candidateId}/interview-questions`,
-        { method: "POST" }
-      );
+      const r = await fetch(apiUrl, { method: "POST" });
       if (!r.ok) {
         setErr(await r.text());
         return;
@@ -87,7 +92,7 @@ export function InterviewQuestionsPanel({
 
   return (
     <Section
-      title="면접 문제 (1차)"
+      title={isExec ? "면접 문제 (2차 · 임원)" : "면접 문제 (1차)"}
       defaultOpen={false}
       summary={
         sheet ? (
@@ -95,7 +100,7 @@ export function InterviewQuestionsPanel({
         ) : confirmed ? (
           <span className="text-slate-500">생성 가능</span>
         ) : (
-          <span className="text-slate-400">1차 일정 확정 후 활성화</span>
+          <span className="text-slate-400">{roundNo} 일정 확정 후 활성화</span>
         )
       }
     >
@@ -103,10 +108,12 @@ export function InterviewQuestionsPanel({
         <div className="text-center py-6">
           <div className="text-3xl mb-3">📝</div>
           <p className="text-sm text-slate-600 mb-1">
-            1차 면접 일정이 확정되면 면접 문제를 생성할 수 있습니다.
+            {roundNo} 면접 일정이 확정되면 면접 문제를 생성할 수 있습니다.
           </p>
           <p className="text-xs text-slate-500">
-            이력서 · 서류평가 · AI 면접 평가를 종합해 맞춤 질문지를 만듭니다.
+            {isExec
+              ? "법인 인재상·컬쳐핏 기준(설정 시)을 반영해 임원 면접용 질문지를 만듭니다."
+              : "이력서 · 서류평가 · AI 면접 평가를 종합해 맞춤 질문지를 만듭니다."}
           </p>
         </div>
       )}
@@ -114,8 +121,9 @@ export function InterviewQuestionsPanel({
       {(confirmed || sheet) && (
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            이력서 · 서류평가 · AI 면접 평가를 종합해 1차 대면 면접용 맞춤
-            질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다.
+            {isExec
+              ? "이력서 · 서류평가 · AI 면접 평가에 법인 인재상·컬쳐핏 기준(설정 시)을 반영해 2차(임원) 면접용 질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다."
+              : "이력서 · 서류평가 · AI 면접 평가를 종합해 1차 대면 면접용 맞춤 질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다."}
           </p>
 
           {sheet && (
@@ -126,6 +134,11 @@ export function InterviewQuestionsPanel({
               <span className="px-2 py-0.5 rounded-md border bg-accent-soft text-accent-deep border-accent/30">
                 {sheet.basedOnInterview ? "AI면접 평가 반영" : "AI면접 평가 없음"}
               </span>
+              {sheet.basedOnCultureFit && (
+                <span className="px-2 py-0.5 rounded-md border bg-success-soft text-success border-success/30">
+                  컬쳐핏 기준 반영
+                </span>
+              )}
               <span className="text-slate-400">
                 {sheet.generatedByName ? `${sheet.generatedByName} · ` : ""}
                 {formatKstDateTime(sheet.updatedAt)} 생성
@@ -166,6 +179,7 @@ export function InterviewQuestionsPanel({
 
       {open && sheet && (
         <QuestionSheetModal
+          title={isExec ? "2차(임원) 면접 질문지" : "1차 면접 질문지"}
           sheet={sheet.questions}
           onClose={() => setOpen(false)}
         />
@@ -175,9 +189,11 @@ export function InterviewQuestionsPanel({
 }
 
 function QuestionSheetModal({
+  title,
   sheet,
   onClose,
 }: {
+  title: string;
   sheet: QuestionSheet;
   onClose: () => void;
 }) {
@@ -191,9 +207,7 @@ function QuestionSheetModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-none sm:rounded-t-2xl z-10">
-          <h3 className="text-base font-bold text-slate-900">
-            1차 면접 질문지
-          </h3>
+          <h3 className="text-base font-bold text-slate-900">{title}</h3>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-700 text-xl leading-none"

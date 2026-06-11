@@ -1474,7 +1474,7 @@ async function Landing() {
               <PriceCell
                 label="면접 문제 생성"
                 tokens={pricing.interview_question_gen}
-                hint="1차 면접 문제 1건 생성"
+                hint="면접 문제 1건 생성 (1·2차 동일)"
               />
             </div>
           </div>
