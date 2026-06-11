@@ -4,7 +4,6 @@ import { useState } from "react";
 import { formatKstDateTime } from "@/lib/utils";
 import { confirmDialog } from "@/app/components/Dialog";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
-import { ScheduleManualModal } from "@/app/components/ScheduleManualModal";
 import type { Schedule } from "./types";
 
 const SCHEDULE_STATUS_LABEL: Record<Schedule["status"], string> = {
@@ -47,7 +46,6 @@ export function ScheduleBox({
   const [confirming, setConfirming] = useState<string | null>(null); // 진행 중인 slot 의 start
   const [confirmErr, setConfirmErr] = useState<string | null>(null);
   const [proposeOpen, setProposeOpen] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false);
 
   // 후보자가 counter 제시한(또는 HR 가 처음 제시한) 슬롯을 확정.
   const confirmSlot = async (slot: { start: string; end: string }) => {
@@ -159,23 +157,16 @@ export function ScheduleBox({
       )}
 
       {canConfirm && (
-        <div className="flex items-center gap-2 pt-1 flex-wrap">
+        <div className="flex items-center gap-2 pt-1">
           <button
             onClick={() => setProposeOpen(true)}
             className="text-xs px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep font-medium hover:bg-primary-soft"
           >
-            🔄 일정 다시 제안
-          </button>
-          <button
-            onClick={() => setManualOpen(true)}
-            title="전화 등으로 이미 협의된 시간을 메일 제시 없이 바로 확정 등록합니다"
-            className="text-xs px-3 py-1.5 rounded-lg border border-accent-deep/40 text-accent-deep font-medium hover:bg-accent-soft"
-          >
-            📝 일정 직접 입력
+            🔄 일정 다시 잡기
           </button>
           <span className="text-[11px] text-slate-500">
-            다시 제안 시 기존 제안은 취소되고 후보자에게 메일이 재발송됩니다.
-            직접 입력은 제시된 시간과 무관하게 즉시 확정합니다.
+            새 시간을 다시 제안하거나, 협의된 시간을 직접 확정할 수 있습니다.
+            기존 제안은 취소됩니다.
           </span>
         </div>
       )}
@@ -224,14 +215,6 @@ export function ScheduleBox({
         round={schedule.round}
         open={proposeOpen}
         onClose={() => setProposeOpen(false)}
-        onDone={onChanged}
-      />
-      <ScheduleManualModal
-        candidateId={candidateId}
-        candidateName={candidateName}
-        round={schedule.round}
-        open={manualOpen}
-        onClose={() => setManualOpen(false)}
         onDone={onChanged}
       />
     </div>
