@@ -14,6 +14,16 @@
 | name | TEXT NOT NULL | 법인명 |
 | biz_registration_no | TEXT NULL | 사업자등록번호 (검색용) |
 | email_domain | TEXT NULL | 자동매칭 키. 공용도메인(gmail 등)은 저장 X. **UNIQUE 아님** — 같은 도메인 1:N 법인 허용(비유니크 인덱스, `lib/schema.ts`). check-email 이 `matchedOrgs[]` 배열로 반환해 사용자가 합류할 법인 선택 (ARCHITECTURE §8) |
+| office_address | TEXT NULL | 오프라인 면접 시 후보자에게 안내될 회사 주소 (1차 면접 스케쥴 제시에 사용) |
+| office_address_detail | TEXT NULL | 상세 주소 |
+| allow_scan_ocr | INTEGER NOT NULL DEFAULT 0 | **OCR 개인정보 게이트** (boolean) — 스캔 PDF(텍스트 레이어 없음)를 Gemini 멀티모달 OCR 로 처리할지. OCR 은 마스킹 전 **원본** 이력서를 AI 수탁자에 전송하므로 처리방침·동의를 정비한 법인만 ON. OFF 면 스캔 PDF 는 평가 실패 → 재업로드 안내 |
+| culture_fit_profile | TEXT NULL | 법인 전반의 선호 인재상·정성 평가 기준 (`CultureFitProfile` JSON). JD 와 별개로 AI 이력서 평가·면접 질문 생성에 자동 반영. NULL=미설정 |
+| suspended_at | TEXT NULL | 시스템 관리자가 법인을 정지한 시각. NULL=정상. 정지 시 멤버 로그인 차단 + 신규 합류 차단 (진행 중 면접 세션은 종료까지 유지) |
+| suspended_reason | TEXT NULL | 정지 사유 |
+| verification_status | TEXT NOT NULL DEFAULT 'pending_review' | **사칭 방지 게이트** — `dart_matched`(DART 등록 사업자번호 일치 → 자동 검증) / `verified`(운영자 수동 확인) / `pending_review`(DART 미매칭 — 비상장사·신생법인, 운영자 검토 대기) / `rejected`(운영자가 사칭 판단해 거절) |
+| verified_at | TEXT NULL | 검증 확정 시각 |
+| verified_by_user_id | INTEGER NULL | 수동 검증/거절한 운영자 (FK 없음) |
+| verification_note | TEXT NULL | 운영자 검토 메모 |
 | created_by_user_id | INTEGER NULL | 최초 등록자 (FK는 없음 — 순환 의존 회피) |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
@@ -33,6 +43,23 @@
 | must_change_password | INTEGER NOT NULL DEFAULT 0 | 임시 비밀번호 계정(부트스트랩 관리자 등). true 면 로그인 후 전역 오버레이(`ForcePasswordChange`)로 차단, 비밀번호 변경 시 자동 해제 |
 | terms_accepted_at / terms_version / terms_accepted_ip / terms_accepted_ua | TEXT NULL | 이용약관 동의 시각·버전·IP·UA (분쟁 입증) |
 | privacy_accepted_at / privacy_version / privacy_accepted_ip / privacy_accepted_ua | TEXT NULL | 처리방침 동의 시각·버전·IP·UA (분쟁 입증) |
+| totp_secret | TEXT NULL | 2FA(TOTP) base32 시크릿 — AES-256-GCM 암호화 저장 (`lib/crypto.ts`) |
+| totp_enabled_at | TEXT NULL | 2FA 활성 시각. NULL=미활성 |
+| last_totp_counter | INTEGER NULL | TOTP replay 방어 — 마지막 검증 성공 timestep(counter). 이하(또는 같은) counter 코드는 재사용 거부 (RFC 6238). NULL=검증 이력 없음 |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+## password_resets
+
+비밀번호 재설정 토큰 (`lib/password-reset.ts`). 발급 시 그 사용자의 기존 미사용 토큰을 모두 무효화 — 사용자당 활성 토큰 1개.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | |
+| token | TEXT UNIQUE NOT NULL | `p_` + 24 random bytes hex |
+| expires_at | TEXT NOT NULL | 1시간 (짧게) |
+| consumed_at | TEXT NULL | 사용 시각. 한 번만 사용 가능 — 신규 발급에 의한 강제 무효화도 이 값으로 처리 |
+| requested_ip | TEXT NULL | 요청 시점 IP |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
 ## email_verifications
@@ -58,6 +85,7 @@
 | user_agent | TEXT NULL | 500자 잘림 |
 | last_seen_at | TEXT NULL | `getCurrentUser` 가 60초 간격으로 갱신 |
 | expires_at | TEXT NOT NULL | 14일 후 |
+| step_up_verified_at | TEXT NULL | 민감 액션(권한 변경/토큰 충전/cross-org 후보자 조회·삭제) 직전 step-up 인증 통과 시각. TTL 10분 — 만료 시 재인증 요구 |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
 사용자는 `/account` 에서 본인 활성 세션 목록 + 원격 로그아웃 가능.
@@ -76,6 +104,25 @@
 | decided_at | TEXT NULL | |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
+## org_invites
+
+법인 합류 초대 — 공고 공유를 통해 발급. 토큰 1회용, 7일 만료.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| token | TEXT UNIQUE NOT NULL | 초대 링크 토큰 (`/invite/[token]`, 비로그인 접근) |
+| org_id | INTEGER NOT NULL FK organizations(id) ON DELETE CASCADE | |
+| email | TEXT NOT NULL | 초대 대상. 멤버가 공고 상세에서 이메일 다수 입력 → 이메일별 row 생성 |
+| job_id | INTEGER NULL FK job_postings(id) ON DELETE SET NULL | 어느 공고를 공유하며 발급된 초대인지 — 수락 후 그 공고로 안내 |
+| invited_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 발급자 |
+| expires_at | TEXT NOT NULL | 7일 |
+| used_at | TEXT NULL | 수락 시각. 1회용 |
+| used_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 수락한 사용자 |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+수락 흐름: 미가입자는 자동 가입 + 법인 합류, 기가입자는 같은 이메일로 로그인 후 합류. 이미 다른 법인 소속이면 거절.
+
 ## job_postings
 
 | 컬럼 | 타입 | 비고 |
@@ -83,9 +130,15 @@
 | id | INTEGER PK auto | |
 | org_id | INTEGER NULL FK organizations(id) ON DELETE CASCADE | 마이그레이션 호환 위해 nullable. 신규 row는 항상 채움 |
 | title / position / level / employment_type / responsibilities / requirements | TEXT NOT NULL | |
+| requirement_checklist | TEXT NOT NULL DEFAULT '' | JD 요건 체크리스트 — 공고 저장 시 LLM 이 주요업무+자격요건을 4~8개 항목으로 1회 분해해 저장 (JSON `string[]`). 이력서 평가가 이 고정 목록으로 `requirement_coverage` 를 판정 → **같은 공고는 후보자가 달라도 항상 동일한 JD 항목** 보장. 빈 ''=미생성(구버전 공고) |
+| ideal_profile | TEXT NOT NULL DEFAULT '' | 선호 인재상 — 평가·면접 시 추가 컨텍스트. 빈 문자열 허용 |
+| evaluation_focus | TEXT NOT NULL DEFAULT '' | AI 평가 중점 사항 — **HR 내부용, 후보자 비공개**. 평가 가중치 코멘트("보안 경력 최우선" 등)를 서류평가/면접 진행/면접 평가 프롬프트에 가이드 블록으로 주입. 차별 금지 항목(성별·나이·출신지·종교 등) 입력은 정책상 금지 |
 | tone | TEXT NOT NULL DEFAULT '중립적인' | 친절한/중립적인/엄격한 |
-| interview_duration_minutes | INTEGER NOT NULL DEFAULT 30 | |
+| interview_duration_minutes | INTEGER NOT NULL DEFAULT 20 | |
 | password_hash | TEXT NULL | 4자리 PIN |
+| created_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 최초 공고 생성자 — 자동으로 면접관(`job_interviewers`)에 포함 |
+| applicant_consent_confirmed_at | TEXT NULL | 인사담당자가 "지원자로부터 AI 평가·국외이전·처리위탁 동의를 받았음"을 attest 한 시각. NULL=미확인 → 이력서 업로드 차단. PIPA 책임 전가 메커니즘 |
+| applicant_consent_confirmed_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | attest 한 사용자 |
 | status | TEXT NOT NULL DEFAULT 'active' | `active` / `closed`. cron 이 closes_at 도래 시 closed 로 전환 |
 | published_at | TEXT NOT NULL | 공고 게시 시각 (= 생성 시각으로 채움) |
 | closes_at | TEXT NOT NULL | 종결 예정. 기본 published_at + 60일. 연장 시 +30일 |
@@ -123,10 +176,55 @@
 | resume_masked_text | TEXT NULL | 마스킹된 텍스트. **LLM 에 전달되는 유일한 본문**. UI 미리보기도 이 값. 폐기 시 NULL |
 | screening_score | INTEGER NULL | 0~100 |
 | screening_report | JSON NULL | 평가 리포트 (`ScreeningResult` — `lib/screening.ts`). 6축 `breakdown`(각 축 score/reason/**confidence**) + `level_match`(연차 보정) + `focus_match`(HR 가이드 가감) + **`requirement_gate`**(JD 필수요건 미충족 시 종합점수 캡 — severity `hard`=40 결격/`soft`=84 학력 등 경력상쇄 가능) + **`requirement_coverage`**(JD 요건별 direct/indirect/none 매트릭스) + **`evidence_quality`**(specific/mixed/generic — 나열형 이력서 캡 60) + **`domain_fit`**(JD 전문 도메인 경험 none 시 캡 50) + `career_info` 등. 종합 점수는 LLM 출력이 아니라 **6축 가중평균 → spread(60기준 1.4배 확대) → 보너스/캡(confidence·focus·구체성·도메인·약한핵심축·필수요건) → 맨 마지막에 직급/연차 페널티(오버스펙 −5/언더스펙 −10, fit 으로 코드가 산출)** 으로 코드가 재계산 (`recomputeScore`). 페널티를 최후에 둬 만점·보너스에 가려지지 않게 함(오버스펙 종합 ≤95). 6축 가중치: tech_fit .20 / experience_depth .20 / role_match .25 / achievement .15 / stability .10 / growth_attitude .10 |
-| status | TEXT NOT NULL DEFAULT 'uploaded' | uploaded/screening/screened/interviewed/failed |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
-중복 체크: 코드는 `(job_id, resume_hash)` 로 검사 (업로더 무관). 2차로 워커가 `(job_id, resume_content_hash)` 비교 후 중복 자동 삭제.
+(과거 문서의 `status` 컬럼(uploaded/screening/…)은 실제 스키마에 없음 — 평가 진행 상태는 `screening_jobs` 큐와 `stage` 로 파악)
+
+중복 체크: 코드는 `(job_id, resume_hash)` 로 검사 (업로더 무관) + **DB 부분 유니크 인덱스 `candidates_job_resume_hash_uq`** (`resume_hash` non-null) 가 동시 업로드 race 를 DB 레벨 차단. 2차로 워커가 `(job_id, resume_content_hash)` 비교 후 중복 자동 삭제.
+
+## candidate_attachments
+
+후보자별 첨부 파일 — 메인 이력서 외 경력기술서·포트폴리오·자기소개서 등.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| candidate_id | INTEGER NOT NULL FK candidates(id) ON DELETE CASCADE | |
+| kind | TEXT NOT NULL DEFAULT 'other' | `resume`(메인 이력서 1개 — `candidates.resume_masked_text` 로 평가) / `career_history` / `portfolio` / `cover_letter` / `other`. SQLite text enum 은 타입 레벨만 — CHECK 제약 없어 값 추가에 마이그레이션 불필요 |
+| file_path | TEXT NOT NULL | 로컬 파일명 또는 Blob URL |
+| original_name | TEXT NOT NULL | 업로드 당시 파일명 |
+| mime | TEXT NULL | |
+| size_bytes | INTEGER NOT NULL DEFAULT 0 | |
+| masked_text | TEXT NULL | 첨부 내용 마스킹 텍스트 — LLM 평가에 사용. 파싱 실패/이미지 등은 NULL |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+인덱스: `(candidate_id)`.
+
+텍스트 추출 가능한 첨부(career_history·cover_letter·일부 other)는 마스킹 후 서류평가 프롬프트에 함께 포함 (`lib/screening.ts`) — resume·career_history 가 1순위 상세검토, portfolio 는 낮은 비중. 이미지 등 추출 불가 파일은 사람 참고용. 합·불 결정 시 메인 이력서와 함께 즉시 폐기.
+
+## user_candidate_favorites
+
+후보자 즐겨찾기 — 사용자별 (같은 법인이라도 멤버마다 다름). 검토 우선 후보를 목록 상단 고정용.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | |
+| candidate_id | INTEGER NOT NULL FK candidates(id) ON DELETE CASCADE | |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+PK 없음 — `(user_id, candidate_id)` UNIQUE 인덱스가 사실상 복합 키.
+
+## user_job_favorites
+
+⚠️ **Deprecated (2026-05)** — 공고 즐겨찾기 기능 제거됨. 공고 목록은 "내가 면접관인 공고" 우선 정렬로 대체. 데이터 보존을 위해 테이블은 유지하되 **더 이상 읽거나 쓰지 않음**.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | |
+| job_id | INTEGER NOT NULL FK job_postings(id) ON DELETE CASCADE | |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+PK 없음 — `(user_id, job_id)` UNIQUE.
 
 ## screening_cache
 
@@ -151,6 +249,39 @@
 | id / candidate_id / access_token / status / messages / evaluation / started_at / completed_at / expires_at / created_at | … | |
 | created_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 링크를 발급한 운영자. 면접 완료 토큰 차감 시 ledger `created_by_user_id` 로 전달 — 누가 면접을 결정했는지 추적. (구 세션은 NULL) |
 
+## interview_schedules
+
+대면 면접(1차/2차) 스케쥴. 면접관이 가능한 시간 슬롯을 제시하고, 후보자가 메일 링크로 선택.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| candidate_id | INTEGER NOT NULL FK candidates(id) ON DELETE CASCADE | |
+| job_id | INTEGER NOT NULL FK job_postings(id) ON DELETE CASCADE | |
+| org_id | INTEGER NULL FK organizations(id) ON DELETE CASCADE | 비정규화 |
+| round | TEXT NOT NULL DEFAULT 'round1' | `round1` / `round2` |
+| access_token | TEXT UNIQUE NOT NULL | 후보자 응답 페이지 토큰 (비로그인) |
+| proposed_slots | JSON NOT NULL | 면접관 제시 슬롯 `[{start, end}, ...]` (ISO) |
+| mode_online | INTEGER NOT NULL DEFAULT 1 | boolean — 온라인/오프라인 |
+| address / address_detail | TEXT NULL | 오프라인 면접 장소 |
+| online_meeting_url | TEXT NULL | 온라인 미팅 링크 (Zoom·Meet·Teams 수동 붙여넣기 또는 Zoom 연동 자동 생성). 확정(`selected`) 후 등록 → 후보자에게 메일 + ICS 발송. mode_online=true 일 때만 사용 |
+| online_meeting_note | TEXT NULL | 접속 안내 메모 |
+| meeting_link_sent_at | TEXT NULL | 미팅 링크 메일 발송 시각 |
+| meeting_link_sent_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
+| interviewer_reminder_sent_at | TEXT NULL | 면접관 리마인더 발송 시각 — 확정 면접 24시간 전 cron 이 1회 발송 후 기록 (중복 방지) |
+| selected_slot | JSON NULL | 지원자가 선택한 슬롯 `{start, end}` |
+| counter_slots | JSON NULL | 지원자가 역제시한 슬롯 후보 |
+| candidate_note | TEXT NULL | 지원자 코멘트 (역제시·취소 사유 등) |
+| status | TEXT NOT NULL DEFAULT 'pending' | 라이프사이클 아래 참조 |
+| proposed_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 슬롯을 제시한 면접관 |
+| expires_at | TEXT NOT NULL | 응답 기한 |
+| responded_at | TEXT NULL | |
+| created_at / updated_at | TEXT NOT NULL | |
+
+인덱스: `(candidate_id)`, `(job_id)`, `(status, expires_at)` — 만료·리마인더 cron 스캔용.
+
+라이프사이클: `pending`(면접관 제시 → 후보자 응답 대기) → `selected`(시간 선택 완료 → 면접 확정) / `counter_proposed`(다른 시간 역제시 → 면접관 재제시 필요) / `withdrawn`(후보자 지원취소). 같은 후보자에 재제시하면 새 row 추가 + 이전 row 는 `cancelled` 마킹 (감사용 보존).
+
 ## interviewer_notes
 
 사람 면접관 스코어카드·메모.
@@ -167,6 +298,21 @@
 | created_at / updated_at | TEXT NOT NULL | |
 
 (후보자별 면접관 배정 `interviewer_assignments` 는 공고 단위 `job_interviewers` 로 대체되어 2026-06-10 테이블째 제거 — migration 0015)
+
+## job_interviewers
+
+공고별 면접관. 한 공고에 여러 면접관 지정 — 면접관 배정은 **공고 단위로만** 관리 (후보자별 배정은 2026-06 제거).
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| job_id | INTEGER NOT NULL FK job_postings(id) ON DELETE CASCADE | |
+| user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | |
+| assigned_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
+| assigned_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+PK 없음 — `(job_id, user_id)` UNIQUE.
+
+자동 추가 시점: ① 공고 생성자 (생성 시) ② 초대 링크로 합류한 사용자 (`org_invites.job_id` 있으면 그 공고에) ③ PIN 알고 잠금 해제한 사용자 (UI "면접관 지정" 버튼으로 본인 직접 추가).
 
 ## audit_logs
 
@@ -210,6 +356,23 @@
 인덱스: `(candidate_id, created_at)`.
 
 후보자는 면접 토큰으로 `/interview/[token]/appeal` 접근 → 제출 시 DPO 메일 알림. PIPA §37의2 에 따라 7영업일 내 답변 의무.
+
+## notifications
+
+사용자별 인앱 알림. 헤더 종 아이콘 + 드롭다운에서 표시.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | 수신자 |
+| type | TEXT NOT NULL | `ai_interview_done`(내가 면접관인 공고의 AI 면접 평가 완료) / `round1_decision`(1차 면접 후 합·불 결정 대기) / `join_request`(신규 합류 요청 — org_admin) / `low_balance`(토큰 잔액 부족 — org_admin) / `new_org`(신규 법인 등록 — system_admin) / `candidate_appeal`(후보자 이의제기) / `schedule_confirmed` · `schedule_counter_proposed` · `schedule_withdrawn`(면접 일정 확정/역제시/지원취소) / `announcement`(공지) / `new_inquiry`(고객센터 접수 — system_admin) |
+| title | TEXT NOT NULL | |
+| href | TEXT NOT NULL | 클릭 시 이동 경로 |
+| payload | TEXT NULL | JSON 문자열 — 알림별 부가 정보 (candidate_id, job_id, org_id 등) |
+| read_at | TEXT NULL | NULL=미읽음 |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+인덱스: `(user_id, read_at)` — 페이지 로드마다 사용자별 미읽음 조회.
 
 ## inquiries
 
@@ -365,6 +528,24 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 
 저장 시 `nodemailer.transporter.verify()` 로 자동 헬스체크. 실패해도 저장은 진행 (상태만 fail 로 기록).
 
+## org_zoom_configs
+
+법인별 Zoom 연동 설정. 1:1. 온라인 면접 확정 시 줌 회의 자동 생성에 사용.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| org_id | INTEGER PK FK organizations(id) ON DELETE CASCADE | |
+| account_id | TEXT NOT NULL | Zoom "Server-to-Server OAuth" 앱의 Account ID |
+| client_id | TEXT NOT NULL | 〃 Client ID |
+| client_secret | TEXT NOT NULL | 〃 Client Secret — **AES-256-GCM 암호화 저장** (`lib/crypto.ts`, `enc:v1:` prefix, `org_smtp_configs.auth_pass` 와 동일 패턴). 조회 시 마스킹 |
+| last_checked_at | TEXT NULL | 마지막 헬스체크 시각 |
+| last_check_status | TEXT NULL | 'ok' / 'fail' |
+| last_check_error | TEXT NULL | 실패 시 메시지 |
+| updated_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
+| updated_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+법인이 줌 마켓플레이스에서 직접 생성한 Server-to-Server OAuth 앱 자격증명 3개를 등록. 1차 면접이 온라인으로 확정되면 `lib/zoom.ts` 가 토큰 발급 → 회의 생성 → join_url 을 `interview_schedules.online_meeting_url` 에 저장 + 메일 발송. 설정 가이드: docs/ZOOM_SETUP_GUIDE.md (인앱: `/org/zoom/guide`).
+
 ## token_wallets
 
 법인별 지갑. 1:1.
@@ -441,11 +622,21 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 organizations ─< users (org_id, role)
       │
       ├─< org_join_requests ─> users (user_id)
+      ├─< org_invites (job_id ─> 공유한 공고)
+      ├─< org_smtp_configs / org_zoom_configs (각 1:1)
       ├─< token_wallets (1:1)
       ├─< token_ledger
       ├─< payment_orders
       ├─< job_postings ─< candidates ─< interview_sessions
+      │        │             ├─< candidate_attachments
+      │        │             ├─< interview_schedules (job_id·org_id 비정규화)
+      │        │             ├─< interview_question_sheets (후보자당 1건)
+      │        │             └─< interviewer_notes
+      │        └─< job_interviewers >─ users
       └─< (위 모든 자식 CASCADE)
+
+users ─< sessions · password_resets · email_verifications · notifications
+      └─< user_candidate_favorites · user_job_favorites (deprecated)
 ```
 
 ## 마이그레이션 스크립트
