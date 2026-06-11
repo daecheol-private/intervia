@@ -756,6 +756,8 @@ export default function CandidateDetailPage() {
           <ScheduleBox
             schedule={activeSchedule}
             jobId={candidate.jobId}
+            candidateId={candidate.id}
+            candidateName={candidate.name}
             onChanged={load}
           />
         </Section>

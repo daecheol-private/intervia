@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { formatKstDateTime } from "@/lib/utils";
 import { confirmDialog } from "@/app/components/Dialog";
+import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 import type { Schedule } from "./types";
 
 const SCHEDULE_STATUS_LABEL: Record<Schedule["status"], string> = {
@@ -32,15 +32,20 @@ function formatSlot(s: { start: string; end: string }): string {
 export function ScheduleBox({
   schedule,
   jobId,
+  candidateId,
+  candidateName,
   onChanged,
 }: {
   schedule: Schedule;
   jobId: number;
+  candidateId: number;
+  candidateName: string;
   onChanged: () => void;
 }) {
   const selected = schedule.selectedSlot;
   const [confirming, setConfirming] = useState<string | null>(null); // 진행 중인 slot 의 start
   const [confirmErr, setConfirmErr] = useState<string | null>(null);
+  const [proposeOpen, setProposeOpen] = useState(false);
 
   // 후보자가 counter 제시한(또는 HR 가 처음 제시한) 슬롯을 확정.
   const confirmSlot = async (slot: { start: string; end: string }) => {
@@ -152,15 +157,17 @@ export function ScheduleBox({
       )}
 
       {canConfirm && (
-        <div className="text-[11px] text-slate-500 pt-1">
-          위 시간이 모두 안 맞으면{" "}
-          <Link
-            href={`/jobs/${jobId}`}
-            className="text-primary-deep hover:underline font-medium"
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            onClick={() => setProposeOpen(true)}
+            className="text-xs px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep font-medium hover:bg-primary-soft"
           >
-            공고 페이지에서 새 시간 다시 제시
-          </Link>
-          하세요.
+            🔄 일정 다시 제안
+          </button>
+          <span className="text-[11px] text-slate-500">
+            새 시간을 제시하면 기존 제안은 취소되고 후보자에게 메일이 다시
+            발송됩니다.
+          </span>
         </div>
       )}
 
@@ -200,6 +207,16 @@ export function ScheduleBox({
           ? `후보자 응답: ${formatKstDateTime(schedule.respondedAt)}`
           : `링크 만료: ${formatKstDateTime(schedule.expiresAt)}`}
       </div>
+
+      <ScheduleProposeModal
+        jobId={jobId}
+        candidateIds={[candidateId]}
+        nameById={{ [candidateId]: candidateName }}
+        round={schedule.round}
+        open={proposeOpen}
+        onClose={() => setProposeOpen(false)}
+        onDone={onChanged}
+      />
     </div>
   );
 }
