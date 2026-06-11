@@ -16,6 +16,9 @@ export const organizations = sqliteTable("organizations", {
   allowScanOcr: integer("allow_scan_ocr", { mode: "boolean" })
     .notNull()
     .default(false),
+  // JD 와 별개로 법인 전반의 선호 인재상·정성 평가 기준을 저장 (CultureFitProfile JSON).
+  // AI 이력서 평가·면접 질문 생성에 자동 반영. null = 미설정.
+  cultureFitProfile: text("culture_fit_profile"),
   // 시스템 관리자가 법인을 정지한 시각. null = 정상.
   // 정지 시 멤버 로그인 차단 + 신규 합류 차단. (진행 중 면접 세션은 그대로 종료까지)
   suspendedAt: text("suspended_at"),

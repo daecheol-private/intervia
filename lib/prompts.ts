@@ -1,3 +1,21 @@
+export type QualItem = {
+  enabled: boolean;
+  weight: "low" | "medium" | "high";
+  guide: string;
+};
+
+export type CultureFitProfile = {
+  idealTalent: string;
+  qualitativeItems: {
+    selfIntro: QualItem;
+    motivation: QualItem;
+    interpersonal: QualItem;
+    strengthWeakness: QualItem;
+    lifeExperience: QualItem;
+    futureAmbition: QualItem;
+  };
+};
+
 export type JobInfo = {
   company?: string;
   position: string;
@@ -17,6 +35,7 @@ export type JobInfo = {
    * "보안 경력 최우선", "Python 미사용 후보 감점" 같은 가중치 힌트.
    */
   evaluationFocus?: string;
+  cultureFitProfile?: CultureFitProfile | null;
   tone?: "친절한" | "엄격한" | "중립적인";
   interviewDurationMinutes?: number;
 };
@@ -69,6 +88,34 @@ function evaluationFocusSection(f?: string): string {
 """
 ${f.trim()}
 """`;
+}
+
+function cultureFitSection(profile?: CultureFitProfile | null): string {
+  if (!profile) return "";
+  const parts: string[] = [];
+  if (profile.idealTalent?.trim()) {
+    parts.push(`- 선호 인재상: ${profile.idealTalent.trim()}`);
+  }
+  const LABELS: Record<string, string> = {
+    selfIntro: "자기소개서",
+    motivation: "지원동기",
+    interpersonal: "대인관계",
+    strengthWeakness: "장점과 단점",
+    lifeExperience: "학창시절/사회생활",
+    futureAmbition: "입사후 포부",
+  };
+  const activeItems = Object.entries(profile.qualitativeItems ?? {})
+    .filter(([, v]) => v.enabled)
+    .map(([k, v]) => {
+      const w = v.weight === "high" ? "(중요)" : v.weight === "low" ? "(참고)" : "";
+      const g = v.guide?.trim() ? ` — ${v.guide.trim()}` : "";
+      return `  · ${LABELS[k] ?? k}${w}${g}`;
+    });
+  if (activeItems.length > 0) {
+    parts.push(`- 법인 중점 정성 평가 항목:\n${activeItems.join("\n")}`);
+  }
+  if (parts.length === 0) return "";
+  return `\n\n## 법인 컬처핏 기준 (법인이 별도 설정한 가치 기준 — 후보자 비공개)\n${parts.join("\n")}`;
 }
 
 function durationPlan(minutes: number): {
@@ -136,7 +183,8 @@ export function buildScreeningPrompt(
   resume: string,
   attachments: Array<{ kind: string; originalName: string; maskedText: string }> = [],
   // 최종학력 — 학교명은 의도적으로 제외(학벌 차별 방지). 학력 수준·전공만 JD 매칭에 사용.
-  education?: { level?: string | null; major?: string | null }
+  education?: { level?: string | null; major?: string | null },
+  cultureFit?: CultureFitProfile | null
 ): string {
   // requirement_coverage 지시 — 공고에 확정된 요건 체크리스트가 있으면 그 고정 목록으로,
   // 없으면(구버전 공고) 기존처럼 즉석 분해. 전자가 "같은 공고 = 동일 JD 항목" 을 보장.
@@ -251,7 +299,7 @@ ${attachments
 - 직급/연차: ${job.level}
 - 근무형태: ${job.employmentType}
 - 주요 업무: ${job.responsibilities}
-- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}${educationSection}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}${educationSection}${cultureFitSection(cultureFit)}
 
 ## 후보자 이력서 (개인정보 마스킹됨 — [이름]/[전화]/[이메일]/[학교]/[지역] 등)
 ${resume}${attachmentSection}
@@ -262,6 +310,7 @@ ${resume}${attachmentSection}
 - 주요 업무를 측정 가능한 task 3~7개로 분해
 - 자격 요건을 hard skill (반드시 필요) / soft skill (있으면 좋음) 로 분류
 - 선호 인재상이 있으면 관찰 가능한 행동·태도 신호로 변환
+- 법인 컬처핏 기준이 있으면 그 정성 평가 항목(자기소개서·지원동기·대인관계 등)을 평가의 보조 신호로 활용하라. 단, 직무 적합도(실무 경력)보다 높은 비중을 두어서는 안 된다.
 
 ### 2단계 · 이력서에서 증거 수집
 각 JD 항목에 대해 다음 중 어디 해당하는지 판정:
@@ -796,7 +845,8 @@ export function buildInterviewQuestionsPrompt(
   job: JobInfo,
   resume: string,
   screening?: ScreeningContext | null,
-  interviewEval?: InterviewEvalContext | null
+  interviewEval?: InterviewEvalContext | null,
+  cultureFit?: CultureFitProfile | null
 ): string {
   return `너는 ${job.company ?? "한 기업"}의 채용 책임자이자 **${job.position} 직무를 오래 해 본 시니어 실무자**다.
 아래 후보자의 **1차 대면 면접**에서 사람 면접관이 그대로 사용할 질문지를 설계하라.
@@ -805,6 +855,7 @@ export function buildInterviewQuestionsPrompt(
 - 서류평가·AI 면접에서 **이미 충분히 검증된 것은 반복하지 말 것.** 미확인·부분검증·우려 항목을 깊게 파고드는 질문에 집중한다.
 - 추상적 질문("협업이 중요한 이유는?") 금지. 이 후보자의 **이력서·평가 내용에 근거한 구체적·맞춤형 질문**을 만든다.
 - "다양한 형태"로 구성: 직무·기술 역량 검증 / 경험·성과 심층(STAR) / 서류·AI면접 우려 검증 / 인성·컬처핏 / 상황·케이스(가상 시나리오) 등. 후보자에 맞춰 섹션을 취사선택·재구성하라.
+- 인성·컬처핏 섹션에는 법인 컬처핏 기준(있으면)의 정성 항목(자기소개서·지원동기·대인관계 등)을 반영한 구체적 질문을 포함하라.
 - 각 질문에는 면접관이 무엇을 보려는지(intent)와, 답변에 따라 더 캘 꼬리질문(followups)을 붙인다.
 - 차별 금지(채용절차법 §4의3): 성별·나이·출신지·학교·가족·종교·신체 등을 묻거나 평가하는 질문 금지. 마스킹 토큰([학교]/[회사] 등)을 사실로 취급 금지.
 
@@ -813,7 +864,7 @@ export function buildInterviewQuestionsPrompt(
 - 직급/연차: ${job.level}
 - 근무형태: ${job.employmentType}
 - 주요 업무: ${job.responsibilities}
-- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}${cultureFitSection(cultureFit)}
 
 ## 후보자 이력서 (마스킹됨)
 ${resume}

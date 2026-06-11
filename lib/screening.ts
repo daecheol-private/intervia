@@ -10,7 +10,7 @@ import {
 import { eq, and, isNotNull, ne, lt } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { deleteFilesForCandidate } from "./candidate-files";
-import { buildScreeningPrompt } from "./prompts";
+import { buildScreeningPrompt, type CultureFitProfile } from "./prompts";
 import { parseChecklist } from "./job-checklist";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
 import { Type } from "@google/genai";
@@ -744,6 +744,17 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
     throw new ScreeningError(`job ${candidate.jobId} 없음`, false);
   }
 
+  let cultureFit: CultureFitProfile | null = null;
+  if (job.orgId) {
+    const [orgRow] = await db
+      .select({ cultureFitProfile: organizations.cultureFitProfile })
+      .from(organizations)
+      .where(eq(organizations.id, job.orgId));
+    if (orgRow?.cultureFitProfile) {
+      try { cultureFit = JSON.parse(orgRow.cultureFitProfile) as CultureFitProfile; } catch { /* ignore */ }
+    }
+  }
+
   const masked = candidate.resumeMaskedText ?? "";
   if (masked.length < 30) {
     throw new ScreeningError("마스킹된 이력서 텍스트 없음/부족", false);
@@ -787,7 +798,8 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
     masked,
     attachmentsForPrompt,
     // 학력 수준·전공만 — 출신 학교명은 전달 안 함(학벌 차별 방지, 블라인드 유지)
-    { level: candidate.educationLevel, major: candidate.educationMajor }
+    { level: candidate.educationLevel, major: candidate.educationMajor },
+    cultureFit
   );
 
   // 결과 캐시 키 = 공고ID + 평가 프롬프트 전체 해시. 입력(공고 평가기준 + 이력서 내용 + 첨부)이

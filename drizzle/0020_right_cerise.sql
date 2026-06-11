@@ -1,0 +1,1 @@
+ALTER TABLE `organizations` ADD `culture_fit_profile` text;

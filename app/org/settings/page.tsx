@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import type { CultureFitProfile, QualItem } from "@/lib/prompts";
 
 /**
  * 법인 설정 — 법인 단위 정책을 org_admin / system_admin 이 관리.
- * 회사 주소, 스캔 PDF AI OCR 허용 등. (이전에는 계정 설정에 있던 항목을 이리로 이동)
+ * 회사 주소, 스캔 PDF AI OCR 허용, 컬처핏 프로필 등.
  */
 type Org = {
   id: number | null;
@@ -15,7 +16,46 @@ type Org = {
   officeAddress?: string | null;
   officeAddressDetail?: string | null;
   allowScanOcr?: boolean;
+  cultureFitProfile?: CultureFitProfile | null;
 };
+
+const QUAL_KEYS = [
+  "selfIntro",
+  "motivation",
+  "interpersonal",
+  "strengthWeakness",
+  "lifeExperience",
+  "futureAmbition",
+] as const;
+
+type QualKey = (typeof QUAL_KEYS)[number];
+
+const QUAL_LABELS: Record<QualKey, string> = {
+  selfIntro: "자기소개서",
+  motivation: "지원동기",
+  interpersonal: "대인관계",
+  strengthWeakness: "장점과 단점",
+  lifeExperience: "학창시절/사회생활",
+  futureAmbition: "입사후 포부",
+};
+
+function defaultQualItem(): QualItem {
+  return { enabled: false, weight: "medium", guide: "" };
+}
+
+function defaultProfile(): CultureFitProfile {
+  return {
+    idealTalent: "",
+    qualitativeItems: {
+      selfIntro: defaultQualItem(),
+      motivation: defaultQualItem(),
+      interpersonal: defaultQualItem(),
+      strengthWeakness: defaultQualItem(),
+      lifeExperience: defaultQualItem(),
+      futureAmbition: defaultQualItem(),
+    },
+  };
+}
 
 export default function OrgSettingsPage() {
   const [org, setOrg] = useState<Org | null>(null);
@@ -32,10 +72,15 @@ export default function OrgSettingsPage() {
     null
   );
 
+  // 컬처핏 로컬 상태
+  const [cfProfile, setCfProfile] = useState<CultureFitProfile>(defaultProfile());
+  const [cfBusy, setCfBusy] = useState(false);
+
   const load = async () => {
-    const [orgRes, statusRes] = await Promise.all([
+    const [orgRes, statusRes, cfRes] = await Promise.all([
       fetch("/api/orgs/me"),
       fetch("/api/auth/status"),
+      fetch("/api/orgs/me/culture-fit"),
     ]);
     if (orgRes.ok) {
       const o = (await orgRes.json()) as Org;
@@ -47,6 +92,12 @@ export default function OrgSettingsPage() {
     if (statusRes.ok) {
       const s = await statusRes.json();
       setRole(s.user?.role ?? null);
+    }
+    if (cfRes.ok) {
+      const { cultureFitProfile } = (await cfRes.json()) as {
+        cultureFitProfile: CultureFitProfile | null;
+      };
+      if (cultureFitProfile) setCfProfile(cultureFitProfile);
     }
     setLoaded(true);
   };
@@ -124,6 +175,32 @@ export default function OrgSettingsPage() {
         ? "스캔 PDF AI OCR 을 허용했습니다."
         : "스캔 PDF AI OCR 을 비활성화했습니다.",
     });
+  };
+
+  const saveCultureFit = async () => {
+    setCfBusy(true);
+    setMsg(null);
+    const r = await fetch("/api/orgs/me/culture-fit", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cultureFitProfile: cfProfile }),
+    });
+    setCfBusy(false);
+    if (!r.ok) {
+      setMsg({ type: "error", text: await r.text() });
+      return;
+    }
+    setMsg({ type: "success", text: "컬처핏 설정이 저장되었습니다." });
+  };
+
+  const updateQualItem = (key: QualKey, patch: Partial<QualItem>) => {
+    setCfProfile((prev) => ({
+      ...prev,
+      qualitativeItems: {
+        ...prev.qualitativeItems,
+        [key]: { ...prev.qualitativeItems[key], ...patch },
+      },
+    }));
   };
 
   return (
@@ -224,7 +301,7 @@ export default function OrgSettingsPage() {
             </div>
           </section>
 
-          {/* 외부 연동 — 메일 서버 / 화상 면접 (네비 드롭다운에서 이리로 이동) */}
+          {/* 외부 연동 — 메일 서버 / 화상 면접 */}
           <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
               외부 연동
@@ -298,12 +375,141 @@ export default function OrgSettingsPage() {
             </div>
             <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-3 leading-relaxed">
               ⚠️ 켜면 스캔 이력서의 <b>마스킹 전 원본</b>이 AI 처리 수탁자(Vertex
-              AI 서울 리전)로 전송됩니다. 일반 이력서의 “로컬 마스킹 후 전송”
+              AI 서울 리전)로 전송됩니다. 일반 이력서의 "로컬 마스킹 후 전송"
               원칙과 달라지므로, <b>개인정보 처리방침·후보자 동의 범위를 먼저
               정비</b>한 뒤 켜세요. 데이터는 국내(서울 리전)에 머물러 국외이전은
               발생하지 않으며, 모든 OCR 전송은 감사 로그에 기록됩니다. 꺼두면
               스캔 이력서는 평가되지 않고 재업로드 안내만 표시됩니다.
             </p>
+          </section>
+
+          {/* 컬처핏 & 정성 평가 설정 */}
+          <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              컬처핏 &amp; 정성 평가 설정
+            </h2>
+            <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
+              설정하면 AI 이력서 평가와 면접 질문 생성에 자동 반영됩니다.
+              직무 공고(JD)와는 별개로, 법인 전반의 인재 선호 기준을 지정합니다.
+            </p>
+
+            {/* 선호 인재상 */}
+            <div className="space-y-1.5 mb-5">
+              <label className="text-sm font-medium text-slate-700">
+                선호 인재상
+              </label>
+              <textarea
+                value={cfProfile.idealTalent}
+                onChange={(e) =>
+                  setCfProfile((p) => ({ ...p, idealTalent: e.target.value }))
+                }
+                disabled={!canEdit}
+                rows={3}
+                placeholder="예: 자기주도적으로 문제를 정의하고 실행까지 책임지는 인재"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none disabled:bg-slate-50 disabled:text-slate-400"
+              />
+            </div>
+
+            {/* 정성 평가 항목 6종 */}
+            <div className="space-y-1 mb-5">
+              <p className="text-sm font-medium text-slate-700 mb-2">
+                중점 정성 평가 항목
+              </p>
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                {QUAL_KEYS.map((key) => {
+                  const item = cfProfile.qualitativeItems[key];
+                  return (
+                    <div key={key} className="p-3 bg-white">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id={`qual-${key}`}
+                          checked={item.enabled}
+                          disabled={!canEdit}
+                          onChange={(e) =>
+                            updateQualItem(key, { enabled: e.target.checked })
+                          }
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                        />
+                        <label
+                          htmlFor={`qual-${key}`}
+                          className="text-sm font-medium text-slate-700 select-none cursor-pointer"
+                        >
+                          {QUAL_LABELS[key]}
+                        </label>
+                      </div>
+
+                      {item.enabled && (
+                        <div className="mt-2.5 ml-7 space-y-2">
+                          {/* 비중 선택 */}
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] text-slate-500 w-8 shrink-0">
+                              비중
+                            </span>
+                            <div className="flex gap-2">
+                              {(
+                                [
+                                  ["low", "낮음"],
+                                  ["medium", "보통"],
+                                  ["high", "높음"],
+                                ] as const
+                              ).map(([val, label]) => (
+                                <label
+                                  key={val}
+                                  className="flex items-center gap-1 cursor-pointer"
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`weight-${key}`}
+                                    value={val}
+                                    checked={item.weight === val}
+                                    disabled={!canEdit}
+                                    onChange={() =>
+                                      updateQualItem(key, { weight: val })
+                                    }
+                                    className="h-3.5 w-3.5 text-primary focus:ring-primary"
+                                  />
+                                  <span className="text-xs text-slate-600">
+                                    {label}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 평가 가이드 */}
+                          <div className="flex items-start gap-3">
+                            <span className="text-[11px] text-slate-500 w-8 shrink-0 mt-1.5">
+                              가이드
+                            </span>
+                            <input
+                              type="text"
+                              value={item.guide}
+                              disabled={!canEdit}
+                              onChange={(e) =>
+                                updateQualItem(key, { guide: e.target.value })
+                              }
+                              placeholder="AI 에게 줄 평가 힌트 (선택)"
+                              className="flex-1 border border-slate-300 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-slate-50 disabled:text-slate-400"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {canEdit && (
+              <button
+                onClick={saveCultureFit}
+                disabled={cfBusy}
+                className="px-4 py-2 rounded-md bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+              >
+                {cfBusy ? "저장 중..." : "컬처핏 설정 저장"}
+              </button>
+            )}
           </section>
 
           {msg && (
