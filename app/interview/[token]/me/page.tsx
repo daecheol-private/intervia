@@ -20,14 +20,6 @@ const STAGE_LABEL_KO: Record<string, string> = {
 type SelfData = {
   name: string;
   email: string | null;
-  phone: string | null;
-  age: number | null;
-  careerYears: number | null;
-  careerSummary: string | null;
-  resumeStored: boolean;
-  maskedTextLength: number;
-  screeningScore: number | null;
-  screeningRecommendation: string | null;
   stage: string;
   outcome: "hired" | "rejected" | "withdrawn" | null;
   createdAt: string;
@@ -137,36 +129,6 @@ export default function SelfPage() {
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm">
               <Row label="이름" value={data.name} />
               <Row label="이메일" value={data.email ?? "(없음)"} />
-              <Row label="전화" value={data.phone ?? "(없음)"} />
-              <Row label="나이" value={data.age ? `${data.age}세` : "(없음)"} />
-              <Row
-                label="경력"
-                value={
-                  data.careerYears != null
-                    ? `${data.careerYears}년`
-                    : data.careerSummary ?? "(없음)"
-                }
-              />
-              <Row
-                label="이력서 파일"
-                value={data.resumeStored ? "보유 중" : "없음/폐기됨"}
-              />
-              <Row
-                label="마스킹 본문"
-                value={
-                  data.maskedTextLength > 0
-                    ? `${data.maskedTextLength.toLocaleString()}자`
-                    : "없음"
-                }
-              />
-              <Row
-                label="서류 평가 점수"
-                value={
-                  data.screeningScore != null
-                    ? `${data.screeningScore} (${data.screeningRecommendation})`
-                    : "미평가"
-                }
-              />
               <Row
                 label="진행 상태"
                 value={
