@@ -74,3 +74,6 @@ dev.log
 /scripts/_*
 /scripts/.cookie-*
 /data.db.bak*
+
+# claude code worktrees (embedded repos)
+/.claude/worktrees/
