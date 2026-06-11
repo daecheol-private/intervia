@@ -210,7 +210,7 @@
 | 면접 질문지 생성/재생성 | **생성 성공 시 (후차감)** | `interview_question_gen` | `candidate` / `candidate_re{N}` | 환불 없음 — 재생성 매번 과금 |
 | 관리자 충전 | 즉시 | `admin_adjust` | - | 별도 PATCH 호출로 -delta |
 
-`chargeFeature`/`refundFeature` 는 `(org, reason, refType, refId)` 단위 멱등. **재평가/재생성 매번 과금**은 `chargeRepeatable` 이 회차별 refType(`{base}`/`{base}_re{N}`)으로 분리. **잔액 0 이하면 유료 라우트는 402 차단**(`lib/wallet-guard.ts`, 공고 생성 제외).
+`chargeFeature`/`refundFeature` 는 `(org, reason, refType, refId)` 단위 멱등. **재평가/재생성 매번 과금**은 `chargeRepeatable` 이 회차별 refType(`{base}`/`{base}_re{N}`)으로 분리. **잔액이 0 이하면 유료 라우트는 402 차단**(`lib/wallet-guard.ts`, 공고 생성 포함).
 
 ## 호출 예시 (curl)
 

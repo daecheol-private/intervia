@@ -92,7 +92,7 @@ export async function POST(
     });
   }
 
-  // 잔액 가드 — 재평가도 토큰 차감이므로 마이너스면 차단
+  // 잔액 가드 — 재평가도 토큰 차감이므로 0 이하면 차단
   const balanceGuard = await requireSpendableBalance(candidate.orgId, {
     isSystemAdmin: me!.role === "system_admin",
   });

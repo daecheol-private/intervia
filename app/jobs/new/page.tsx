@@ -106,7 +106,12 @@ export default function NewJobPage() {
       body: JSON.stringify(form),
     });
     if (!res.ok) {
-      alert("저장 실패: " + (await res.text()));
+      const text = await res.text();
+      let msg = text;
+      try {
+        msg = JSON.parse(text).message || text;
+      } catch {}
+      alert("저장 실패: " + msg);
       setSaving(false);
       return;
     }

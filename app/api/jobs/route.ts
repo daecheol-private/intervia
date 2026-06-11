@@ -11,6 +11,7 @@ import { jobOrgFilter, requireUser } from "@/lib/tenant";
 import { isValidPin } from "@/lib/job-lock";
 import { rateLimit } from "@/lib/rate-limit";
 import { chargeFeature } from "@/lib/tokens";
+import { requireSpendableBalance, insufficientTokensResponse } from "@/lib/wallet-guard";
 import { defaultClosesAt } from "@/lib/job-lifecycle";
 import { stripBiasedLines } from "@/lib/job-bias-filter";
 import {
@@ -105,6 +106,12 @@ export async function POST(req: Request) {
     me!.role === "system_admin"
       ? Number(body.orgId ?? me!.orgId ?? 0) || null
       : me!.orgId;
+
+  // 잔액 가드 — 0 이하면 차단 (공고 생성도 토큰 차감 대상)
+  const balanceGuard = await requireSpendableBalance(orgId, {
+    isSystemAdmin: me!.role === "system_admin",
+  });
+  if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);
 
   const now = new Date();
   const [row] = await db

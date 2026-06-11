@@ -39,11 +39,6 @@ const DEFAULT_PRICING: Record<FeatureKey, number> = {
 // 기존 법인 합류(invite/join-request)에는 지급 X. 함수는 orgId 기준 멱등.
 export const WELCOME_BONUS_TOKENS = 500;
 
-// 후불(여신) 한도 — 잔액이 이 값 이하면 유료 행위 차단(`lib/wallet-guard.ts`).
-// 후차감(성공 시 차감) 구조라, 잔액 0 직전에 요청한 작업이 성공해 마이너스로 떨어지는 건
-// 허용한다. 단 무한 외상 방지를 위해 -300 을 바닥으로 둔다. 마이너스 진입 시 자동 메일 통지.
-export const CREDIT_LIMIT_TOKENS = -300;
-
 /**
  * 충전 보너스 정책 — KRW 결제액에 따라 추가 지급 토큰 계산.
  * 100원당 1 토큰 + 구간별 보너스.
@@ -347,10 +342,10 @@ export async function chargeFeature(args: {
   if (!applied) {
     return { cost: 0, balance, alreadyCharged: true };
   }
-  // 잔액이 0 이상 → 마이너스(후불)로 떨어지는 순간 1회만 알림 (스팸 방지).
-  // 후차감이라 0 직전 요청 작업이 성공해 마이너스 진입할 수 있다 — 이때 법인담당자에게
-  // 자동 메일로 통지하고, -300 한도에 도달하면 유료 기능이 멈춤을 안내.
-  if (prevBalance >= 0 && balance < 0) {
+  // 잔액이 양수 → 0 이하(신규 차단 상태)로 떨어지는 순간 1회만 알림 (스팸 방지).
+  // 후차감이라 잔액이 양수일 때 시작한 작업이 성공하며 0 이하로 떨어질 수 있다 —
+  // 이후 신규 유료 요청은 wallet-guard 가 즉시 차단하므로 충전 필요를 자동 메일 통지.
+  if (prevBalance > 0 && balance <= 0) {
     void (async () => {
       try {
         const { notifyOrgAdmins } = await import("./notifications");
@@ -358,11 +353,11 @@ export async function chargeFeature(args: {
           args.orgId,
           {
             type: "low_balance",
-            title: `토큰 잔액이 마이너스가 되었습니다 (현재 ${balance} 토큰). ${CREDIT_LIMIT_TOKENS} 토큰까지 후불로 이용 가능하며, 한도 도달 시 유료 기능이 중단됩니다. 충전이 필요합니다.`,
+            title: `토큰 잔액이 소진되었습니다 (현재 ${balance} 토큰). 진행 중이던 평가·면접은 완료되지만, 충전 전까지 신규 유료 기능 사용이 차단됩니다. 충전이 필요합니다.`,
             href: "/org/tokens",
-            payload: { orgId: args.orgId, balance, creditLimit: CREDIT_LIMIT_TOKENS },
+            payload: { orgId: args.orgId, balance },
           },
-          // 마이너스 진입 = 충전 필요 신호 — 관리자에게 메일로도 통지.
+          // 0 이하 진입 = 충전 필요 신호 — 관리자에게 메일로도 통지.
           { email: true }
         );
       } catch {

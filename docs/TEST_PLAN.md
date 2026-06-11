@@ -82,8 +82,8 @@
 | TC-36 | 면접 링크 발급 | ledger -`interview` 단가 |
 | TC-37 | 면접 미시작 상태에서 만료 | ledger 자동 환불 |
 | TC-38 | 면접 1턴 이상 진행 후 만료 | 환불 없음 |
-| TC-39 | 잔액 0 인 상태에서 공고 등록 | 마이너스로 진행 (정책: 후불), UI 경고 배너 표시 |
-| TC-40 | 잔액 마이너스에서 더 사용 | 계속 마이너스 누적, ledger 정상 기록 |
+| TC-39 | 잔액 0 인 상태에서 공고 등록 | 402 차단 (잔액 0 이하 신규 유료 요청 차단), UI 경고 배너 표시 |
+| TC-40 | 잔액 0 이하에서 신규 유료 요청 | 402 차단. 진행 중이던 작업의 후차감만 마이너스 누적 (ledger 정상 기록) |
 | TC-41 | system_admin 수동 충전 | ledger reason=`admin_adjust`, delta=+N, `balance_after` 정확 |
 | TC-42 | system_admin 이 단가 변경 (`job_post` 10→20) | `token_pricing` 업데이트, 이후 등록부터 새 단가 적용 (소급 X) |
 | TC-43 | org_admin 이 단가 변경 시도 | 403 |

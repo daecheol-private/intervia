@@ -139,12 +139,12 @@ export default function TokensPage() {
             </div>
           )}
         </div>
-        {data.balance < 0 && (
+        {data.balance <= 0 && (
           <p className="text-xs text-rose-700 mt-3 bg-white/60 rounded-lg px-3 py-2">
-            ⚠️ 잔액이 마이너스입니다. 신규 이력서 업로드·평가·면접·이메일 발송이 차단됩니다. 시스템 관리자에게 충전을 요청해 주세요.
+            ⚠️ 잔액이 소진되었습니다. 신규 이력서 업로드·평가·면접·이메일 발송이 차단됩니다. 시스템 관리자에게 충전을 요청해 주세요.
           </p>
         )}
-        {data.lowBalance && data.balance >= 0 && (
+        {data.lowBalance && data.balance > 0 && (
           <p className="text-xs text-amber-700 mt-3 bg-white/60 rounded-lg px-3 py-2">
             잔액이 0에 가깝습니다. 미리 충전해 주세요.
           </p>

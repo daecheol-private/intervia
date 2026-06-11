@@ -258,7 +258,7 @@ Next 16 의 `after(async () => ...)` (from `next/server`) 는 Vercel 이 응답 
 
 **동작**: `POST /api/jobs/[id]/candidates` 가 후보자 insert 후 `enqueueScreening`(`app/api/jobs/[id]/candidates/route.ts:780`) + `triggerWorker`(:603) 를 호출 → 사용자 클릭 없이 평가 시작. **차감은 업로드/enqueue 시점이 아니라 워커가 평가 성공한 시점에 후차감**(`chargeScreeningSuccess`, refType=`screening_job`). enqueue 실패해도 업로드 자체는 성공 — 후보자 상세에서 재시도 가능.
 
-**수동 재평가/재시도**: `POST /api/candidates/[id]/screen`(단건) / `bulk-screen`(일괄). 잔액 0 이하면 402 차단(`lib/wallet-guard.ts`).
+**수동 재평가/재시도**: `POST /api/candidates/[id]/screen`(단건) / `bulk-screen`(일괄). 잔액이 0 이하면 402 차단(`lib/wallet-guard.ts`).
 
 ## 0-2-2. 이력서 업로드는 지원자 동의 확인 게이트가 있음
 

@@ -26,7 +26,7 @@ import {
 } from "@/lib/file-classify";
 import { extractZip, ZipExtractError } from "@/lib/zip-extract";
 import {
-  requireSpendableBalance, // 후불 한도(-300) 가드
+  requireSpendableBalance, // 잔액 0 이하 가드
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { logAudit } from "@/lib/audit";
