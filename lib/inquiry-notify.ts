@@ -7,10 +7,12 @@
  *   2) 지원 이메일(APPEAL_CONTACT = DPO/문의 단일 채널)로 통지 메일 — SMTP 있을 때만.
  *
  * 처리/완료 시(notifyInquiryReply):
- *   문의자(고객/후보자) 회신용 이메일로 운영팀 답변·처리 상태를 발송.
- *   → 비로그인 후보자도 처리 결과를 확인할 수 있는 유일한 채널.
+ *   1) 문의자가 로그인 고객(userId 있음)이면 인앱 알림 — SMTP 무관, 항상 시도.
+ *   2) 문의자(고객/후보자) 회신용 이메일로 운영팀 답변·처리 상태를 발송.
+ *      → 비로그인 후보자도 처리 결과를 확인할 수 있는 유일한 채널.
  *
- * 모두 fire-and-forget 으로 호출 — 실패해도 문의 제출·처리 자체는 성공 응답.
+ * 호출은 라우트에서 next/server `after()` 로 — 응답 반환 후 서버리스 인스턴스가
+ * suspend 되기 전에 실행이 보장된다 (void fire-and-forget 은 유실될 수 있음).
  * SMTP 미설정이면 메일은 조용히 skip (인박스/내 문의 내역에는 남으므로 누락 아님).
  */
 import {
@@ -28,7 +30,7 @@ import {
   type InquirySource,
   type InquiryStatus,
 } from "@/lib/inquiry";
-import { notifySystemAdmins } from "@/lib/notifications";
+import { createNotification, notifySystemAdmins } from "@/lib/notifications";
 
 export async function notifyNewInquiry(opts: {
   source: InquirySource;
@@ -54,8 +56,9 @@ export async function notifyNewInquiry(opts: {
     console.error("[inquiry] 인앱 알림 실패:", e);
   }
 
-  // 2) 지원 이메일 통지 — SMTP 사용 가능할 때만.
-  if (!(await isSmtpAvailable(orgId))) return;
+  // 2) 지원 이메일 통지 — 수신자가 운영팀이므로 항상 시스템 기본 SMTP(env)로 발송.
+  //    문의한 법인의 SMTP 로 라우팅하면 법인 설정 오류에 따라 조용히 누락된다.
+  if (!(await isSmtpAvailable(null))) return;
 
   const adminUrl = `${SITE_INFO.baseUrl}/admin/inquiries`;
   const subject = `[${SITE_INFO.serviceName}] ${sourceLabel} 문의 접수 — ${categoryLabel}`;
@@ -105,7 +108,7 @@ ${opts.message}
     subject,
     html,
     text,
-    orgId,
+    orgId: null,
     audience: "org",
   });
 }
@@ -123,14 +126,33 @@ export async function notifyInquiryReply(opts: {
   status: InquiryStatus;
   adminNote: string | null;
   contactEmail: string;
+  /** 문의자 userId (org_user 문의만 존재). 있으면 인앱 알림 발송. */
+  userId?: number | null;
 }): Promise<void> {
-  // env(시스템 기본) SMTP 가용 시에만 발송. 미설정이면 조용히 skip.
-  if (!(await isSmtpAvailable(null))) return;
-
   const categoryLabel = CATEGORY_LABEL[opts.category] ?? opts.category;
   const statusLabel = STATUS_LABEL[opts.status];
   const resolved = opts.status === "resolved";
   const note = opts.adminNote?.trim() || "";
+
+  // 1) 문의자 인앱 알림 — 로그인 고객만. SMTP 와 무관하게 항상 시도.
+  if (opts.userId) {
+    try {
+      await createNotification({
+        userId: opts.userId,
+        type: "inquiry_replied",
+        title: resolved
+          ? `문의가 처리 완료되었습니다 — ${categoryLabel}`
+          : `문의에 운영팀 답변이 등록되었습니다 — ${categoryLabel}`,
+        href: "/support",
+        payload: { category: opts.category, status: opts.status },
+      });
+    } catch (e) {
+      console.error("[inquiry] 회신 인앱 알림 실패:", e);
+    }
+  }
+
+  // 2) env(시스템 기본) SMTP 가용 시에만 발송. 미설정이면 조용히 skip.
+  if (!(await isSmtpAvailable(null))) return;
 
   const subject = resolved
     ? `[${SITE_INFO.serviceName}] 문의가 처리 완료되었습니다 — ${categoryLabel}`

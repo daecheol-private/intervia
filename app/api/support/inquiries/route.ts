@@ -6,6 +6,7 @@
  *
  * Rate limit: 사용자당 분당 5회.
  */
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { inquiries, organizations } from "@/lib/schema";
 import { and, desc, eq } from "drizzle-orm";
@@ -82,14 +83,17 @@ export async function POST(req: Request) {
     metadata: { category, message_length: message.length },
   });
 
-  void notifyNewInquiry({
-    source: "org_user",
-    category,
-    message,
-    contactEmail: me!.email,
-    orgName,
-    orgId,
-  }).catch((e) => console.error("[support] 통지 메일 실패:", e));
+  // after() — 응답 반환 후 실행 보장. void fire-and-forget 은 서버리스 suspend 로 유실됨.
+  after(() =>
+    notifyNewInquiry({
+      source: "org_user",
+      category,
+      message,
+      contactEmail: me!.email,
+      orgName,
+      orgId,
+    }).catch((e) => console.error("[support] 접수 통지 실패:", e))
+  );
 
   return Response.json({ ok: true, id: row.id });
 }
