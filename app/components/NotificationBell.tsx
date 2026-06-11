@@ -198,7 +198,7 @@ export function NotificationBell() {
                         <div className="min-w-0 flex-1">
                           <div
                             className={
-                              "text-sm leading-snug " +
+                              "text-sm leading-snug whitespace-pre-line " +
                               (isUnread ? "text-ink font-medium" : "text-ink-soft")
                             }
                           >

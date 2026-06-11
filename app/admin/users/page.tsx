@@ -402,7 +402,7 @@ export default function AdminUsersPage() {
       <div className="flex gap-2 mb-4">
         <input
           className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
-          placeholder="이름 또는 이메일"
+          placeholder="이름, 이메일 또는 법인명"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && load()}

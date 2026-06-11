@@ -38,7 +38,13 @@ export async function GET(req: Request) {
     .limit(200);
 
   const rows = pattern
-    ? await base.where(or(like(users.email, pattern), like(users.name, pattern)))
+    ? await base.where(
+        or(
+          like(users.email, pattern),
+          like(users.name, pattern),
+          like(organizations.name, pattern)
+        )
+      )
     : await base;
 
   // SYSTEM_ADMIN_EMAIL 로 지정된 부트스트랩 관리자 계정은 목록에서 숨긴다 —

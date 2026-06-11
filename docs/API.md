@@ -159,7 +159,7 @@
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
 | GET | `/api/admin/orgs` | 👑 | 전체 법인 + 잔액/멤버수/공고수 |
-| GET | `/api/admin/users?q=` | 👑 | 전 사용자 검색. **`SYSTEM_ADMIN_EMAIL` 로 지정된 보호 계정은 목록에서 제외** (사용자 관리 화면 비노출) |
+| GET | `/api/admin/users?q=` | 👑 | 전 사용자 검색 (이름/이메일/법인명). **`SYSTEM_ADMIN_EMAIL` 로 지정된 보호 계정은 목록에서 제외** (사용자 관리 화면 비노출) |
 | GET | `/api/admin/pricing` | 🔒 | 단가 조회 (전 로그인 사용자) |
 | PATCH | `/api/admin/pricing` | 👑 | `{job_post?, resume_upload?, interview?, interview_question_gen?}` 0 이상 정수 |
 | POST | `/api/admin/orgs/[id]/grant-tokens` | 👑 | `{delta, memo?}` 수동 충전/조정 (admin_adjust ledger) |

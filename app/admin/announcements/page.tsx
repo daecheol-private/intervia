@@ -146,7 +146,7 @@ export default function AdminAnnouncementsPage() {
                 <Megaphone className="w-3.5 h-3.5" />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm leading-snug text-slate-900 font-medium break-words">
+                <div className="text-sm leading-snug text-slate-900 font-medium break-words whitespace-pre-line">
                   {title.trim()}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">방금 전</div>
