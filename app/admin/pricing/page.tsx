@@ -17,7 +17,7 @@ const LABELS: { key: keyof Pricing; label: string; desc: string }[] = [
   {
     key: "interview_question_gen",
     label: "면접 문제 생성",
-    desc: "1차 면접 문제 1건 생성 시 차감",
+    desc: "면접 문제 1건 생성 시 차감 (1·2차 동일 단가)",
   },
 ];
 

@@ -345,4 +345,5 @@ interviewer/
 - **집계** (`lib/interview-signals.ts` `computeTranscriptStats`): complete·reevaluate 공용. 붙여넣기 비율/탭이탈/복사시도 임계 초과 시 `suspicious`. 평가 프롬프트에 객관 수치로 전달 → `llm_assist_note`.
 - **AI 자동 판별** (C): 평가 LLM 이 답변 텍스트 **문체만** 분석해 `ai_authorship`(likelihood/score/signals/note) 산출. 행동 신호와 독립적, 추가 LLM 호출 없음.
 - 모든 신호는 **단정 금지·중립 톤** — 정당 사용 가능성 명시, 후보자 상세 리포트에 표시.
-- `buildInterviewQuestionsPrompt`: 1차 대면 면접 질문지 (이력서+서류평가+AI면접 평가 종합 → 섹션별 맞춤 질문지). 1차 일정 확정 후 면접관이 생성, `interview_question_sheets` 에 저장.
+- `buildInterviewQuestionsPrompt`: 1차 대면 면접 질문지 (이력서+서류평가+AI면접 평가+법인 컬쳐핏 기준(있으면) 종합 → 섹션별 맞춤 질문지). 1차 일정 확정 후 면접관이 생성, `interview_question_sheets` 에 저장 (round='round1').
+- `buildExecutiveInterviewQuestionsPrompt`: 2차(임원) 면접 질문지 — 기술 재검증 없이 임원 관점 축(컬쳐핏·인재상 적합성/가치관·태도/조직 기여/성장 잠재력/동기·정착)에 집중. 법인 컬쳐핏 기준(`organizations.culture_fit_profile`, 있으면)을 질문 설계의 중심 축으로 주입. 2차 일정 확정 후 생성, 같은 테이블에 round='round2' 로 저장. 과금은 1차와 동일 키(`interview_question_gen`) — UI 단가 표기도 "면접 문제 생성" 단일.

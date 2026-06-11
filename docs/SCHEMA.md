@@ -14,6 +14,7 @@
 | name | TEXT NOT NULL | 법인명 |
 | biz_registration_no | TEXT NULL | 사업자등록번호 (검색용) |
 | email_domain | TEXT NULL | 자동매칭 키. 공용도메인(gmail 등)은 저장 X. **UNIQUE 아님** — 같은 도메인 1:N 법인 허용(비유니크 인덱스, `lib/schema.ts`). check-email 이 `matchedOrgs[]` 배열로 반환해 사용자가 합류할 법인 선택 (ARCHITECTURE §8) |
+| culture_fit_profile | TEXT NULL | `CultureFitProfile` JSON (선호 인재상 + 정성 평가 항목 6종). `/org/settings` 에서 입력, 서류 평가·면접 질문지(1·2차) 생성에 자동 반영. NULL = 미설정 |
 | created_by_user_id | INTEGER NULL | 최초 등록자 (FK는 없음 — 순환 의존 회피) |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
@@ -322,21 +323,26 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 
 ## interview_question_sheets
 
-1차 대면 면접 질문지. **후보자당 1건** (`candidate_id` UNIQUE — 재생성 시 덮어쓰기).
+대면 면접 질문지 (1차 실무 / 2차 임원). **후보자당 라운드별 1건** (`(candidate_id, round)` UNIQUE — 재생성 시 덮어쓰기).
 
-1차 면접 일정 확정(`interview_schedules` round1 · status='selected') 후 면접관 누구나 생성.
-이력서(마스킹) + 서류평가(`screeningReport`) + AI 면접 평가(`interviewSessions.evaluation`, 있으면)를
-종합해 LLM(task=`questionGen`)이 생성. **`interview_question_gen` 토큰 차감(기본 5)** — 생성 성공 시 후차감,
-재생성도 매번 과금(`chargeRepeatable`, refType `candidate`/`candidate_re{N}`). row 는 1건 upsert 라도 과금은 회차별. (과거 "무료" 서술은 stale)
+해당 라운드 면접 일정 확정(`interview_schedules` round 일치 · status='selected') 후 면접관 누구나 생성.
+이력서(마스킹) + 서류평가(`screeningReport`) + AI 면접 평가(`interviewSessions.evaluation`, 있으면)
++ 법인 컬쳐핏 기준(`organizations.culture_fit_profile`, 있으면 — 두 라운드 공통)을
+종합해 LLM(task=`questionGen`)이 생성. 1차는 `buildInterviewQuestionsPrompt`(직무·기술 검증 중심),
+2차는 `buildExecutiveInterviewQuestionsPrompt`(임원 관점 — 컬쳐핏·인재상·가치관·성장 잠재력 중심).
+**`interview_question_gen` 토큰 차감(기본 5, 라운드 구분 없이 동일 단가)** — 생성 성공 시 후차감,
+재생성·라운드 추가 생성도 매번 과금(`chargeRepeatable`, refType `candidate`/`candidate_re{N}` — 회차는 라운드 합산). (과거 "무료" 서술은 stale)
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
 | id | INTEGER PK auto | |
-| candidate_id | INTEGER NOT NULL UNIQUE FK candidates(id) ON DELETE CASCADE | 후보자당 1건 |
+| candidate_id | INTEGER NOT NULL FK candidates(id) ON DELETE CASCADE | `(candidate_id, round)` UNIQUE |
+| round | TEXT NOT NULL DEFAULT 'round1' | `round1`(1차 실무) / `round2`(2차 임원) |
 | job_id | INTEGER NOT NULL FK job_postings(id) ON DELETE CASCADE | |
 | org_id | INTEGER NULL FK organizations(id) ON DELETE CASCADE | |
 | based_on_screening | INTEGER NOT NULL DEFAULT 0 | 생성 시 서류평가 반영 여부 (boolean) |
 | based_on_interview | INTEGER NOT NULL DEFAULT 0 | 생성 시 AI면접 평가 반영 여부 (boolean) |
+| based_on_culture_fit | INTEGER NOT NULL DEFAULT 0 | 생성 시 법인 컬쳐핏 기준 반영 여부 (boolean) |
 | questions | JSON NOT NULL | `InterviewQuestionSheet` — `{strategy, sections[], red_flags?}`. 섹션별 `{title, focus, questions[{question, intent, followups?, basis?}]}` |
 | generated_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 마지막 생성자 |
 | created_at / updated_at | TEXT NOT NULL | |

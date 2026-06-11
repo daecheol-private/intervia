@@ -885,20 +885,24 @@ export type InterviewQuestionSheet = {
 };
 
 /**
- * 면접 문제(질문지) 한 벌 — 후보자당 1건.
+ * 면접 문제(질문지) 한 벌 — 후보자당 라운드별 1건.
  *
- * 1차 면접 일정이 확정(interview_schedules.status='selected', round='round1')된 후
+ * 해당 라운드 면접 일정이 확정(interview_schedules.status='selected', round 일치)된 후
  * 면접관 중 누구나 "면접 문제 생성"을 누르면 LLM 이 이력서·서류평가·AI면접 평가를
- * 종합해 다양한 형태의 질문지를 만들어 여기에 저장한다. 이후 면접관이 팝업으로 열람.
+ * 종합해 질문지를 만들어 여기에 저장한다. 이후 면접관이 팝업으로 열람.
+ *   round1 = 1차 실무 면접 (직무·기술 검증 중심)
+ *   round2 = 2차 임원 면접 (컬쳐핏·인재상·가치관·성장 잠재력 중심)
  *
- * 후보자당 1건(candidate_id UNIQUE) — 재생성 시 같은 row 를 덮어쓴다(이력 미보관).
+ * (candidate_id, round) UNIQUE — 재생성 시 같은 row 를 덮어쓴다(이력 미보관).
  */
 export const interviewQuestionSheets = sqliteTable("interview_question_sheets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   candidateId: integer("candidate_id")
     .notNull()
-    .unique()
     .references(() => candidates.id, { onDelete: "cascade" }),
+  round: text("round", { enum: ["round1", "round2"] })
+    .notNull()
+    .default("round1"),
   jobId: integer("job_id")
     .notNull()
     .references(() => jobPostings.id, { onDelete: "cascade" }),
@@ -906,11 +910,14 @@ export const interviewQuestionSheets = sqliteTable("interview_question_sheets", 
     onDelete: "cascade",
   }),
   // 생성 시점에 어떤 입력이 반영됐는지 — UI 안내용.
-  // (서류평가 있었나 / AI면접 평가 있었나)
+  // (서류평가 있었나 / AI면접 평가 있었나 / 법인 컬쳐핏 기준 있었나)
   basedOnScreening: integer("based_on_screening", { mode: "boolean" })
     .notNull()
     .default(false),
   basedOnInterview: integer("based_on_interview", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  basedOnCultureFit: integer("based_on_culture_fit", { mode: "boolean" })
     .notNull()
     .default(false),
   questions: text("questions", { mode: "json" })
@@ -926,7 +933,12 @@ export const interviewQuestionSheets = sqliteTable("interview_question_sheets", 
   updatedAt: text("updated_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  candidateRoundUq: uniqueIndex("interview_question_sheets_candidate_round_uq").on(
+    t.candidateId,
+    t.round
+  ),
+}));
 
 export const orgSmtpConfigs = sqliteTable("org_smtp_configs", {
   orgId: integer("org_id")

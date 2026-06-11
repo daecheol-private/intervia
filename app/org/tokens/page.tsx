@@ -177,7 +177,7 @@ export default function TokensPage() {
             icon="📝"
             label="면접 문제 생성"
             tokens={data.pricing.interview_question_gen}
-            hint="1차 면접 문제 1건 생성"
+            hint="면접 문제 1건 생성 (1·2차 동일)"
           />
         </div>
         <p className="text-[11px] text-slate-500 mt-2">

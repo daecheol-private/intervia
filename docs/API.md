@@ -82,8 +82,8 @@
 | GET | `/api/candidates/[id]` | 🔑 |
 | DELETE | `/api/candidates/[id]` | 후보자 + 파일 삭제 |
 | POST | `/api/candidates/[id]/interview-link` | 새 면접 세션 + 링크 발급 (**차감 없음**). 🪙 잔액 0 이하면 402. interview 과금은 발급·동의·시작이 아니라 **면접 평가(`complete`/`reevaluate`) 성공 시 후차감** |
-| GET | `/api/candidates/[id]/interview-questions` | 저장된 1차 면접 질문지 + `scheduleConfirmed`(1차 일정 확정 여부) 반환. 없으면 `sheet:null` |
-| POST | `/api/candidates/[id]/interview-questions` | 1차 면접 질문지 **생성/재생성**. **`interview_question_gen` 토큰 차감(기본 5, 생성 성공 시 후차감 — 재생성도 매번 과금, `chargeRepeatable` 회차 refType `candidate`/`candidate_re{N}`)**. 게이트: round1 일정 `selected` 아니면 409. 이력서+서류평가+AI면접 평가 종합 LLM(task=questionGen) → 후보자당 1건 upsert. 감사 `interview_questions.generate` |
+| GET | `/api/candidates/[id]/interview-questions?round=round1\|round2` | 저장된 해당 라운드 면접 질문지 + `scheduleConfirmed`(해당 라운드 일정 확정 여부) 반환. round 생략 시 round1. 없으면 `sheet:null` |
+| POST | `/api/candidates/[id]/interview-questions?round=round1\|round2` | 면접 질문지 **생성/재생성**. **`interview_question_gen` 토큰 차감(기본 5, 라운드 동일 단가, 생성 성공 시 후차감 — 재생성·라운드 추가 생성도 매번 과금, `chargeRepeatable` 회차 refType `candidate`/`candidate_re{N}` 라운드 합산)**. 게이트: 해당 라운드 일정 `selected` 아니면 409. 이력서+서류평가+AI면접 평가+법인 컬쳐핏 기준(있으면) 종합 LLM(task=questionGen) — round1=실무 프롬프트, round2=임원(컬쳐핏·인재상 중심) 프롬프트 → 후보자당 라운드별 1건 upsert. 감사 `interview_questions.generate`(metadata.round) |
 
 ## 면접 (외부 — 후보자용)
 
@@ -208,7 +208,7 @@
 | 이력서 업로드 | (차감 없음) | - | - | - |
 | 서류 평가 / 재평가 | **평가 성공 시 (후차감)** | `resume_upload` | `screening_job:id` | 환불 없음 — 오류/재시도는 애초에 과금 안 됨. 재평가는 새 job 이라 성공마다 1건 |
 | AI 면접 | **평가 성공 시 (후차감)** `complete`/`reevaluate` | `interview` | `interview_session` / `interview_session_re{N}` | 환불 없음 — 발급·동의·만료 시점엔 과금 X |
-| 면접 질문지 생성/재생성 | **생성 성공 시 (후차감)** | `interview_question_gen` | `candidate` / `candidate_re{N}` | 환불 없음 — 재생성 매번 과금 |
+| 면접 질문지 생성/재생성 (1·2차 공통) | **생성 성공 시 (후차감)** | `interview_question_gen` | `candidate` / `candidate_re{N}` (회차는 라운드 합산) | 환불 없음 — 재생성·라운드 추가 생성 매번 과금 |
 | 관리자 충전 | 즉시 | `admin_adjust` | - | 별도 PATCH 호출로 -delta |
 
 `chargeFeature`/`refundFeature` 는 `(org, reason, refType, refId)` 단위 멱등. **재평가/재생성 매번 과금**은 `chargeRepeatable` 이 회차별 refType(`{base}`/`{base}_re{N}`)으로 분리. **잔액이 0 이하면 유료 라우트는 402 차단**(`lib/wallet-guard.ts`, 공고 생성 포함).
