@@ -32,6 +32,13 @@ import {
 import { logAudit } from "@/lib/audit";
 import { enqueueScreening } from "@/lib/screening-queue";
 import { triggerWorker } from "@/lib/worker-trigger";
+import {
+  ATTACHMENT_EXTS,
+  MAX_ATTACHMENT_SIZE,
+  RESUME_EXTS,
+  ext,
+  verifyMagic,
+} from "@/lib/upload-validation";
 
 export const runtime = "nodejs";
 
@@ -250,46 +257,6 @@ export async function GET(
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB per file (blob 다운로드/안전 상한)
 const MAX_ZIP_SIZE = 100 * 1024 * 1024; // 100MB for ZIP
-// 개별 첨부 1건 상한. 초과 시 그 파일만 제외(배치 전체는 진행) — 동영상 삽입된 PPT 등
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB
-const RESUME_EXTS = new Set(["pdf", "docx"]);
-const ATTACHMENT_EXTS = new Set([
-  "pdf",
-  "docx",
-  "doc",
-  "hwp",
-  "hwpx",
-  "png",
-  "jpg",
-  "jpeg",
-  "pptx",
-  "xlsx",
-  "txt",
-  "md",
-]);
-
-function ext(name: string): string {
-  return (name.split(".").pop() ?? "").toLowerCase();
-}
-
-function verifyMagic(name: string, buf: Buffer): string | null {
-  const e = ext(name);
-  if (e === "pdf") {
-    if (
-      buf.length < 5 ||
-      buf[0] !== 0x25 ||
-      buf[1] !== 0x50 ||
-      buf[2] !== 0x44 ||
-      buf[3] !== 0x46 ||
-      buf[4] !== 0x2d
-    )
-      return "유효한 PDF 파일이 아닙니다.";
-  } else if (e === "docx" || e === "pptx" || e === "xlsx") {
-    if (buf.length < 2 || buf[0] !== 0x50 || buf[1] !== 0x4b)
-      return `유효한 ${e.toUpperCase()} 파일이 아닙니다.`;
-  }
-  return null;
-}
 
 export async function POST(
   req: Request,

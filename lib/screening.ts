@@ -31,6 +31,21 @@ function extOf(name: string): string {
 }
 
 /**
+ * 첨부 1건 텍스트 추출 + 마스킹. 추출 불가 형식(이미지 등)·빈 텍스트면 null.
+ * 워커(ensureParsed)와 후보자 상세 첨부 추가 라우트가 공유 — 마스킹 규칙 단일화.
+ * @throws 파싱 라이브러리 오류는 그대로 전파 — 호출부가 best-effort 처리.
+ */
+export async function maskAttachmentText(
+  buf: Buffer,
+  originalName: string
+): Promise<string | null> {
+  if (!TEXT_EXTRACTABLE.has(extOf(originalName))) return null;
+  const raw = await extractTextFromBuffer(buf, originalName);
+  if (raw.trim().length === 0) return null;
+  return sanitizeResumeText(maskText(raw)).text;
+}
+
+/**
  * 이력서 본문 정규화 후 SHA-256 — "내용 동일" 중복 판정용.
  * 공백·대소문자 차이를 무시해, 바이트가 달라도(재저장·재export) 본문이 같으면 같은 해시.
  */
@@ -238,12 +253,11 @@ export async function ensureParsed(candidateId: number): Promise<void> {
     const abuf = await readStoredFile(a.filePath);
     if (!abuf) continue;
     try {
-      const raw = await extractTextFromBuffer(abuf, a.originalName);
-      if (raw.trim().length > 0) {
-        const s = sanitizeResumeText(maskText(raw));
+      const maskedAtt = await maskAttachmentText(abuf, a.originalName);
+      if (maskedAtt) {
         await db
           .update(candidateAttachments)
-          .set({ maskedText: s.text })
+          .set({ maskedText: maskedAtt })
           .where(eq(candidateAttachments.id, a.id));
       }
     } catch (e) {
