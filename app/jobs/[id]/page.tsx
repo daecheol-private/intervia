@@ -1163,13 +1163,24 @@ export default function JobDetailPage() {
           </button>
         )}
         {onlyStage === "round1_passed" && (
-          <button
-            onClick={() => void bulkAdvance("round2_passed", inProgress.map((c) => c.id))}
-            disabled={bulkBusy !== null}
-            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
-          >
-            → 2차 합격
-          </button>
+          <>
+            <SchedulePropose
+              jobId={Number(jobId)}
+              selectedIds={inProgress.map((c) => c.id)}
+              round="round2"
+              onDone={() => {
+                setSelected(new Set());
+                void loadCandidates();
+              }}
+            />
+            <button
+              onClick={() => void bulkAdvance("round2_passed", inProgress.map((c) => c.id))}
+              disabled={bulkBusy !== null}
+              className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+            >
+              → 2차 합격
+            </button>
+          </>
         )}
         {allInProgress && (
           <button
@@ -1915,6 +1926,17 @@ export default function JobDetailPage() {
                   />
                   <span className={`text-xs font-semibold ${meta.tone}`}>{meta.label}</span>
                   <span className="text-xs text-slate-400">({items.length}명)</span>
+                  {gk === "hr_round1" && (
+                    <SchedulePropose
+                      jobId={Number(jobId)}
+                      selectedIds={selectedInBlock}
+                      round="round2"
+                      onDone={() => {
+                        setSelected(new Set());
+                        void loadCandidates();
+                      }}
+                    />
+                  )}
                   {hasSel && (
                     <span className="text-xs text-primary-deep font-medium">
                       · {selectedInBlock.length}명 선택됨

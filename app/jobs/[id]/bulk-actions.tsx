@@ -7,13 +7,16 @@ export function SchedulePropose({
   jobId,
   selectedIds,
   onDone,
+  round = "round1",
 }: {
   jobId: number;
   selectedIds: number[];
   onDone: () => void;
+  round?: "round1" | "round2";
 }) {
   const [open, setOpen] = useState(false);
   const disabled = selectedIds.length === 0;
+  const label = round === "round2" ? "2차 일정 제시" : "면접 스케쥴 제시";
 
   return (
     <>
@@ -21,13 +24,14 @@ export function SchedulePropose({
         onClick={() => setOpen(true)}
         disabled={disabled}
         className="ml-auto text-xs px-3 py-1.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        title={disabled ? "후보자를 체크하세요" : "면접 스케쥴 제시"}
+        title={disabled ? "후보자를 체크하세요" : label}
       >
-        📅 면접 스케쥴 제시 ({selectedIds.length})
+        📅 {label} ({selectedIds.length})
       </button>
       <ScheduleProposeModal
         jobId={jobId}
         candidateIds={selectedIds}
+        round={round}
         open={open}
         onClose={() => setOpen(false)}
         onDone={onDone}
