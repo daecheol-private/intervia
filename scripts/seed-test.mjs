@@ -4,6 +4,14 @@ import bcrypt from "bcryptjs";
 
 const url = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || "file:./data.db";
 const authToken = process.env.TURSO_AUTH_TOKEN;
+
+// 전체 wipe 를 수행하므로 원격(운영) DB 차단 — _load-env 가 기본으로 .env.production.local 을
+// 읽어 TURSO URL 이 잡힐 수 있다. 로컬 실행: $env:LOCAL_DB="1"; npm run db:seed-test
+if (!url.startsWith("file:") && process.env.SEED_REMOTE !== "1") {
+  console.error(`❌ 원격 DB(${url}) 시드 거부. 로컬은 LOCAL_DB=1, 원격을 정말 원하면 SEED_REMOTE=1.`);
+  process.exit(1);
+}
+
 const db = createClient({ url, authToken });
 
 // C-2 — 비번 정책(10자+·3종+) 준수. 기존 "Test1234!"(9자)는 정책 미달이라 일부

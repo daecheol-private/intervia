@@ -2,6 +2,18 @@
 
 작업 전 한 번 훑으면 시간 낭비 큰 폭으로 줄어듭니다.
 
+## 0-B. node 스크립트의 env 기본값은 운영 — DB 스크립트는 반드시 `LOCAL_DB=1`
+
+**증상**: `npm run db:seed-test` 등을 로컬 작업이라 생각하고 실행했는데 운영 Turso 가 wipe 됨 (2026-06-12 실사고).
+
+**원인**: `scripts/_load-env.mjs` 가 `LOCAL_DB=1` 없으면 **production 모드**로 로드 → `.env.production.local` 의 `TURSO_DATABASE_URL` 이 잡힘. Next dev 서버(로컬 `data.db`)와 node 스크립트의 대상 DB 가 다르다.
+
+**해결**:
+- 로컬 대상 스크립트는 항상 `$env:LOCAL_DB="1"; node scripts/...` 또는 `$env:LOCAL_DB="1"; npm run db:seed-test`
+- destructive 스크립트는 실행 직후 출력되는 `DB:` URL 부터 확인
+- `seed-test.mjs` 는 원격 URL 이면 거부하는 가드 내장 (`SEED_REMOTE=1` 로만 해제)
+- 새 wipe/시드 스크립트를 만들면 같은 가드를 넣을 것
+
 ## 0-A. 후보자 서브상태는 컬럼이 아니라 파생 — `lib/candidate-state.ts` 만 수정
 
 **증상**: "지원자 응답 대기"인데 실제론 HR 차례 등 목록/대시보드 상태 불일치.
