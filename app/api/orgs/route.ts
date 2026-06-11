@@ -192,7 +192,7 @@ export async function POST(req: Request) {
   void notifySystemAdmins({
     type: "new_org",
     title: `신규 법인 "${org.name}" 이(가) 등록되었습니다 (대표: ${user.name})`,
-    href: `/admin/orgs/${org.id}`,
+    href: "/admin/orgs",
     payload: { orgId: org.id, userId: user.id },
   });
 
