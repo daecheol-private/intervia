@@ -98,7 +98,8 @@ export default function JobDetailPage() {
     return "all";
   });
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
+  // 실행 중인 일괄 액션 이름 — 해당 버튼만 스피너 표시 (null 이면 유휴)
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   // 합·불 일괄 처리 모달 — 사유 + 통보 메일 옵션을 받기 위해 confirm 대신 모달 사용.
   const [bulkDecisionState, setBulkDecisionState] = useState<{
     decision: "hired" | "rejected";
@@ -767,13 +768,13 @@ export default function JobDetailPage() {
       ))
     )
       return;
-    setBulkBusy(true);
+    setBulkBusy("screen");
     const res = await fetch("/api/candidates/bulk-screen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: targets.map((c) => c.id) }),
     });
-    setBulkBusy(false);
+    setBulkBusy(null);
     if (!res.ok) {
       notify(await res.text(), { tone: "danger", title: "큐 등록 실패" });
       return;
@@ -821,13 +822,13 @@ export default function JobDetailPage() {
       ))
     )
       return;
-    setBulkBusy(true);
+    setBulkBusy("rescreen");
     const res = await fetch("/api/candidates/bulk-screen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: targets.map((c) => c.id) }),
     });
-    setBulkBusy(false);
+    setBulkBusy(null);
     if (!res.ok) {
       notify(await res.text(), { tone: "danger", title: "재평가 요청 실패" });
       return;
@@ -856,13 +857,13 @@ export default function JobDetailPage() {
       }))
     )
       return;
-    setBulkBusy(true);
+    setBulkBusy("delete");
     const res = await fetch("/api/candidates/bulk-delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: targetIds }),
     });
-    setBulkBusy(false);
+    setBulkBusy(null);
     if (!res.ok) {
       notify(await res.text(), { tone: "danger", title: "삭제 실패" });
       return;
@@ -887,7 +888,7 @@ export default function JobDetailPage() {
     const st = bulkDecisionState;
     if (!st) return;
     const label = st.decision === "hired" ? "최종합격" : "불합격";
-    setBulkBusy(true);
+    setBulkBusy("decide");
     let ok = 0;
     let fail = 0;
     let mailOk = 0;
@@ -936,7 +937,7 @@ export default function JobDetailPage() {
     await Promise.all(
       Array.from({ length: Math.min(6, st.ids.length) }, runWorker)
     );
-    setBulkBusy(false);
+    setBulkBusy(null);
     setBulkDecisionState(null);
     notify(
       `${label} 처리: 성공 ${ok}건${fail > 0 ? ` / 실패 ${fail}건` : ""}` +
@@ -960,7 +961,7 @@ export default function JobDetailPage() {
       ))
     )
       return;
-    setBulkBusy(true);
+    setBulkBusy("decisionMail");
     let ok = 0;
     let fail = 0;
     const queue = [...targetIds];
@@ -980,7 +981,7 @@ export default function JobDetailPage() {
     await Promise.all(
       Array.from({ length: Math.min(6, targetIds.length) }, runWorker)
     );
-    setBulkBusy(false);
+    setBulkBusy(null);
     notify(
       `불합격 통보 발송: 성공 ${ok}건${fail > 0 ? ` / 실패 ${fail}건` : ""}`,
       { tone: fail > 0 ? "warn" : "success", title: "통보 메일 발송 결과" }
@@ -998,13 +999,13 @@ export default function JobDetailPage() {
       ))
     )
       return;
-    setBulkBusy(true);
+    setBulkBusy("interviewSend");
     const r = await fetch(`/api/jobs/${jobId}/interview-links`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ candidateIds: targetIds }),
     });
-    setBulkBusy(false);
+    setBulkBusy(null);
     if (!r.ok) {
       const text = await r.text();
       notify(text, { tone: "danger", title: "발송 실패" });
@@ -1028,7 +1029,7 @@ export default function JobDetailPage() {
 
   const bulkAdvance = async (newStage: Candidate["stage"], targetIds: number[]) => {
     if (targetIds.length === 0) return;
-    setBulkBusy(true);
+    setBulkBusy("advance");
     const ids = targetIds;
     let ok = 0;
     let fail = 0;
@@ -1041,7 +1042,7 @@ export default function JobDetailPage() {
       if (res.ok) ok++;
       else fail++;
     }
-    setBulkBusy(false);
+    setBulkBusy(null);
     if (fail > 0)
       notify(`성공 ${ok}건 / 실패 ${fail}건`, { tone: "warn", title: "처리 결과" });
     setSelected(new Set());
@@ -1106,39 +1107,39 @@ export default function JobDetailPage() {
           href={`/jobs/${jobId}/compare?ids=${selectedInBlock.join(",")}`}
           className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium whitespace-nowrap"
         >
-          비교 ({selectedInBlock.length})
+          비교
         </Link>
         {screenable.length > 0 && (
           <button
             onClick={() => void bulkScreen(screenable.map((c) => c.id))}
-            disabled={bulkBusy}
+            disabled={bulkBusy !== null}
             className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="평가 안 됐거나 실패한 후보를 다시 큐에 넣습니다"
           >
-            {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {bulkBusy ? "처리 중..." : `AI 검토 요청 (${screenable.length})`}
+            {bulkBusy === "screen" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {bulkBusy === "screen" ? "처리 중..." : "AI 검토 요청"}
           </button>
         )}
         {rescreenable.length > 0 && (
           <button
             onClick={() => void bulkRescreen(rescreenable.map((c) => c.id))}
-            disabled={bulkBusy}
+            disabled={bulkBusy !== null}
             className="px-2.5 py-1.5 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="이미 평가된 후보를 다시 평가합니다 (공고/평가 가이드 수정 후 등)"
           >
-            {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {bulkBusy ? "처리 중..." : `🔄 재평가 (${rescreenable.length})`}
+            {bulkBusy === "rescreen" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {bulkBusy === "rescreen" ? "처리 중..." : "🔄 재평가"}
           </button>
         )}
         {(onlyStage === "screened" || onlyStage === "ai_pending") && (
           <button
             onClick={() => void bulkInterviewSend(inProgress.map((c) => c.id))}
-            disabled={bulkBusy}
+            disabled={bulkBusy !== null}
             className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="선택된 후보 전원에게 AI 면접 링크 메일 발송"
           >
-            {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {bulkBusy ? "발송 중..." : `📧 AI 면접 발송 (${inProgress.length})`}
+            {bulkBusy === "interviewSend" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {bulkBusy === "interviewSend" ? "발송 중..." : "📧 AI 면접 발송"}
           </button>
         )}
         {(onlyStage === "round1_candidate" ||
@@ -1155,7 +1156,7 @@ export default function JobDetailPage() {
         {onlyStage === "ai_evaluated" && (
           <button
             onClick={() => void bulkAdvance("round1_candidate", inProgress.map((c) => c.id))}
-            disabled={bulkBusy}
+            disabled={bulkBusy !== null}
             className="px-2.5 py-1.5 rounded-lg bg-accent-deep hover:bg-accent text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
           >
             ⭐ 1차 면접 후보로 지정
@@ -1164,7 +1165,7 @@ export default function JobDetailPage() {
         {onlyStage === "round1_passed" && (
           <button
             onClick={() => void bulkAdvance("round2_passed", inProgress.map((c) => c.id))}
-            disabled={bulkBusy}
+            disabled={bulkBusy !== null}
             className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
           >
             → 2차 합격
@@ -1173,7 +1174,7 @@ export default function JobDetailPage() {
         {allInProgress && (
           <button
             onClick={() => setDecideIds(inProgress.map((c) => c.id))}
-            disabled={bulkBusy}
+            disabled={bulkBusy !== null}
             className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
           >
             합/불 결정
@@ -1181,11 +1182,11 @@ export default function JobDetailPage() {
         )}
         <button
           onClick={() => void bulkDelete(selectedInBlock)}
-          disabled={bulkBusy}
+          disabled={bulkBusy !== null}
           className="px-2.5 py-1.5 rounded-lg bg-danger hover:bg-danger/85 text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
         >
-          {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-          {bulkBusy ? "삭제 중..." : `삭제 (${selectedInBlock.length})`}
+          {bulkBusy === "delete" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          {bulkBusy === "delete" ? "삭제 중..." : "삭제"}
         </button>
       </div>
     );
@@ -1642,11 +1643,11 @@ export default function JobDetailPage() {
             </button>
             <button
               onClick={() => void bulkDecisionMail(unnotified.map((c) => c.id))}
-              disabled={bulkBusy}
+              disabled={bulkBusy !== null}
               className="ml-auto text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
             >
-              {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {bulkBusy ? "발송 중..." : "일괄 통보 발송"}
+              {bulkBusy === "decisionMail" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {bulkBusy === "decisionMail" ? "발송 중..." : "일괄 통보 발송"}
             </button>
           </div>
         );
@@ -2031,7 +2032,7 @@ export default function JobDetailPage() {
                   setDecideIds(null);
                   void bulkDecide("hired", ids);
                 }}
-                disabled={bulkBusy}
+                disabled={bulkBusy !== null}
                 className="px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 transition-colors"
               >
                 ✓ 최종합격
@@ -2042,7 +2043,7 @@ export default function JobDetailPage() {
                   setDecideIds(null);
                   void bulkDecide("rejected", ids);
                 }}
-                disabled={bulkBusy}
+                disabled={bulkBusy !== null}
                 className="px-4 py-2.5 rounded-lg bg-ink hover:bg-ink-soft text-surface text-sm font-medium disabled:opacity-50 transition-colors"
               >
                 ✗ 불합격
@@ -2067,7 +2068,7 @@ export default function JobDetailPage() {
             .map((c) => c.stage)}
           jobTitle={job?.title ?? "공고"}
           companyName={job?.companyName ?? null}
-          busy={bulkBusy}
+          busy={bulkBusy === "decide"}
           onCancel={() => setBulkDecisionState(null)}
           onConfirm={(opts) => void runBulkDecision(opts)}
         />
