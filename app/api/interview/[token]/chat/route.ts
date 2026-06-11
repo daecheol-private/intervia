@@ -26,16 +26,15 @@ export async function POST(
   // Rate limit — LLM 비용 DoS 방지.
   // 세션 토큰 기준 분당 20턴 (자연스러운 대화 한계의 약 2배), IP 기준 분당 60턴.
   // 세션 토큰을 식별자로 쓰므로, 같은 토큰을 안 후보자(또는 공격자)가 무한 호출 못 함.
-  const ratePerSession = await rateLimit(
-    req,
-    "interview.chat.session",
-    { limit: 20, windowSec: 60, identifier: `t:${token}` }
-  );
+  const [ratePerSession, ratePerIp] = await Promise.all([
+    rateLimit(req, "interview.chat.session", {
+      limit: 20,
+      windowSec: 60,
+      identifier: `t:${token}`,
+    }),
+    rateLimit(req, "interview.chat.ip", { limit: 60, windowSec: 60 }),
+  ]);
   if (ratePerSession) return ratePerSession;
-  const ratePerIp = await rateLimit(req, "interview.chat.ip", {
-    limit: 60,
-    windowSec: 60,
-  });
   if (ratePerIp) return ratePerIp;
 
   const { userMessage, inputSignals } = (await req.json()) as {
@@ -60,32 +59,52 @@ export async function POST(
   if (new Date(session.expiresAt) < new Date())
     return new Response("만료된 링크", { status: 400 });
 
+  // 동의 확인 ∥ 후보자·공고·법인 로드 — 상호 독립이라 병렬. 후보자/공고/법인은 JOIN 1쿼리
+  // (기존 3회 순차 왕복). 컬럼도 사용분만 — 전체 select() 는 비마스킹 이력서 원문(수십 KB)
+  // 까지 매 턴 끌어왔다. 매 턴 실행되는 first-token 핫패스.
+  const [consentOk, ctxRows] = await Promise.all([
+    hasValidConsent(session.id),
+    db
+      .select({
+        candidate: {
+          id: candidates.id,
+          name: candidates.name,
+          email: candidates.email,
+          phone: candidates.phone,
+          resumeMaskedText: candidates.resumeMaskedText,
+          screeningReport: candidates.screeningReport,
+        },
+        job: {
+          position: jobPostings.position,
+          level: jobPostings.level,
+          employmentType: jobPostings.employmentType,
+          responsibilities: jobPostings.responsibilities,
+          requirements: jobPostings.requirements,
+          idealProfile: jobPostings.idealProfile,
+          tone: jobPostings.tone,
+          interviewDurationMinutes: jobPostings.interviewDurationMinutes,
+        },
+        // 회사명 — 공고가 속한 법인 이름. AI 면접관 자기소개에 사용.
+        orgName: organizations.name,
+      })
+      .from(candidates)
+      .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
+      .leftJoin(organizations, eq(organizations.id, jobPostings.orgId))
+      .where(eq(candidates.id, session.candidateId)),
+  ]);
+
   // 동의 가드 — 동의 없으면 면접 진행 차단
-  if (!(await hasValidConsent(session.id))) {
+  if (!consentOk) {
     return Response.json(
       { error: "면접 시작 전 개인정보 처리 동의가 필요합니다.", code: "consent_required" },
       { status: 403 }
     );
   }
 
-  const [candidate] = await db
-    .select()
-    .from(candidates)
-    .where(eq(candidates.id, session.candidateId));
-  const [job] = await db
-    .select()
-    .from(jobPostings)
-    .where(eq(jobPostings.id, candidate!.jobId));
-  // 회사명 — 공고가 속한 법인 이름. AI 면접관 자기소개에 사용.
-  const orgRow = job?.orgId
-    ? (
-        await db
-          .select({ name: organizations.name })
-          .from(organizations)
-          .where(eq(organizations.id, job.orgId))
-      )[0]
-    : null;
-  const companyName = orgRow?.name ?? null;
+  const ctx = ctxRows[0];
+  if (!ctx) return new Response("후보자 없음", { status: 404 });
+  const { candidate, job } = ctx;
+  const companyName = ctx.orgName ?? null;
 
   const isFirstTurn = session.messages.length === 0;
   const rawContent = userMessage ?? (isFirstTurn ? "면접을 시작해주세요." : "");
@@ -93,7 +112,7 @@ export async function POST(
   if (sanitized.injectionAttempt) {
     log.warn("prompt_injection_attempt", {
       sessionId: session.id,
-      candidateId: candidate?.id,
+      candidateId: candidate.id,
       hadEndToken: sanitized.hadEndToken,
       sample: rawContent.slice(0, 200),
     });
@@ -103,9 +122,9 @@ export async function POST(
   const maskedContent = maskText(sanitized.text, {
     level: "standard",
     known: {
-      name: candidate?.name ?? null,
-      emails: candidate?.email ? [candidate.email] : [],
-      phones: candidate?.phone ? [candidate.phone] : [],
+      name: candidate.name ?? null,
+      emails: candidate.email ? [candidate.email] : [],
+      phones: candidate.phone ? [candidate.phone] : [],
     },
   });
   const newUserMessage: InterviewMessage = {
@@ -120,18 +139,18 @@ export async function POST(
     systemInstruction: buildSystemPrompt(
       {
         company: companyName ?? undefined,
-        position: job!.position,
-        level: job!.level,
-        employmentType: job!.employmentType,
-        responsibilities: job!.responsibilities,
-        requirements: job!.requirements,
-        idealProfile: job!.idealProfile,
-        tone: job!.tone,
-        interviewDurationMinutes: job!.interviewDurationMinutes,
+        position: job.position,
+        level: job.level,
+        employmentType: job.employmentType,
+        responsibilities: job.responsibilities,
+        requirements: job.requirements,
+        idealProfile: job.idealProfile,
+        tone: job.tone,
+        interviewDurationMinutes: job.interviewDurationMinutes,
       },
       // LLM 에는 항상 마스킹된 텍스트만 전달
-      candidate!.resumeMaskedText ?? "",
-      candidate!.screeningReport ?? null
+      candidate.resumeMaskedText ?? "",
+      candidate.screeningReport ?? null
     ),
     history: history.slice(0, -1).map((m) => ({
       role: m.role,
@@ -139,19 +158,24 @@ export async function POST(
     })),
   });
 
-  if (session.status === "pending") {
-    await db
-      .update(interviewSessions)
-      .set({ status: "in_progress", startedAt: new Date().toISOString() })
-      .where(eq(interviewSessions.id, session.id));
-  }
+  // 첫 턴 상태 전환 — LLM 스트림 시작과 병렬로 처리해 first-token 지연에서 DB 왕복 제거.
+  const markStarted =
+    session.status === "pending"
+      ? db
+          .update(interviewSessions)
+          .set({ status: "in_progress", startedAt: new Date().toISOString() })
+          .where(eq(interviewSessions.id, session.id))
+      : null;
 
   try {
     // 스트리밍 시작 단계 transient 503/429 자동 재시도 2회.
     // stream 첫 토큰 도달 후 발생하는 에러는 재시도 안 함 (부분 토큰이 이미 클라이언트에 갔을 수 있음).
-    const stream = await startChatStreamWithRetry(() =>
-      chat.sendMessageStream({ message: newUserMessage.content })
-    );
+    const [stream] = await Promise.all([
+      startChatStreamWithRetry(() =>
+        chat.sendMessageStream({ message: newUserMessage.content })
+      ),
+      markStarted,
+    ]);
 
     const encoder = new TextEncoder();
     let acc = "";
@@ -174,7 +198,7 @@ export async function POST(
         if (truncated) {
           log.warn("interview_stream_truncated", {
             sessionId: session.id,
-            candidateId: candidate?.id,
+            candidateId: candidate.id,
             partialLen: acc.length,
           });
         }
@@ -199,7 +223,7 @@ export async function POST(
           if (detectSystemPromptLeak(acc)) {
             log.warn("system_prompt_leak_suspected", {
               sessionId: session.id,
-              candidateId: candidate?.id,
+              candidateId: candidate.id,
               sample: acc.slice(0, 300),
             });
             // M10 — 검출 시 DB 저장 본문을 보호 메시지로 치환하여 다음 LLM 평가

@@ -157,6 +157,13 @@ export async function POST(
     stage: Stage;
   };
   const tasks: SendTask[] = [];
+  // 세션 INSERT 는 모아서 1회 배치 — 후보자당 직렬 INSERT 는 원격 DB 에서 인원수 × RTT.
+  const sessionRows: Array<{
+    candidateId: number;
+    createdByUserId: number;
+    accessToken: string;
+    expiresAt: string;
+  }> = [];
 
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
 
@@ -204,7 +211,7 @@ export async function POST(
 
     const token = generateToken();
     const expiresAt = addDays(new Date(), days).toISOString();
-    await db.insert(interviewSessions).values({
+    sessionRows.push({
       candidateId: c.id,
       createdByUserId: me!.id,
       accessToken: token,
@@ -230,6 +237,11 @@ export async function POST(
       stage: c.stage,
     });
     results.push({ candidateId: c.id, status: "sending" });
+  }
+
+  // 발송 전에 세션이 반드시 존재해야 함 — 배치 INSERT 는 동기 단계에서 완료.
+  if (sessionRows.length > 0) {
+    await db.insert(interviewSessions).values(sessionRows);
   }
 
   const skippedCount = results.filter((r) => r.status === "skipped").length;

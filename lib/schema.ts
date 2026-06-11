@@ -730,7 +730,10 @@ export const consentLogs = sqliteTable("consent_logs", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
-});
+}, (t) => ({
+  // 채팅 매 턴 hasValidConsent() 가 세션 기준 조회 — 인덱스 없으면 누적 풀스캔.
+  sessionIdx: index("idx_consent_logs_session").on(t.interviewSessionId),
+}));
 
 export const interviewSessions = sqliteTable("interview_sessions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -761,6 +764,11 @@ export const interviewSessions = sqliteTable("interview_sessions", {
 }, (t) => ({
   // 후보자 상세에서 세션 조회. (accessToken 은 별도 unique 인덱스.)
   candidateIdx: index("idx_interview_sessions_candidate").on(t.candidateId),
+  // 만료 cron 의 WHERE status=? AND expires_at < ? — 테이블 누적 시 풀스캔 방지.
+  statusExpiresIdx: index("idx_interview_sessions_status_expires").on(
+    t.status,
+    t.expiresAt
+  ),
 }));
 
 /**
@@ -838,6 +846,11 @@ export const interviewSchedules = sqliteTable("interview_schedules", {
   // 후보자 상세 / 공고 스케쥴 조회.
   candidateIdx: index("idx_interview_schedules_candidate").on(t.candidateId),
   jobIdx: index("idx_interview_schedules_job").on(t.jobId),
+  // 만료 cron · 리마인더 cron 의 status 기준 스캔 — 테이블 누적 시 풀스캔 방지.
+  statusExpiresIdx: index("idx_interview_schedules_status_expires").on(
+    t.status,
+    t.expiresAt
+  ),
 }));
 
 /**

@@ -182,12 +182,20 @@ export default function InterviewPage() {
       const decoder = new TextDecoder();
       let acc = "";
       setMessages([...next, { role: "model", content: "" }]);
+      // 청크마다 setState 하면 메시지 누적 시 전체 버블 리렌더가 초당 수십 회 —
+      // 80ms 스로틀로 묶고 종료 후 1회 최종 반영 (저사양 모바일 입력 끊김 방지).
+      let lastFlush = 0;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         acc += decoder.decode(value, { stream: true });
-        setMessages([...next, { role: "model", content: acc }]);
+        const now = Date.now();
+        if (now - lastFlush >= 80) {
+          lastFlush = now;
+          setMessages([...next, { role: "model", content: acc }]);
+        }
       }
+      setMessages([...next, { role: "model", content: acc }]);
       if (acc.includes("[INTERVIEW_END]")) {
         setEnded(true);
         void finalizeSilently();

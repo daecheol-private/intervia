@@ -148,10 +148,16 @@ export default function JobDetailPage() {
     }
   };
   const [funnelKey, setFunnelKey] = useState(0);
+  // 직전 응답 원문 — 내용이 같으면 setState 를 생략해 4초 폴링이 매번 전체 리렌더
+  // (후보 수백 명 카드 + 파생 계산) + 펀널 refetch 를 유발하지 않게 한다.
+  const lastCandidatesJsonRef = useRef("");
   const loadCandidates = async () => {
     const r = await fetch(`/api/jobs/${jobId}/candidates`);
     if (!r.ok) return;
-    setCandidatesList(await r.json());
+    const text = await r.text();
+    if (text === lastCandidatesJsonRef.current) return;
+    lastCandidatesJsonRef.current = text;
+    setCandidatesList(JSON.parse(text));
     // 후보자 목록이 갱신되면 깔때기도 갱신 (stage 변경·삭제·신규 업로드 모두 커버)
     setFunnelKey((k) => k + 1);
   };
@@ -159,10 +165,20 @@ export default function JobDetailPage() {
   useEffect(() => {
     void loadJob();
     void loadCandidates();
+    // 백그라운드 탭에서는 폴링 중단 — 복귀 시 visibilitychange 가 즉시 1회 갱신.
     const t = setInterval(() => {
-      if (!locked) void loadCandidates();
+      if (!locked && document.visibilityState === "visible")
+        void loadCandidates();
     }, 4000);
-    return () => clearInterval(t);
+    const onVisible = () => {
+      if (!locked && document.visibilityState === "visible")
+        void loadCandidates();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, locked]);
 

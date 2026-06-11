@@ -28,7 +28,12 @@ export type LlmTask = keyof typeof MODELS;
  * 운영(Vercel): GOOGLE_APPLICATION_CREDENTIALS_JSON (서비스계정 JSON 전체 문자열).
  * 로컬 dev: GOOGLE_APPLICATION_CREDENTIALS (파일 경로 — SDK 자동 인식).
  */
+// 모듈 싱글톤 — GoogleAuth 의 액세스 토큰 캐시가 인스턴스 단위라, 호출마다 새로 만들면
+// 매번 JWT 서명 + 토큰 교환이 발생한다 (모든 LLM 호출에 +100~300ms). env 는 프로세스 불변.
+let cachedVertexClient: GoogleGenAI | null = null;
+
 function vertexClient() {
+  if (cachedVertexClient) return cachedVertexClient;
   const project = process.env.GOOGLE_CLOUD_PROJECT;
   if (!project) throw new Error("GOOGLE_CLOUD_PROJECT가 설정되지 않았습니다.");
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? "asia-northeast3";
@@ -38,7 +43,7 @@ function vertexClient() {
       client_email: string;
       private_key: string;
     };
-    return new GoogleGenAI({
+    cachedVertexClient = new GoogleGenAI({
       vertexai: true,
       project,
       location,
@@ -49,8 +54,10 @@ function vertexClient() {
         },
       },
     });
+  } else {
+    cachedVertexClient = new GoogleGenAI({ vertexai: true, project, location });
   }
-  return new GoogleGenAI({ vertexai: true, project, location });
+  return cachedVertexClient;
 }
 
 function clientFor(_task: LlmTask) {

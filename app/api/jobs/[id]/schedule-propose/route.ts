@@ -40,6 +40,9 @@ import {
 } from "@/lib/wallet-guard";
 
 export const runtime = "nodejs";
+// 동기 발송 최대 50명 × MAIL_RATE_PER_SEC(기본 2/s) 페이싱 ≈ 25s + 재시도 여유.
+// interview-links 와 동일 기준.
+export const maxDuration = 120;
 
 export async function POST(
   req: Request,

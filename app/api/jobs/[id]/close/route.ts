@@ -13,6 +13,9 @@ import { checkCloseable, closeJob, isJobExpired } from "@/lib/job-lifecycle";
 import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
+// 통보 메일은 closeJob 내부 after() 백그라운드 발송 — after 도 maxDuration 안에
+// 끝나야 하므로 페이싱(기본 2/s) × 300s ≈ 600통 용량 확보 (Hobby 플랜 상한).
+export const maxDuration = 300;
 
 export async function GET(
   _req: Request,
@@ -88,8 +91,7 @@ export async function POST(
     metadata: {
       rejectedCount: result.rejectedCount,
       sendNotification,
-      mailsSent: result.mailsSent,
-      mailsFailed: result.mailsFailed,
+      mailsQueued: result.mailsQueued,
     },
   });
 

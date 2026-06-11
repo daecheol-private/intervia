@@ -207,6 +207,31 @@ cron/internal 라우트 `authorize` 는 `x-vercel-cron` 헤더 우회를 반드�
 
 ⚠️ Turso(운영)는 서버가 쓰기를 직렬화해 빈도가 낮지만, 재시도는 백엔드 무관 안전망. 새 멱등 차감/중요 쓰기는 같은 패턴 유지. 로컬 dev DB 가 delete 저널이면 `PRAGMA journal_mode=WAL` 1회 적용(서버 재시작 시 `lib/db.ts` 가 자동 설정).
 
+## 0-0-5. 성능 컨벤션 (2026-06-11 성능 점검 반영)
+
+회귀 방지용 — 새 코드 작성 시 아래 패턴 유지. (운영 DB 는 원격 Turso 라 쿼리 1회 = RTT 30~50ms.
+순차 await 쿼리 수가 곧 응답 지연이다.)
+
+- **`getCurrentUser` 는 React cache() 래핑** — RSC 렌더(layout+page) 중복 호출은 자동 dedupe.
+  route handler 에서는 dedupe 안 되므로 헬퍼에 `me` 를 직접 전달: `isJobUnlocked(jobId, me)`
+  (me 생략 시 내부에서 세션 조인 쿼리 재실행). 공고 N건 일괄 판정은 `getUnlockChecker` 사용
+  (대시보드 — 면접관 집합 + 쿠키 기반 동기 판정, 공고당 DB 0쿼리).
+- **독립 쿼리는 `Promise.all`** — 대시보드(`app/page.tsx`)·후보자 목록/상세 API·채팅 라우트가
+  적용 예. 채팅 라우트는 후보자/공고/법인을 JOIN 1쿼리로 + 첫 턴 상태 UPDATE 를 LLM 스트림
+  시작과 병렬.
+- **목록/핫패스에서 `interview_sessions` 전체 `select()` 금지** — `messages`(면접 대화록 전문,
+  세션당 수십 KB)가 끌려온다. 필요한 컬럼만 명시 (`status`/`evaluation` 등). `candidates`
+  전체 select 도 동일 문제 (`resume_text`/`resume_masked_text`).
+- **Gemini 클라이언트는 모듈 싱글톤** — `lib/gemini.ts` `vertexClient()` 가 캐시. 호출마다
+  `new GoogleGenAI()` 생성 금지 (GoogleAuth 토큰 캐시가 인스턴스 단위 → 매번 JWT 서명+토큰 교환).
+- **클라이언트 폴링 3원칙** — ① `document.visibilityState === "visible"` 일 때만 fetch
+  (백그라운드 탭 무한 폴링 방지, 복귀는 visibilitychange/focus 로 1회 갱신), ② 응답 원문이
+  직전과 같으면 setState 생략 (`app/jobs/[id]/page.tsx` `lastCandidatesJsonRef` 패턴 — 4초
+  폴링이 매번 전체 리렌더+펀널 refetch 하던 문제), ③ 같은 엔드포인트 폴링 루프는 1개만
+  (후보 상세에서 useEffect + setTimeout 체인 2중 폴링 사례).
+- **스트리밍 UI 는 setState 스로틀** — 면접 채팅이 청크마다 setMessages 하면 메시지 누적 시
+  전체 버블 리렌더 폭주. 80ms 묶음 + 종료 후 최종 1회 (`app/interview/[token]/page.tsx`).
+
 ## 0-0. SQLite CURRENT_TIMESTAMP 와 JS toISOString() 포맷 불일치
 
 **증상**: timestamp 컬럼을 `gte/lte` 로 비교했을 때 모든 row 가 false 또는 true 로 일관되게 잘못 나옴.
@@ -475,6 +500,15 @@ Resend 는 **팀 단위 rate limit**(기본 5rps, 구계정 2rps)이 있어 동�
 → 대량 발송 경로를 새로 만들 때 `sendMail` 만 쓰면 페이싱이 자동 적용된다. 단 **페이싱은
 프로세스 단위** — 서버리스 다중 인스턴스 합산이 팀 한도를 넘기면 재시도가 흡수한다.
 Resend 한도 상향(서포트 요청) 후엔 `MAIL_RATE_PER_SEC` 만 올리면 됨.
+
+**대량 발송 라우트 컨벤션** (2026-06-12): 페이싱 때문에 발송 시간 = 통수 ÷ 2/s. 그래서
+① N 이 사용자 선택(≤50)인 라우트는 `maxDuration 120` (interview-links·schedule-propose),
+② N 이 무제한인 경로(closeJob 통보)는 **검증·DB 작업만 동기로 하고 발송은 `after()` 백그라운드**
++ 호출 라우트 `maxDuration 300` (after 도 maxDuration 안에 끝나야 함 — 2/s × 300s ≈ 600통 상한),
+③ 메일 보내는 cron(expire-interviews·interview-reminders)도 `maxDuration 120` 명시.
+④ after() 발송은 성공 건만 카운터(`decisionEmailCount` 등) 증가 — 함수가 죽어 유실돼도
+후보 상세 "재발송" 으로 복구 가능 (프로세스 내 큐의 유실 보완책). 발송 보장이 필수가 되면
+DB 아웃박스 테이블로 승격.
 
 ## 12. proxy.ts에서 보호 안 되는 경로
 

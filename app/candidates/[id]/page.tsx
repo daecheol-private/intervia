@@ -154,18 +154,9 @@ export default function CandidateDetailPage() {
       setScreenErr(await res.text());
       return;
     }
+    // 백그라운드 평가 진행 중 폴링은 위 useEffect(screeningPhase==="in_queue") 가 담당.
+    // 여기서 별도 setTimeout 체인을 돌리면 같은 엔드포인트를 2중 폴링하게 된다.
     void load();
-    // 백그라운드 평가 진행 중 → polling
-    const tick = () => {
-      void (async () => {
-        const r = await fetch(`/api/candidates/${id}`);
-        if (!r.ok) return;
-        const d = await r.json();
-        setData(d);
-        if (d.screeningPhase === "in_queue") setTimeout(tick, 4000);
-      })();
-    };
-    setTimeout(tick, 4000);
   };
 
   const handleDelete = async () => {

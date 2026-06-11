@@ -69,7 +69,10 @@ export function NotificationBell() {
   // 초기 로드 + 폴링 + 창 포커스 시 즉시 갱신 + 'intervia:notifications-refresh' 커스텀 이벤트
   useEffect(() => {
     void fetchNotifications();
-    const id = setInterval(fetchNotifications, POLL_MS);
+    // 백그라운드 탭은 스킵 — focus 핸들러가 복귀 시 즉시 갱신한다.
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") void fetchNotifications();
+    }, POLL_MS);
     const onFocus = () => void fetchNotifications();
     const onRefresh = () => void fetchNotifications();
     window.addEventListener("focus", onFocus);

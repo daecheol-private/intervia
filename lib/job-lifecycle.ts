@@ -28,6 +28,7 @@ import { getBalance, getPricing, writeLedgerIdempotent } from "./tokens";
 import { buildDecisionEmail, purgeOnDecision } from "./candidate-stage";
 import { sendMail } from "./mailer";
 import { redactCandidateAuditPii } from "./audit";
+import { after } from "next/server";
 
 export const DEFAULT_JOB_DURATION_DAYS = 30;
 export const EXTENSION_DAYS = 30;
@@ -312,8 +313,7 @@ export async function closeJob(args: {
 }): Promise<{
   closedAt: string;
   rejectedCount: number;
-  mailsSent: number;
-  mailsFailed: number;
+  mailsQueued: number;
 }> {
   const closedAt = new Date().toISOString();
 
@@ -361,9 +361,10 @@ export async function closeJob(args: {
     .set({ status: "closed", closedAt })
     .where(eq(jobPostings.id, args.jobId));
 
-  // 결과 통보 메일 (옵션)
-  let mailsSent = 0;
-  let mailsFailed = 0;
+  // 결과 통보 메일 (옵션) — 대상 인원이 무제한이라 발송은 after() 백그라운드로 분리,
+  // 응답을 막지 않는다 (페이싱 2/s 기준 240명이면 동기 발송만 2분). 성공 건만
+  // decisionEmailCount 증가 → 실패 후보는 상세의 "결정 통보 재발송" 으로 복구 가능.
+  let mailsQueued = 0;
   if (args.sendNotification && job) {
     const [org] = job.orgId
       ? await db
@@ -371,42 +372,54 @@ export async function closeJob(args: {
           .from(organizations)
           .where(eq(organizations.id, job.orgId))
       : [];
-    for (const t of targets) {
-      if (!t.email) continue;
-      try {
-        const { subject, html, text } = buildDecisionEmail({
-          candidateName: t.name,
-          jobTitle: job.title,
-          decision: "rejected",
-          companyName: org?.name ?? null,
-        });
-        await sendMail({
-          to: t.email,
-          subject,
-          html,
-          text,
-          orgId: job.orgId,
-          audience: "candidate",
-        });
-        // 결정 통보 메일 카운트 증가
-        await db
-          .update(candidates)
-          .set({
-            decisionEmailCount: sql`${candidates.decisionEmailCount} + 1`,
-          })
-          .where(eq(candidates.id, t.id));
-        mailsSent++;
-      } catch (e) {
-        console.error(
-          `closeJob: notification mail failed (cid=${t.id})`,
-          e
-        );
-        mailsFailed++;
-      }
+    const mailTargets = targets.filter((t) => !!t.email);
+    mailsQueued = mailTargets.length;
+    if (mailTargets.length > 0) {
+      after(async () => {
+        let sent = 0;
+        let failed = 0;
+        for (const t of mailTargets) {
+          try {
+            const { subject, html, text } = buildDecisionEmail({
+              candidateName: t.name,
+              jobTitle: job.title,
+              decision: "rejected",
+              companyName: org?.name ?? null,
+            });
+            await sendMail({
+              to: t.email!,
+              subject,
+              html,
+              text,
+              orgId: job.orgId,
+              audience: "candidate",
+            });
+            // 결정 통보 메일 카운트 증가
+            await db
+              .update(candidates)
+              .set({
+                decisionEmailCount: sql`${candidates.decisionEmailCount} + 1`,
+              })
+              .where(eq(candidates.id, t.id));
+            sent++;
+          } catch (e) {
+            console.error(
+              `closeJob: notification mail failed (cid=${t.id})`,
+              e
+            );
+            failed++;
+          }
+        }
+        if (failed > 0) {
+          console.error(
+            `closeJob: 통보 메일 ${failed}건 실패 / 성공 ${sent}건 (job=${args.jobId}) — 후보 상세에서 재발송 가능`
+          );
+        }
+      });
     }
   }
 
-  return { closedAt, rejectedCount: targets.length, mailsSent, mailsFailed };
+  return { closedAt, rejectedCount: targets.length, mailsQueued };
 }
 
 /**

@@ -4,6 +4,7 @@ import { eq, count, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { addDays } from "./utils";
 
 export const SESSION_COOKIE = "session";
@@ -77,7 +78,9 @@ export type CurrentUser = {
   sessionToken: string; // 현재 세션 식별용 (UI 에서 "현재 디바이스" 표시)
 };
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+// React cache() — 같은 요청(RSC 렌더) 안에서 layout/page/하위 헬퍼가 중복 호출해도
+// 세션 조인 쿼리는 1회만. 렌더 컨텍스트 밖(route handler)에서는 그냥 통과 호출.
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -136,7 +139,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     mustChangePassword: !!row.mustChangePassword,
     sessionToken: token,
   };
-}
+});
 void sql; // sql 은 향후 raw 쿼리에서 사용 예정
 
 export function assertOrgAccess(

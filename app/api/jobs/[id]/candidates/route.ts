@@ -45,7 +45,7 @@ async function guardJob(me: CurrentUser, jobId: number) {
   if (!job) return { error: new Response("Not found", { status: 404 }), job: null };
   if (!ownsOrg(me, job.orgId))
     return { error: new Response("Not found", { status: 404 }), job: null };
-  if (me.role !== "system_admin" && job.passwordHash && !(await isJobUnlocked(jobId))) {
+  if (me.role !== "system_admin" && job.passwordHash && !(await isJobUnlocked(jobId, me))) {
     return { error: new Response("잠긴 공고입니다.", { status: 403 }), job: null };
   }
   return { error: null, job };
@@ -93,13 +93,75 @@ export async function GET(
     .orderBy(desc(candidates.createdAt));
 
   const ids = rows.map((r) => r.id);
-  const sessions = ids.length
-    ? await db
-        .select()
-        .from(interviewSessions)
-        .where(inArray(interviewSessions.candidateId, ids))
-        .orderBy(desc(interviewSessions.createdAt))
-    : [];
+
+  // 보조 조회 4종은 상호 독립 — 병렬 실행 (순차 await 는 원격 DB RTT 가 그대로 합산).
+  // sessions 는 목록에서 status·evaluation 만 쓰므로 컬럼 축소 — 전체 select() 는
+  // 면접 대화록(messages, 세션당 수십 KB)까지 끌어와 폴링마다 전송된다.
+  const [sessions, allJobs, schedRows, favRows] = await Promise.all([
+    ids.length
+      ? db
+          .select({
+            candidateId: interviewSessions.candidateId,
+            status: interviewSessions.status,
+            evaluation: interviewSessions.evaluation,
+          })
+          .from(interviewSessions)
+          .where(inArray(interviewSessions.candidateId, ids))
+          .orderBy(desc(interviewSessions.createdAt))
+      : Promise.resolve([]),
+    // 큐 정보 — UI 진행상황 + 실패 사유 표시용. 후보자별 최신 job 1건씩.
+    ids.length
+      ? db
+          .select({
+            candidateId: screeningJobs.candidateId,
+            jobId: screeningJobs.id,
+            status: screeningJobs.status,
+            attempts: screeningJobs.attempts,
+            notBefore: screeningJobs.notBefore,
+            lastError: screeningJobs.lastError,
+          })
+          .from(screeningJobs)
+          .where(inArray(screeningJobs.candidateId, ids))
+          .orderBy(desc(screeningJobs.id))
+      : Promise.resolve([]),
+    // 면접 스케줄 상태 — 라운드별 최신 활성 row.
+    //  round1: stage=round1_scheduling 에서 pending(응답 대기) vs counter_proposed(역제시) 구분용
+    //  round2: stage 변화 없이(round1_passed 유지) 스케줄 row 로만 진행되므로 1차/2차 대기 구분용
+    //  selectedSlot.end — 확정 면접 시각 경과 시 "결과 입력 필요" 파생 (lib/candidate-state.ts)
+    ids.length
+      ? db
+          .select({
+            candidateId: interviewSchedules.candidateId,
+            round: interviewSchedules.round,
+            status: interviewSchedules.status,
+            selectedSlot: interviewSchedules.selectedSlot,
+          })
+          .from(interviewSchedules)
+          .where(
+            and(
+              inArray(interviewSchedules.candidateId, ids),
+              inArray(interviewSchedules.status, [
+                "pending",
+                "counter_proposed",
+                "selected",
+              ])
+            )
+          )
+          .orderBy(desc(interviewSchedules.id))
+      : Promise.resolve([]),
+    // 현재 사용자의 후보자 즐겨찾기 ID 셋
+    ids.length
+      ? db
+          .select({ candidateId: userCandidateFavorites.candidateId })
+          .from(userCandidateFavorites)
+          .where(
+            and(
+              eq(userCandidateFavorites.userId, me!.id),
+              inArray(userCandidateFavorites.candidateId, ids)
+            )
+          )
+      : Promise.resolve([]),
+  ]);
 
   const latestByCandidate = new Map<number, typeof sessions[number]>();
   for (const s of sessions) {
@@ -107,22 +169,6 @@ export async function GET(
       latestByCandidate.set(s.candidateId, s);
     }
   }
-
-  // 큐 정보 — UI 진행상황 + 실패 사유 표시용. 후보자별 최신 job 1건씩.
-  const allJobs = ids.length
-    ? await db
-        .select({
-          candidateId: screeningJobs.candidateId,
-          jobId: screeningJobs.id,
-          status: screeningJobs.status,
-          attempts: screeningJobs.attempts,
-          notBefore: screeningJobs.notBefore,
-          lastError: screeningJobs.lastError,
-        })
-        .from(screeningJobs)
-        .where(inArray(screeningJobs.candidateId, ids))
-        .orderBy(desc(screeningJobs.id))
-    : [];
   const jobByCandidate = new Map<number, typeof allJobs[number]>();
   for (const j of allJobs) {
     // desc 정렬이므로 가장 최신 한 건만 보존
@@ -152,31 +198,6 @@ export async function GET(
     queuedJobIds.forEach((jid, idx) => positions.set(jid, beforeMine + idx + 1));
   }
 
-  // 면접 스케줄 상태 — 라운드별 최신 활성 row.
-  //  round1: stage=round1_scheduling 에서 pending(응답 대기) vs counter_proposed(역제시) 구분용
-  //  round2: stage 변화 없이(round1_passed 유지) 스케줄 row 로만 진행되므로 1차/2차 대기 구분용
-  //  selectedSlot.end — 확정 면접 시각 경과 시 "결과 입력 필요" 파생 (lib/candidate-state.ts)
-  const schedRows = ids.length
-    ? await db
-        .select({
-          candidateId: interviewSchedules.candidateId,
-          round: interviewSchedules.round,
-          status: interviewSchedules.status,
-          selectedSlot: interviewSchedules.selectedSlot,
-        })
-        .from(interviewSchedules)
-        .where(
-          and(
-            inArray(interviewSchedules.candidateId, ids),
-            inArray(interviewSchedules.status, [
-              "pending",
-              "counter_proposed",
-              "selected",
-            ])
-          )
-        )
-        .orderBy(desc(interviewSchedules.id))
-    : [];
   type SchedInfo = {
     status: typeof schedRows[number]["status"];
     selectedEnd: string | null;
@@ -193,18 +214,6 @@ export async function GET(
       });
   }
 
-  // 현재 사용자의 후보자 즐겨찾기 ID 셋
-  const favRows = ids.length
-    ? await db
-        .select({ candidateId: userCandidateFavorites.candidateId })
-        .from(userCandidateFavorites)
-        .where(
-          and(
-            eq(userCandidateFavorites.userId, me!.id),
-            inArray(userCandidateFavorites.candidateId, ids)
-          )
-        )
-    : [];
   const favoritedSet = new Set(favRows.map((r) => r.candidateId));
 
   const result = rows.map((r) => {

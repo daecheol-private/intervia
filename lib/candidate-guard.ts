@@ -36,7 +36,7 @@ export async function guardCandidate(
   if (
     me.role !== "system_admin" &&
     job?.passwordHash &&
-    !(await isJobUnlocked(job.id))
+    !(await isJobUnlocked(job.id, me))
   ) {
     return {
       ok: false,

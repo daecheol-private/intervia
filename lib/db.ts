@@ -43,6 +43,11 @@ if (cfg.url.startsWith("file:")) {
   void client
     .execute("PRAGMA journal_mode=WAL")
     .catch((e) => console.warn("[db] WAL 설정 실패(무시):", String(e)));
+  // 동시 쓰기 시 즉시 SQLITE_BUSY 로 실패하지 않고 최대 5초 대기 — lib/tokens.ts 재시도의
+  // 보조 안전망. (연결별 PRAGMA 라 트랜잭션용 별도 연결엔 미적용될 수 있음 — WAL+재시도가 주 방어)
+  void client
+    .execute("PRAGMA busy_timeout=5000")
+    .catch((e) => console.warn("[db] busy_timeout 설정 실패(무시):", String(e)));
 }
 
 export const db = drizzle(client, { schema });

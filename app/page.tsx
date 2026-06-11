@@ -11,7 +11,7 @@ import {
 } from "@/lib/schema";
 import { desc, eq, count, sql, and } from "drizzle-orm";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
-import { isJobUnlocked } from "@/lib/job-lock";
+import { getUnlockChecker } from "@/lib/job-lock";
 import { ChatPreview } from "./components/ChatPreview";
 import { HowItWorksCarousel } from "./components/HowItWorksCarousel";
 import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
@@ -55,91 +55,250 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const orgScope = me.role === "system_admin" ? null : me.orgId ?? -1;
   const orgFilter = orgScope == null ? undefined : eq(jobPostings.orgId, orgScope);
   const candFilter = orgScope == null ? undefined : eq(candidates.orgId, orgScope);
+  const nowIso = new Date().toISOString();
 
-  // 인사말에 표시할 법인명 — orgId 있는 경우만 조회.
-  let orgName: string | null = null;
-  if (me.orgId) {
-    const [org] = await db
-      .select({ name: organizations.name })
-      .from(organizations)
-      .where(eq(organizations.id, me.orgId));
-    orgName = org?.name ?? null;
-  }
-
-  // -- 공고 통계 ----------------------------------------------------------
-  const [jobsAgg] = await db
-    .select({ total: count() })
-    .from(jobPostings)
-    .where(orgFilter ?? sql`1=1`);
-  const totalJobs = Number(jobsAgg?.total ?? 0);
-
-  // -- 후보자 총량 (KPI 카드용) ------------------------------------------
-  // 단계별 분포는 공고 카드에서 표시 — 대시보드 상단엔 합계만.
-  const [candAgg] = await db
-    .select({
-      total: count(),
-      // 종결 판정은 outcome 기준 — stage 는 종결 후에도 진행 단계를 보존한다.
-      decided: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NOT NULL THEN 1 ELSE 0 END)`,
-      // 첫 실행 가이드용 — AI 면접 단계(발송 후 응시 대기) 이상에 도달한 후보 수.
-      interviewReached: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('ai_pending','ai_evaluated','round1_candidate','round1_scheduling','round1_waiting','round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
-    })
-    .from(candidates)
-    .where(candFilter ?? sql`1=1`);
-
-  // -- 평가 대기 큐 카운트 -------------------------------------------------
-  const queueCountQuery = db
-    .select({ c: count() })
-    .from(screeningJobs)
-    .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
-    .where(
-      candFilter
-        ? and(
-            candFilter,
-            sql`${screeningJobs.status} IN ('queued','processing')`
-          )
-        : sql`${screeningJobs.status} IN ('queued','processing')`
-    );
-  const [queueAgg] = await queueCountQuery;
-  const queueCount = Number(queueAgg?.c ?? 0);
-
-  // -- 합류 요청 (org_admin / system_admin 만) ----------------------------
-  let joinRequestCount = 0;
-  if (me.role === "org_admin" && me.orgId) {
-    const [r] = await db
+  // 상호 독립 쿼리 전부 병렬 — 순차 await 는 원격 DB(Turso) RTT × 쿼리 수가
+  // 첫 화면 TTFB 에 그대로 더해진다.
+  const [
+    orgName,
+    totalJobs,
+    candAgg,
+    queueCount,
+    joinRequestCount,
+    tokenBalance,
+    pricing,
+    myInterviewerRows,
+    jobsRaw,
+    myInterviewerJobs,
+    counterRows,
+    expiredAiRows,
+    resultDueRows,
+    orgCount,
+  ] = await Promise.all([
+    // 인사말에 표시할 법인명 — orgId 있는 경우만 조회.
+    me.orgId
+      ? db
+          .select({ name: organizations.name })
+          .from(organizations)
+          .where(eq(organizations.id, me.orgId))
+          .then(([org]): string | null => org?.name ?? null)
+      : Promise.resolve<string | null>(null),
+    // -- 공고 통계 --------------------------------------------------------
+    db
+      .select({ total: count() })
+      .from(jobPostings)
+      .where(orgFilter ?? sql`1=1`)
+      .then(([r]) => Number(r?.total ?? 0)),
+    // -- 후보자 총량 (KPI 카드용) ------------------------------------------
+    // 단계별 분포는 공고 카드에서 표시 — 대시보드 상단엔 합계만.
+    db
+      .select({
+        total: count(),
+        // 종결 판정은 outcome 기준 — stage 는 종결 후에도 진행 단계를 보존한다.
+        decided: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NOT NULL THEN 1 ELSE 0 END)`,
+        // 첫 실행 가이드용 — AI 면접 단계(발송 후 응시 대기) 이상에 도달한 후보 수.
+        interviewReached: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('ai_pending','ai_evaluated','round1_candidate','round1_scheduling','round1_waiting','round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
+      })
+      .from(candidates)
+      .where(candFilter ?? sql`1=1`)
+      .then(([r]) => r),
+    // -- 평가 대기 큐 카운트 -----------------------------------------------
+    db
       .select({ c: count() })
-      .from(orgJoinRequests)
+      .from(screeningJobs)
+      .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
+      .where(
+        candFilter
+          ? and(
+              candFilter,
+              sql`${screeningJobs.status} IN ('queued','processing')`
+            )
+          : sql`${screeningJobs.status} IN ('queued','processing')`
+      )
+      .then(([r]) => Number(r?.c ?? 0)),
+    // -- 합류 요청 (org_admin / system_admin 만) ---------------------------
+    (async () => {
+      if (me.role === "org_admin" && me.orgId) {
+        const [r] = await db
+          .select({ c: count() })
+          .from(orgJoinRequests)
+          .where(
+            and(
+              eq(orgJoinRequests.orgId, me.orgId),
+              eq(orgJoinRequests.status, "pending")
+            )
+          );
+        return Number(r?.c ?? 0);
+      }
+      if (me.role === "system_admin") {
+        const [r] = await db
+          .select({ c: count() })
+          .from(orgJoinRequests)
+          .where(eq(orgJoinRequests.status, "pending"));
+        return Number(r?.c ?? 0);
+      }
+      return 0;
+    })(),
+    // -- 토큰 잔액 (자기 법인만, system_admin 은 전체 잔액 합계) -------------
+    (async (): Promise<number | null> => {
+      if (me.orgId) {
+        const [w] = await db
+          .select({ b: tokenWallets.balance })
+          .from(tokenWallets)
+          .where(eq(tokenWallets.orgId, me.orgId));
+        return w?.b ?? 0;
+      }
+      if (me.role === "system_admin") {
+        const [w] = await db
+          .select({ b: sql<number>`COALESCE(SUM(${tokenWallets.balance}), 0)` })
+          .from(tokenWallets);
+        return Number(w?.b ?? 0);
+      }
+      return null;
+    })(),
+    getAllPricing(),
+    // 내가 면접관인 공고 id — 목록 정렬 1순위 + 잠금 일괄 판정 재료
+    db
+      .select({ jobId: jobInterviewers.jobId })
+      .from(jobInterviewers)
+      .where(eq(jobInterviewers.userId, me.id)),
+    // -- 공고별 액션 카운트 (인사담당자가 처리해야 할 단계만) ----------------
+    // - screened: 서류평가 완료 → 면접 보낼지 결정 대기 (인사담당자 액션)
+    // - ai_pending: 링크 발송 후 후보자 응시 대기 (후보자 액션, 모니터링용)
+    // - ai_evaluated: AI 면접 끝, 합·불 결정 대기 (인사담당자 액션)
+    db
+      .select({
+        id: jobPostings.id,
+        title: jobPostings.title,
+        position: jobPostings.position,
+        level: jobPostings.level,
+        employmentType: jobPostings.employmentType,
+        interviewDurationMinutes: jobPostings.interviewDurationMinutes,
+        createdAt: jobPostings.createdAt,
+        status: jobPostings.status,
+        publishedAt: jobPostings.publishedAt,
+        closesAt: jobPostings.closesAt,
+        extensionCount: jobPostings.extensionCount,
+        passwordHash: jobPostings.passwordHash,
+        candidateCount: count(candidates.id),
+        // 평가 대기 = 아직 stage=applied (서류 평가 안 마침). 진행 중인 후보 수.
+        screeningCount: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'applied' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+        decidedCount: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NOT NULL THEN 1 ELSE 0 END)`,
+        needsInterviewDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'screened' THEN 1 ELSE 0 END)`,
+        awaitingInterview: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_pending' THEN 1 ELSE 0 END)`,
+        needsFinalDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_evaluated' THEN 1 ELSE 0 END)`,
+        needsRound1Schedule: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+        // 2차 진행 결정 — 이미 2차 일정이 진행 중(active 스케줄 존재)인 후보는 제외
+        // (lib/candidate-state.ts r2_decide 판정과 동일)
+        needsRound2Decision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = ${candidates.id} AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
+        needsFinalOffer: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+      })
+      .from(jobPostings)
+      .leftJoin(candidates, eq(candidates.jobId, jobPostings.id))
+      .where(orgFilter ?? sql`1=1`)
+      .groupBy(jobPostings.id)
+      .orderBy(
+        // active 먼저, 그 안에서 최신순. 면접관 우선 정렬은 JS 에서 다시 적용.
+        sql`CASE WHEN ${jobPostings.status} = 'active' THEN 0 ELSE 1 END`,
+        desc(jobPostings.createdAt)
+      ),
+    // 내가 면접관인 공고들 — 단계별 대기 카운트 (알림용)
+    db
+      .select({
+        jobId: jobInterviewers.jobId,
+        title: jobPostings.title,
+        orgId: jobPostings.orgId,
+        passwordHash: jobPostings.passwordHash,
+        pendingDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_evaluated' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+        round1Candidates: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+        round1Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = ${candidates.id} AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
+        round2Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+      })
+      .from(jobInterviewers)
+      .innerJoin(jobPostings, eq(jobPostings.id, jobInterviewers.jobId))
+      .leftJoin(candidates, eq(candidates.jobId, jobPostings.id))
+      .where(eq(jobInterviewers.userId, me.id))
+      .groupBy(jobInterviewers.jobId, jobPostings.title),
+    // 역제시 알림 — 내가 면접관인 공고에서 status='counter_proposed' 인 스케쥴
+    db
+      .select({
+        jobId: interviewSchedules.jobId,
+        title: jobPostings.title,
+        passwordHash: jobPostings.passwordHash,
+        n: count(),
+      })
+      .from(interviewSchedules)
+      .innerJoin(
+        jobInterviewers,
+        eq(jobInterviewers.jobId, interviewSchedules.jobId)
+      )
+      .innerJoin(jobPostings, eq(jobPostings.id, interviewSchedules.jobId))
       .where(
         and(
-          eq(orgJoinRequests.orgId, me.orgId),
-          eq(orgJoinRequests.status, "pending")
+          eq(jobInterviewers.userId, me.id),
+          eq(interviewSchedules.status, "counter_proposed")
         )
-      );
-    joinRequestCount = Number(r?.c ?? 0);
-  } else if (me.role === "system_admin") {
-    const [r] = await db
-      .select({ c: count() })
-      .from(orgJoinRequests)
-      .where(eq(orgJoinRequests.status, "pending"));
-    joinRequestCount = Number(r?.c ?? 0);
-  }
-
-  // -- 토큰 잔액 (자기 법인만, system_admin 은 전체 잔액 합계) -------------
-  let tokenBalance: number | null = null;
-  if (me.orgId) {
-    const [w] = await db
-      .select({ b: tokenWallets.balance })
-      .from(tokenWallets)
-      .where(eq(tokenWallets.orgId, me.orgId));
-    tokenBalance = w?.b ?? 0;
-  } else if (me.role === "system_admin") {
-    const [w] = await db
-      .select({ b: sql<number>`COALESCE(SUM(${tokenWallets.balance}), 0)` })
-      .from(tokenWallets);
-    tokenBalance = Number(w?.b ?? 0);
-  }
+      )
+      .groupBy(interviewSchedules.jobId, jobPostings.title),
+    // AI 면접 링크 만료(응시 중 중단) 알림 — 미응시 만료는 cron 이 자동 불합격 처리하지만,
+    // 응시 중 만료는 HR 이 재발송 또는 결정해야 한다. 활성/완료 세션 없이 expired 만 남은 후보.
+    db
+      .select({
+        jobId: candidates.jobId,
+        title: jobPostings.title,
+        passwordHash: jobPostings.passwordHash,
+        n: count(),
+      })
+      .from(candidates)
+      .innerJoin(jobInterviewers, eq(jobInterviewers.jobId, candidates.jobId))
+      .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
+      .where(
+        and(
+          eq(jobInterviewers.userId, me.id),
+          eq(candidates.stage, "ai_pending"),
+          sql`${candidates.outcome} IS NULL`,
+          sql`EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status = 'expired')`,
+          sql`NOT EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status IN ('pending','in_progress','completed'))`
+        )
+      )
+      .groupBy(candidates.jobId, jobPostings.title),
+    // 면접 결과 입력 대기 알림 — 확정 면접 시각이 지났는데 합·불/다음 단계 미입력.
+    // 최신 active 스케줄 row 만 판정 (재제시로 묻힌 옛 selected row 제외).
+    db
+      .select({
+        jobId: interviewSchedules.jobId,
+        title: jobPostings.title,
+        passwordHash: jobPostings.passwordHash,
+        n: count(),
+      })
+      .from(interviewSchedules)
+      .innerJoin(
+        jobInterviewers,
+        eq(jobInterviewers.jobId, interviewSchedules.jobId)
+      )
+      .innerJoin(jobPostings, eq(jobPostings.id, interviewSchedules.jobId))
+      .innerJoin(candidates, eq(candidates.id, interviewSchedules.candidateId))
+      .where(
+        and(
+          eq(jobInterviewers.userId, me.id),
+          eq(interviewSchedules.status, "selected"),
+          sql`${candidates.outcome} IS NULL`,
+          sql`datetime(json_extract(${interviewSchedules.selectedSlot}, '$.end')) <= datetime(${nowIso})`,
+          sql`((${interviewSchedules.round} = 'round1' AND ${candidates.stage} = 'round1_waiting') OR (${interviewSchedules.round} = 'round2' AND ${candidates.stage} = 'round1_passed'))`,
+          sql`NOT EXISTS (SELECT 1 FROM interview_schedules s2 WHERE s2.candidate_id = ${interviewSchedules.candidateId} AND s2.round = ${interviewSchedules.round} AND s2.id > ${interviewSchedules.id} AND s2.status IN ('pending','counter_proposed','selected'))`
+        )
+      )
+      .groupBy(interviewSchedules.jobId, jobPostings.title),
+    // -- system_admin: 법인 수 (참고용) ------------------------------------
+    me.role === "system_admin"
+      ? db
+          .select({ c: count() })
+          .from(organizations)
+          .then(([r]): number | null => Number(r?.c ?? 0))
+      : Promise.resolve<number | null>(null),
+  ]);
 
   // 토큰 잔액으로 가능한 액션 수 환산 — KPI 카드 보조 문구
-  const pricing = await getAllPricing();
   const tokenEquivResumes =
     tokenBalance != null && tokenBalance > 0
       ? Math.floor(tokenBalance / pricing.resume_upload)
@@ -149,70 +308,24 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       ? Math.floor(tokenBalance / pricing.interview)
       : 0;
 
-  // 내가 면접관인 공고 id — 목록 정렬 1순위 (로그인 계정이 면접관인 공고를 위로)
-  const myInterviewerRows = await db
-    .select({ jobId: jobInterviewers.jobId })
-    .from(jobInterviewers)
-    .where(eq(jobInterviewers.userId, me.id));
   const interviewerSet = new Set(myInterviewerRows.map((r) => r.jobId));
+  // 잠금 일괄 판정 — 면접관 공고 집합은 위에서 1회 조회했으므로 공고당 DB 재조회 없이
+  // 쿠키만으로 동기 판정한다 (기존엔 공고 × 알림 루프마다 2쿼리씩 발생).
+  const unlocked = await getUnlockChecker(me, interviewerSet);
 
-  // -- 공고별 액션 카운트 (인사담당자가 처리해야 할 단계만) ----------------
-  // - screened: 서류평가 완료 → 면접 보낼지 결정 대기 (인사담당자 액션)
-  // - ai_pending: 링크 발송 후 후보자 응시 대기 (후보자 액션, 모니터링용)
-  // - ai_evaluated: AI 면접 끝, 합·불 결정 대기 (인사담당자 액션)
-  const jobsWithActions = await db
-    .select({
-      id: jobPostings.id,
-      title: jobPostings.title,
-      position: jobPostings.position,
-      level: jobPostings.level,
-      employmentType: jobPostings.employmentType,
-      interviewDurationMinutes: jobPostings.interviewDurationMinutes,
-      createdAt: jobPostings.createdAt,
-      status: jobPostings.status,
-      publishedAt: jobPostings.publishedAt,
-      closesAt: jobPostings.closesAt,
-      extensionCount: jobPostings.extensionCount,
-      passwordHash: jobPostings.passwordHash,
-      candidateCount: count(candidates.id),
-      // 평가 대기 = 아직 stage=applied (서류 평가 안 마침). 진행 중인 후보 수.
-      screeningCount: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'applied' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
-      decidedCount: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NOT NULL THEN 1 ELSE 0 END)`,
-      needsInterviewDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'screened' THEN 1 ELSE 0 END)`,
-      awaitingInterview: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_pending' THEN 1 ELSE 0 END)`,
-      needsFinalDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_evaluated' THEN 1 ELSE 0 END)`,
-      needsRound1Schedule: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
-      // 2차 진행 결정 — 이미 2차 일정이 진행 중(active 스케줄 존재)인 후보는 제외
-      // (lib/candidate-state.ts r2_decide 판정과 동일)
-      needsRound2Decision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = ${candidates.id} AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
-      needsFinalOffer: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
-    })
-    .from(jobPostings)
-    .leftJoin(candidates, eq(candidates.jobId, jobPostings.id))
-    .where(orgFilter ?? sql`1=1`)
-    .groupBy(jobPostings.id)
-    .orderBy(
-      // active 먼저, 그 안에서 최신순. 면접관 우선 정렬은 JS 에서 다시 적용.
-      sql`CASE WHEN ${jobPostings.status} = 'active' THEN 0 ELSE 1 END`,
-      desc(jobPostings.createdAt)
-    )
-    .then((rows) =>
-      rows.sort((a, b) => {
-        // 1순위: 내가 면접관인 공고
-        const ai = interviewerSet.has(a.id) ? 1 : 0;
-        const bi = interviewerSet.has(b.id) ? 1 : 0;
-        if (ai !== bi) return bi - ai;
-        // 2순위: SQL orderBy 결과 유지 (active 먼저, created desc)
-        return 0;
-      })
-    );
+  const jobsWithActions = jobsRaw.sort((a, b) => {
+    // 1순위: 내가 면접관인 공고
+    const ai = interviewerSet.has(a.id) ? 1 : 0;
+    const bi = interviewerSet.has(b.id) ? 1 : 0;
+    if (ai !== bi) return bi - ai;
+    // 2순위: SQL orderBy 결과 유지 (active 먼저, created desc)
+    return 0;
+  });
 
   // 잠긴 공고 체크 — 후보자 카운트 숨김
   const lockedJobIdsAtJobs = new Set<number>();
   for (const j of jobsWithActions) {
-    if (j.passwordHash) {
-      if (!(await isJobUnlocked(j.id))) lockedJobIdsAtJobs.add(j.id);
-    }
+    if (j.passwordHash && !unlocked(j.id)) lockedJobIdsAtJobs.add(j.id);
   }
 
   // 알림 — 내가 면접관으로 지정된 공고에서 액션 대기 중인 항목.
@@ -226,25 +339,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     tone: "amber" | "blue" | "indigo" | "rose";
   };
   const notifications: Notification[] = [];
-  // 내가 면접관인 공고들 — 단계별 대기 카운트
-  const myInterviewerJobs = await db
-    .select({
-      jobId: jobInterviewers.jobId,
-      title: jobPostings.title,
-      orgId: jobPostings.orgId,
-      passwordHash: jobPostings.passwordHash,
-      pendingDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_evaluated' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
-      round1Candidates: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
-      round1Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = ${candidates.id} AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
-      round2Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
-    })
-    .from(jobInterviewers)
-    .innerJoin(jobPostings, eq(jobPostings.id, jobInterviewers.jobId))
-    .leftJoin(candidates, eq(candidates.jobId, jobPostings.id))
-    .where(eq(jobInterviewers.userId, me.id))
-    .groupBy(jobInterviewers.jobId, jobPostings.title);
   for (const j of myInterviewerJobs) {
-    const locked = j.passwordHash != null && !(await isJobUnlocked(j.jobId));
+    const locked = j.passwordHash != null && !unlocked(j.jobId);
     const displayTitle = locked ? "🔒 비공개" : j.title;
     const decision = Number(j.pendingDecision);
     const round1Cand = Number(j.round1Candidates);
@@ -292,29 +388,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     }
   }
 
-  // 역제시 알림 — 내가 면접관인 공고에서 status='counter_proposed' 인 스케쥴
-  const counterRows = await db
-    .select({
-      jobId: interviewSchedules.jobId,
-      title: jobPostings.title,
-      passwordHash: jobPostings.passwordHash,
-      n: count(),
-    })
-    .from(interviewSchedules)
-    .innerJoin(
-      jobInterviewers,
-      eq(jobInterviewers.jobId, interviewSchedules.jobId)
-    )
-    .innerJoin(jobPostings, eq(jobPostings.id, interviewSchedules.jobId))
-    .where(
-      and(
-        eq(jobInterviewers.userId, me.id),
-        eq(interviewSchedules.status, "counter_proposed")
-      )
-    )
-    .groupBy(interviewSchedules.jobId, jobPostings.title);
   for (const r of counterRows) {
-    const locked = r.passwordHash != null && !(await isJobUnlocked(r.jobId));
+    const locked = r.passwordHash != null && !unlocked(r.jobId);
     const displayTitle = locked ? "🔒 비공개" : r.title;
     const n = Number(r.n);
     if (n > 0) {
@@ -330,30 +405,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     }
   }
 
-  // AI 면접 링크 만료(응시 중 중단) 알림 — 미응시 만료는 cron 이 자동 불합격 처리하지만,
-  // 응시 중 만료는 HR 이 재발송 또는 결정해야 한다. 활성/완료 세션 없이 expired 만 남은 후보.
-  const expiredAiRows = await db
-    .select({
-      jobId: candidates.jobId,
-      title: jobPostings.title,
-      passwordHash: jobPostings.passwordHash,
-      n: count(),
-    })
-    .from(candidates)
-    .innerJoin(jobInterviewers, eq(jobInterviewers.jobId, candidates.jobId))
-    .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
-    .where(
-      and(
-        eq(jobInterviewers.userId, me.id),
-        eq(candidates.stage, "ai_pending"),
-        sql`${candidates.outcome} IS NULL`,
-        sql`EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status = 'expired')`,
-        sql`NOT EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status IN ('pending','in_progress','completed'))`
-      )
-    )
-    .groupBy(candidates.jobId, jobPostings.title);
   for (const r of expiredAiRows) {
-    const locked = r.passwordHash != null && !(await isJobUnlocked(r.jobId));
+    const locked = r.passwordHash != null && !unlocked(r.jobId);
     const displayTitle = locked ? "🔒 비공개" : r.title;
     const n = Number(r.n);
     if (n > 0) {
@@ -368,36 +421,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     }
   }
 
-  // 면접 결과 입력 대기 알림 — 확정 면접 시각이 지났는데 합·불/다음 단계 미입력.
-  // 최신 active 스케줄 row 만 판정 (재제시로 묻힌 옛 selected row 제외).
-  const nowIso = new Date().toISOString();
-  const resultDueRows = await db
-    .select({
-      jobId: interviewSchedules.jobId,
-      title: jobPostings.title,
-      passwordHash: jobPostings.passwordHash,
-      n: count(),
-    })
-    .from(interviewSchedules)
-    .innerJoin(
-      jobInterviewers,
-      eq(jobInterviewers.jobId, interviewSchedules.jobId)
-    )
-    .innerJoin(jobPostings, eq(jobPostings.id, interviewSchedules.jobId))
-    .innerJoin(candidates, eq(candidates.id, interviewSchedules.candidateId))
-    .where(
-      and(
-        eq(jobInterviewers.userId, me.id),
-        eq(interviewSchedules.status, "selected"),
-        sql`${candidates.outcome} IS NULL`,
-        sql`datetime(json_extract(${interviewSchedules.selectedSlot}, '$.end')) <= datetime(${nowIso})`,
-        sql`((${interviewSchedules.round} = 'round1' AND ${candidates.stage} = 'round1_waiting') OR (${interviewSchedules.round} = 'round2' AND ${candidates.stage} = 'round1_passed'))`,
-        sql`NOT EXISTS (SELECT 1 FROM interview_schedules s2 WHERE s2.candidate_id = ${interviewSchedules.candidateId} AND s2.round = ${interviewSchedules.round} AND s2.id > ${interviewSchedules.id} AND s2.status IN ('pending','counter_proposed','selected'))`
-      )
-    )
-    .groupBy(interviewSchedules.jobId, jobPostings.title);
   for (const r of resultDueRows) {
-    const locked = r.passwordHash != null && !(await isJobUnlocked(r.jobId));
+    const locked = r.passwordHash != null && !unlocked(r.jobId);
     const displayTitle = locked ? "🔒 비공개" : r.title;
     const n = Number(r.n);
     if (n > 0) {
@@ -414,13 +439,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
 
   // 우선순위: count 큰 순
   notifications.sort((a, b) => b.count - a.count);
-
-  // -- system_admin: 법인 수 (참고용) ------------------------------------
-  let orgCount: number | null = null;
-  if (me.role === "system_admin") {
-    const [r] = await db.select({ c: count() }).from(organizations);
-    orgCount = Number(r?.c ?? 0);
-  }
+  void orgCount; // system_admin 은 /admin/dashboard 로 리다이렉트 — 참고용 유지
 
   const totalCand = Number(candAgg?.total ?? 0);
   const decidedCount = Number(candAgg?.decided ?? 0);

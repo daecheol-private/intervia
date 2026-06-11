@@ -1,13 +1,18 @@
 import { cookies } from "next/headers";
-import { getCurrentUser } from "./auth";
+import { getCurrentUser, type CurrentUser } from "./auth";
 import { db } from "./db";
 import { jobInterviewers } from "./schema";
 import { and, eq } from "drizzle-orm";
 
 const COOKIE_PREFIX = "job_unlock_";
 
-export async function isJobUnlocked(jobId: number): Promise<boolean> {
-  const user = await getCurrentUser();
+// me 를 넘기면 getCurrentUser 재호출(세션 조인 쿼리 1회)을 생략한다.
+// 호출자가 이미 인증을 마친 라우트에서는 반드시 me 를 전달할 것.
+export async function isJobUnlocked(
+  jobId: number,
+  me?: CurrentUser | null
+): Promise<boolean> {
+  const user = me !== undefined ? me : await getCurrentUser();
   if (!user) return false;
   if (user.isAdmin) return true; // 관리자는 모든 공고 잠금 우회
   // 공고 면접관으로 등록된 사용자는 PIN 우회 (공유 메일로 자동 등록되거나, PIN 입력 후 자가 지정한 멤버 포함)
@@ -23,6 +28,21 @@ export async function isJobUnlocked(jobId: number): Promise<boolean> {
   if (row) return true;
   const jar = await cookies();
   return jar.get(COOKIE_PREFIX + jobId)?.value === "1";
+}
+
+// 일괄 잠금 판정 — 호출자가 사용자의 면접관 공고 집합을 이미 조회한 경우(대시보드 등)
+// 공고 수만큼 DB 를 다시 두드리지 않고 동기 판정한다. 판정 로직은 isJobUnlocked 와 동일.
+export async function getUnlockChecker(
+  user: CurrentUser | null,
+  interviewerJobIds: Set<number>
+): Promise<(jobId: number) => boolean> {
+  const jar = await cookies();
+  return (jobId: number) => {
+    if (!user) return false;
+    if (user.isAdmin) return true;
+    if (interviewerJobIds.has(jobId)) return true;
+    return jar.get(COOKIE_PREFIX + jobId)?.value === "1";
+  };
 }
 
 export async function setJobUnlocked(jobId: number) {

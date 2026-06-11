@@ -2,6 +2,8 @@ import { sendInterviewerReminders } from "@/lib/interview-reminders";
 import { getCurrentUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
+// 리마인더 메일 발송(페이싱 2/s) — 같은 시간대 면접이 몰린 날 대비.
+export const maxDuration = 120;
 
 /**
  * 매 시간 호출. Vercel Cron 또는 system_admin 수동 호출.

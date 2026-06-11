@@ -2,6 +2,8 @@ import { expireInterviewSessions } from "@/lib/expire-sessions";
 import { getCurrentUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
+// 만료 처리 + 자동불합격 통보 메일(페이싱 2/s) — 공고 일괄 만료처럼 대상이 몰린 시간대 대비.
+export const maxDuration = 120;
 
 /**
  * 매 시간 호출. Vercel Cron 또는 system_admin 수동 호출.
