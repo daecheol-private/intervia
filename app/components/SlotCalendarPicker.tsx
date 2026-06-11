@@ -63,10 +63,16 @@ export function SlotCalendarPicker({
   value,
   onChange,
   maxDaysAhead = 60,
+  single = false,
+  durationMin = DURATION_MIN,
 }: {
   value: SlotItem[];
   onChange: (slots: SlotItem[]) => void;
   maxDaysAhead?: number;
+  /** 단일 선택 모드 — 시간 클릭 즉시 그 슬롯 하나로 교체 (일정 직접 입력용). */
+  single?: boolean;
+  /** 면접 길이(분). 기본 60. */
+  durationMin?: number;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
   const maxDate = useMemo(() => {
@@ -131,7 +137,7 @@ export function SlotCalendarPicker({
       const [hh, mm] = t.split(":").map(Number);
       const start = new Date(selectedDay);
       start.setHours(hh, mm, 0, 0);
-      const end = new Date(start.getTime() + DURATION_MIN * 60_000);
+      const end = new Date(start.getTime() + durationMin * 60_000);
       const startIso = start.toISOString();
       if (existingStarts.has(startIso)) continue;
       toAdd.push({ start: startIso, end: end.toISOString() });
@@ -152,6 +158,27 @@ export function SlotCalendarPicker({
       return next;
     });
   };
+
+  // 단일 모드 — 클릭 즉시 그 시간 하나로 교체.
+  const pickSingle = (t: string) => {
+    if (!selectedDay) return;
+    const [hh, mm] = t.split(":").map(Number);
+    const start = new Date(selectedDay);
+    start.setHours(hh, mm, 0, 0);
+    onChange([
+      {
+        start: start.toISOString(),
+        end: new Date(start.getTime() + durationMin * 60_000).toISOString(),
+      },
+    ]);
+  };
+
+  const durLabel =
+    durationMin % 60 === 0
+      ? `${durationMin / 60}시간`
+      : durationMin > 60
+        ? `${Math.floor(durationMin / 60)}시간 ${durationMin % 60}분`
+        : `${durationMin}분`;
 
   const removeSlot = (idx: number) => {
     const next = [...value];
@@ -250,13 +277,15 @@ export function SlotCalendarPicker({
                 day: "numeric",
                 weekday: "short",
               })}{" "}
-              시간 선택 (1시간)
+              시간 선택 ({durLabel})
             </span>
-            <span className="text-[10px] text-slate-500">
-              {selectedTimes.size > 0
-                ? `${selectedTimes.size}개 선택됨`
-                : "여러 개 선택 가능"}
-            </span>
+            {!single && (
+              <span className="text-[10px] text-slate-500">
+                {selectedTimes.size > 0
+                  ? `${selectedTimes.size}개 선택됨`
+                  : "여러 개 선택 가능"}
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-5 sm:grid-cols-6 gap-1">
             {TIME_SLOTS.map((t) => {
@@ -264,14 +293,16 @@ export function SlotCalendarPicker({
               const start = new Date(selectedDay);
               start.setHours(hh, mm, 0, 0);
               const startIso = start.toISOString();
-              const used = value.some((s) => s.start === startIso);
-              const picked = selectedTimes.has(t);
+              const used = !single && value.some((s) => s.start === startIso);
+              const picked = single
+                ? value.some((s) => s.start === startIso)
+                : selectedTimes.has(t);
               return (
                 <button
                   type="button"
                   key={t}
                   disabled={used}
-                  onClick={() => toggleTime(t)}
+                  onClick={() => (single ? pickSingle(t) : toggleTime(t))}
                   className={`text-[11px] px-2 py-1 rounded border ${
                     used
                       ? "bg-slate-100 text-slate-300 border-slate-100 cursor-not-allowed"
@@ -285,19 +316,21 @@ export function SlotCalendarPicker({
               );
             })}
           </div>
-          <button
-            type="button"
-            onClick={addSelectedTimes}
-            disabled={selectedTimes.size === 0 || value.length >= MAX_SLOTS}
-            className="w-full px-3 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-40"
-          >
-            + 선택한 시간 추가{" "}
-            {selectedTimes.size > 0 && (
-              <span className="opacity-80 font-normal">
-                ({selectedTimes.size}개)
-              </span>
-            )}
-          </button>
+          {!single && (
+            <button
+              type="button"
+              onClick={addSelectedTimes}
+              disabled={selectedTimes.size === 0 || value.length >= MAX_SLOTS}
+              className="w-full px-3 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-40"
+            >
+              + 선택한 시간 추가{" "}
+              {selectedTimes.size > 0 && (
+                <span className="opacity-80 font-normal">
+                  ({selectedTimes.size}개)
+                </span>
+              )}
+            </button>
+          )}
         </div>
       ) : (
         <div className="text-xs text-slate-400 text-center py-3 bg-slate-50 rounded-lg">
@@ -309,7 +342,9 @@ export function SlotCalendarPicker({
       {value.length > 0 && (
         <div className="border-t border-slate-200 pt-3">
           <div className="text-xs font-medium text-slate-700 mb-2">
-            제안할 면접 시간 ({value.length}/{MAX_SLOTS})
+            {single
+              ? "선택한 면접 시간"
+              : `제안할 면접 시간 (${value.length}/${MAX_SLOTS})`}
           </div>
           <div className="space-y-1.5">
             {value.map((s, i) => (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
 
 /**
  * 면접 일정 수동 확정 입력 모달.
@@ -25,7 +26,7 @@ export function ScheduleManualModal({
   onDone: () => void;
 }) {
   const roundLbl = round === "round2" ? "2차" : "1차";
-  const [start, setStart] = useState("");
+  const [slots, setSlots] = useState<Array<{ start: string; end: string }>>([]);
   const [durationMin, setDurationMin] = useState(60);
   const [modeOnline, setModeOnline] = useState(true);
   const [address, setAddress] = useState("");
@@ -48,15 +49,28 @@ export function ScheduleManualModal({
 
   if (!open) return null;
 
+  // 소요 시간 변경 시 이미 선택한 슬롯의 종료 시각 재계산.
+  const changeDuration = (min: number) => {
+    setDurationMin(min);
+    setSlots((prev) =>
+      prev[0]
+        ? [
+            {
+              start: prev[0].start,
+              end: new Date(
+                new Date(prev[0].start).getTime() + min * 60_000
+              ).toISOString(),
+            },
+          ]
+        : prev
+    );
+  };
+
   const submit = async () => {
     setErr("");
-    if (!start) {
-      setErr("면접 일시를 입력해 주세요.");
-      return;
-    }
-    const startDate = new Date(start);
-    if (Number.isNaN(startDate.getTime())) {
-      setErr("일시 형식이 올바르지 않습니다.");
+    const slot = slots[0];
+    if (!slot) {
+      setErr("면접 일시를 선택해 주세요.");
       return;
     }
     if (!modeOnline && !address.trim()) {
@@ -64,10 +78,6 @@ export function ScheduleManualModal({
       return;
     }
     setBusy(true);
-    const slot = {
-      start: startDate.toISOString(),
-      end: new Date(startDate.getTime() + durationMin * 60_000).toISOString(),
-    };
     const r = await fetch(`/api/candidates/${candidateId}/schedule-manual`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -106,7 +116,7 @@ export function ScheduleManualModal({
 
   const close = () => {
     setErr("");
-    setStart("");
+    setSlots([]);
     setNotify(false);
     onClose();
   };
@@ -117,7 +127,7 @@ export function ScheduleManualModal({
       onClick={close}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
@@ -129,22 +139,14 @@ export function ScheduleManualModal({
         </div>
 
         <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4 text-sm">
-          <div className="flex gap-2">
-            <label className="flex-1 block">
-              <span className="text-xs font-medium text-slate-700">면접 일시</span>
-              <input
-                type="datetime-local"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-                className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </label>
-            <label className="block w-28">
-              <span className="text-xs font-medium text-slate-700">소요 시간</span>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-700">면접 일시</span>
+            <label className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">소요 시간</span>
               <select
                 value={durationMin}
-                onChange={(e) => setDurationMin(Number(e.target.value))}
-                className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                onChange={(e) => changeDuration(Number(e.target.value))}
+                className="border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value={30}>30분</option>
                 <option value={60}>1시간</option>
@@ -153,6 +155,12 @@ export function ScheduleManualModal({
               </select>
             </label>
           </div>
+          <SlotCalendarPicker
+            value={slots}
+            onChange={setSlots}
+            single
+            durationMin={durationMin}
+          />
 
           <div>
             <label className="text-xs font-medium text-slate-700 mb-1 block">
