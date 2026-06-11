@@ -39,15 +39,38 @@ const NAME_NOISE = new Set([
   "복사본", "사본", "버전", "백업", "임시", "회사", "지원서",
 ]);
 
+/**
+ * 영문 파일명에 섞이는 비이름 라틴 토큰 — 날짜·버전·상태·일반 명사.
+ * nameTokens 에서 소문자 변환 후 비교.
+ */
+const LATIN_NAME_NOISE = new Set([
+  // 날짜·버전·상태
+  "final", "draft", "copy", "update", "updated", "revised", "revision",
+  "version", "backup", "temp", "temporary", "latest", "new", "old",
+  // 파일/문서 일반 명사 (KIND_KEYWORDS 제거 후 잔여 방어)
+  "doc", "docs", "file", "files", "document", "letter",
+  // 흔한 전치사·접속사
+  "the", "and", "for", "of", "by", "at", "to", "in",
+]);
+
 // 길이 긴 키워드부터 매칭 (cover_letter > letter 등 부분 매칭 회피)
 const KIND_KEYWORDS: ReadonlyArray<{ kind: FileKind; patterns: RegExp[] }> = [
   {
     kind: "cover_letter",
-    patterns: [/자기소개서/, /자\s*소\s*서/, /cover[\s_-]?letter/i, /cover[\s_-]?note/i],
+    patterns: [
+      /자기소개서/, /자\s*소\s*서/,
+      /cover[\s_-]?letter/i, /cover[\s_-]?note/i,
+      /motivation[\s_-]?letter/i,
+      /self[\s_-]?intro(?:duction)?/i,
+    ],
   },
   {
     kind: "portfolio",
-    patterns: [/포트폴리오/, /포\s*폴/, /작품(?:집)?/, /portfolio/i, /works?\b/i, /samples?\b/i],
+    patterns: [
+      /포트폴리오/, /포\s*폴/, /작품(?:집)?/,
+      /portfolio/i, /works?\b/i, /samples?\b/i,
+      /showcase/i, /\bfolio\b/i,
+    ],
   },
   {
     // 경력기술서 — 이력서와 함께 상세검토하는 별도 문서. resume 보다 먼저 매칭해야
@@ -58,6 +81,15 @@ const KIND_KEYWORDS: ReadonlyArray<{ kind: FileKind; patterns: RegExp[] }> = [
       /경\s*력\s*기\s*술\s*서/,
       /경\s*력\s*서/,
       /career[\s_-]?(?:history|description)/i,
+      // 영문 역량·경력 관련 문서 타입
+      /\bskill[\s_-]?(?:inventory|set|summary|sheet|list)\b/i,
+      /\bskills\b/i,
+      /\btechnical[\s_-]?(?:skills?|profile|summary)\b/i,
+      /\bwork[\s_-]?(?:experience|history)\b/i,
+      /\bexperience[\s_-]?(?:summary|overview|description)\b/i,
+      /\bqualifications?\b/i,
+      /\bachievements?\b/i,
+      /\bcompetenc(?:y|ies)\b/i,
     ],
   },
   {
@@ -69,6 +101,8 @@ const KIND_KEYWORDS: ReadonlyArray<{ kind: FileKind; patterns: RegExp[] }> = [
       /resume/i,
       /\bcv\b/i,
       /curriculum/i,
+      /\bprofile\b/i,
+      /\bbiography\b/i,
     ],
   },
 ];
@@ -268,7 +302,7 @@ export function nameTokens(filename: string): string[] {
   const ko = s.match(/[가-힣]{2,4}/g) ?? [];
   const la = s.match(/[A-Za-z]{2,}/g) ?? [];
   return [...ko, ...la].filter(
-    (t) => !NAME_NOISE.has(t) && !NON_PERSON_TOKENS.has(t)
+    (t) => !NAME_NOISE.has(t) && !NON_PERSON_TOKENS.has(t) && !LATIN_NAME_NOISE.has(t.toLowerCase())
   );
 }
 
