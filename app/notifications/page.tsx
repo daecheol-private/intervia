@@ -54,7 +54,7 @@ export default async function NotificationsPage() {
                   <div className="flex-1 min-w-0">
                     <div
                       className={
-                        "text-sm leading-snug " +
+                        "text-sm leading-snug whitespace-pre-line " +
                         (isUnread ? "text-ink font-medium" : "text-ink-soft")
                       }
                     >
