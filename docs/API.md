@@ -82,6 +82,9 @@
 | GET | `/api/candidates/[id]` | 🔑 |
 | DELETE | `/api/candidates/[id]` | 후보자 + 파일 삭제 |
 | POST | `/api/candidates/[id]/interview-link` | 새 면접 세션 + 링크 발급 (**차감 없음**). 🪙 잔액 0 이하면 402. interview 과금은 발급·동의·시작이 아니라 **면접 평가(`complete`/`reevaluate`) 성공 시 후차감** |
+| GET | `/api/candidates/[id]/attachments` | 첨부 목록 (메인 이력서 kind=resume 포함) |
+| POST | `/api/candidates/[id]/attachments` | 첨부 추가 (multipart `file`, `kind?`=career_history/portfolio/cover_letter/other). 추가 시점에 파싱+마스킹 — 기존 평가엔 미반영, **재평가 시 포함**. 결정된 후보·원본 폐기 후보 409. 10MB 상한. 감사 `candidate.attachment_add` |
+| DELETE | `/api/candidates/[id]/attachments/[aid]` | 첨부 삭제 (kind=resume 불가). 기존 평가에서 빼려면 재평가 필요. 감사 `candidate.attachment_delete` |
 | GET | `/api/candidates/[id]/interview-questions` | 저장된 1차 면접 질문지 + `scheduleConfirmed`(1차 일정 확정 여부) 반환. 없으면 `sheet:null` |
 | POST | `/api/candidates/[id]/interview-questions` | 1차 면접 질문지 **생성/재생성**. **`interview_question_gen` 토큰 차감(기본 5, 생성 성공 시 후차감 — 재생성도 매번 과금, `chargeRepeatable` 회차 refType `candidate`/`candidate_re{N}`)**. 게이트: round1 일정 `selected` 아니면 409. 이력서+서류평가+AI면접 평가 종합 LLM(task=questionGen) → 후보자당 1건 upsert. 감사 `interview_questions.generate` |
 

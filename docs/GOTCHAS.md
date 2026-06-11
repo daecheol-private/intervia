@@ -72,6 +72,7 @@ if (limited) return limited;
 | `send-email` | 5 | userId 기준 |
 | `self-view` / `self-delete` | 5 / 3 | 면접 토큰 기준 (후보자 본인열람/삭제) |
 | `llm-screen` | 30 | userId 기준 (단건) |
+| `attachment-modify` | 20 | userId 기준 (후보자 첨부 추가/삭제) |
 | `llm-bulk-screen` | 5 | userId 기준 (1회당 ≤500건) |
 | `job-create` | 10/10분 | userId 기준 (생성 직후 LLM 체크리스트 호출 — 비용 공격 차단) |
 | `job-unlock` | 5/5분 | userId+jobId 기준 (4자리 PIN 대입 차단) |

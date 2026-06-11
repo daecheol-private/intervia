@@ -758,7 +758,14 @@ export default function CandidateDetailPage() {
         candidateId={candidate.id}
         scheduleConfirmed={round1Confirmed}
       />
-      <AttachmentsPanel candidateId={candidate.id} />
+      <AttachmentsPanel
+        candidateId={candidate.id}
+        screeningDone={screeningPhase === "done"}
+        canModify={
+          !candidate.outcome &&
+          !!(candidate.resumeFilePath || candidate.resumeMaskedText)
+        }
+      />
       <InterviewerNotesPanel candidateId={candidate.id} currentStage={candidate.stage} />
       <AppealsPanel candidateId={candidate.id} />
 
