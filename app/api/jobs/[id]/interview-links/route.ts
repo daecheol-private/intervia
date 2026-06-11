@@ -206,6 +206,7 @@ export async function POST(
     const expiresAt = addDays(new Date(), days).toISOString();
     await db.insert(interviewSessions).values({
       candidateId: c.id,
+      createdByUserId: me!.id,
       accessToken: token,
       expiresAt,
     });

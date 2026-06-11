@@ -29,6 +29,8 @@ type LedgerRow = {
   balanceAfter: number;
   memo: string | null;
   createdAt: string;
+  byName: string | null;
+  byEmail: string | null;
 };
 
 type Data = {
@@ -220,11 +222,12 @@ export default function TokensPage() {
           최근 사용 내역
         </div>
         <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[520px]">
+        <table className="w-full text-sm min-w-[600px]">
           <thead className="bg-slate-50 text-slate-600 text-xs">
             <tr>
               <th className="text-left px-4 py-2 font-medium">시각</th>
               <th className="text-left px-4 py-2 font-medium">사유</th>
+              <th className="text-left px-4 py-2 font-medium">처리자</th>
               <th className="text-left px-4 py-2 font-medium">메모</th>
               <th className="text-right px-4 py-2 font-medium">변동</th>
               <th className="text-right px-4 py-2 font-medium">잔액</th>
@@ -233,7 +236,7 @@ export default function TokensPage() {
           <tbody className="divide-y divide-slate-100">
             {data.ledger.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={5}>
+                <td className="px-4 py-6 text-slate-400" colSpan={6}>
                   내역이 없습니다.
                 </td>
               </tr>
@@ -244,6 +247,12 @@ export default function TokensPage() {
                   {formatLocalDateTime(r.createdAt, { format: { second: "2-digit" } })}
                 </td>
                 <td className="px-4 py-2 text-xs">{reasonLabel(r.reason)}</td>
+                <td
+                  className="px-4 py-2 text-xs text-slate-600"
+                  title={r.byEmail ?? undefined}
+                >
+                  {r.byName || "-"}
+                </td>
                 <td className="px-4 py-2 text-xs text-slate-600">
                   {r.memo || "-"}
                 </td>

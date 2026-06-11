@@ -119,6 +119,7 @@ export async function POST(
     .insert(interviewSessions)
     .values({
       candidateId: cid,
+      createdByUserId: me!.id,
       accessToken: token,
       expiresAt,
     })

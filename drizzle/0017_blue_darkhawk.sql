@@ -1,0 +1,1 @@
+ALTER TABLE `interview_sessions` ADD `created_by_user_id` integer REFERENCES users(id);

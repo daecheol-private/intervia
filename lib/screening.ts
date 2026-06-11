@@ -5,6 +5,7 @@ import {
   candidateAttachments,
   organizations,
   screeningCache,
+  screeningJobs,
 } from "./schema";
 import { eq, and, isNotNull, ne, lt } from "drizzle-orm";
 import { createHash } from "node:crypto";
@@ -886,11 +887,17 @@ export async function chargeScreeningSuccess(
     .from(candidates)
     .where(eq(candidates.id, candidateId));
   if (!candidate?.orgId) return;
+  // 차감 주체 = 평가를 큐에 넣은 운영자 (업로드/재평가 요청자).
+  const [sjob] = await db
+    .select({ enqueuedByUserId: screeningJobs.enqueuedByUserId })
+    .from(screeningJobs)
+    .where(eq(screeningJobs.id, jobId));
   await chargeFeature({
     orgId: candidate.orgId,
     feature: "resume_upload",
     refType: "screening_job",
     refId: jobId,
+    userId: sjob?.enqueuedByUserId ?? null,
     memo: candidate.name,
   });
 }

@@ -175,6 +175,8 @@ export async function POST(
         feature: "interview",
         baseRefType: "interview_session",
         refId: session.id,
+        // 차감 주체는 후보자가 아니라 면접을 결정·발급한 운영자.
+        userId: session.createdByUserId,
         memo: "AI 면접 평가 완료",
       });
     }

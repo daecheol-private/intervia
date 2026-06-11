@@ -120,6 +120,20 @@
       "when": 1781095747518,
       "tag": "0016_powerful_norman_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1781149180280,
+      "tag": "0017_blue_darkhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1781149775007,
+      "tag": "0018_backfill_ledger_actor",
+      "breakpoints": true
     }
   ]
 }

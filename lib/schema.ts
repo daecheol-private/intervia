@@ -737,6 +737,10 @@ export const interviewSessions = sqliteTable("interview_sessions", {
   candidateId: integer("candidate_id")
     .notNull()
     .references(() => candidates.id, { onDelete: "cascade" }),
+  // AI 면접을 결정하고 링크를 발급한 운영자 — 면접 토큰 차감 시 "누가" 추적용.
+  createdByUserId: integer("created_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   accessToken: text("access_token").notNull().unique(),
   status: text("status", {
     enum: ["pending", "in_progress", "completed", "expired"],

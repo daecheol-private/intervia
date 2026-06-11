@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { tokenWallets, tokenLedger, tokenPricing } from "./schema";
+import { tokenWallets, tokenLedger, tokenPricing, users } from "./schema";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { isUniqueViolation } from "./db-errors";
 
@@ -546,6 +546,8 @@ export async function listLedger(
     balanceAfter: number;
     memo: string | null;
     createdAt: string;
+    byName: string | null;
+    byEmail: string | null;
   }[]
 > {
   const rows = await db
@@ -558,8 +560,11 @@ export async function listLedger(
       balanceAfter: tokenLedger.balanceAfter,
       memo: tokenLedger.memo,
       createdAt: tokenLedger.createdAt,
+      byName: users.name,
+      byEmail: users.email,
     })
     .from(tokenLedger)
+    .leftJoin(users, eq(users.id, tokenLedger.createdByUserId))
     .where(eq(tokenLedger.orgId, orgId))
     .orderBy(desc(tokenLedger.id))
     .limit(limit);

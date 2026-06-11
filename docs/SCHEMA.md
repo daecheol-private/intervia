@@ -149,6 +149,7 @@
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
 | id / candidate_id / access_token / status / messages / evaluation / started_at / completed_at / expires_at / created_at | … | |
+| created_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 링크를 발급한 운영자. 면접 완료 토큰 차감 시 ledger `created_by_user_id` 로 전달 — 누가 면접을 결정했는지 추적. (구 세션은 NULL) |
 
 ## interviewer_notes
 
