@@ -25,7 +25,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { generateToken, addDays, formatKstDateTime } from "@/lib/utils";
 import {
-  requirePositiveBalance,
+  requireSpendableBalance,
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { sendMail, buildInterviewEmail, isSmtpAvailable } from "@/lib/mailer";
@@ -112,7 +112,7 @@ export async function POST(
       { status: 409 }
     );
 
-  const balanceGuard = await requirePositiveBalance(job.orgId, {
+  const balanceGuard = await requireSpendableBalance(job.orgId, {
     isSystemAdmin: me!.role === "system_admin",
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);

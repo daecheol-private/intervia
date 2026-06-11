@@ -25,6 +25,16 @@ export function roundLabel(round: ScheduleRound | null | undefined): string {
   return round === "round2" ? "2차" : "1차";
 }
 
+/** 두 슬롯의 시간이 겹치는지 (start < other.end && other.start < end). 같은 공고 더블부킹 판별용. */
+export function slotsOverlap(a: Slot, b: Slot): boolean {
+  const as = new Date(a.start).getTime();
+  const ae = new Date(a.end).getTime();
+  const bs = new Date(b.start).getTime();
+  const be = new Date(b.end).getTime();
+  if ([as, ae, bs, be].some((n) => Number.isNaN(n))) return false;
+  return as < be && bs < ae;
+}
+
 /** 슬롯 검증 — 시작이 미래, end > start, 최대 30일 후까지. */
 export function validateSlots(slots: unknown): {
   ok: true;

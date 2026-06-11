@@ -36,3 +36,23 @@ export function isUniqueViolation(e: unknown): boolean {
   }
   return false;
 }
+
+/**
+ * 일시적(재시도하면 풀릴 수 있는) 쓰기 충돌인지 — `SQLITE_BUSY`/"database is locked".
+ *
+ * SQLite 는 단일 writer 라 동시 쓰기 트랜잭션이 겹치면 BEGIN 단계에서 즉시 이 오류로
+ * 실패한다(`lib/db.ts` 에 busy_timeout 미설정). UNIQUE 와 달리 같은 작업을 다시 시도하면
+ * 보통 성공하므로, 멱등 차감(`writeLedgerIdempotent`)처럼 누락이 곧 손실인 경로는 이걸로
+ * 판별해 짧게 재시도한다. (운영 Turso 는 빈도가 다르나 동일 계열 오류로 귀결.)
+ */
+export function isTransientDbError(e: unknown): boolean {
+  for (const node of collect(e)) {
+    const msg = typeof node.message === "string" ? node.message : "";
+    if (/SQLITE_BUSY|database is locked|database table is locked/i.test(msg))
+      return true;
+    if (node.code === "SQLITE_BUSY") return true;
+    if (node.extendedCode === "SQLITE_BUSY") return true;
+    if (node.rawCode === 5) return true;
+  }
+  return false;
+}

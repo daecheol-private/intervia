@@ -8,7 +8,7 @@ import { guardCandidate } from "@/lib/candidate-guard";
 import { generateToken, addDays } from "@/lib/utils";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import {
-  requirePositiveBalance,
+  requireSpendableBalance,
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 
@@ -56,7 +56,7 @@ export async function POST(
   }
 
   // 잔액 가드
-  const balanceGuard = await requirePositiveBalance(candidate.orgId, {
+  const balanceGuard = await requireSpendableBalance(candidate.orgId, {
     isSystemAdmin: me!.role === "system_admin",
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);

@@ -13,7 +13,7 @@
 | id | INTEGER PK auto | |
 | name | TEXT NOT NULL | 법인명 |
 | biz_registration_no | TEXT NULL | 사업자등록번호 (검색용) |
-| email_domain | TEXT NULL UNIQUE | 자동매칭 키. 공용도메인(gmail 등)은 저장 X |
+| email_domain | TEXT NULL | 자동매칭 키. 공용도메인(gmail 등)은 저장 X. **UNIQUE 아님** — 같은 도메인 1:N 법인 허용(비유니크 인덱스, `lib/schema.ts`). check-email 이 `matchedOrgs[]` 배열로 반환해 사용자가 합류할 법인 선택 (ARCHITECTURE §8) |
 | created_by_user_id | INTEGER NULL | 최초 등록자 (FK는 없음 — 순환 의존 회피) |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
@@ -326,7 +326,8 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 
 1차 면접 일정 확정(`interview_schedules` round1 · status='selected') 후 면접관 누구나 생성.
 이력서(마스킹) + 서류평가(`screeningReport`) + AI 면접 평가(`interviewSessions.evaluation`, 있으면)를
-종합해 LLM(task=`questionGen`)이 생성. **토큰 과금 없음(무료)**.
+종합해 LLM(task=`questionGen`)이 생성. **`interview_question_gen` 토큰 차감(기본 5)** — 생성 성공 시 후차감,
+재생성도 매번 과금(`chargeRepeatable`, refType `candidate`/`candidate_re{N}`). row 는 1건 upsert 라도 과금은 회차별. (과거 "무료" 서술은 stale)
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
@@ -383,8 +384,8 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 | id | INTEGER PK auto | |
 | org_id | INTEGER NOT NULL FK organizations(id) ON DELETE CASCADE | |
 | delta | INTEGER NOT NULL | 음수 = 차감, 양수 = 충전/환불 |
-| reason | TEXT NOT NULL | `charge` / `job_post` / `resume_upload` / `interview` / `refund` / `admin_adjust` |
-| ref_type | TEXT NULL | 차감/환불 대상 종류. 예: `job`, `candidate`, `interview_session` |
+| reason | TEXT NOT NULL | `charge` / `job_post` / `resume_upload` / `interview` / `interview_question_gen` / `job_extend` / `refund` / `admin_adjust` |
+| ref_type | TEXT NULL | 차감/환불 대상 종류. 예: `job`, `screening_job`, `interview_session`, `candidate`. 재평가/재생성은 회차 suffix `_re{N}` 부여 |
 | ref_id | INTEGER NULL | 대상 id |
 | balance_after | INTEGER NOT NULL | 기록 직후 잔액 |
 | created_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
@@ -399,7 +400,7 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
-| feature_key | TEXT PK | `job_post` / `resume_upload` / `interview` |
+| feature_key | TEXT PK | `job_post` / `resume_upload` / `interview` / `interview_question_gen` (DEFAULT_PRICING 폴백 5 — 시드에 행 없을 수 있음) |
 | cost | INTEGER NOT NULL | 0 이상 |
 | updated_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
 | updated_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |

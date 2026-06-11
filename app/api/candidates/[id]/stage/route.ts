@@ -23,7 +23,7 @@ import {
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { logAudit } from "@/lib/audit";
 import {
-  requirePositiveBalance,
+  requireSpendableBalance,
 } from "@/lib/wallet-guard";
 import { MAX_DECISION_EMAILS_PER_CANDIDATE, maybeAutoCloseJob } from "@/lib/job-lifecycle";
 import { notifyJobInterviewers } from "@/lib/notifications";
@@ -195,7 +195,7 @@ export async function PATCH(
     (outcomeRequested === "hired" || outcomeRequested === "rejected")
   ) {
     // 잔액 가드
-    const balanceGuard = await requirePositiveBalance(candidate.orgId, {
+    const balanceGuard = await requireSpendableBalance(candidate.orgId, {
       isSystemAdmin: me!.role === "system_admin",
     });
     if (!balanceGuard.ok) {

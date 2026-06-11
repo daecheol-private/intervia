@@ -35,7 +35,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { isJobExpired } from "@/lib/job-lifecycle";
 import {
-  requirePositiveBalance,
+  requireSpendableBalance,
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 
@@ -101,7 +101,7 @@ export async function POST(
     );
 
   // 잔액 가드
-  const balanceGuard = await requirePositiveBalance(job.orgId, {
+  const balanceGuard = await requireSpendableBalance(job.orgId, {
     isSystemAdmin: me!.role === "system_admin",
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);

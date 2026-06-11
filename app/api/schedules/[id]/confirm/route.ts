@@ -25,10 +25,15 @@ import {
   organizations,
   users,
 } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
-import { buildScheduleConfirmedEmail, roundLabel, type Slot } from "@/lib/schedules";
+import {
+  buildScheduleConfirmedEmail,
+  roundLabel,
+  slotsOverlap,
+  type Slot,
+} from "@/lib/schedules";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
@@ -80,6 +85,28 @@ export async function POST(
     return new Response(
       "제시된 슬롯 또는 후보자 역제시 슬롯 중에서만 확정 가능합니다.",
       { status: 400 }
+    );
+
+  // 더블부킹 방지 — 같은 공고·같은 차수에서 이미 확정된 다른 후보자 슬롯과 겹치면 거부.
+  const sameRoundSelected = await db
+    .select({ selectedSlot: interviewSchedules.selectedSlot })
+    .from(interviewSchedules)
+    .where(
+      and(
+        eq(interviewSchedules.jobId, sched.jobId),
+        eq(interviewSchedules.round, sched.round),
+        eq(interviewSchedules.status, "selected"),
+        ne(interviewSchedules.id, sched.id)
+      )
+    );
+  if (
+    sameRoundSelected.some(
+      (r) => r.selectedSlot && slotsOverlap(r.selectedSlot as Slot, matched)
+    )
+  )
+    return new Response(
+      "이미 다른 지원자가 확정한 시간대입니다. 다른 시간으로 확정해주세요.",
+      { status: 409 }
     );
 
   const now = new Date().toISOString();

@@ -195,6 +195,18 @@ cron/internal 라우트 `authorize` 는 `x-vercel-cron` 헤더 우회를 반드�
 - **토큰-only 본인확인 금지**: 면접 토큰 기반 후보자 본인 라우트(`interview/[token]/me`)는 등록 이메일이
   없으면 토큰만으로 통과시키지 말 것(링크 전달·유출 시 제3자 열람). 이메일 미보유면 403(fail-safe).
 
+## 0-0-4. 동시 쓰기 트랜잭션 SQLITE_BUSY → 차감 누락 (WAL + 재시도 필수) (2026-06-11 QA)
+
+**증상**: 같은 법인 평가 2~N건이 수 ms 차로 동시 완료되면 일부 토큰 차감 ledger 가 **조용히 누락**(매출 누락). 평가 결과는 정상 저장돼 알아채기 어려움.
+
+**원인**: SQLite 단일 writer. 동시 `db.transaction()`(BEGIN IMMEDIATE)이 겹치면 즉시 `SQLITE_BUSY`. `lib/db.ts` 에 busy_timeout 미설정 + 과금 catch 가 로깅만 하고 재시도 없음(`app/api/internal/process-screenings/route.ts`). QA 재현: delete 저널 = 12동시 중 1건만 성공.
+
+**해결** (2026-06-11):
+1. **WAL 모드** — `lib/db.ts` 가 file 백엔드일 때 `PRAGMA journal_mode=WAL`(파일 헤더 영속, 모든 연결 적용). delete 저널은 락을 오래 잡아 재시도해도 실패하지만, WAL 은 빠른 락 해제로 재시도가 성공.
+2. **트랜잭션 재시도** — `lib/tokens.ts` `writeLedgerIdempotent` 가 `isTransientDbError`(SQLITE_BUSY) 면 jitter 백오프로 재시도. 멱등 인덱스가 이중 차감 차단. 검증: WAL+재시도 = 20동시 모두 누락 0.
+
+⚠️ Turso(운영)는 서버가 쓰기를 직렬화해 빈도가 낮지만, 재시도는 백엔드 무관 안전망. 새 멱등 차감/중요 쓰기는 같은 패턴 유지. 로컬 dev DB 가 delete 저널이면 `PRAGMA journal_mode=WAL` 1회 적용(서버 재시작 시 `lib/db.ts` 가 자동 설정).
+
 ## 0-0. SQLite CURRENT_TIMESTAMP 와 JS toISOString() 포맷 불일치
 
 **증상**: timestamp 컬럼을 `gte/lte` 로 비교했을 때 모든 row 가 false 또는 true 로 일관되게 잘못 나옴.
@@ -240,13 +252,13 @@ Next 16 의 `after(async () => ...)` (from `next/server`) 는 Vercel 이 응답 
   공고는 즉시 저장·응답하고(체크리스트는 `""` 또는 기존 값 유지), `after()` 가 백그라운드에서
   생성해 행을 업데이트. 그 사이 평가는 즉석 분해 폴백으로 정상 동작 → 잘려도 치명적이지 않음.
 
-## 0-2. 이력서 자동 평가하지 않음 — 사용자 게이트 필요
+## 0-2. 이력서 업로드 → **자동 평가 enqueue** (과금은 평가 성공 시 후차감)
 
-**증상**: 이력서 업로드 직후 status 가 계속 `uploaded` 이고 평가가 시작되지 않음.
+⚠️ 과거 "자동 평가 안 함 — 사용자 검토 게이트" 서술은 **stale**. 현재 코드는 업로드 직후 자동으로 큐에 넣고 워커를 깨운다.
 
-**원인**: 의도된 동작. 안정화 기간 동안 LLM 호출은 사용자가 텍스트 추출 결과를 확인한 뒤 "검토 진행" 버튼으로 명시적으로 시작.
+**동작**: `POST /api/jobs/[id]/candidates` 가 후보자 insert 후 `enqueueScreening`(`app/api/jobs/[id]/candidates/route.ts:780`) + `triggerWorker`(:603) 를 호출 → 사용자 클릭 없이 평가 시작. **차감은 업로드/enqueue 시점이 아니라 워커가 평가 성공한 시점에 후차감**(`chargeScreeningSuccess`, refType=`screening_job`). enqueue 실패해도 업로드 자체는 성공 — 후보자 상세에서 재시도 가능.
 
-**해결**: `POST /api/candidates/[id]/screen` 또는 candidate 상세 페이지의 "검토 진행" 버튼. 이 시점에 토큰 차감.
+**수동 재평가/재시도**: `POST /api/candidates/[id]/screen`(단건) / `bulk-screen`(일괄). 잔액 0 이하면 402 차단(`lib/wallet-guard.ts`).
 
 ## 0-2-2. 이력서 업로드는 지원자 동의 확인 게이트가 있음
 

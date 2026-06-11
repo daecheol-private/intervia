@@ -1,7 +1,15 @@
 import { db } from "./db";
 import { tokenWallets, tokenLedger, tokenPricing, users } from "./schema";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
-import { isUniqueViolation } from "./db-errors";
+import { isUniqueViolation, isTransientDbError } from "./db-errors";
+
+// 동시 쓰기 트랜잭션이 SQLITE_BUSY 로 즉시 실패할 때 짧게 재시도 (멱등 차감 누락 방지).
+// 멱등 게이트(token_ledger_idem_uq)가 있어 재시도가 이중 차감을 만들지 않는다.
+// jitter 로 재충돌(thundering-herd lockstep)을 분산. 로컬 file 백엔드는 busy_timeout 이
+// 없어 즉시 실패하지만, 워커가 실제로 만드는 동시 완료(2~4건)는 이 백오프로 흡수된다.
+// (운영 Turso 는 서버가 쓰기를 직렬화해 빈도가 더 낮음 — 이 재시도는 그 위의 안전망.)
+const TX_RETRY = { attempts: 6, baseMs: 25, jitterMs: 25 };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export type FeatureKey =
   | "job_post"
@@ -30,6 +38,11 @@ const DEFAULT_PRICING: Record<FeatureKey, number> = {
 // 법인 최초 등록 시 1회 자동 지급 — 무료 체험용 (5만원).
 // 기존 법인 합류(invite/join-request)에는 지급 X. 함수는 orgId 기준 멱등.
 export const WELCOME_BONUS_TOKENS = 500;
+
+// 후불(여신) 한도 — 잔액이 이 값 이하면 유료 행위 차단(`lib/wallet-guard.ts`).
+// 후차감(성공 시 차감) 구조라, 잔액 0 직전에 요청한 작업이 성공해 마이너스로 떨어지는 건
+// 허용한다. 단 무한 외상 방지를 위해 -300 을 바닥으로 둔다. 마이너스 진입 시 자동 메일 통지.
+export const CREDIT_LIMIT_TOKENS = -300;
 
 /**
  * 충전 보너스 정책 — KRW 결제액에 따라 추가 지급 토큰 계산.
@@ -241,42 +254,53 @@ export async function writeLedgerIdempotent(args: {
   // INSERT(멱등 게이트)→지갑 UPDATE→balanceAfter 보정을 트랜잭션으로 원자화 —
   // 중간 크래시 시 원장만 남고 지갑이 안 바뀌는 영구 불일치(재시도해도 UNIQUE 가 막음) 방지.
   // UNIQUE 위반은 트랜잭션 전체 롤백 후 applied=false 로 귀결.
-  try {
-    return await db.transaction(async (tx) => {
-      const ins = await tx
-        .insert(tokenLedger)
-        .values({
-          orgId: args.orgId,
-          delta: args.delta,
-          reason: args.reason,
-          refType: args.refType,
-          refId: args.refId,
-          balanceAfter: 0, // 지갑 갱신 후 보정
-          createdByUserId: args.userId ?? null,
-          memo: args.memo ?? null,
-        })
-        .returning({ id: tokenLedger.id });
-      const updated = await tx
-        .update(tokenWallets)
-        .set({
-          balance: sql`${tokenWallets.balance} + ${args.delta}`,
-          updatedAt: sql`CURRENT_TIMESTAMP`,
-        })
-        .where(eq(tokenWallets.orgId, args.orgId))
-        .returning({ balance: tokenWallets.balance });
-      const next = updated[0]?.balance ?? 0;
-      await tx
-        .update(tokenLedger)
-        .set({ balanceAfter: next })
-        .where(eq(tokenLedger.id, ins[0].id));
-      return { balance: next, applied: true };
-    });
-  } catch (e) {
-    // drizzle 가 에러를 감싸 최상위 message 는 "Failed query: ..." 뿐 — cause 체인까지 봐야 함.
-    if (isUniqueViolation(e)) {
-      return { balance: await getBalance(args.orgId), applied: false };
+  // 동시 쓰기로 인한 SQLITE_BUSY 는 짧게 재시도 — 안 그러면 동시 차감 1건이 조용히 누락된다
+  // (예: 같은 법인 평가 2건 동시 완료 → 한쪽 과금 소실). 멱등 게이트가 이중 차감을 막는다.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await db.transaction(async (tx) => {
+        const ins = await tx
+          .insert(tokenLedger)
+          .values({
+            orgId: args.orgId,
+            delta: args.delta,
+            reason: args.reason,
+            refType: args.refType,
+            refId: args.refId,
+            balanceAfter: 0, // 지갑 갱신 후 보정
+            createdByUserId: args.userId ?? null,
+            memo: args.memo ?? null,
+          })
+          .returning({ id: tokenLedger.id });
+        const updated = await tx
+          .update(tokenWallets)
+          .set({
+            balance: sql`${tokenWallets.balance} + ${args.delta}`,
+            updatedAt: sql`CURRENT_TIMESTAMP`,
+          })
+          .where(eq(tokenWallets.orgId, args.orgId))
+          .returning({ balance: tokenWallets.balance });
+        const next = updated[0]?.balance ?? 0;
+        await tx
+          .update(tokenLedger)
+          .set({ balanceAfter: next })
+          .where(eq(tokenLedger.id, ins[0].id));
+        return { balance: next, applied: true };
+      });
+    } catch (e) {
+      // drizzle 가 에러를 감싸 최상위 message 는 "Failed query: ..." 뿐 — cause 체인까지 봐야 함.
+      if (isUniqueViolation(e)) {
+        return { balance: await getBalance(args.orgId), applied: false };
+      }
+      // 일시적 쓰기 충돌이면 백오프(+jitter) 후 재시도 (멱등이라 안전). 한도 초과 시 throw.
+      if (isTransientDbError(e) && attempt < TX_RETRY.attempts) {
+        await sleep(
+          TX_RETRY.baseMs * (attempt + 1) + Math.random() * TX_RETRY.jitterMs
+        );
+        continue;
+      }
+      throw e;
     }
-    throw e;
   }
 }
 
@@ -323,8 +347,10 @@ export async function chargeFeature(args: {
   if (!applied) {
     return { cost: 0, balance, alreadyCharged: true };
   }
-  // 잔액이 양수 → 0 이하로 떨어지는 순간 1회만 알림 (스팸 방지)
-  if (prevBalance > 0 && balance <= 0) {
+  // 잔액이 0 이상 → 마이너스(후불)로 떨어지는 순간 1회만 알림 (스팸 방지).
+  // 후차감이라 0 직전 요청 작업이 성공해 마이너스 진입할 수 있다 — 이때 법인담당자에게
+  // 자동 메일로 통지하고, -300 한도에 도달하면 유료 기능이 멈춤을 안내.
+  if (prevBalance >= 0 && balance < 0) {
     void (async () => {
       try {
         const { notifyOrgAdmins } = await import("./notifications");
@@ -332,11 +358,11 @@ export async function chargeFeature(args: {
           args.orgId,
           {
             type: "low_balance",
-            title: `토큰 잔액이 부족합니다 (현재 ${balance} 토큰). 충전이 필요합니다.`,
+            title: `토큰 잔액이 마이너스가 되었습니다 (현재 ${balance} 토큰). ${CREDIT_LIMIT_TOKENS} 토큰까지 후불로 이용 가능하며, 한도 도달 시 유료 기능이 중단됩니다. 충전이 필요합니다.`,
             href: "/org/tokens",
-            payload: { orgId: args.orgId, balance },
+            payload: { orgId: args.orgId, balance, creditLimit: CREDIT_LIMIT_TOKENS },
           },
-          // 충전 전까지 메일·평가 기능 정지 — 관리자에게 메일로도 통지.
+          // 마이너스 진입 = 충전 필요 신호 — 관리자에게 메일로도 통지.
           { email: true }
         );
       } catch {

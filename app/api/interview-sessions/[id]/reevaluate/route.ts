@@ -26,7 +26,7 @@ import { buildSummaryPrompt } from "@/lib/prompts";
 import { computeTranscriptStats } from "@/lib/interview-signals";
 import { chargeRepeatable } from "@/lib/tokens";
 import {
-  requirePositiveBalance,
+  requireSpendableBalance,
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { logAudit } from "@/lib/audit";
@@ -93,7 +93,7 @@ export async function POST(
   }
 
   // 잔액 가드 — 재평가도 토큰 차감이므로 마이너스면 차단
-  const balanceGuard = await requirePositiveBalance(candidate.orgId, {
+  const balanceGuard = await requireSpendableBalance(candidate.orgId, {
     isSystemAdmin: me!.role === "system_admin",
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);

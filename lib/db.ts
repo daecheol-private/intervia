@@ -33,5 +33,17 @@ function resolveUrl(): { url: string; authToken?: string } {
 const cfg = resolveUrl();
 const client = createClient(cfg);
 
+// 로컬 file 백엔드는 WAL 모드로 — 기본(delete 저널)에선 동시 쓰기 트랜잭션이 락을 오래 잡고
+// 깨끗이 풀지 않아, busy_timeout 이 없는 @libsql/client 에서 재시도해도 SQLITE_BUSY 가 거의
+// 항상 누락된다(QA 재현: delete=1/N 성공, WAL+재시도=N/N). WAL 은 writer↔reader 비차단 +
+// 빠른 락 해제라 lib/tokens.ts 의 트랜잭션 재시도가 정상 동작한다. WAL 은 DB 파일 헤더에
+// 영속 저장되므로 lazy 생성되는 트랜잭션 연결까지 모두 적용된다 (연결별 PRAGMA 와 달리).
+// Turso(원격)는 서버가 쓰기를 직렬화하므로 미적용 — file: URL 일 때만.
+if (cfg.url.startsWith("file:")) {
+  void client
+    .execute("PRAGMA journal_mode=WAL")
+    .catch((e) => console.warn("[db] WAL 설정 실패(무시):", String(e)));
+}
+
 export const db = drizzle(client, { schema });
 export { schema };

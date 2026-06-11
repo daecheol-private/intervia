@@ -13,7 +13,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { formatKstDateTime } from "@/lib/utils";
 import {
-  requirePositiveBalance,
+  requireSpendableBalance,
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { MAX_INTERVIEW_EMAILS_PER_CANDIDATE } from "@/lib/job-lifecycle";
@@ -79,7 +79,7 @@ export async function POST(
   }
 
   // 잔액 가드
-  const balanceGuard = await requirePositiveBalance(candidate.orgId, {
+  const balanceGuard = await requireSpendableBalance(candidate.orgId, {
     isSystemAdmin: me!.role === "system_admin",
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);

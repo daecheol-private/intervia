@@ -26,7 +26,7 @@ import {
 } from "@/lib/file-classify";
 import { extractZip, ZipExtractError } from "@/lib/zip-extract";
 import {
-  requirePositiveBalance,
+  requireSpendableBalance, // 후불 한도(-300) 가드
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { logAudit } from "@/lib/audit";
@@ -319,7 +319,7 @@ export async function POST(
   }
 
   // 잔액 가드 — 0 이하면 차단
-  const balanceGuard = await requirePositiveBalance(job.orgId, {
+  const balanceGuard = await requireSpendableBalance(job.orgId, {
     isSystemAdmin: me!.role === "system_admin",
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);

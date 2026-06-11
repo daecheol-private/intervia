@@ -10,7 +10,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { parseDbTimestamp } from "@/lib/utils";
 import {
-  requirePositiveBalance,
+  requireSpendableBalance,
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 
@@ -79,7 +79,7 @@ export async function POST(
   }
 
   // 잔액 가드 — 0 이하면 평가 차단
-  const balanceGuard = await requirePositiveBalance(candidate.orgId, {
+  const balanceGuard = await requireSpendableBalance(candidate.orgId, {
     isSystemAdmin: me!.role === "system_admin",
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);

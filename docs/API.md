@@ -39,7 +39,7 @@
 
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
-| POST | `/api/orgs` | 🌐 | 신규 법인 + 첫 사용자 동시 생성. 첫 사용자=org_admin, wallet=0, 즉시 로그인 |
+| POST | `/api/orgs` | 🌐 | 신규 법인 + 첫 사용자 동시 생성. 첫 사용자=org_admin. **세션 미발급** — `verificationRequired:true` 반환, 이메일 인증 후 로그인. 신규 법인은 **웰컴 보너스 500토큰** 자동 지급(`grantWelcomeBonus`, orgId 멱등). 공용 도메인 이메일은 400 차단 |
 | GET | `/api/orgs/search?q=` | 🌐 | 회사명/사업자번호 LIKE 검색 (2자 이상) |
 | POST | `/api/orgs/join-requests` | 🌐 | 비로그인 가입 + 합류 요청. user.status=pending |
 | GET | `/api/orgs/join-requests?orgId=&status=` | 🛡️ | 자기 법인 합류 요청 목록 |
@@ -80,9 +80,9 @@
 | POST | `/api/candidates/[id]/screen` | 수동 트리거 (신규 평가 + **재평가** + **재시도 대기 즉시 재시도** 공용). 백그라운드 LLM 평가. **과금은 평가 성공 시 후차감** (오류면 과금 X). 동작: `processing`→409, `queued`(백오프 포함)→새 job 안 만들고 백오프 해제 후 즉시 재시도, 그 외(done/failed/미시작)→새 job enqueue. **지원자 동의 확인 누락(2026-05-22 이후 row) 시 400** |
 | GET | `/api/candidates/[id]` | 🔑 |
 | DELETE | `/api/candidates/[id]` | 후보자 + 파일 삭제 |
-| POST | `/api/candidates/[id]/interview-link` | 새 면접 세션 + 링크 발급 (차감 없음 — 지원자 면접 시작 시 과금) |
+| POST | `/api/candidates/[id]/interview-link` | 새 면접 세션 + 링크 발급 (**차감 없음**). 🪙 잔액 0 이하면 402. interview 과금은 발급·동의·시작이 아니라 **면접 평가(`complete`/`reevaluate`) 성공 시 후차감** |
 | GET | `/api/candidates/[id]/interview-questions` | 저장된 1차 면접 질문지 + `scheduleConfirmed`(1차 일정 확정 여부) 반환. 없으면 `sheet:null` |
-| POST | `/api/candidates/[id]/interview-questions` | 1차 면접 질문지 **생성/재생성**(무료). 게이트: round1 일정 `selected` 아니면 409. 이력서+서류평가+AI면접 평가 종합 LLM(task=questionGen) → 후보자당 1건 upsert. 감사 `interview_questions.generate` |
+| POST | `/api/candidates/[id]/interview-questions` | 1차 면접 질문지 **생성/재생성**. **`interview_question_gen` 토큰 차감(기본 5, 생성 성공 시 후차감 — 재생성도 매번 과금, `chargeRepeatable` 회차 refType `candidate`/`candidate_re{N}`)**. 게이트: round1 일정 `selected` 아니면 409. 이력서+서류평가+AI면접 평가 종합 LLM(task=questionGen) → 후보자당 1건 upsert. 감사 `interview_questions.generate` |
 
 ## 면접 (외부 — 후보자용)
 
@@ -90,7 +90,7 @@
 |---|---|---|---|
 | GET | `/api/interview/[token]` | 🎫 | 세션 + 후보자 + 공고 |
 | GET | `/api/interview/[token]` | 🎫 | 세션 정보. 미동의 시 `consentRequired:true` + `consentItems[]` |
-| POST | `/api/interview/[token]/consent` | 🎫 | 후보자 동의 기록 + **`interview` 차감** (면접 실제 시작 시점, 멱등). 필수 항목 누락 시 400 `{code:"consent_missing", missing}`. IP/UA/version 자동 기록 |
+| POST | `/api/interview/[token]/consent` | 🎫 | 후보자 동의 기록. **차감 없음** — interview 과금은 여기가 아니라 `complete`/`reevaluate` 평가 성공 시 후차감(`chargeRepeatable`). 필수 항목 누락 시 400 `{code:"consent_missing", missing}`. IP/UA/version 자동 기록 |
 | POST | `/api/interview/[token]/chat` | 🎫 | 스트리밍 응답. **동의 없으면 403 `{code:"consent_required"}`** |
 | POST | `/api/interview/[token]/complete` | 🎫 | 평가 LLM + 저장. **동의 없으면 403** |
 | POST | `/api/interview/[token]/appeal` | 🎫 | 자동화 의사결정 이의제기. body: `{email, reason}`. 본인 이메일 매칭 + 사유 10~5000자. DPO 알림 메일 (실패해도 제출 성공). Rate limit IP 3/분 |
@@ -144,7 +144,7 @@
 
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
-| GET/POST | `/api/cron/expire-interviews` | 🌐 (CRON_SECRET) 또는 👑 | 만료된 면접 세션 → `expired` 처리 + 미시작 분만 환불. Vercel Cron schedule = `0 * * * *` (시간당) |
+| GET/POST | `/api/cron/expire-interviews` | 🌐 (CRON_SECRET) 또는 👑 | 만료된 면접 세션 → `expired` 처리. **환불 없음**(면접은 후차감이라 미시작/미평가는 과금된 적 없음 — `lib/expire-sessions.ts` `refundedCount=0`). `pending`(AI 미시작) 만료는 자동 불합격(`ai_link_expired`). Vercel Cron schedule = `0 * * * *` (시간당) |
 | GET/POST | `/api/cron/purge-original` | 🌐 (CRON_SECRET) 또는 👑 | 평가 완료 + N일 경과 후보자의 `resume_text` 와 파일 삭제 (PIPA 가명처리). `?days=N` 으로 오버라이드. Vercel Cron schedule = `30 3 * * *` (매일 03:30). 디폴트 `PURGE_AFTER_DAYS=30` |
 | GET/POST | `/api/cron/interview-reminders` | 🌐 (CRON_SECRET) 또는 👑 | 확정 면접(`status='selected'`) 24시간 전 면접관 전원에게 리마인더 메일 1회 발송 후 `interview_schedules.interviewer_reminder_sent_at` 기록(중복 방지). Vercel Cron schedule = `0 * * * *` (시간당) |
 
@@ -157,7 +157,7 @@
 | GET | `/api/admin/orgs` | 👑 | 전체 법인 + 잔액/멤버수/공고수 |
 | GET | `/api/admin/users?q=` | 👑 | 전 사용자 검색. **`SYSTEM_ADMIN_EMAIL` 로 지정된 보호 계정은 목록에서 제외** (사용자 관리 화면 비노출) |
 | GET | `/api/admin/pricing` | 🔒 | 단가 조회 (전 로그인 사용자) |
-| PATCH | `/api/admin/pricing` | 👑 | `{job_post?, resume_upload?, interview?}` 0 이상 정수 |
+| PATCH | `/api/admin/pricing` | 👑 | `{job_post?, resume_upload?, interview?, interview_question_gen?}` 0 이상 정수 |
 | POST | `/api/admin/orgs/[id]/grant-tokens` | 👑 | `{delta, memo?}` 수동 충전/조정 (admin_adjust ledger) |
 | DELETE | `/api/admin/orgs/[id]` | 👑 🔐 | 법인 영구 삭제. **정지(suspended) 상태만**. `{reason(5자+), confirm=법인명}`. 멤버 계정도 함께 삭제(system_admin 멤버는 분리). 후보자 파일 폐기 + cascade. 감사 로그 보존 |
 | DELETE | `/api/admin/candidates/[id]` | 👑 🔐 | 후보자 영구 삭제 (PIPA 권리요청). `{reason(5자+), confirm=이메일/이름}`. cross-org |
@@ -203,13 +203,14 @@
 
 | 이벤트 | 시점 | 사유 키 | ref | 환불 트리거 |
 |---|---|---|---|---|
-| 공고 생성 | 200 직전 | `job_post` | `job:id` | 5분 내 DELETE |
+| 공고 생성 | 200 직전 (선차감) | `job_post` | `job:id` | 5분 내 DELETE |
 | 이력서 업로드 | (차감 없음) | - | - | - |
 | 서류 평가 / 재평가 | **평가 성공 시 (후차감)** | `resume_upload` | `screening_job:id` | 환불 없음 — 오류/재시도는 애초에 과금 안 됨. 재평가는 새 job 이라 성공마다 1건 |
-| 면접 링크 발급 | 200 직전 | `interview` | `interview_session:id` | cron `/api/cron/expire-interviews` 가 시간당 호출 — 미시작 만료만 자동 환불 |
+| AI 면접 | **평가 성공 시 (후차감)** `complete`/`reevaluate` | `interview` | `interview_session` / `interview_session_re{N}` | 환불 없음 — 발급·동의·만료 시점엔 과금 X |
+| 면접 질문지 생성/재생성 | **생성 성공 시 (후차감)** | `interview_question_gen` | `candidate` / `candidate_re{N}` | 환불 없음 — 재생성 매번 과금 |
 | 관리자 충전 | 즉시 | `admin_adjust` | - | 별도 PATCH 호출로 -delta |
 
-`chargeFeature`/`refundFeature` 모두 `(org, reason, refType, refId)` 단위 멱등.
+`chargeFeature`/`refundFeature` 는 `(org, reason, refType, refId)` 단위 멱등. **재평가/재생성 매번 과금**은 `chargeRepeatable` 이 회차별 refType(`{base}`/`{base}_re{N}`)으로 분리. **잔액 0 이하면 유료 라우트는 402 차단**(`lib/wallet-guard.ts`, 공고 생성 제외).
 
 ## 호출 예시 (curl)
 

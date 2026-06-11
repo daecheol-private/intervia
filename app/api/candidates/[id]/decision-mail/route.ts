@@ -15,7 +15,7 @@ import { buildDecisionEmail } from "@/lib/candidate-stage";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { logAudit } from "@/lib/audit";
 import {
-  requirePositiveBalance,
+  requireSpendableBalance,
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { MAX_DECISION_EMAILS_PER_CANDIDATE } from "@/lib/job-lifecycle";
@@ -49,7 +49,7 @@ export async function POST(
     return new Response("후보자에게 이메일이 없습니다.", { status: 400 });
   }
 
-  const balanceGuard = await requirePositiveBalance(candidate.orgId, {
+  const balanceGuard = await requireSpendableBalance(candidate.orgId, {
     isSystemAdmin: me!.role === "system_admin",
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);
