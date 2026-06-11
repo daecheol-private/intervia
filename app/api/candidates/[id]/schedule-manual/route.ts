@@ -52,10 +52,11 @@ export async function POST(
   const userGuard = requireUser(me);
   if (userGuard) return userGuard;
 
+  // 일괄 직접 확정(목록에서 최대 50명)이 후보자별 호출로 들어옴 — 한도는 그보다 여유 있게.
   const limited = await rateLimit(
     req,
     "schedule-manual",
-    { limit: 10, windowSec: 60 },
+    { limit: 60, windowSec: 60 },
     me!.id
   );
   if (limited) return limited;
