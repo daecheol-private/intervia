@@ -89,8 +89,8 @@ export default function OrgZoomPage() {
   return (
     <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-slate-500 hover:underline">
-          ← 대시보드
+        <Link href="/org/settings" className="text-xs text-slate-500 hover:underline">
+          ← 법인 설정
         </Link>
         <h1 className="text-2xl font-bold text-slate-900 mt-2">
           화상 면접 (줌) 연동
