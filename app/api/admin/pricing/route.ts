@@ -34,11 +34,15 @@ export async function PATCH(req: Request) {
 
   const body = (await req.json().catch(() => ({}))) as Partial<Record<Key, number>>;
 
+  // 상한 — 거대값으로 전 법인 지갑을 일괄 음수화하는 입력(내부자/계정 탈취) 차단.
+  const MAX_COST = 1_000_000;
   for (const k of ALLOWED) {
     const v = body[k];
     if (v == null) continue;
-    if (!Number.isInteger(v) || v < 0)
-      return new Response(`${k}: 0 이상 정수 필요`, { status: 400 });
+    if (!Number.isSafeInteger(v) || v < 0 || v > MAX_COST)
+      return new Response(`${k}: 0~${MAX_COST.toLocaleString()} 정수 필요`, {
+        status: 400,
+      });
     await db
       .insert(tokenPricing)
       .values({

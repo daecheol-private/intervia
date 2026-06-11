@@ -9,7 +9,8 @@ import { candidates, jobPostings, organizations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { ownsOrg, requireUser } from "@/lib/tenant";
+import { requireUser } from "@/lib/tenant";
+import { guardCandidate } from "@/lib/candidate-guard";
 import { buildDecisionEmail } from "@/lib/candidate-stage";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { logAudit } from "@/lib/audit";
@@ -35,13 +36,9 @@ export async function POST(
     customMessage?: string;
   };
 
-  const [candidate] = await db
-    .select()
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!candidate) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, candidate.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate } = g;
 
   if (candidate.outcome !== "hired" && candidate.outcome !== "rejected") {
     return new Response("결정 통보 메일은 최종합격/불합격 후보에게만 발송됩니다.", {

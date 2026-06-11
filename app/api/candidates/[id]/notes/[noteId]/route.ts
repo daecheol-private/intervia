@@ -2,10 +2,11 @@
  * 개별 메모 수정/삭제. 본인 작성 row 만 허용.
  */
 import { db } from "@/lib/db";
-import { candidates, interviewerNotes } from "@/lib/schema";
+import { interviewerNotes } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { ownsOrg, requireUser } from "@/lib/tenant";
+import { requireUser } from "@/lib/tenant";
+import { guardCandidate } from "@/lib/candidate-guard";
 
 export const runtime = "nodejs";
 
@@ -20,20 +21,17 @@ async function loadAndAuthorize(
   cid: number,
   nid: number
 ) {
-  const [candidate] = await db
-    .select({ orgId: candidates.orgId })
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!candidate) return { status: 404 as const };
-  if (!ownsOrg(me, candidate.orgId)) return { status: 404 as const };
+  const g = await guardCandidate(me, cid);
+  if (!g.ok) return { res: g.res };
   const [note] = await db
     .select()
     .from(interviewerNotes)
     .where(
       and(eq(interviewerNotes.id, nid), eq(interviewerNotes.candidateId, cid))
     );
-  if (!note) return { status: 404 as const };
-  if (note.authorUserId !== me.id) return { status: 403 as const };
+  if (!note) return { res: new Response("Not found", { status: 404 }) };
+  if (note.authorUserId !== me.id)
+    return { res: new Response("Forbidden", { status: 403 }) };
   return { ok: true as const };
 }
 
@@ -50,7 +48,7 @@ export async function PATCH(
   const nid = Number(noteId);
 
   const r = await loadAndAuthorize(me!, cid, nid);
-  if ("status" in r) return new Response("Forbidden", { status: r.status });
+  if ("res" in r) return r.res;
 
   const body = (await req.json().catch(() => null)) as {
     scores?: Record<string, unknown>;
@@ -110,7 +108,7 @@ export async function DELETE(
   const nid = Number(noteId);
 
   const r = await loadAndAuthorize(me!, cid, nid);
-  if ("status" in r) return new Response("Forbidden", { status: r.status });
+  if ("res" in r) return r.res;
 
   await db.delete(interviewerNotes).where(eq(interviewerNotes.id, nid));
   return new Response(null, { status: 204 });

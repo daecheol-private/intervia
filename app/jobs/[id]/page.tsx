@@ -17,6 +17,17 @@ import {
   STAGE_GROUP_LABELS,
 } from "@/lib/stage-meta";
 import {
+  deriveCandidateState,
+  GROUP_ORDER,
+  GROUP_META,
+  isHrGroup,
+  matchesWaiterFilter,
+  STAGE_BUCKET,
+  WAITER_FILTER_META,
+  type GroupKey,
+  type WaiterFilter,
+} from "@/lib/candidate-state";
+import {
   HL,
   OutcomeBadge,
   RecBadge,
@@ -25,7 +36,6 @@ import {
   Tag,
   WaitBadge,
   dimIfClosed,
-  hasCounterProposal,
   stageGroupBorder,
 } from "./badges";
 import { BulkDecisionModal, SchedulePropose } from "./bulk-actions";
@@ -54,26 +64,39 @@ export default function JobDetailPage() {
     done: number;
     total: number;
   } | null>(null);
-  const [tab, setTab] = useState<"all" | "screened" | "interviewed">("all");
   const [dragOver, setDragOver] = useState(false);
   const [locked, setLocked] = useState<{ title: string } | null>(null);
   const [loadError, setLoadError] = useState<"not_found" | "failed" | null>(null);
   const [search, setSearch] = useState("");
   // 만료 결정 모달 — 닫아도 페이지 상단 띠는 유지. 다시 열기 가능.
   const [expiredModalDismissed, setExpiredModalDismissed] = useState(false);
-  // URL ?stage=screened 로 진입 시 초기 필터 적용. "all" 은 미지정.
-  // "counter_proposed" 는 stage 가 아닌 pseudo 필터 — 대시보드 역제시 알림 딥링크용.
-  const [stageFilter, setStageFilter] = useState<
-    Candidate["stage"] | "all" | "counter_proposed"
-  >(() => {
+  // 단일 필터 — 칩·드롭다운·펀널 박스가 전부 이 하나의 상태를 공유한다.
+  // 조합 없음: 어디서든 새로 선택하면 이전 필터를 대체 (리셋 비용 제거).
+  // 딥링크: ?stage=(stage·pseudo·bucket·outcome) / ?focus=(대기주체) 모두 이 상태로 수렴.
+  type FilterValue =
+    | "all"
+    | Exclude<WaiterFilter, "all"> // 대기주체 칩 (hr/candidate/interviewer/system/closed)
+    | "in_progress"
+    | "hired"
+    | "rejected"
+    | "withdrawn"
+    | Candidate["stage"] // 세부 단계 (대시보드 딥링크 호환)
+    | "counter_proposed"
+    | "ai_link_expired"
+    | "result_due"
+    | "resume_action"
+    | "bucket_resume"
+    | "bucket_ai"
+    | "bucket_round1"
+    | "bucket_round2";
+  const [filter, setFilter] = useState<FilterValue>(() => {
+    const f = searchParams.get("focus");
+    if (f && ["hr", "candidate", "interviewer", "system", "closed"].includes(f))
+      return f as FilterValue;
     const s = searchParams.get("stage");
-    if (!s) return "all";
-    return s as Candidate["stage"] | "counter_proposed";
+    if (s) return s as FilterValue;
+    return "all";
   });
-  // outcome 필터: "all"=모두, "in_progress"=진행중(outcome null), 또는 특정 outcome 값
-  const [outcomeFilter, setOutcomeFilter] = useState<
-    "all" | "in_progress" | "hired" | "rejected" | "withdrawn"
-  >("all");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   // 합·불 일괄 처리 모달 — 사유 + 통보 메일 옵션을 받기 위해 confirm 대신 모달 사용.
@@ -552,43 +575,69 @@ export default function JobDetailPage() {
     !!job.closesAt &&
     new Date(job.closesAt).getTime() < Date.now();
 
-  // 탭 분류 (status 의존 제거):
-  //   screened (평가완료): AI 서류평가 리포트가 있음
-  //   interviewed (면접완료): AI 면접 세션 완료됨
-  const isScreened = (c: Candidate) => c.screeningReport != null;
-  const isInterviewed = (c: Candidate) => c.latestInterviewStatus === "completed";
-  const counts = {
-    all: candidatesList.length,
-    screened: candidatesList.filter(isScreened).length,
-    interviewed: candidatesList.filter(isInterviewed).length,
+  // 파생 상태 — lib/candidate-state.ts 단일 진실원천. 그룹·필터·정렬·뱃지 모두 이 값 기준.
+  const stateMap = new Map(
+    candidatesList.map((c) => [c.id, deriveCandidateState(c)] as const)
+  );
+  const stateOf = (c: Candidate) => stateMap.get(c.id) ?? deriveCandidateState(c);
+  const groupOf = (c: Candidate): GroupKey => stateOf(c).group;
+  const GROUP_IDX = new Map(GROUP_ORDER.map((g, i) => [g, i] as const));
+
+  // 대기주체별 카운트 — 필터 칩 뱃지용 (탭/검색과 무관하게 전체 기준)
+  const waiterCounts: Record<Exclude<WaiterFilter, "all">, number> = {
+    hr: 0,
+    candidate: 0,
+    interviewer: 0,
+    system: 0,
+    closed: 0,
+  };
+  for (const c of candidatesList) {
+    const s = stateOf(c);
+    if (s.bucket === "closed") waiterCounts.closed++;
+    else if (s.waiter !== "none")
+      waiterCounts[s.waiter as Exclude<WaiterFilter, "all" | "closed">]++;
+  }
+
+  // 단일 필터 판정 — 값 종류별 의미:
+  //   대기주체: 파생 상태의 waiter / 결과: outcome ("최종 합격"은 stage 가 아니라 outcome 기준)
+  //   할일 pseudo: 파생 그룹 / 버킷·세부 단계: 진행 중(outcome null)만 — 펀널 박스 숫자와 일치,
+  //   종결자는 종결 칩·결과 필터로 본다.
+  const matchesFilter = (c: Candidate): boolean => {
+    switch (filter) {
+      case "all":
+        return true;
+      case "hr":
+      case "candidate":
+      case "interviewer":
+      case "system":
+      case "closed":
+        return matchesWaiterFilter(stateOf(c), filter);
+      case "in_progress":
+        return c.outcome == null;
+      case "hired":
+      case "rejected":
+      case "withdrawn":
+        return c.outcome === filter;
+      case "counter_proposed":
+        return stateOf(c).group === "hr_counter";
+      case "ai_link_expired":
+        return stateOf(c).group === "hr_ai_expired";
+      case "result_due":
+        return stateOf(c).group === "hr_result_due";
+      case "resume_action":
+        return stateOf(c).group === "hr_resume_action";
+      default:
+        if (filter.startsWith("bucket_")) {
+          const bucket = filter.slice("bucket_".length);
+          return STAGE_BUCKET[c.stage] === bucket && c.outcome == null;
+        }
+        return c.stage === filter && c.outcome == null;
+    }
   };
 
-  const byTab =
-    tab === "all"
-      ? candidatesList
-      : tab === "screened"
-        ? candidatesList.filter(isScreened)
-        : candidatesList.filter(isInterviewed);
-
   const q = search.trim().toLowerCase();
-  const filteredRaw = byTab.filter((c) => {
-    // "최종 합격"은 stage 가 아니라 outcome 기준 (합격자는 stage 가 round2_passed 등으로 남고
-    // outcome 만 "hired"). 특정 단계 필터에서는 hired 후보를 제외 — 펀널이 hired 를 해당 단계에서
-    // 빼서 "최종 합격" 박스로 옮겨 표시하므로, 박스 숫자와 목록이 정확히 일치하게 한다.
-    if (stageFilter === "hired") {
-      if (c.outcome !== "hired") return false;
-    } else if (stageFilter === "counter_proposed") {
-      if (c.outcome != null || !hasCounterProposal(c)) return false;
-    } else if (stageFilter !== "all") {
-      if (c.stage !== stageFilter || c.outcome === "hired") return false;
-    }
-    if (outcomeFilter === "in_progress" && c.outcome != null) return false;
-    if (
-      outcomeFilter !== "all" &&
-      outcomeFilter !== "in_progress" &&
-      c.outcome !== outcomeFilter
-    )
-      return false;
+  const filteredRaw = candidatesList.filter((c) => {
+    if (!matchesFilter(c)) return false;
     if (!q) return true;
     const hay = [
       c.name,
@@ -608,61 +657,11 @@ export default function JobDetailPage() {
     return hay.includes(q);
   });
 
-  // 그룹 정렬 — 파이프라인 순서. HR 액션 단계는 stage 별로 별도 블럭.
+  // 그룹 정렬 — 파이프라인 순서 (그룹 정의는 lib/candidate-state.ts).
   // 1차 면접 후보(round1_candidate)는 별도 핀 섹션이라 그룹에서 제외.
-  type GroupKey =
-    | "system"
-    | "hr_screened"
-    | "hr_ai_eval"
-    | "hr_counter"
-    | "hr_round1"
-    | "hr_round2"
-    | "r1_interview"
-    | "r2_interview"
-    | "external"
-    | "closed_hired"
-    | "closed_neg";
-  const groupOf = (c: Candidate): GroupKey => {
-    if (c.outcome === "hired") return "closed_hired";
-    if (c.outcome === "rejected" || c.outcome === "withdrawn")
-      return "closed_neg";
-    // 역제시 — 응답 대기가 아니라 HR 의 시간 확정 대기 (round1·round2 공통)
-    if (hasCounterProposal(c)) return "hr_counter";
-    if (c.stage === "applied") return "system";
-    if (c.stage === "screened") return "hr_screened";
-    if (c.stage === "ai_evaluated") return "hr_ai_eval";
-    if (c.stage === "round1_waiting") return "r1_interview";
-    if (c.stage === "round1_passed") {
-      // 2차는 stage 변화 없이 스케줄 row(round2)로만 진행 — 상태로 분기
-      if (c.round2ScheduleStatus === "selected") return "r2_interview";
-      if (c.round2ScheduleStatus != null) return "external"; // pending(응답 대기)
-      return "hr_round1";
-    }
-    if (c.stage === "round2_passed") return "hr_round2";
-    return "external";
-  };
-  const GROUP_ORDER: Record<GroupKey, number> = {
-    system: 0,
-    hr_screened: 1,
-    hr_ai_eval: 2,
-    hr_counter: 3,
-    hr_round1: 4,
-    hr_round2: 5,
-    r1_interview: 6,
-    r2_interview: 7,
-    external: 8,
-    closed_hired: 9,
-    closed_neg: 10,
-  };
-  const isHrGroup = (gk: GroupKey) =>
-    gk === "hr_screened" ||
-    gk === "hr_ai_eval" ||
-    gk === "hr_counter" ||
-    gk === "hr_round1" ||
-    gk === "hr_round2";
   const filtered = [...filteredRaw].sort((a, b) => {
-    const ga = GROUP_ORDER[groupOf(a)];
-    const gb = GROUP_ORDER[groupOf(b)];
+    const ga = GROUP_IDX.get(groupOf(a)) ?? 0;
+    const gb = GROUP_IDX.get(groupOf(b)) ?? 0;
     if (ga !== gb) return ga - gb;
     // 같은 그룹 내: HR 그룹은 점수 높은 순, 그 외는 stage 늦은 순.
     if (isHrGroup(groupOf(a))) {
@@ -693,19 +692,6 @@ export default function JobDetailPage() {
   const otherCandidates = filtered.filter(
     (c) => c.stage !== "round1_candidate" && !c.favorited
   );
-  const GROUP_META: Record<GroupKey, { label: string; tone: string }> = {
-    system: { label: "⚙️ AI 평가 진행 중", tone: "text-slate-500" },
-    hr_screened: { label: "🔔 서류 검토 · 면접 진행 결정", tone: "text-primary-deep" },
-    hr_ai_eval: { label: "🔔 AI 면접 결과 검토", tone: "text-primary-deep" },
-    hr_counter: { label: "↩️ 지원자 시간 역제시 · 확정 필요", tone: "text-primary-deep" },
-    hr_round1: { label: "🔔 1차 합격 · 2차 진행 결정", tone: "text-primary-deep" },
-    hr_round2: { label: "🔔 2차 합격 · 최종 결정", tone: "text-primary-deep" },
-    r1_interview: { label: "🎤 1차 면접 진행 대기", tone: "text-accent-deep" },
-    r2_interview: { label: "🎤 2차 면접 진행 대기", tone: "text-accent-deep" },
-    external: { label: "⏳ 지원자 응답 대기", tone: "text-slate-600" },
-    closed_hired: { label: "✓ 종결 · 합격", tone: "text-emerald-700" },
-    closed_neg: { label: "✗ 종결", tone: "text-slate-400" },
-  };
 
   const visibleIds = filtered.map((c) => c.id);
   const allSelected =
@@ -1324,11 +1310,9 @@ export default function JobDetailPage() {
       <FunnelPanel
         jobId={jobId}
         refreshKey={funnelKey}
-        activeStage={stageFilter}
+        activeStage={filter}
         onStageSelect={(s) => {
-          setStageFilter(s as typeof stageFilter);
-          // 단계 박스 클릭 시 결과 필터는 초기화 — 해당 단계 후보가 결과 필터에 가려지지 않게.
-          setOutcomeFilter("all");
+          setFilter(s as FilterValue);
           // 목록이 펀널보다 한참 아래라 클릭 효과가 보이도록 스크롤.
           if (s !== "all")
             listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1512,30 +1496,54 @@ export default function JobDetailPage() {
       </div>
       {/* /데스크톱 업로드 영역 */}
 
-      {/* Tabs */}
-      <div ref={listTopRef} className="flex gap-1 mt-8 border-b border-slate-200 scroll-mt-4">
-        {[
-          { k: "all", label: "전체", count: counts.all },
-          { k: "screened", label: "평가완료", count: counts.screened },
-          { k: "interviewed", label: "면접완료", count: counts.interviewed },
-        ].map(({ k, label, count }) => (
-          <button
-            key={k}
-            onClick={() => setTab(k as typeof tab)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 ${
-              tab === k
-                ? "border-primary text-primary"
-                : "border-transparent text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            {label}
-            <span className="ml-1.5 text-xs text-slate-400">{count}</span>
-          </button>
-        ))}
+      {/* 필터 — 단일 선택. 칩(대기주체)과 드롭다운(단계·결과 상세)이 같은 상태를 공유하며,
+         어디서든 새로 고르면 이전 필터를 대체한다 (조합 없음 → 리셋 불필요). */}
+      <div
+        ref={listTopRef}
+        className="mt-8 flex flex-wrap items-center gap-1.5 scroll-mt-4"
+      >
+        <button
+          onClick={() => setFilter("all")}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+            filter === "all"
+              ? "bg-ink text-surface border-ink"
+              : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+          }`}
+          title="필터 해제 — 전체 표시"
+        >
+          전체 <span className="opacity-70">{candidatesList.length}</span>
+        </button>
+        {(["hr", "candidate", "interviewer", "system", "closed"] as const).map(
+          (k) => {
+            const m = WAITER_FILTER_META[k];
+            const n = waiterCounts[k];
+            const active = filter === k;
+            return (
+              <button
+                key={k}
+                onClick={() => setFilter(active ? "all" : k)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  active
+                    ? "bg-primary text-surface border-primary"
+                    : k === "hr" && n > 0
+                      ? "bg-warning-soft text-warning border-warning/40 hover:bg-warning/10"
+                      : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+                }`}
+                title={
+                  k === "hr"
+                    ? "지금 처리해야 할 후보만 표시"
+                    : `${m.label} 상태 후보만 표시`
+                }
+              >
+                {m.icon} {m.label} <span className="opacity-70">{n}</span>
+              </button>
+            );
+          }
+        )}
       </div>
 
-      {/* Search + filter */}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      {/* Search + 상세 필터 드롭다운 (칩과 동일한 단일 상태) */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <div className="flex-1 min-w-[220px] relative">
           <input
             value={search}
@@ -1548,15 +1556,26 @@ export default function JobDetailPage() {
           </span>
         </div>
         <select
-          value={stageFilter}
-          onChange={(e) =>
-            setStageFilter(e.target.value as typeof stageFilter)
+          // 칩 값(대기주체)은 드롭다운 옵션에 없으므로 그때는 "전체" 표시 — 활성 상태는 칩이 보여줌.
+          value={
+            (["hr", "candidate", "interviewer", "system", "closed"] as const).includes(
+              filter as Exclude<WaiterFilter, "all">
+            )
+              ? "all"
+              : filter
           }
+          onChange={(e) => setFilter(e.target.value as FilterValue)}
           className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
         >
-          {/* 단계 필터 — 12개 세부 stage 를 4버킷(서류/AI면접/대면/결정)으로 묶어 표시 */}
-          <option value="all">단계 전체</option>
-          {STAGE_GROUPS.map((g) => (
+          <option value="all">상세 필터 — 전체</option>
+          <optgroup label="전형 버킷 (진행 중)">
+            <option value="bucket_resume">서류</option>
+            <option value="bucket_ai">AI 면접</option>
+            <option value="bucket_round1">1차 면접</option>
+            <option value="bucket_round2">2차 면접</option>
+          </optgroup>
+          {/* 세부 단계 — 결정(최종 합격)은 아래 "결과" 그룹과 중복이라 제외 */}
+          {STAGE_GROUPS.filter((g) => g.group !== "decision").map((g) => (
             <optgroup key={g.group} label={STAGE_GROUP_LABELS[g.group]}>
               {g.stages.map((s) => (
                 <option key={s} value={s}>
@@ -1565,23 +1584,19 @@ export default function JobDetailPage() {
               ))}
             </optgroup>
           ))}
-          {/* pseudo 필터 — 대시보드 역제시 알림 딥링크(?stage=counter_proposed)와 동일 */}
-          <optgroup label="스케줄 응답">
-            <option value="counter_proposed">지원자 시간 역제시</option>
+          {/* pseudo 필터 — 대시보드 할일 알림 딥링크(?stage=...)와 동일 */}
+          <optgroup label="할일 바로가기">
+            <option value="resume_action">서류 평가 조치 필요</option>
+            <option value="counter_proposed">지원자 시간 역제안</option>
+            <option value="ai_link_expired">AI 면접 링크 만료</option>
+            <option value="result_due">면접 결과 입력 대기</option>
           </optgroup>
-        </select>
-        <select
-          value={outcomeFilter}
-          onChange={(e) =>
-            setOutcomeFilter(e.target.value as typeof outcomeFilter)
-          }
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-        >
-          <option value="all">결과 전체</option>
-          <option value="in_progress">진행 중</option>
-          <option value="hired">최종합격</option>
-          <option value="rejected">불합격</option>
-          <option value="withdrawn">지원취소</option>
+          <optgroup label="결과">
+            <option value="in_progress">진행 중 (미종결)</option>
+            <option value="hired">최종합격</option>
+            <option value="rejected">불합격</option>
+            <option value="withdrawn">지원취소</option>
+          </optgroup>
         </select>
         <a
           href={`/api/jobs/${jobId}/candidates/export`}
@@ -1604,7 +1619,7 @@ export default function JobDetailPage() {
               📭 불합격 통보 메일 미발송 {unnotified.length}명
             </span>
             <button
-              onClick={() => void setOutcomeFilter("rejected")}
+              onClick={() => setFilter("rejected")}
               className="text-xs px-2.5 py-1 rounded-md border border-warning/40 text-warning hover:bg-warning/10"
             >
               불합격만 보기
@@ -1851,21 +1866,7 @@ export default function JobDetailPage() {
               </ul>
             </div>
           )}
-          {(
-            [
-              "system",
-              "hr_screened",
-              "hr_ai_eval",
-              "hr_counter",
-              "hr_round1",
-              "hr_round2",
-              "r1_interview",
-              "r2_interview",
-              "external",
-              "closed_hired",
-              "closed_neg",
-            ] as const
-          ).map((gk) => {
+          {GROUP_ORDER.map((gk) => {
             const items = otherCandidates.filter((c) => groupOf(c) === gk);
             if (items.length === 0) return null;
             const meta = GROUP_META[gk];

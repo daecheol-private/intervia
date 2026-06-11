@@ -8,7 +8,8 @@ import { db } from "@/lib/db";
 import { candidates, jobPostings, organizations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { ownsOrg, requireUser } from "@/lib/tenant";
+import { requireUser } from "@/lib/tenant";
+import { guardCandidate } from "@/lib/candidate-guard";
 import {
   type Stage,
   type Outcome,
@@ -87,13 +88,9 @@ export async function PATCH(
   if (!outcomeRequested && !stageRequested)
     return new Response("stage 또는 outcome 값이 올바르지 않습니다.", { status: 400 });
 
-  const [candidate] = await db
-    .select()
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!candidate) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, candidate.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate } = g;
 
   const prevStage = candidate.stage as Stage;
   const prevOutcome = candidate.outcome as Outcome | null;

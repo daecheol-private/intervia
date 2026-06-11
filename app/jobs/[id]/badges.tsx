@@ -3,8 +3,12 @@
 import {
   STAGE_META as STAGE_META_SHARED,
   STAGE_RANK as STAGE_RANK_SHARED,
-  STAGE_WAITER,
 } from "@/lib/stage-meta";
+import {
+  deriveCandidateState,
+  hasCounterProposal as hasCounterProposalDerived,
+  type CandidateStateInput,
+} from "@/lib/candidate-state";
 import type { Candidate } from "./types";
 
 // 요약 텍스트의 **굵게** 마크다운만 렌더 (그 외는 평문 유지)
@@ -124,49 +128,29 @@ const WAITER_META: Record<
 };
 
 /** 역제시 상태 — 공이 지원자가 아니라 HR(시간 확정·재제시)에게 있다. */
-export function hasCounterProposal(
-  c: Pick<Candidate, "stage" | "round1ScheduleStatus" | "round2ScheduleStatus">
-): boolean {
-  return (
-    (c.stage === "round1_scheduling" &&
-      c.round1ScheduleStatus === "counter_proposed") ||
-    (c.stage === "round1_passed" && c.round2ScheduleStatus === "counter_proposed")
-  );
+export function hasCounterProposal(c: CandidateStateInput): boolean {
+  return hasCounterProposalDerived(c);
 }
 
-/**
- * 실제 대기 주체 — stage 만으로는 부족한 두 경우를 스케줄 상태로 보정:
- *  - 역제시(counter_proposed): 지원자 응답 대기가 아니라 HR 확정 대기
- *  - 2차 면접: stage 변화 없이(round1_passed 유지) round2 스케줄 row 로만 진행
- */
+/** 실제 대기 주체 + 서브상태 라벨 — lib/candidate-state.ts 단일 진실원천에 위임. */
 export function effectiveWaiter(
-  c: Pick<Candidate, "stage" | "round1ScheduleStatus" | "round2ScheduleStatus">
+  c: CandidateStateInput
 ): { who: keyof typeof WAITER_META; label: string } {
-  if (hasCounterProposal(c))
-    return { who: "hr", label: "역제시 시간 확정 대기" };
-  if (c.stage === "round1_passed" && c.round2ScheduleStatus) {
-    return c.round2ScheduleStatus === "selected"
-      ? { who: "interviewer", label: "2차 면접 진행 대기" }
-      : { who: "candidate", label: "지원자 일정 응답 대기" };
-  }
-  return STAGE_WAITER[c.stage];
+  const s = deriveCandidateState(c);
+  return { who: s.waiter, label: s.label };
 }
 
-export function WaitBadge({
-  c,
-}: {
-  c: Pick<Candidate, "stage" | "round1ScheduleStatus" | "round2ScheduleStatus">;
-}) {
-  const w = effectiveWaiter(c);
-  if (w.who === "none") return null;
-  const m = WAITER_META[w.who];
+export function WaitBadge({ c }: { c: CandidateStateInput }) {
+  const s = deriveCandidateState(c);
+  if (s.waiter === "none") return null;
+  const m = WAITER_META[s.waiter];
   return (
     <span
       className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border ${m.color}`}
-      title={w.label}
+      title={s.label}
     >
       <span>{m.icon}</span>
-      <span>{w.label}</span>
+      <span>{s.label}</span>
     </span>
   );
 }

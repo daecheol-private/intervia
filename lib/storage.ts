@@ -36,6 +36,43 @@ export function contentTypeFromName(name: string): string {
   return map[ext] ?? "application/octet-stream";
 }
 
+/**
+ * 다운로드 응답에서 브라우저가 스크립트로 실행할 수 있는 위험 타입을
+ * octet-stream 으로 강등. 업로드/Blob 이 보고한 content-type 을 그대로 흘리면
+ * .html/.svg 가 세션 도메인에서 렌더되어 저장형 XSS 가 된다.
+ * (호출부에서 nosniff 헤더 + attachment 강제와 함께 사용 — 다층 방어)
+ */
+export function safeDownloadContentType(contentType: string): string {
+  const ct = (contentType || "").split(";")[0].trim().toLowerCase();
+  const DANGEROUS = new Set([
+    "text/html",
+    "application/xhtml+xml",
+    "image/svg+xml",
+    "application/xml",
+    "text/xml",
+    "application/javascript",
+    "text/javascript",
+    "application/x-javascript",
+  ]);
+  return DANGEROUS.has(ct) ? "application/octet-stream" : contentType;
+}
+
+/** inline 미리보기를 허용할 안전한 타입만 inline, 그 외 attachment 강제(강제 다운로드). */
+export function downloadDisposition(
+  contentType: string
+): "inline" | "attachment" {
+  const ct = (contentType || "").split(";")[0].trim().toLowerCase();
+  const INLINE_OK = new Set([
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "text/plain",
+  ]);
+  return INLINE_OK.has(ct) ? "inline" : "attachment";
+}
+
 function useBlob(): boolean {
   const has = !!process.env.BLOB_READ_WRITE_TOKEN;
   // 안전 가드: dev 에서 Blob 토큰이 실수로 .env.local 에 있으면 로컬 디스크 fallback

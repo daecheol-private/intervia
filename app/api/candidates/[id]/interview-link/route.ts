@@ -1,9 +1,10 @@
 import { db } from "@/lib/db";
-import { candidates, interviewSessions, jobPostings, screeningJobs } from "@/lib/schema";
+import { candidates, interviewSessions, screeningJobs } from "@/lib/schema";
 import { isJobExpired } from "@/lib/job-lifecycle";
 import { eq, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { ownsOrg, requireUser } from "@/lib/tenant";
+import { requireUser } from "@/lib/tenant";
+import { guardCandidate } from "@/lib/candidate-guard";
 import { generateToken, addDays } from "@/lib/utils";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import {
@@ -26,13 +27,9 @@ export async function POST(
   const body = (await req.json().catch(() => ({}))) as { days?: number };
   const days = body.days ?? 7;
 
-  const [candidate] = await db
-    .select()
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!candidate) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, candidate.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate, job } = g;
 
   // 종결(합격·불합격·지원취소)된 후보는 AI 면접 링크 발급 불가.
   if (candidate.outcome) {
@@ -65,10 +62,6 @@ export async function POST(
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);
 
   // 종결·만료 공고는 새 면접 발급 불가
-  const [job] = await db
-    .select({ status: jobPostings.status, closesAt: jobPostings.closesAt })
-    .from(jobPostings)
-    .where(eq(jobPostings.id, candidate.jobId));
   if (job?.status === "closed")
     return Response.json(
       { code: "job_closed", message: "종결된 공고입니다. 연장 후 다시 시도해 주세요." },

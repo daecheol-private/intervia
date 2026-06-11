@@ -30,8 +30,17 @@ export async function POST(
     delta?: number;
     memo?: string;
   };
-  if (!Number.isInteger(body.delta) || body.delta === 0)
-    return new Response("delta(0이 아닌 정수) 필요", { status: 400 });
+  // 상한 — 거대값 적립/회수로 잔액을 오버플로시켜 balance<=0 가드를 무력화하는 입력 차단.
+  const MAX_GRANT = 1_000_000;
+  if (
+    !Number.isSafeInteger(body.delta) ||
+    body.delta === 0 ||
+    Math.abs(body.delta!) > MAX_GRANT
+  )
+    return new Response(
+      `delta(0이 아닌 정수, 절대값 ${MAX_GRANT.toLocaleString()} 이하) 필요`,
+      { status: 400 }
+    );
 
   const [org] = await db
     .select({ id: organizations.id, name: organizations.name })

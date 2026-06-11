@@ -58,16 +58,31 @@ export async function GET(
   const pendingByStage: Record<string, number> = {};
   for (const r of pendingRows) pendingByStage[r.stage] = Number(r.count);
 
-  // "오늘 결정할 일" 중 stage 만으로 셀 수 없는 HR 액션 — 스케줄 row 기반.
+  // "오늘 결정할 일" 중 stage 만으로 셀 수 없는 HR 액션 — 스케줄/세션/큐 row 기반.
+  // 판정 기준은 lib/candidate-state.ts 파생 규칙의 SQL 재현 (조건 바꿀 때 양쪽 동기화).
   //  counterProposed: 지원자가 시간을 역제시해 HR 확정/재제시 대기 (round1·round2 공통)
   //  round1PassedUndecided: 1차 합격인데 아직 2차 스케줄 제시 전 → 진짜 "2차 진행 결정" 대상
-  //    (이미 2차 일정이 돌고 있는 후보는 결정이 끝난 것이므로 제외)
+  //  resumeActionNeeded: 평가 실패/충전 대기/평가 미실행 — HR 이 재평가·충전·검토요청 필요
+  //  aiLinkExpired: 응시 중 만료된 AI 면접 링크 — 재발송 또는 결정 필요
+  //  resultDue: 확정 면접 시각 경과 후 결과 미입력 (1·2차)
   const latestSched = (round: "round1" | "round2") => sql`(
     SELECT s.status FROM interview_schedules s
     WHERE s.candidate_id = ${candidates.id} AND s.round = ${round}
       AND s.status IN ('pending','counter_proposed','selected')
     ORDER BY s.id DESC LIMIT 1
   )`;
+  const latestSchedEnd = (round: "round1" | "round2") => sql`(
+    SELECT json_extract(s.selected_slot, '$.end') FROM interview_schedules s
+    WHERE s.candidate_id = ${candidates.id} AND s.round = ${round}
+      AND s.status IN ('pending','counter_proposed','selected')
+    ORDER BY s.id DESC LIMIT 1
+  )`;
+  const latestScreenJob = sql`(
+    SELECT s.status FROM screening_jobs s
+    WHERE s.candidate_id = ${candidates.id}
+    ORDER BY s.id DESC LIMIT 1
+  )`;
+  const nowIso = new Date().toISOString();
   const [hrSched] = await db
     .select({
       counterProposed: sql<number>`COALESCE(SUM(CASE
@@ -77,12 +92,29 @@ export async function GET(
       round1PassedUndecided: sql<number>`COALESCE(SUM(CASE
         WHEN ${candidates.stage} = 'round1_passed' AND ${latestSched("round2")} IS NULL THEN 1
         ELSE 0 END), 0)`,
+      resumeActionNeeded: sql<number>`COALESCE(SUM(CASE
+        WHEN ${candidates.stage} IN ('applied','screened') AND (
+          ${latestScreenJob} IN ('failed','paused')
+          OR (${latestScreenJob} IS NULL AND ${candidates.screeningReport} IS NULL)
+        ) THEN 1 ELSE 0 END), 0)`,
+      aiLinkExpired: sql<number>`COALESCE(SUM(CASE
+        WHEN ${candidates.stage} = 'ai_pending'
+          AND EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status = 'expired')
+          AND NOT EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status IN ('pending','in_progress','completed'))
+        THEN 1 ELSE 0 END), 0)`,
+      resultDue: sql<number>`COALESCE(SUM(CASE
+        WHEN ${candidates.stage} = 'round1_waiting' AND ${latestSched("round1")} = 'selected' AND datetime(${latestSchedEnd("round1")}) <= datetime(${nowIso}) THEN 1
+        WHEN ${candidates.stage} = 'round1_passed' AND ${latestSched("round2")} = 'selected' AND datetime(${latestSchedEnd("round2")}) <= datetime(${nowIso}) THEN 1
+        ELSE 0 END), 0)`,
     })
     .from(candidates)
     .where(and(eq(candidates.jobId, jobId), sql`${candidates.outcome} IS NULL`));
   const hrActions = {
     counterProposed: Number(hrSched?.counterProposed ?? 0),
     round1PassedUndecided: Number(hrSched?.round1PassedUndecided ?? 0),
+    resumeActionNeeded: Number(hrSched?.resumeActionNeeded ?? 0),
+    aiLinkExpired: Number(hrSched?.aiLinkExpired ?? 0),
+    resultDue: Number(hrSched?.resultDue ?? 0),
   };
 
   const stages = {

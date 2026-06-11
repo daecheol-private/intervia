@@ -5,7 +5,11 @@
  *   candidate ID 가 노출되지 않은 한 파일명 조합 추측은 어려움 — defense in depth)
  * - 새 코드는 /api/uploads/candidate/[id] 사용. 거기서 ownsOrg + PIN 검증.
  */
-import { readLocalFile } from "@/lib/storage";
+import {
+  readLocalFile,
+  safeDownloadContentType,
+  downloadDisposition,
+} from "@/lib/storage";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 
@@ -33,10 +37,13 @@ export async function GET(
   const found = await readLocalFile(decoded);
   if (!found) return new Response("Not found", { status: 404 });
 
+  // 위험 타입(html/svg 등)은 octet-stream 강등 + 안전 타입만 inline (저장형 XSS 차단)
+  const ct = safeDownloadContentType(found.contentType);
   return new Response(new Uint8Array(found.data), {
     headers: {
-      "Content-Type": found.contentType,
-      "Content-Disposition": `inline; filename="${encodeURIComponent(decoded)}"`,
+      "Content-Type": ct,
+      "Content-Disposition": `${downloadDisposition(ct)}; filename*=UTF-8''${encodeURIComponent(decoded)}`,
+      "X-Content-Type-Options": "nosniff",
       "Cache-Control": "private, no-store",
     },
   });

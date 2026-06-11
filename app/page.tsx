@@ -78,7 +78,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const [candAgg] = await db
     .select({
       total: count(),
-      decided: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('hired','rejected','withdrawn','hold') THEN 1 ELSE 0 END)`,
+      // 종결 판정은 outcome 기준 — stage 는 종결 후에도 진행 단계를 보존한다.
+      decided: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NOT NULL THEN 1 ELSE 0 END)`,
       // 첫 실행 가이드용 — AI 면접 단계(발송 후 응시 대기) 이상에 도달한 후보 수.
       interviewReached: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('ai_pending','ai_evaluated','round1_candidate','round1_scheduling','round1_waiting','round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
     })
@@ -181,7 +182,9 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       awaitingInterview: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_pending' THEN 1 ELSE 0 END)`,
       needsFinalDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_evaluated' THEN 1 ELSE 0 END)`,
       needsRound1Schedule: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
-      needsRound2Decision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+      // 2차 진행 결정 — 이미 2차 일정이 진행 중(active 스케줄 존재)인 후보는 제외
+      // (lib/candidate-state.ts r2_decide 판정과 동일)
+      needsRound2Decision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = ${candidates.id} AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
       needsFinalOffer: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
     })
     .from(jobPostings)
@@ -232,7 +235,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       passwordHash: jobPostings.passwordHash,
       pendingDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_evaluated' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
       round1Candidates: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
-      round1Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+      round1Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = ${candidates.id} AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
       round2Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
     })
     .from(jobInterviewers)
@@ -326,6 +329,89 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       });
     }
   }
+
+  // AI 면접 링크 만료(응시 중 중단) 알림 — 미응시 만료는 cron 이 자동 불합격 처리하지만,
+  // 응시 중 만료는 HR 이 재발송 또는 결정해야 한다. 활성/완료 세션 없이 expired 만 남은 후보.
+  const expiredAiRows = await db
+    .select({
+      jobId: candidates.jobId,
+      title: jobPostings.title,
+      passwordHash: jobPostings.passwordHash,
+      n: count(),
+    })
+    .from(candidates)
+    .innerJoin(jobInterviewers, eq(jobInterviewers.jobId, candidates.jobId))
+    .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
+    .where(
+      and(
+        eq(jobInterviewers.userId, me.id),
+        eq(candidates.stage, "ai_pending"),
+        sql`${candidates.outcome} IS NULL`,
+        sql`EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status = 'expired')`,
+        sql`NOT EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status IN ('pending','in_progress','completed'))`
+      )
+    )
+    .groupBy(candidates.jobId, jobPostings.title);
+  for (const r of expiredAiRows) {
+    const locked = r.passwordHash != null && !(await isJobUnlocked(r.jobId));
+    const displayTitle = locked ? "🔒 비공개" : r.title;
+    const n = Number(r.n);
+    if (n > 0) {
+      notifications.push({
+        id: `aiexp-${r.jobId}`,
+        icon: "⏰",
+        title: `[${displayTitle}] AI 면접 링크 만료 · 재발송/결정`,
+        count: n,
+        href: `/jobs/${r.jobId}?stage=ai_link_expired`,
+        tone: "amber",
+      });
+    }
+  }
+
+  // 면접 결과 입력 대기 알림 — 확정 면접 시각이 지났는데 합·불/다음 단계 미입력.
+  // 최신 active 스케줄 row 만 판정 (재제시로 묻힌 옛 selected row 제외).
+  const nowIso = new Date().toISOString();
+  const resultDueRows = await db
+    .select({
+      jobId: interviewSchedules.jobId,
+      title: jobPostings.title,
+      passwordHash: jobPostings.passwordHash,
+      n: count(),
+    })
+    .from(interviewSchedules)
+    .innerJoin(
+      jobInterviewers,
+      eq(jobInterviewers.jobId, interviewSchedules.jobId)
+    )
+    .innerJoin(jobPostings, eq(jobPostings.id, interviewSchedules.jobId))
+    .innerJoin(candidates, eq(candidates.id, interviewSchedules.candidateId))
+    .where(
+      and(
+        eq(jobInterviewers.userId, me.id),
+        eq(interviewSchedules.status, "selected"),
+        sql`${candidates.outcome} IS NULL`,
+        sql`datetime(json_extract(${interviewSchedules.selectedSlot}, '$.end')) <= datetime(${nowIso})`,
+        sql`((${interviewSchedules.round} = 'round1' AND ${candidates.stage} = 'round1_waiting') OR (${interviewSchedules.round} = 'round2' AND ${candidates.stage} = 'round1_passed'))`,
+        sql`NOT EXISTS (SELECT 1 FROM interview_schedules s2 WHERE s2.candidate_id = ${interviewSchedules.candidateId} AND s2.round = ${interviewSchedules.round} AND s2.id > ${interviewSchedules.id} AND s2.status IN ('pending','counter_proposed','selected'))`
+      )
+    )
+    .groupBy(interviewSchedules.jobId, jobPostings.title);
+  for (const r of resultDueRows) {
+    const locked = r.passwordHash != null && !(await isJobUnlocked(r.jobId));
+    const displayTitle = locked ? "🔒 비공개" : r.title;
+    const n = Number(r.n);
+    if (n > 0) {
+      notifications.push({
+        id: `due-${r.jobId}`,
+        icon: "📝",
+        title: `[${displayTitle}] 면접 완료 · 결과 입력 대기`,
+        count: n,
+        href: `/jobs/${r.jobId}?stage=result_due`,
+        tone: "indigo",
+      });
+    }
+  }
+
   // 우선순위: count 큰 순
   notifications.sort((a, b) => b.count - a.count);
 

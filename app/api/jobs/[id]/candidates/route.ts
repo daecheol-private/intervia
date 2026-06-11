@@ -155,12 +155,14 @@ export async function GET(
   // 면접 스케줄 상태 — 라운드별 최신 활성 row.
   //  round1: stage=round1_scheduling 에서 pending(응답 대기) vs counter_proposed(역제시) 구분용
   //  round2: stage 변화 없이(round1_passed 유지) 스케줄 row 로만 진행되므로 1차/2차 대기 구분용
+  //  selectedSlot.end — 확정 면접 시각 경과 시 "결과 입력 필요" 파생 (lib/candidate-state.ts)
   const schedRows = ids.length
     ? await db
         .select({
           candidateId: interviewSchedules.candidateId,
           round: interviewSchedules.round,
           status: interviewSchedules.status,
+          selectedSlot: interviewSchedules.selectedSlot,
         })
         .from(interviewSchedules)
         .where(
@@ -175,11 +177,20 @@ export async function GET(
         )
         .orderBy(desc(interviewSchedules.id))
     : [];
-  const r1ByCandidate = new Map<number, typeof schedRows[number]["status"]>();
-  const r2ByCandidate = new Map<number, typeof schedRows[number]["status"]>();
+  type SchedInfo = {
+    status: typeof schedRows[number]["status"];
+    selectedEnd: string | null;
+  };
+  const r1ByCandidate = new Map<number, SchedInfo>();
+  const r2ByCandidate = new Map<number, SchedInfo>();
   for (const s of schedRows) {
     const m = s.round === "round2" ? r2ByCandidate : r1ByCandidate;
-    if (!m.has(s.candidateId)) m.set(s.candidateId, s.status);
+    if (!m.has(s.candidateId))
+      m.set(s.candidateId, {
+        status: s.status,
+        selectedEnd:
+          s.status === "selected" ? (s.selectedSlot?.end ?? null) : null,
+      });
   }
 
   // 현재 사용자의 후보자 즐겨찾기 ID 셋
@@ -206,8 +217,10 @@ export async function GET(
       // 파싱(텍스트 추출+마스킹) 완료 여부 — UI 가 '분석 중' vs '평가 중' 구분.
       parsed: (maskedLen ?? 0) >= 30,
       favorited: favoritedSet.has(r.id),
-      round1ScheduleStatus: r1ByCandidate.get(r.id) ?? null,
-      round2ScheduleStatus: r2ByCandidate.get(r.id) ?? null,
+      round1ScheduleStatus: r1ByCandidate.get(r.id)?.status ?? null,
+      round2ScheduleStatus: r2ByCandidate.get(r.id)?.status ?? null,
+      round1SelectedEnd: r1ByCandidate.get(r.id)?.selectedEnd ?? null,
+      round2SelectedEnd: r2ByCandidate.get(r.id)?.selectedEnd ?? null,
       latestInterviewStatus: s?.status ?? null,
       latestInterviewScore:
         s?.status === "completed" ? (s.evaluation?.overall_score ?? null) : null,

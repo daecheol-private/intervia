@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser, verifyPassword } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { setJobUnlocked } from "@/lib/job-lock";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,15 @@ export async function POST(
 
   const { id } = await params;
   const jobId = Number(id);
+
+  // 4자리 PIN 무차별 대입 차단 — (사용자, 공고)별 5회/5분.
+  const limited = await rateLimit(req, "job-unlock", {
+    limit: 5,
+    windowSec: 300,
+    identifier: `unlock:${me!.id}:${jobId}`,
+  });
+  if (limited) return limited;
+
   const { password } = (await req.json()) as { password?: string };
   if (!password) return new Response("비밀번호 필수", { status: 400 });
 

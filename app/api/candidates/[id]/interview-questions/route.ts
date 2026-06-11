@@ -14,8 +14,6 @@
  */
 import { db } from "@/lib/db";
 import {
-  candidates,
-  jobPostings,
   organizations,
   interviewSessions,
   interviewSchedules,
@@ -25,18 +23,14 @@ import {
 } from "@/lib/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { ownsOrg, requireUser } from "@/lib/tenant";
+import { requireUser } from "@/lib/tenant";
+import { guardCandidate } from "@/lib/candidate-guard";
 import { generateJSON } from "@/lib/gemini";
 import { buildInterviewQuestionsPrompt } from "@/lib/prompts";
 import { logAudit } from "@/lib/audit";
 import { chargeRepeatable } from "@/lib/tokens";
 
 export const runtime = "nodejs";
-
-async function loadCandidate(cid: number) {
-  const [c] = await db.select().from(candidates).where(eq(candidates.id, cid));
-  return c ?? null;
-}
 
 export async function GET(
   _req: Request,
@@ -51,10 +45,8 @@ export async function GET(
   if (!Number.isFinite(cid))
     return new Response("잘못된 candidate id", { status: 400 });
 
-  const candidate = await loadCandidate(cid);
-  if (!candidate) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, candidate.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
 
   const [sheet] = await db
     .select()
@@ -110,10 +102,9 @@ export async function POST(
   if (!Number.isFinite(cid))
     return new Response("잘못된 candidate id", { status: 400 });
 
-  const candidate = await loadCandidate(cid);
-  if (!candidate) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, candidate.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate, job } = g;
 
   // 게이트: 1차 면접 일정이 확정돼야 생성 가능
   const [confirmed] = await db
@@ -138,10 +129,6 @@ export async function POST(
       status: 400,
     });
 
-  const [job] = await db
-    .select()
-    .from(jobPostings)
-    .where(eq(jobPostings.id, candidate.jobId));
   if (!job) return new Response("공고를 찾을 수 없습니다.", { status: 404 });
 
   const org = candidate.orgId

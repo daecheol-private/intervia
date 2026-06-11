@@ -6,8 +6,14 @@ type Funnel = {
   stages: Record<string, number>;
   /** 결정되지 않은(outcome IS NULL) 후보만 stage 별 카운트. "오늘 결정할 일" 계산용. */
   pendingByStage: Record<string, number>;
-  /** stage 만으로 셀 수 없는 HR 액션 — 스케줄 row 기반 (역제시 확정, 2차 진행 미결정). */
-  hrActions?: { counterProposed: number; round1PassedUndecided: number };
+  /** stage 만으로 셀 수 없는 HR 액션 — 스케줄/세션/큐 row 기반 (lib/candidate-state.ts 와 동일 판정). */
+  hrActions?: {
+    counterProposed: number;
+    round1PassedUndecided: number;
+    resumeActionNeeded?: number;
+    aiLinkExpired?: number;
+    resultDue?: number;
+  };
   total: number;
   avgScreeningScore: number | null;
   countWithScreeningScore: number;
@@ -46,85 +52,70 @@ export function FunnelPanel({
 
   if (!data || data.total === 0) return null;
 
-  // 전형 단계 — 1줄 표시. 그룹별 색 묶음:
-  //   G1 스크리닝(지원·서류) / G2 AI면접(대기·평가) / G3 1차(후보·스케쥴·대기·합격) / G4 2차 / G5 최종
-  // 그룹별 색상 토큰 — 후보자 카드 좌측 색띠와 동일.
+  // 전형 단계 — 버킷 5개 (서류 → AI 면접 → 1차 → 2차 → 최종 합격).
+  // 각 박스 안에 서브상태 요약 1줄. 색상 토큰은 후보자 카드 좌측 색띠와 동일.
   // active: 값이 있는 셀(테두리 진하고 배경 살짝), empty: 값 0인 셀(테두리만 옅게).
+  const s = (k: string) => Number(data.stages[k] ?? 0);
   type PipelineCell = {
-    stage: string;
+    stage: string; // 클릭 시 목록 필터 키 (bucket_* pseudo 또는 hired)
     label: string;
-    group: 1 | 2 | 3 | 4 | 5;
+    n: number;
+    /** 서브상태 요약 — "라벨 n" 중 n>0 만 표시 */
+    subs: Array<{ label: string; n: number }>;
     active: string;
     empty: string;
   };
   const pipelineCells: PipelineCell[] = [
     {
-      stage: "applied",
-      label: "지원",
-      group: 1,
+      stage: "bucket_resume",
+      label: "서류",
+      n: s("applied") + s("screened"),
+      subs: [
+        { label: "평가전", n: s("applied") },
+        { label: "평가완료", n: s("screened") },
+      ],
       active: "border-slate-400 bg-slate-50 text-slate-700",
       empty: "border-slate-200 text-slate-300",
     },
     {
-      stage: "screened",
-      label: "서류평가",
-      group: 1,
-      active: "border-slate-400 bg-slate-50 text-slate-700",
-      empty: "border-slate-200 text-slate-300",
-    },
-    {
-      stage: "ai_pending",
-      label: "AI면접·대기",
-      group: 2,
+      stage: "bucket_ai",
+      label: "AI 면접",
+      n: s("ai_pending") + s("ai_evaluated"),
+      subs: [
+        { label: "응시대기", n: s("ai_pending") },
+        { label: "면접완료", n: s("ai_evaluated") },
+      ],
       active: "border-info bg-info-soft text-info",
       empty: "border-info/30 text-info/40",
     },
     {
-      stage: "ai_evaluated",
-      label: "AI면접·평가",
-      group: 2,
-      active: "border-info bg-info-soft text-info",
-      empty: "border-info/30 text-info/40",
-    },
-    {
-      stage: "round1_candidate",
-      label: "1차·후보",
-      group: 3,
+      stage: "bucket_round1",
+      label: "1차 면접",
+      n: s("round1_candidate") + s("round1_scheduling") + s("round1_waiting"),
+      subs: [
+        { label: "후보", n: s("round1_candidate") },
+        { label: "일정조율", n: s("round1_scheduling") },
+        { label: "면접확정", n: s("round1_waiting") },
+      ],
       active: "border-accent bg-accent-soft text-accent-deep",
       empty: "border-accent/30 text-accent/40",
     },
     {
-      stage: "round1_scheduling",
-      label: "1차·스케쥴",
-      group: 3,
-      active: "border-accent bg-accent-soft text-accent-deep",
-      empty: "border-accent/30 text-accent/40",
-    },
-    {
-      stage: "round1_waiting",
-      label: "1차·대기",
-      group: 3,
-      active: "border-accent bg-accent-soft text-accent-deep",
-      empty: "border-accent/30 text-accent/40",
-    },
-    {
-      stage: "round1_passed",
-      label: "1차 합격",
-      group: 3,
-      active: "border-accent bg-accent-soft text-accent-deep",
-      empty: "border-accent/30 text-accent/40",
-    },
-    {
-      stage: "round2_passed",
-      label: "2차 합격",
-      group: 4,
+      stage: "bucket_round2",
+      label: "2차 면접",
+      n: s("round1_passed") + s("round2_passed"),
+      subs: [
+        { label: "진행·일정", n: s("round1_passed") },
+        { label: "최종결정", n: s("round2_passed") },
+      ],
       active: "border-primary bg-primary-soft text-primary-deep",
       empty: "border-primary/30 text-primary/40",
     },
     {
       stage: "hired",
       label: "최종 합격",
-      group: 5,
+      n: s("hired"),
+      subs: [],
       active: "border-primary bg-primary text-surface",
       empty: "border-primary/40 text-primary/50",
     },
@@ -157,10 +148,22 @@ export function FunnelPanel({
   const pending = data.pendingByStage ?? {};
   const actionItems: { stage: string; label: string; count: number; tone: string }[] = [
     {
+      stage: "resume_action",
+      label: "서류 평가 조치 (실패·미실행)",
+      count: data.hrActions?.resumeActionNeeded ?? 0,
+      tone: "bg-warning-soft text-warning border-warning/30 hover:bg-warning-soft/70",
+    },
+    {
       stage: "screened",
       label: "서류평가 후 면접 진행 결정",
       count: pending["screened"] ?? 0,
       tone: "bg-primary-soft text-primary-deep border-primary/30 hover:bg-primary-soft/70",
+    },
+    {
+      stage: "ai_link_expired",
+      label: "AI 면접 링크 만료 · 재발송/결정",
+      count: data.hrActions?.aiLinkExpired ?? 0,
+      tone: "bg-warning-soft text-warning border-warning/30 hover:bg-warning-soft/70",
     },
     {
       stage: "ai_evaluated",
@@ -178,6 +181,12 @@ export function FunnelPanel({
       stage: "counter_proposed",
       label: "지원자 역제시 시간 확정",
       count: data.hrActions?.counterProposed ?? 0,
+      tone: "bg-warning-soft text-warning border-warning/30 hover:bg-warning-soft/70",
+    },
+    {
+      stage: "result_due",
+      label: "면접 완료 · 결과 입력",
+      count: data.hrActions?.resultDue ?? 0,
       tone: "bg-warning-soft text-warning border-warning/30 hover:bg-warning-soft/70",
     },
     {
@@ -237,16 +246,17 @@ export function FunnelPanel({
         </div>
       </div>
 
-      {/* 파이프라인 — 데스크톱은 1줄 꽉 채움(flex-1), 모바일은 가로 스크롤(셀 최소폭 유지). */}
+      {/* 파이프라인 — 버킷 5박스. 데스크톱은 1줄 꽉 채움(flex-1), 모바일은 가로 스크롤. */}
       <div className="flex items-stretch gap-0.5 pb-2 overflow-x-auto sm:overflow-visible -mx-1 px-1">
         {pipelineCells.map((cell, i) => {
-          const n = data.stages[cell.stage] ?? 0;
-          const next = pipelineCells[i + 1];
-          const isGroupBoundary = next && next.group !== cell.group;
+          const subsLine = cell.subs
+            .filter((x) => x.n > 0)
+            .map((x) => `${x.label} ${x.n}`)
+            .join(" · ");
           return (
             <div
               key={cell.stage}
-              className="flex items-center gap-0.5 shrink-0 sm:shrink sm:flex-1 min-w-[62px] sm:min-w-0"
+              className="flex items-center gap-0.5 shrink-0 sm:shrink sm:flex-1 min-w-[96px] sm:min-w-0"
             >
               <button
                 type="button"
@@ -261,7 +271,7 @@ export function FunnelPanel({
                     : `${cell.label} 단계만 보기`
                 }
                 className={`rounded-md text-center flex-1 min-w-0 cursor-pointer transition hover:shadow-sm hover:brightness-95 ${
-                  n > 0 ? cell.active : cell.empty
+                  cell.n > 0 ? cell.active : cell.empty
                 } ${
                   activeStage === cell.stage
                     ? "border-4 px-0.5 py-1"
@@ -272,18 +282,15 @@ export function FunnelPanel({
                   {cell.label}
                 </div>
                 <div className="text-base font-bold mt-0.5 tabular-nums">
-                  {n}
+                  {cell.n}
+                </div>
+                <div className="text-[9px] opacity-70 truncate h-3">
+                  {subsLine}
                 </div>
               </button>
               {i < pipelineCells.length - 1 && (
-                <span
-                  className={`text-[10px] shrink-0 ${
-                    isGroupBoundary
-                      ? "text-slate-400 px-0.5"
-                      : "text-slate-300"
-                  }`}
-                >
-                  {isGroupBoundary ? "▶" : "▸"}
+                <span className="text-[10px] shrink-0 text-slate-400 px-0.5">
+                  ▶
                 </span>
               )}
             </div>

@@ -2,10 +2,11 @@
  * 이의제기 검토 상태/답변 업데이트 (채용담당자/시스템관리자).
  */
 import { db } from "@/lib/db";
-import { candidates, appealLogs, jobPostings, organizations } from "@/lib/schema";
+import { appealLogs, jobPostings, organizations } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { ownsOrg, requireUser } from "@/lib/tenant";
+import { requireUser } from "@/lib/tenant";
+import { guardCandidate } from "@/lib/candidate-guard";
 import { logAudit } from "@/lib/audit";
 import { sendMail, buildAppealResponseEmail } from "@/lib/mailer";
 
@@ -26,17 +27,9 @@ export async function PATCH(
   const cid = Number(id);
   const aid = Number(appealId);
 
-  const [candidate] = await db
-    .select({
-      orgId: candidates.orgId,
-      name: candidates.name,
-      jobId: candidates.jobId,
-    })
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!candidate) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, candidate.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate } = g;
 
   const [prev] = await db
     .select({

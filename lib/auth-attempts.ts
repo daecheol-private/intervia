@@ -230,14 +230,27 @@ export async function cleanupOldAttempts(): Promise<number> {
   return r.length;
 }
 
-/** Request 에서 client IP 추출 (Vercel proxy 헤더 우선). */
+/**
+ * Request 에서 client IP 추출 — 잠금·rate limit 등 보안 판정에 쓰이는 값.
+ * 클라이언트가 임의 조작 가능한 XFF 첫 토큰은 신뢰하지 않는다: Vercel 프록시가 설정하는
+ * 신뢰 헤더 우선, XFF 는 신뢰 프록시가 덧붙인 가장 오른쪽 토큰만 사용.
+ */
 export function extractIp(req: Request): string | null {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
+  const vercel = req.headers.get("x-vercel-forwarded-for");
+  if (vercel) {
+    const v = vercel.split(",")[0]?.trim();
+    if (v) return v;
   }
   const real = req.headers.get("x-real-ip");
   if (real) return real.trim();
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const parts = xff
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) return last;
+  }
   return null;
 }

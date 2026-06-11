@@ -9,6 +9,7 @@ import { desc, eq, count, sql, and } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { jobOrgFilter, requireUser } from "@/lib/tenant";
 import { isValidPin } from "@/lib/job-lock";
+import { rateLimit } from "@/lib/rate-limit";
 import { chargeFeature } from "@/lib/tokens";
 import { defaultClosesAt } from "@/lib/job-lifecycle";
 import { stripBiasedLines } from "@/lib/job-bias-filter";
@@ -77,6 +78,15 @@ export async function POST(req: Request) {
   if (guard) return guard;
   if (me!.role !== "system_admin" && me!.orgId == null)
     return new Response("법인이 지정되지 않은 계정입니다.", { status: 403 });
+
+  // 생성 직후 LLM 체크리스트 호출이 따라붙으므로 무제한 생성은 비용 공격이 된다.
+  const limited = await rateLimit(
+    req,
+    "job-create",
+    { limit: 10, windowSec: 600 },
+    me!.id
+  );
+  if (limited) return limited;
 
   const body = await req.json();
   const required = ["title", "position", "level", "employmentType", "responsibilities", "requirements"];

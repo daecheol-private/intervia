@@ -69,6 +69,9 @@ export type Candidate = {
   round1ScheduleStatus: "pending" | "counter_proposed" | "selected" | null;
   // 최신 활성 2차 면접 스케줄 상태 — 2차는 stage 변화 없이 스케줄 row 로만 진행.
   round2ScheduleStatus: "pending" | "counter_proposed" | "selected" | null;
+  // 확정 슬롯 종료 시각 — 경과 시 "면접 완료 · 결과 입력 필요" 파생 (lib/candidate-state.ts)
+  round1SelectedEnd: string | null;
+  round2SelectedEnd: string | null;
 };
 
 /** 1차 면접 확정 일정 항목 (GET /api/jobs/[id]/round1-schedule). */

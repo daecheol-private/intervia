@@ -255,6 +255,20 @@ interviewer/
 - **네비 정리** (`app/components/NavBar.tsx`): org_admin "법인" 드롭다운에서 **메일서버(`/org/smtp`)·줌(`/org/zoom`) 제외** → 법인 설정(`/org/settings`) 의 "외부 연동" 섹션으로 이동. 모바일 메뉴는 원래 둘을 숨기고 있어 데스크톱과 일관성도 맞췄다. 미설정 시 Intervia 기본값으로 동작하므로 첫 흐름에서 빠져도 무방(SMTP 는 후보자 상세에서도 맥락 링크로 도달 가능).
 - **단계 필터 4버킷 그룹화** (`app/jobs/[id]/page.tsx` 후보자 필터 `<select>`): 12개 세부 stage 를 `<optgroup>` 4그룹(**서류 전형 / AI 면접 / 대면 면접 / 결정**)으로 묶어 표시. 매핑은 `lib/stage-meta.ts` 의 `STAGE_GROUPS` / `STAGE_GROUP_LABELS` / `STAGE_GROUP_OF` (재사용 가능). 내부 stage enum 과 "전형 단계 현황" 보드(이미 색상 그룹 구분)는 불변.
 
+### 13. 후보자 파생 상태 — 버킷·서브상태·대기주체 (`lib/candidate-state.ts`)
+
+"지금 누가 무엇을 해야 하는가"의 **단일 진실원천**. 저장은 `stage`(파이프라인 위치) + `outcome`(종결 결과)뿐이고, 서브상태는 큐/세션/스케줄 테이블에서 **파생**한다 (컬럼 저장 금지 — 전환 지점마다 갱신 누락 시 드리프트 버그).
+
+- **모델**: 버킷 5개(`resume`/`ai`/`round1`/`round2`/`closed`) × 서브상태(`StateKey` 26종) × 대기주체(`system`/`hr`/`candidate`/`interviewer`/`none`).
+- **입력**: `CandidateStateInput` — 목록 API(`GET /api/jobs/[id]/candidates`) 응답의 부분집합. 스케줄 확정 슬롯 종료시각(`round1SelectedEnd`/`round2SelectedEnd`)으로 "면접 완료 · 결과 입력 필요"를 시간 경과로 파생.
+- **소비처**: 목록 그룹핑/정렬(`GROUP_ORDER`/`GROUP_META`), 대기 뱃지(`WaitBadge`), 대기주체 필터 칩("내 할일" = waiter `hr`), 검색 태그, 펀널 패널(`funnel-panel.tsx` — 버킷 5박스 + 서브상태 요약, 클릭 시 `bucket_*` pseudo 필터). 대시보드 알림 SQL(`app/page.tsx`)과 펀널 API `hrActions`(`app/api/jobs/[id]/funnel`)는 같은 판정을 SQL 로 재현 — 조건 바꿀 때 **모두 동기화 필수**.
+- **이 모델이 잡는 사각지대** (stage 만으로는 안 보이던 HR 할일):
+  - `ai_link_expired`: 응시 중 만료된 AI 면접 링크 (미응시 만료는 cron 자동 불합격이지만, 응시 중 만료는 HR 재발송/결정 필요)
+  - `r1_result_due`/`r2_result_due`: 확정 면접 시각 경과 후 합·불 미입력
+  - `resume_failed`/`resume_paused`/`resume_not_started`: 평가 실패·충전 대기·평가 미실행 (이전엔 "AI 평가 진행 중"으로 묻힘)
+- **딥링크 pseudo 필터**: `/jobs/[id]?stage=counter_proposed|ai_link_expired|result_due`, 대기주체는 `?focus=hr|candidate|interviewer|system|closed`.
+- **단일 필터 원칙** (`app/jobs/[id]/page.tsx` `filter` 상태): 목록 필터는 항상 1개만 활성 — 대기주체 칩 / 상세 드롭다운(버킷·세부 단계·할일·결과) / 펀널 박스가 전부 같은 상태를 공유하고, 새로 선택하면 이전 필터를 **대체**한다 (조합·리셋 없음). 텍스트 검색만 필터와 AND 조합. 버킷·세부 단계 필터는 진행 중(outcome null)만 — 펀널 박스 숫자와 목록 인원 일치 불변식.
+
 ## 데이터 흐름 디테일
 
 ### 이력서 업로드 → 서류 평가

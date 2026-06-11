@@ -11,7 +11,7 @@ import { interviewSessions, candidates, appealLogs, jobPostings } from "@/lib/sc
 import { eq } from "drizzle-orm";
 import { extractIp } from "@/lib/auth-attempts";
 import { rateLimit } from "@/lib/rate-limit";
-import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import { sendMail, isSmtpAvailable, escapeHtml } from "@/lib/mailer";
 import { DPO_INFO, COMPANY_INFO, SITE_INFO } from "@/lib/site-info";
 import { logAudit } from "@/lib/audit";
 import { notifyJobInterviewers, notifyOrgAdmins } from "@/lib/notifications";
@@ -155,10 +155,10 @@ ${COMPANY_INFO.name} DPO 알림`,
     html: `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;">
   <h2 style="color:#0f172a;font-size:18px;">AI 평가 이의제기 접수</h2>
   <table style="font-size:13px;color:#334155;border-collapse:collapse;margin-top:12px;">
-    <tr><td style="padding:4px 8px;color:#64748b;">후보자</td><td>${opts.candidateName} &lt;${opts.candidateEmail}&gt;</td></tr>
-    <tr><td style="padding:4px 8px;color:#64748b;">공고</td><td>${jobTitle}</td></tr>
+    <tr><td style="padding:4px 8px;color:#64748b;">후보자</td><td>${escapeHtml(opts.candidateName)} &lt;${escapeHtml(opts.candidateEmail)}&gt;</td></tr>
+    <tr><td style="padding:4px 8px;color:#64748b;">공고</td><td>${escapeHtml(jobTitle)}</td></tr>
   </table>
-  <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;white-space:pre-wrap;">${opts.reason.replace(/[<>&]/g, (c) => ({"<":"&lt;",">":"&gt;","&":"&amp;"})[c]!)}</div>
+  <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;white-space:pre-wrap;">${escapeHtml(opts.reason)}</div>
   <p style="margin-top:16px;font-size:12px;color:#64748b;">PIPA §37의2 에 따라 7영업일 이내에 검토 의견을 회신해야 합니다.</p>
   <a href="${adminUrl}" style="display:inline-block;margin-top:8px;background:#2563eb;color:white;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;">관리자 페이지 열기</a>
 </div>`,

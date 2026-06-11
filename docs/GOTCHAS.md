@@ -2,6 +2,18 @@
 
 작업 전 한 번 훑으면 시간 낭비 큰 폭으로 줄어듭니다.
 
+## 0-A. 후보자 서브상태는 컬럼이 아니라 파생 — `lib/candidate-state.ts` 만 수정
+
+**증상**: "지원자 응답 대기"인데 실제론 HR 차례 등 목록/대시보드 상태 불일치.
+
+**원인**: 누가 액션할 차례인지(서브상태)를 stage 나 별도 컬럼으로 직접 판정/저장하려 함. 서브상태는 큐(`screening_jobs`)/세션(`interview_sessions`)/스케줄(`interview_schedules`)에서 **파생**되는 값이라, 복제 저장하면 전환 지점마다 갱신이 누락돼 드리프트한다.
+
+**해결**:
+- 판정 로직 추가/변경은 `lib/candidate-state.ts` `deriveCandidateState()` 한 곳에만
+- UI 는 `WaitBadge`/`GROUP_META`/`matchesWaiterFilter` 등 모듈 export 만 소비
+- 대시보드 알림(`app/page.tsx`)은 같은 판정의 SQL 재현 — 모듈 조건 바꾸면 **SQL 도 같이** 수정
+- 새 stage/스케줄 전이를 추가하면 `StateKey` 매트릭스에 빠지는 상태가 없는지 확인 (특히 "만료/시간경과" 류 — `ai_link_expired`, `r1_result_due` 가 과거에 빠져 있던 사각지대)
+
 ## 0. 멀티테넌트 — `org_id` 필터 누락이 가장 위험
 
 **증상**: 다른 법인 사용자가 우리 공고/후보자를 보게 됨.
@@ -13,6 +25,18 @@
 - 단일 row 조회: 로드 후 `ownsOrg(me, row.orgId)` 체크. 실패 시 **404** 로 응답 (존재 여부 위장)
 - POST/INSERT: body의 `orgId` 무시하고 서버측 `me.orgId` 사용. system_admin만 명시 허용
 - system_admin은 모든 법인 통과 — 필터 함수가 `undefined` 반환
+
+## 0-1. 후보자 하위 라우트 권한은 `guardCandidate` 만 사용
+
+**증상**: PIN 잠긴 공고인데 같은 법인 멤버가 `/notes`(면접관 평가 열람), `/stage`(합·불 확정+메일) 등 하위 라우트로 우회 접근.
+
+**원인**: 라우트마다 candidate 로드 + `ownsOrg` 만 직접 구현하고 공고 PIN 잠금(`isJobUnlocked`) 검사를 빠뜨림.
+
+**해결**: `app/api/candidates/[id]/**` 신규 라우트는 반드시 `lib/candidate-guard.ts` 의 `guardCandidate(me, cid)` 사용 — 존재(404)/법인 소유(404)/PIN 잠금(403 `{locked:true}`)을 한 번에 처리하고 `candidate`·`job` row 를 돌려준다. 개별 구현 금지.
+
+## 0-2. 토큰 ledger 멱등 가드 — 에러 메시지는 cause 체인에서 검사
+
+drizzle 가 모든 쿼리 에러를 감싸므로 최상위 `e.message` 는 `"Failed query: ..."` 뿐. UNIQUE 위반 판별은 반드시 `lib/db-errors.ts` `isUniqueViolation(e)` 사용 (`String(e)` 정규식 검사 금지 — 과거 join-requests·token ledger 두 곳에서 동일 버그 재발).
 
 ## 0-0-2. Rate limit 위치
 
@@ -37,6 +61,9 @@ if (limited) return limited;
 | `self-view` / `self-delete` | 5 / 3 | 면접 토큰 기준 (후보자 본인열람/삭제) |
 | `llm-screen` | 30 | userId 기준 (단건) |
 | `llm-bulk-screen` | 5 | userId 기준 (1회당 ≤500건) |
+| `job-create` | 10/10분 | userId 기준 (생성 직후 LLM 체크리스트 호출 — 비용 공격 차단) |
+| `job-unlock` | 5/5분 | userId+jobId 기준 (4자리 PIN 대입 차단) |
+| `interview-reevaluate` | 10 | userId 기준 |
 
 login 은 `auth_attempts` 잠금이 더 강력 — rate-limit 별도 적용 X.
 고트래픽 streaming endpoint (`/api/interview/[token]/chat`) 는 매 호출 DB 접근 비용 우려로 미적용 (필요 시 in-memory 카운터 검토).

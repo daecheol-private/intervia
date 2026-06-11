@@ -11,7 +11,9 @@
  */
 import * as cheerio from "cheerio";
 import { lookup } from "node:dns/promises";
+import type { LookupOptions, LookupAddress } from "node:dns";
 import { isIP } from "node:net";
+import { Agent } from "undici";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -159,8 +161,11 @@ function isBlockedIp(ip: string): boolean {
 /**
  * 외부 fetch 전 URL 검증 — http/https 만, 호스트가 사설/내부 대역으로 해석되면 차단.
  * 공고 URL·본문 이미지 fetch 가 내부망·메타데이터(169.254.169.254)에 도달하는 SSRF 를 막는다.
+ *
+ * 반환: 검증을 통과한 IP. 이 IP 로 연결을 고정(핀)해서, 검증 시점과 fetch 시점의
+ * DNS 결과가 달라지는 TOCTOU(DNS rebinding) 우회를 차단한다.
  */
-async function assertPublicUrl(raw: string): Promise<void> {
+async function assertPublicUrl(raw: string): Promise<string> {
   let u: URL;
   try {
     u = new URL(raw);
@@ -172,7 +177,7 @@ async function assertPublicUrl(raw: string): Promise<void> {
   const host = u.hostname;
   if (isIP(host)) {
     if (isBlockedIp(host)) throw new Error("내부 주소로의 요청은 차단됩니다.");
-    return;
+    return host;
   }
   let addrs: Array<{ address: string }>;
   try {
@@ -180,9 +185,38 @@ async function assertPublicUrl(raw: string): Promise<void> {
   } catch {
     throw new Error("호스트를 확인할 수 없습니다.");
   }
+  if (addrs.length === 0) throw new Error("호스트를 확인할 수 없습니다.");
   for (const a of addrs)
     if (isBlockedIp(a.address))
       throw new Error("내부 주소로의 요청은 차단됩니다.");
+  return addrs[0].address;
+}
+
+/**
+ * 검증된 IP 로 연결을 고정하는 undici dispatcher.
+ * fetch 내부의 2차 DNS 조회를 우회하고 이 IP 로만 connect → DNS rebinding 차단.
+ * (undici 가 TLS servername 은 원 호스트로 유지하므로 인증서 검증은 정상 동작)
+ */
+function pinnedDispatcher(ip: string): Agent {
+  const family = isIP(ip) === 6 ? 6 : 4;
+  // undici 6.x 는 lookup 을 { all: true } 로 호출 → 콜백에 배열을 넘겨야 한다.
+  // (양쪽 계약 모두 처리: all 이면 배열, 아니면 단일 주소)
+  return new Agent({
+    connect: {
+      lookup: (
+        _hostname: string,
+        options: LookupOptions,
+        cb: (
+          err: NodeJS.ErrnoException | null,
+          address: string | LookupAddress[],
+          family?: number
+        ) => void
+      ) =>
+        options.all
+          ? cb(null, [{ address: ip, family }])
+          : cb(null, ip, family),
+    },
+  });
 }
 
 async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
@@ -199,15 +233,17 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Respon
   };
   try {
     // 리다이렉트를 수동 추적하며 각 hop 을 SSRF 재검증 (리다이렉트 기반 우회 차단). 최대 5 hop.
+    // 각 hop 은 검증된 IP 로 연결을 고정(핀)해 DNS rebinding 우회까지 차단한다.
     let current = url;
     for (let hop = 0; hop < 5; hop++) {
-      await assertPublicUrl(current);
+      const pinnedIp = await assertPublicUrl(current);
       const res = await fetch(current, {
         ...init,
         signal: ctrl.signal,
         redirect: "manual",
         headers,
-      });
+        dispatcher: pinnedDispatcher(pinnedIp),
+      } as RequestInit & { dispatcher: Agent });
       const loc = res.headers.get("location");
       if (res.status >= 300 && res.status < 400 && loc) {
         current = new URL(loc, current).toString();

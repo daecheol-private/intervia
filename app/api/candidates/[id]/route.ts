@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
-import { candidates, interviewSchedules, interviewSessions, jobPostings, organizations, screeningJobs, userCandidateFavorites } from "@/lib/schema";
+import { candidates, interviewSchedules, interviewSessions, organizations, screeningJobs, userCandidateFavorites } from "@/lib/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { ownsOrg, requireUser } from "@/lib/tenant";
-import { isJobUnlocked } from "@/lib/job-lock";
+import { requireUser } from "@/lib/tenant";
+import { guardCandidate } from "@/lib/candidate-guard";
 import { deleteFilesForCandidate } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
 
@@ -20,30 +20,9 @@ export async function GET(
   const { id } = await params;
   const cid = Number(id);
 
-  const [candidate] = await db
-    .select()
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!candidate) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, candidate.orgId))
-    return new Response("Not found", { status: 404 });
-
-  const [job] = await db
-    .select()
-    .from(jobPostings)
-    .where(eq(jobPostings.id, candidate.jobId));
-
-  if (
-    me!.role !== "system_admin" &&
-    job?.passwordHash &&
-    !(await isJobUnlocked(job.id))
-  ) {
-    return Response.json(
-      { locked: true, jobId: job.id, jobTitle: job.title },
-      { status: 403 }
-    );
-  }
-
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate, job } = g;
 
   const sessions = await db
     .select()
@@ -117,9 +96,16 @@ export async function GET(
     companyName = org?.name ?? null;
   }
 
+  // PIN bcrypt 해시는 응답에서 제거 (4자리라 오프라인 대입에 취약)
+  let jobSafe: Record<string, unknown> | null = null;
+  if (job) {
+    const { passwordHash, ...rest } = job;
+    jobSafe = { ...rest, hasPassword: passwordHash != null };
+  }
+
   return Response.json({
     candidate: { ...candidate, favorited },
-    job,
+    job: jobSafe,
     companyName,
     sessions,
     schedules,
@@ -151,13 +137,9 @@ export async function PATCH(
   } | null;
   if (!body) return new Response("바디 필요", { status: 400 });
 
-  const [row] = await db
-    .select({ orgId: candidates.orgId, name: candidates.name })
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!row) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, row.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate: row } = g;
 
   const updates: Partial<{
     name: string;
@@ -234,16 +216,9 @@ export async function DELETE(
 
   const { id } = await params;
   const cid = Number(id);
-  const [row] = await db
-    .select({
-      orgId: candidates.orgId,
-      name: candidates.name,
-    })
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!row) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, row.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate: row } = g;
 
   // 파일 먼저 — DB row 삭제 후엔 path 정보 못 가져옴 (cascade 로 attachments 도 사라짐)
   const fileResult = await deleteFilesForCandidate(cid);

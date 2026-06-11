@@ -11,7 +11,11 @@ import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
-import { readLocalFile } from "@/lib/storage";
+import {
+  readLocalFile,
+  safeDownloadContentType,
+  downloadDisposition,
+} from "@/lib/storage";
 import path from "node:path";
 import { logAudit } from "@/lib/audit";
 
@@ -101,7 +105,9 @@ export async function GET(
 
   const safeName = (att.originalName || `attachment_${attId}`)
     .replace(/[\r\n"]/g, "");
-  const disposition = `inline; filename*=UTF-8''${encodeURIComponent(safeName)}`;
+  // 위험 타입은 octet-stream 강등 + 안전 타입만 inline, 그 외 강제 다운로드 (저장형 XSS 차단)
+  const dispFor = (ct: string) =>
+    `${downloadDisposition(ct)}; filename*=UTF-8''${encodeURIComponent(safeName)}`;
 
   const key = att.filePath;
   if (/^https?:\/\//i.test(key)) {
@@ -131,12 +137,15 @@ export async function GET(
     // 스트림 pass-through 대신 버퍼링 — fetch 자동 압축해제 시 upstream 의
     // Content-Length 가 본문과 어긋나 Vercel 함수가 500 난다 (이력서 라우트와 동일).
     const buf = Buffer.from(await upstream.arrayBuffer());
+    const ct = safeDownloadContentType(
+      upstream.headers.get("content-type") ?? contentTypeFromPath(key)
+    );
     return new Response(new Uint8Array(buf), {
       headers: {
-        "Content-Type":
-          upstream.headers.get("content-type") ?? contentTypeFromPath(key),
+        "Content-Type": ct,
         "Content-Length": String(buf.byteLength),
-        "Content-Disposition": disposition,
+        "Content-Disposition": dispFor(ct),
+        "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, no-store",
       },
     });
@@ -145,10 +154,12 @@ export async function GET(
   // 로컬 디스크
   const found = await readLocalFile(key);
   if (!found) return new Response("Not found", { status: 404 });
+  const ct = safeDownloadContentType(found.contentType);
   return new Response(new Uint8Array(found.data), {
     headers: {
-      "Content-Type": found.contentType,
-      "Content-Disposition": disposition,
+      "Content-Type": ct,
+      "Content-Disposition": dispFor(ct),
+      "X-Content-Type-Options": "nosniff",
       "Cache-Control": "private, no-store",
     },
   });

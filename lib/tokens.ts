@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { tokenWallets, tokenLedger, tokenPricing } from "./schema";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { isUniqueViolation } from "./db-errors";
 
 export type FeatureKey =
   | "job_post"
@@ -193,27 +194,30 @@ async function writeLedger(args: {
   // H4 — 원자적 차감/증가. SELECT-then-UPDATE 패턴은 두 동시 호출이 같은 current 를 읽고
   // 둘 다 같은 next 로 덮어쓰는 race 발생 (실제 차감은 1회만 적용된 결과). 단일 UPDATE
   // + RETURNING balance 로 race 차단. 멱등 가드는 호출자 (chargeFeature 등) 에서 처리.
+  // UPDATE↔INSERT 사이 크래시 시 지갑·원장 불일치 방지 — 트랜잭션으로 원자화.
   await ensureWallet(args.orgId);
-  const updated = await db
-    .update(tokenWallets)
-    .set({
-      balance: sql`${tokenWallets.balance} + ${args.delta}`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
-    .where(eq(tokenWallets.orgId, args.orgId))
-    .returning({ balance: tokenWallets.balance });
-  const next = updated[0]?.balance ?? 0;
-  await db.insert(tokenLedger).values({
-    orgId: args.orgId,
-    delta: args.delta,
-    reason: args.reason,
-    refType: args.refType ?? null,
-    refId: args.refId ?? null,
-    balanceAfter: next,
-    createdByUserId: args.userId ?? null,
-    memo: args.memo ?? null,
+  return await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(tokenWallets)
+      .set({
+        balance: sql`${tokenWallets.balance} + ${args.delta}`,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(eq(tokenWallets.orgId, args.orgId))
+      .returning({ balance: tokenWallets.balance });
+    const next = updated[0]?.balance ?? 0;
+    await tx.insert(tokenLedger).values({
+      orgId: args.orgId,
+      delta: args.delta,
+      reason: args.reason,
+      refType: args.refType ?? null,
+      refId: args.refId ?? null,
+      balanceAfter: next,
+      createdByUserId: args.userId ?? null,
+      memo: args.memo ?? null,
+    });
+    return next;
   });
-  return next;
 }
 
 /**
@@ -234,42 +238,46 @@ export async function writeLedgerIdempotent(args: {
   memo?: string | null;
 }): Promise<{ balance: number; applied: boolean }> {
   await ensureWallet(args.orgId);
-  let ledgerId: number;
+  // INSERT(멱등 게이트)→지갑 UPDATE→balanceAfter 보정을 트랜잭션으로 원자화 —
+  // 중간 크래시 시 원장만 남고 지갑이 안 바뀌는 영구 불일치(재시도해도 UNIQUE 가 막음) 방지.
+  // UNIQUE 위반은 트랜잭션 전체 롤백 후 applied=false 로 귀결.
   try {
-    const ins = await db
-      .insert(tokenLedger)
-      .values({
-        orgId: args.orgId,
-        delta: args.delta,
-        reason: args.reason,
-        refType: args.refType,
-        refId: args.refId,
-        balanceAfter: 0, // 지갑 갱신 후 보정
-        createdByUserId: args.userId ?? null,
-        memo: args.memo ?? null,
-      })
-      .returning({ id: tokenLedger.id });
-    ledgerId = ins[0].id;
+    return await db.transaction(async (tx) => {
+      const ins = await tx
+        .insert(tokenLedger)
+        .values({
+          orgId: args.orgId,
+          delta: args.delta,
+          reason: args.reason,
+          refType: args.refType,
+          refId: args.refId,
+          balanceAfter: 0, // 지갑 갱신 후 보정
+          createdByUserId: args.userId ?? null,
+          memo: args.memo ?? null,
+        })
+        .returning({ id: tokenLedger.id });
+      const updated = await tx
+        .update(tokenWallets)
+        .set({
+          balance: sql`${tokenWallets.balance} + ${args.delta}`,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(tokenWallets.orgId, args.orgId))
+        .returning({ balance: tokenWallets.balance });
+      const next = updated[0]?.balance ?? 0;
+      await tx
+        .update(tokenLedger)
+        .set({ balanceAfter: next })
+        .where(eq(tokenLedger.id, ins[0].id));
+      return { balance: next, applied: true };
+    });
   } catch (e) {
-    if (/unique constraint/i.test(String(e))) {
+    // drizzle 가 에러를 감싸 최상위 message 는 "Failed query: ..." 뿐 — cause 체인까지 봐야 함.
+    if (isUniqueViolation(e)) {
       return { balance: await getBalance(args.orgId), applied: false };
     }
     throw e;
   }
-  const updated = await db
-    .update(tokenWallets)
-    .set({
-      balance: sql`${tokenWallets.balance} + ${args.delta}`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
-    .where(eq(tokenWallets.orgId, args.orgId))
-    .returning({ balance: tokenWallets.balance });
-  const next = updated[0]?.balance ?? 0;
-  await db
-    .update(tokenLedger)
-    .set({ balanceAfter: next })
-    .where(eq(tokenLedger.id, ledgerId));
-  return { balance: next, applied: true };
 }
 
 /**
@@ -356,27 +364,41 @@ export async function chargeRepeatable(args: {
   userId?: number | null;
   memo?: string | null;
 }): Promise<{ cost: number; balance: number; alreadyCharged: boolean }> {
-  const prior = await db
-    .select({ c: sql<number>`COUNT(*)` })
-    .from(tokenLedger)
-    .where(
-      and(
-        eq(tokenLedger.orgId, args.orgId),
-        eq(tokenLedger.reason, args.feature),
-        eq(tokenLedger.refId, args.refId),
-        lt(tokenLedger.delta, 0)
-      )
-    );
-  const n = Number(prior[0]?.c ?? 0);
-  const refType = n === 0 ? args.baseRefType : `${args.baseRefType}_re${n}`;
-  return chargeFeature({
-    orgId: args.orgId,
-    feature: args.feature,
-    refType,
-    refId: args.refId,
-    userId: args.userId,
-    memo: args.memo,
-  });
+  // COUNT↔INSERT 가 비원자라 동시 호출이 같은 회차 N 을 계산할 수 있다 (둘 다 _re{N} 시도 →
+  // 한쪽이 UNIQUE 충돌로 과금 누락). 충돌 시 회차를 다시 세어 재시도해 성공 1회 = 과금 1회 보장.
+  let last: { cost: number; balance: number; alreadyCharged: boolean } = {
+    cost: 0,
+    balance: 0,
+    alreadyCharged: true,
+  };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const prior = await db
+      .select({ c: sql<number>`COUNT(*)` })
+      .from(tokenLedger)
+      .where(
+        and(
+          eq(tokenLedger.orgId, args.orgId),
+          eq(tokenLedger.reason, args.feature),
+          eq(tokenLedger.refId, args.refId),
+          lt(tokenLedger.delta, 0)
+        )
+      );
+    const n = Number(prior[0]?.c ?? 0);
+    const refType = n === 0 ? args.baseRefType : `${args.baseRefType}_re${n}`;
+    last = await chargeFeature({
+      orgId: args.orgId,
+      feature: args.feature,
+      refType,
+      refId: args.refId,
+      userId: args.userId,
+      memo: args.memo,
+    });
+    if (!last.alreadyCharged) return last;
+  }
+  console.error(
+    `[tokens] chargeRepeatable 회차 충돌 5회 — 과금 누락 가능 (org ${args.orgId}, ${args.feature}, ref ${args.refId})`
+  );
+  return last;
 }
 
 /**
@@ -447,6 +469,10 @@ export async function adjustTokens(args: {
   userId: number;
   memo?: string | null;
 }): Promise<{ balance: number }> {
+  // 거대값으로 잔액을 오버플로/음수화해 balance 가드를 무력화하는 입력 차단 (라우트 검증의 백스톱).
+  if (!Number.isSafeInteger(args.delta) || args.delta === 0) {
+    throw new Error("조정 수량은 0이 아닌 안전한 정수여야 합니다.");
+  }
   const balance = await writeLedger({
     orgId: args.orgId,
     delta: args.delta,
@@ -480,29 +506,31 @@ export async function refundTokens(args: {
   if (reason.length < 5) {
     throw new Error("환불 사유는 5자 이상이어야 합니다.");
   }
-  if (!Number.isInteger(args.delta) || args.delta === 0) {
-    throw new Error("환불 수량은 0이 아닌 정수여야 합니다.");
+  if (!Number.isSafeInteger(args.delta) || args.delta === 0) {
+    throw new Error("환불 수량은 0이 아닌 안전한 정수여야 합니다.");
   }
   const current = await ensureWallet(args.orgId);
   const next = current + args.delta;
-  await db
-    .update(tokenWallets)
-    .set({ balance: next, updatedAt: sql`CURRENT_TIMESTAMP` })
-    .where(eq(tokenWallets.orgId, args.orgId));
-  const inserted = await db
-    .insert(tokenLedger)
-    .values({
-      orgId: args.orgId,
-      delta: args.delta,
-      reason: "refund",
-      refType: "manual_refund",
-      refId: args.sourceLedgerId ?? null,
-      balanceAfter: next,
-      createdByUserId: args.userId,
-      memo: reason,
-    })
-    .returning({ id: tokenLedger.id });
-  return { balance: next, ledgerId: inserted[0].id };
+  return await db.transaction(async (tx) => {
+    await tx
+      .update(tokenWallets)
+      .set({ balance: next, updatedAt: sql`CURRENT_TIMESTAMP` })
+      .where(eq(tokenWallets.orgId, args.orgId));
+    const inserted = await tx
+      .insert(tokenLedger)
+      .values({
+        orgId: args.orgId,
+        delta: args.delta,
+        reason: "refund",
+        refType: "manual_refund",
+        refId: args.sourceLedgerId ?? null,
+        balanceAfter: next,
+        createdByUserId: args.userId,
+        memo: reason,
+      })
+      .returning({ id: tokenLedger.id });
+    return { balance: next, ledgerId: inserted[0].id };
+  });
 }
 
 export async function listLedger(

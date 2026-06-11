@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { after } from "next/server";
-import { jobPostings, candidates, organizations } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { jobPostings, candidates, organizations, tokenLedger } from "@/lib/schema";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
@@ -16,6 +16,8 @@ import {
 } from "@/lib/job-checklist";
 
 const REFUND_WINDOW_MS = 5 * 60 * 1000;
+// 생성(선차감+LLM 호출)→5분 내 삭제→환불 무한 반복으로 LLM 비용만 소모시키는 abuse 차단.
+const JOB_REFUND_DAILY_LIMIT = 3;
 
 export const runtime = "nodejs";
 
@@ -191,21 +193,41 @@ export async function DELETE(
   // 3. 공고 DB row 삭제 (cascade 발동)
   await db.delete(jobPostings).where(eq(jobPostings.id, jobId));
 
-  // 5분 내 삭제 시 자동 환불
+  // 5분 내 삭제 시 자동 환불 — 법인당 하루 3회까지만 (생성→삭제→환불 반복 차단)
+  let refundLimited = false;
   if (existing.orgId) {
     // createdAt 은 SQLite CURRENT_TIMESTAMP(UTC, "YYYY-MM-DD HH:MM:SS", Z 없음).
     // new Date() 기본 파싱은 이를 로컬(KST+9)로 해석해 ageMs 가 항상 ~9h 과대 → 5분 내 환불이
     // 영영 미발동(로컬/비UTC 서버). parseDbTimestamp 로 UTC 파싱해 바로잡는다.
     const ageMs = Date.now() - parseDbTimestamp(existing.createdAt).getTime();
     if (ageMs <= REFUND_WINDOW_MS) {
-      await refundFeature({
-        orgId: existing.orgId,
-        feature: "job_post",
-        refType: "job",
-        refId: jobId,
-        userId: me!.id,
-        memo: "공고 등록 직후 삭제",
-      });
+      const since = new Date(Date.now() - 86_400_000)
+        .toISOString()
+        .replace("T", " ")
+        .replace(/\.\d+Z$/, "");
+      const [recent] = await db
+        .select({ c: sql<number>`COUNT(*)` })
+        .from(tokenLedger)
+        .where(
+          and(
+            eq(tokenLedger.orgId, existing.orgId),
+            eq(tokenLedger.reason, "refund"),
+            eq(tokenLedger.refType, "job"),
+            gte(tokenLedger.createdAt, since)
+          )
+        );
+      if (Number(recent?.c ?? 0) < JOB_REFUND_DAILY_LIMIT) {
+        await refundFeature({
+          orgId: existing.orgId,
+          feature: "job_post",
+          refType: "job",
+          refId: jobId,
+          userId: me!.id,
+          memo: "공고 등록 직후 삭제",
+        });
+      } else {
+        refundLimited = true;
+      }
     }
   }
 
@@ -220,6 +242,7 @@ export async function DELETE(
       candidatesDeleted: candidateIds.length,
       filesDeleted: fileResult.deletedFiles,
       fileErrors: fileResult.errors,
+      refundLimited: refundLimited || undefined,
     },
   });
 

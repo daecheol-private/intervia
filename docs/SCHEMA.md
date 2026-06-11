@@ -105,7 +105,10 @@
 | resume_content_hash | TEXT NULL | 파싱된 **본문**(정규화) SHA-256. 워커가 파싱 후 기록. 같은 공고에 동일 내용이 먼저 있으면 자동 삭제 (2차 dedup, 바이트 달라도 잡음) |
 | name / email / phone / age / career_years / career_summary | … | 정규식 + LLM 추출 |
 | education_level / education_school / education_major | TEXT NULL | 최종학력(수준/학교명/전공). 업로드 시 원문에서 결정적 추출 (`lib/education-extract.ts`). 셋 다 화면 표시. **AI 평가에는 학력 수준·전공만 전달(학교명 제외 — 학벌 차별 방지)** |
-| stage | TEXT NOT NULL DEFAULT 'applied' | applied/screened/interview_1/interview_2/offer/hired/rejected/hold/withdrawn |
+| stage | TEXT NOT NULL DEFAULT 'applied' | 12값: applied/screened/ai_pending/ai_evaluated/round1_candidate/round1_scheduling/round1_waiting/round1_passed/round2_passed/hired/rejected/withdrawn. **파이프라인 위치** — 종결 후에도 보존 (`lib/stage-meta.ts`) |
+| outcome | TEXT NULL | `hired`/`rejected`/`withdrawn`/NULL=진행중. **종결 결과** — stage 와 분리. 서브상태(누가 액션할 차례)는 컬럼이 아니라 `lib/candidate-state.ts` 가 큐/세션/스케줄에서 파생 |
+| outcome_reason | TEXT NULL | 종결 사유 코드 (`OutcomeReason` — `lib/candidate-stage.ts`). rejected 는 필수 |
+| decision_from_stage | TEXT NULL | 종결 시점의 stage 스냅샷 (통계용) |
 | decided_at | TEXT NULL | 단말 단계 (hired/rejected/withdrawn) 진입 시각 |
 | decided_by_user_id | INTEGER NULL FK users | 결정한 채용담당자 |
 | decision_note | TEXT NULL | 내부 메모 (후보자 비공개) |

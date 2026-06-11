@@ -6,10 +6,11 @@
  *  - POST: 같은 법인 멤버 누구나 작성. 본인 row 만 생성됨.
  */
 import { db } from "@/lib/db";
-import { candidates, interviewerNotes, users } from "@/lib/schema";
+import { interviewerNotes, users } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { ownsOrg, requireUser } from "@/lib/tenant";
+import { requireUser } from "@/lib/tenant";
+import { guardCandidate } from "@/lib/candidate-guard";
 
 export const runtime = "nodejs";
 
@@ -35,13 +36,8 @@ export async function GET(
 
   const { id } = await params;
   const cid = Number(id);
-  const [candidate] = await db
-    .select({ orgId: candidates.orgId })
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!candidate) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, candidate.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
 
   const rows = await db
     .select({
@@ -72,13 +68,9 @@ export async function POST(
 
   const { id } = await params;
   const cid = Number(id);
-  const [candidate] = await db
-    .select({ orgId: candidates.orgId, stage: candidates.stage })
-    .from(candidates)
-    .where(eq(candidates.id, cid));
-  if (!candidate) return new Response("Not found", { status: 404 });
-  if (!ownsOrg(me!, candidate.orgId))
-    return new Response("Not found", { status: 404 });
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate } = g;
 
   const body = (await req.json().catch(() => null)) as {
     scores?: Record<string, unknown>;
