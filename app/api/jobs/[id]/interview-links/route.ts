@@ -37,7 +37,7 @@ import { after } from "next/server";
 
 export const runtime = "nodejs";
 // 백그라운드 발송(after)이 maxDuration 안에 끝나도록 충분히 큰 값.
-// 50명 × ~2s 를 동시성 8 로 보내면 ~13s — 여유.
+// mailer 가 MAIL_RATE_PER_SEC(기본 2/s)로 페이싱 — 50명 ≈ 25s + 재시도 여유.
 export const maxDuration = 120;
 
 /** 동시성 제한 병렬 실행 — 직렬이면 50통 발송이 줄줄이 느려진다. */

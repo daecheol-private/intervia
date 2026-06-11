@@ -459,9 +459,22 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 ## 11. 이메일 발송 환경변수
 
 **필수 4개**: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` (없으면 mailer가 에러 throw)
-**선택**: `SMTP_FROM` (없으면 `SMTP_USER`로 fallback)
+**선택**: `SMTP_FROM` (없으면 `SMTP_USER`로 fallback), `MAIL_RATE_PER_SEC` (기본 2)
 
 **Gmail App Password 발급**: https://myaccount.google.com/apppasswords (2단계 인증 활성화 후 가능)
+
+### 동시 발송 rate limit (2026-06-11 사고)
+
+Resend 는 **팀 단위 rate limit**(기본 5rps, 구계정 2rps)이 있어 동시 발송이 몰리면 일부가
+429 로 조용히 거부된다 (일괄 불합격 통보 6건 중 4건 누락). 대응은 `lib/mailer.ts` 에 내장:
+
+- 모든 transporter 가 **pooled** + `rateLimit`(`MAIL_RATE_PER_SEC`, 기본 2/s) 로 발송 페이싱.
+- 일시 오류(SMTP 421/429/45x, 소켓 오류)는 **지수 백오프로 3회 재시도**.
+- 법인 SMTP transporter 는 orgId 별 캐시 (설정 변경 시 fingerprint 로 자동 재생성).
+
+→ 대량 발송 경로를 새로 만들 때 `sendMail` 만 쓰면 페이싱이 자동 적용된다. 단 **페이싱은
+프로세스 단위** — 서버리스 다중 인스턴스 합산이 팀 한도를 넘기면 재시도가 흡수한다.
+Resend 한도 상향(서포트 요청) 후엔 `MAIL_RATE_PER_SEC` 만 올리면 됨.
 
 ## 12. proxy.ts에서 보호 안 되는 경로
 

@@ -251,6 +251,7 @@ export async function PATCH(
           metadata: { kind: "decision_notify", to: candidate.email, decision: outcomeRequested },
         });
       } catch (e) {
+        console.error(`[stage] 결정 통보 메일 발송 실패 (candidate ${cid}):`, e);
         mailResult = {
           sent: false,
           error: e instanceof Error ? e.message : String(e),

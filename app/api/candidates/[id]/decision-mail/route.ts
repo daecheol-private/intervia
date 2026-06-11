@@ -118,6 +118,7 @@ export async function POST(
       max: MAX_DECISION_EMAILS_PER_CANDIDATE,
     });
   } catch (e) {
+    console.error(`[decision-mail] 결정 통보 메일 발송 실패 (candidate ${cid}):`, e);
     return Response.json(
       {
         code: "smtp_send_failed",
