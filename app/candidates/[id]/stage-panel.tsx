@@ -6,6 +6,7 @@ import { formatKstDateTime } from "@/lib/utils";
 import { STAGE_LABELS as STAGE_LABELS_SHARED } from "@/lib/stage-meta";
 import { confirmDialog } from "@/app/components/Dialog";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
+import { ScheduleManualModal } from "@/app/components/ScheduleManualModal";
 import { Modal } from "./shared";
 import type { Candidate } from "./types";
 
@@ -210,7 +211,7 @@ export function StagePanel({
   const [busy, setBusy] = useState(false);
   const [rescreenBusy, setRescreenBusy] = useState(false);
   const [open, setOpen] = useState<
-    null | "decide" | "stage" | "notify" | "schedule" | "schedule2"
+    null | "decide" | "stage" | "notify" | "schedule" | "schedule2" | "manual1" | "manual2"
   >(null);
   const [decision, setDecision] = useState<"hired" | "rejected">("rejected");
   const [reason, setReason] = useState<string>("");
@@ -502,15 +503,36 @@ export function StagePanel({
                 ⭐ 1차 면접 후보로 지정
               </button>
             )}
-            {candidate.stage === "round1_passed" && (
+            {(candidate.stage === "round1_candidate" ||
+              candidate.stage === "round1_scheduling") && (
               <button
-                onClick={() => setOpen("schedule2")}
+                onClick={() => setOpen("manual1")}
                 disabled={busy}
-                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-50 transition-colors"
-                title="1차 합격 후보에게 2차 면접 일정을 제시합니다"
+                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-accent-deep/40 text-accent-deep hover:bg-accent-soft font-medium disabled:opacity-50 transition-colors"
+                title="전화 등으로 이미 협의된 1차 면접 시간을 메일 제시 없이 바로 확정 등록합니다"
               >
-                📅 2차 일정 제시
+                📝 1차 일정 직접 입력
               </button>
+            )}
+            {candidate.stage === "round1_passed" && (
+              <>
+                <button
+                  onClick={() => setOpen("schedule2")}
+                  disabled={busy}
+                  className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-50 transition-colors"
+                  title="1차 합격 후보에게 2차 면접 일정을 제시합니다"
+                >
+                  📅 2차 일정 제시
+                </button>
+                <button
+                  onClick={() => setOpen("manual2")}
+                  disabled={busy}
+                  className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-accent-deep/40 text-accent-deep hover:bg-accent-soft font-medium disabled:opacity-50 transition-colors"
+                  title="전화 등으로 이미 협의된 2차 면접 시간을 메일 제시 없이 바로 확정 등록합니다"
+                >
+                  📝 2차 일정 직접 입력
+                </button>
+              </>
             )}
             {STAGE_NEXT_MAP[candidate.stage] && (
               <button
@@ -595,6 +617,20 @@ export function StagePanel({
           candidateIds={[candidate.id]}
           nameById={{ [candidate.id]: candidate.name }}
           round="round2"
+          open
+          onClose={() => setOpen(null)}
+          onDone={() => {
+            setOpen(null);
+            onChanged();
+          }}
+        />
+      )}
+
+      {(open === "manual1" || open === "manual2") && (
+        <ScheduleManualModal
+          candidateId={candidate.id}
+          candidateName={candidate.name}
+          round={open === "manual2" ? "round2" : "round1"}
           open
           onClose={() => setOpen(null)}
           onDone={() => {

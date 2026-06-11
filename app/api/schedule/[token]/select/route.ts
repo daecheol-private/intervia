@@ -10,11 +10,10 @@ import {
   organizations,
   users,
 } from "@/lib/schema";
-import { and, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   buildScheduleConfirmedEmail,
   roundLabel,
-  slotsOverlap,
   type Slot,
 } from "@/lib/schedules";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
@@ -48,31 +47,8 @@ export async function POST(
   if (body.slotIndex < 0 || body.slotIndex >= slots.length)
     return new Response("잘못된 슬롯 선택", { status: 400 });
 
+  // 같은 시간대 다수 면접 허용 — 동시간 다른 지원자 확정 여부는 검사하지 않음 (2026-06-12).
   const selected = slots[body.slotIndex];
-
-  // 더블부킹 방지 — 같은 공고·같은 차수에서 이미 확정(selected)된 다른 후보자의 슬롯과
-  // 시간이 겹치면 거부 (면접관/회의실 동시간 중복). 후보자는 다른 슬롯을 고르면 됨.
-  // (확정 슬롯은 selectedSlot JSON 이라 SQL 로 겹침 비교가 어려워 JS 에서 판정.
-  //  동시 select TOCTOU 는 드물어 체크로 창을 충분히 좁힘 — 프로토타입 수준.)
-  const sameRoundSelected = await db
-    .select({ selectedSlot: interviewSchedules.selectedSlot })
-    .from(interviewSchedules)
-    .where(
-      and(
-        eq(interviewSchedules.jobId, sched.jobId),
-        eq(interviewSchedules.round, sched.round),
-        eq(interviewSchedules.status, "selected"),
-        ne(interviewSchedules.id, sched.id)
-      )
-    );
-  const clash = sameRoundSelected.some(
-    (r) => r.selectedSlot && slotsOverlap(r.selectedSlot as Slot, selected)
-  );
-  if (clash)
-    return new Response(
-      "이미 다른 지원자가 확정한 시간대입니다. 다른 시간을 선택해주세요.",
-      { status: 409 }
-    );
 
   await db
     .update(interviewSchedules)

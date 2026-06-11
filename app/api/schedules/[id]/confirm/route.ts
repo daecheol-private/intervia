@@ -25,13 +25,12 @@ import {
   organizations,
   users,
 } from "@/lib/schema";
-import { and, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import {
   buildScheduleConfirmedEmail,
   roundLabel,
-  slotsOverlap,
   type Slot,
 } from "@/lib/schedules";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
@@ -87,28 +86,7 @@ export async function POST(
       { status: 400 }
     );
 
-  // 더블부킹 방지 — 같은 공고·같은 차수에서 이미 확정된 다른 후보자 슬롯과 겹치면 거부.
-  const sameRoundSelected = await db
-    .select({ selectedSlot: interviewSchedules.selectedSlot })
-    .from(interviewSchedules)
-    .where(
-      and(
-        eq(interviewSchedules.jobId, sched.jobId),
-        eq(interviewSchedules.round, sched.round),
-        eq(interviewSchedules.status, "selected"),
-        ne(interviewSchedules.id, sched.id)
-      )
-    );
-  if (
-    sameRoundSelected.some(
-      (r) => r.selectedSlot && slotsOverlap(r.selectedSlot as Slot, matched)
-    )
-  )
-    return new Response(
-      "이미 다른 지원자가 확정한 시간대입니다. 다른 시간으로 확정해주세요.",
-      { status: 409 }
-    );
-
+  // 같은 시간대 다수 면접 허용 — 동시간 다른 지원자 확정 여부는 검사하지 않음 (2026-06-12).
   const now = new Date().toISOString();
   await db
     .update(interviewSchedules)
