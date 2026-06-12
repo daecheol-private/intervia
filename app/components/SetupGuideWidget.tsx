@@ -31,11 +31,12 @@ export function SetupGuideWidget() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [collapsed, setCollapsed] = useState<boolean | null>(null);
   const [pos, setPos] = useState<Pos | null>(null); // null = 기본 위치(좌하단)
+  const [confirmHide, setConfirmHide] = useState(false);
   const boxRef = useRef<HTMLElement | null>(null);
   const draggedRef = useRef(false); // 드래그 직후 클릭 토글 방지
 
+  // 후보자용·관리자 화면은 조회/렌더 모두 제외.
   const hidden =
-    pathname === "/" ||
     pathname.startsWith("/interview/") ||
     pathname.startsWith("/schedule/") ||
     pathname.startsWith("/unsubscribe/") ||
@@ -88,6 +89,16 @@ export function SetupGuideWidget() {
   const steps = buildSetupSteps(progress, progress.firstJobId);
   const doneCount = steps.filter((s) => s.done).length;
   const active = steps.find((s) => !s.done) ?? null;
+
+  // 대시보드는 미완료 시 자체 가이드(hero/strip)가 있어 중복 방지 —
+  // 4단계 완료 후엔 자체 가이드가 사라지므로 플로팅이 이어받는다.
+  if (pathname === "/" && active != null) return null;
+
+  const dismiss = () => {
+    fetch("/api/orgs/me/setup-progress", { method: "POST" }).catch(() => {});
+    sessionStorage.setItem(DONE_KEY, "1");
+    setProgress((p) => (p ? { ...p, show: false } : p));
+  };
 
   function clampToViewport(p: Pos): Pos {
     const el = boxRef.current;
@@ -258,6 +269,44 @@ export function SetupGuideWidget() {
           );
         })}
       </ol>
+      <footer className="px-4 pb-3 pt-1 border-t border-border-default">
+        {active == null && (
+          <p className="text-[11px] text-primary-deep font-medium pt-2">
+            🎉 4단계를 모두 완료했어요! 이제 가이드를 숨겨도 좋아요.
+          </p>
+        )}
+        {confirmHide ? (
+          <div className="flex items-center justify-between gap-2 pt-2">
+            <span className="text-[11px] text-ink-soft">
+              법인 모든 구성원에게서 숨겨집니다.
+            </span>
+            <span className="flex gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={dismiss}
+                className="text-[11px] font-medium px-2 py-1 rounded-md bg-danger text-white hover:opacity-90 transition-opacity"
+              >
+                숨기기
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmHide(false)}
+                className="text-[11px] font-medium px-2 py-1 rounded-md text-ink-soft hover:bg-surface-alt transition-colors"
+              >
+                취소
+              </button>
+            </span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmHide(true)}
+            className="text-[11px] text-ink-muted hover:text-ink underline underline-offset-2 pt-2 transition-colors"
+          >
+            가이드 다시 보지 않기
+          </button>
+        )}
+      </footer>
     </aside>
   );
 }

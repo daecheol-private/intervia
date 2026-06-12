@@ -46,7 +46,8 @@
 | PATCH | `/api/orgs/join-requests/[id]` | 🛡️ | `{action: 'approve'|'reject'}` |
 | GET | `/api/orgs/members?orgId?` | 🛡️ | 자기 법인 멤버 (system_admin은 orgId 지정 가능) |
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
-| GET | `/api/orgs/me/setup-progress` | 🔒 | 첫 실행 가이드 진행 상태 `{show, step1~4, firstJobId}` — 플로팅 위젯(`SetupGuideWidget`)용. 판정 기준은 대시보드 setup1~4 와 동일. system_admin/무소속은 `{show:false}` |
+| GET | `/api/orgs/me/setup-progress` | 🔒 | 첫 실행 가이드 진행 상태 `{show, step1~4, firstJobId}` — 플로팅 위젯(`SetupGuideWidget`)용. 단계 판정은 대시보드 setup1~4 와 동일. `show`는 완료 여부와 무관 — `setup_guide_dismissed_at` NULL 인 동안 true. system_admin/무소속은 `{show:false}` |
+| POST | `/api/orgs/me/setup-progress` | 🔒 | 가이드 숨기기 — `setup_guide_dismissed_at` 기록 (**법인 단위** — 모든 구성원 화면에서 hero/strip/플로팅 모두 사라짐, 멤버도 가능) |
 
 ## 사용자
 

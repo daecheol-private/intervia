@@ -1,0 +1,1 @@
+ALTER TABLE `organizations` ADD `setup_guide_dismissed_at` text;
