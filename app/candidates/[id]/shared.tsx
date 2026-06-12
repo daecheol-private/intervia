@@ -47,7 +47,7 @@ export function scoreColor(score: number): string {
 }
 
 /** LLM 이 **단어** 로 감싼 토큰을 <strong> 으로 렌더. 마크다운은 bold 만 처리. */
-export function HL({ text }: { text: string }) {
+export function HL({ text, mark = false }: { text: string; mark?: boolean }) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return (
     <>
@@ -55,7 +55,14 @@ export function HL({ text }: { text: string }) {
         const m = /^\*\*([^*]+)\*\*$/.exec(p);
         if (m)
           return (
-            <strong key={i} className="font-semibold text-ink">
+            <strong
+              key={i}
+              className={
+                mark
+                  ? "font-semibold text-ink bg-amber-100 rounded-sm px-0.5 box-decoration-clone"
+                  : "font-semibold text-ink"
+              }
+            >
               {m[1]}
             </strong>
           );

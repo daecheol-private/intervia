@@ -181,6 +181,7 @@ export function InterviewQuestionsPanel({
         <QuestionSheetModal
           title={isExec ? "2차(임원) 면접 질문지" : "1차 면접 질문지"}
           sheet={sheet.questions}
+          exec={isExec}
           onClose={() => setOpen(false)}
         />
       )}
@@ -188,15 +189,21 @@ export function InterviewQuestionsPanel({
   );
 }
 
+// 임원용(exec)은 큰 글씨 + 형광펜 하이라이트 + "요점만 보기"(질문 위주) 기본 ON.
 function QuestionSheetModal({
   title,
   sheet,
+  exec = false,
   onClose,
 }: {
   title: string;
   sheet: QuestionSheet;
+  exec?: boolean;
   onClose: () => void;
 }) {
+  const [compact, setCompact] = useState(exec);
+  const body = exec ? "text-base" : "text-sm";
+  const sub = exec ? "text-sm" : "text-xs";
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/40 flex items-stretch sm:items-start justify-center overflow-y-auto p-0 sm:p-4"
@@ -206,61 +213,80 @@ function QuestionSheetModal({
         className="bg-white rounded-none sm:rounded-2xl shadow-xl w-full max-w-4xl min-h-full sm:min-h-0 sm:my-8"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-none sm:rounded-t-2xl z-10">
-          <h3 className="text-base font-bold text-slate-900">{title}</h3>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 text-xl leading-none"
-            aria-label="닫기"
-          >
-            ×
-          </button>
+        <div className="flex justify-between items-center gap-3 px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-none sm:rounded-t-2xl z-10">
+          <h3 className={`${exec ? "text-lg" : "text-base"} font-bold text-slate-900`}>
+            {title}
+          </h3>
+          <div className="flex items-center gap-3 shrink-0">
+            <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={compact}
+                onChange={(e) => setCompact(e.target.checked)}
+                className="accent-primary"
+              />
+              요점만 보기
+            </label>
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-700 text-xl leading-none"
+              aria-label="닫기"
+            >
+              ×
+            </button>
+          </div>
         </div>
         <div className="px-6 py-5 space-y-6">
           {sheet.strategy && (
-            <div className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-sm text-slate-800 leading-relaxed">
+            <div
+              className={`border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg ${body} text-slate-800 leading-relaxed`}
+            >
               <div className="text-[11px] font-semibold text-primary-deep uppercase tracking-wider mb-1">
                 면접 전략
               </div>
-              <HL text={sheet.strategy} />
+              <HL text={sheet.strategy} mark={exec} />
             </div>
           )}
 
           {sheet.sections.map((sec, si) => (
             <div key={si}>
-              <h4 className="text-sm font-bold text-slate-900">
+              <h4 className={`${body} font-bold text-slate-900`}>
                 {si + 1}. {sec.title}
               </h4>
-              {sec.focus && (
-                <p className="text-xs text-slate-500 mt-0.5 mb-3">
-                  <HL text={sec.focus} />
+              {sec.focus && !compact && (
+                <p className={`${sub} text-slate-500 mt-0.5 mb-3`}>
+                  <HL text={sec.focus} mark={exec} />
                 </p>
               )}
-              <ol className="space-y-3">
+              <ol className={`space-y-3 ${compact ? "mt-2" : ""}`}>
                 {sec.questions.map((q, qi) => (
                   <li
                     key={qi}
                     className="rounded-lg border border-slate-200 px-4 py-3"
                   >
-                    <p className="text-sm text-slate-800 font-medium">
-                      <HL text={q.question} />
+                    <p
+                      className={`${body} text-slate-800 font-medium leading-relaxed`}
+                    >
+                      <HL text={q.question} mark={exec} />
                     </p>
-                    {q.intent && (
-                      <p className="text-xs text-slate-500 mt-1.5">
-                        🎯 <HL text={q.intent} />
+                    {q.intent && !compact && (
+                      <p className={`${sub} text-slate-500 mt-1.5`}>
+                        🎯 <HL text={q.intent} mark={exec} />
                       </p>
                     )}
-                    {q.followups && q.followups.length > 0 && (
+                    {q.followups && q.followups.length > 0 && !compact && (
                       <ul className="mt-2 space-y-1 pl-3 border-l-2 border-slate-100">
                         {q.followups.map((f, fi) => (
-                          <li key={fi} className="text-xs text-slate-600">
-                            ↳ <HL text={f} />
+                          <li key={fi} className={`${sub} text-slate-600`}>
+                            ↳ <HL text={f} mark={exec} />
                           </li>
                         ))}
                       </ul>
                     )}
-                    {q.basis && (
-                      <p className="text-[11px] text-slate-400 mt-2">
+                    {q.basis && !compact && (
+                      <p
+                        className={`${exec ? "text-xs" : "text-[11px]"} text-slate-400 mt-2`}
+                      >
                         근거: {q.basis}
                       </p>
                     )}
@@ -277,8 +303,8 @@ function QuestionSheetModal({
               </div>
               <ul className="space-y-1">
                 {sheet.red_flags.map((r, ri) => (
-                  <li key={ri} className="text-sm text-slate-700">
-                    ⚠️ <HL text={r} />
+                  <li key={ri} className={`${body} text-slate-700`}>
+                    ⚠️ <HL text={r} mark={exec} />
                   </li>
                 ))}
               </ul>
