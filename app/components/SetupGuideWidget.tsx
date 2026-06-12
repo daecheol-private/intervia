@@ -16,7 +16,9 @@ type Progress = {
 };
 
 const COLLAPSE_KEY = "setup-guide-widget-collapsed";
-const DONE_KEY = "setup-guide-widget-done"; // 완료 확인 후 세션 내 재조회 생략
+// 숨김 확인 후 세션 내 재조회 생략. v2: 구버전("…-done")은 4단계 완료를 캐시했는데
+// 정책이 "숨기기 전까지 항상 표시"로 바뀌어 키를 교체 — 구 캐시 무효화.
+const DONE_KEY = "setup-guide-widget-dismissed-v2";
 const POS_KEY = "setup-guide-widget-pos"; // 드래그로 옮긴 위치 {x,y}
 
 type Pos = { x: number; y: number };
