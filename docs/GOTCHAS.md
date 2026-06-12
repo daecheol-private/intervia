@@ -467,6 +467,20 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 ```
 ※ 현재 codebase에서 better-sqlite3는 제거됨. libsql client로 같은 작업 가능.
 
+## 8-1. FK/인덱스 드리프트 — `ALTER ADD COLUMN` 의 `REFERENCES` 에 ON DELETE 누락 주의 (2026-06-13)
+
+**증상**: 멤버 계정/법인 삭제가 FK 제약 위반 500 으로 실패 (스키마는 `onDelete: "set null"` 인데 실제 DB 는 `NO ACTION`). 또는 스키마에 있는 FK·unique 인덱스가 운영 DB 에만 없음.
+
+**원인** (두 갈래):
+1. SQLite 의 `ALTER TABLE ADD COLUMN x REFERENCES t(id)` 는 ON DELETE 절을 안 쓰면 NO ACTION 으로 생성된다. drizzle 스냅샷은 schema.ts 기준(`set null`)으로 기록되므로 **`db:generate` 가 드리프트를 영영 감지 못 한다** (0017 이 실제 사례 — `interview_sessions.created_by_user_id`).
+2. 운영 Turso 는 초기 테이블이 `db:push`(setup-fresh-db) 로 선생성된 이력이 있어, 베이스라인 마이그레이션(0000)의 FK·인덱스 일부가 실제로는 적용된 적이 없다 (`meeting_link_sent_by_user_id`/`applicant_consent_confirmed_by_user_id` FK, 토큰 unique 인덱스 3종, `idx_org_email_domain` UNIQUE 잔존이 실제 사례 — 0025 에서 일괄 복구).
+
+**해결**:
+- 점검: `node scripts/check-fk-drift.mjs` (기본 운영 / `$env:LOCAL_DB="1"` 로컬) — 최신 스냅샷 vs 실제 DB 의 FK ON DELETE·인덱스 비교. 읽기 전용.
+- 복구: SQLite 는 FK 절 변경에 ALTER 미지원 → 테이블 재생성 마이그레이션 (`drizzle-kit generate --custom`, 스냅샷이 이미 올바르므로 일반 generate 는 빈 diff). 작성 패턴은 `drizzle/0025_fix_fk_index_drift.sql` 참고.
+- 재생성 마이그레이션엔 반드시 **FK OFF 가드** 포함: `PRAGMA foreign_keys=OFF` 가 연결에 실제 적용 안 됐으면 DROP TABLE 의 암묵 DELETE 가 자식 ON DELETE CASCADE 를 발동시켜 연쇄 삭제됨. 가드(존재할 수 없는 user_id INSERT)가 그 전에 실패해 중단시킨다.
+- 예방: 마이그레이션 SQL 의 `ADD COLUMN ... REFERENCES` 에 ON DELETE 절이 schema.ts 와 일치하는지 `db:generate` 후 눈으로 확인.
+
 ## 9. 한국어 인코딩 / Windows PowerShell
 
 **증상**: `bash`의 `cat`, `dir` 명령이 한국어 깨짐, 또는 Windows에서 동작 안 함.
