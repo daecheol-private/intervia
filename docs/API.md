@@ -17,6 +17,9 @@
 | POST | `/api/auth/resend-verification` | 🌐 | `{email}` → 미인증 사용자에게 메일 재발송 (존재 여부 노출 X) |
 | POST | `/api/auth/logout` | 🔒 | |
 | POST | `/api/auth/change-password` | 🔒 | 10자+3종+HIBP 정책. 동일 비번 거부 |
+| POST | `/api/auth/password-reset/request` | 🌐 | `{email}` → 재설정 메일 발송 (토큰 1시간 유효, 사용자당 활성 토큰 1개). 존재 여부 노출 X — 항상 `{ok:true}`, active 사용자만 실제 발송. Rate limit IP 3분 3회 |
+| GET | `/api/auth/password-reset/confirm?token=` | 🌐 | 토큰 유효성 사전 확인 → `{valid}` (재설정 페이지 진입용, 사용자 정보 노출 X) |
+| POST | `/api/auth/password-reset/confirm` | 🌐 | `{token, newPassword}` → 새 비밀번호 설정 (10자+3종+HIBP 정책). 성공 시 `mustChangePassword` 해제 + **전체 세션 무효화** |
 | DELETE | `/api/account` | 🔒 | **본인 계정 탈퇴** (되돌릴 수 없음). `{password, code?, confirm:이메일}`. 2FA 켜져 있으면 `code` 필수. system_admin·법인 유일 관리자(다른 멤버 존재 시)는 409 차단. FK CASCADE 정리, 작성 공고·후보자는 SET NULL 보존 |
 | GET | `/api/auth/sessions` | 🔒 | 본인 활성 세션 목록. `displayId` (토큰 앞 12자) + ip/browser/lastSeenAt |
 | DELETE | `/api/auth/sessions/[displayId]` | 🔒 | 특정 세션 원격 종료. 현재 세션 거부 |
@@ -168,6 +171,7 @@
 | DELETE | `/api/admin/orgs/[id]` | 👑 🔐 | 법인 영구 삭제. **정지(suspended) 상태만**. `{reason(5자+), confirm=법인명}`. 멤버 계정도 함께 삭제(system_admin 멤버는 분리). 후보자 파일 폐기 + cascade. 감사 로그 보존 |
 | DELETE | `/api/admin/candidates/[id]` | 👑 🔐 | 후보자 영구 삭제 (PIPA 권리요청). `{reason(5자+), confirm=이메일/이름}`. cross-org |
 | DELETE | `/api/users/[id]` | 👑 🔐 | 계정 영구 삭제. 기본은 **비활성(disabled) 상태만**. `{reason(5자+), confirm=이메일, force?}` — **`force:true` 면 활성/대기 계정도 즉시 삭제**(사용자 관리 "강제 삭제" 버튼; 마지막 org_admin 정리용). 본인·system_admin·**`SYSTEM_ADMIN_EMAIL` 보호 계정** 불가 |
+| POST | `/api/admin/users/[id]/password-reset` | 👑 | 대상 사용자에게 재설정 메일 강제 발송 (기존 토큰 무효화 + 새 토큰, 본인이 요청 못 하는 상황용). 메일 실패해도 200 + `{mailSent:false, error}` |
 
 ### 마케팅 메일 (`/admin/marketing`)
 

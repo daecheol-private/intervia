@@ -43,7 +43,11 @@ export async function POST(req: Request) {
   if (!user) return new Response("사용자 없음", { status: 404 });
 
   const newHash = await hashPassword(newPassword);
-  await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, user.id));
+  // 사용자가 직접 새 비밀번호를 정했으므로 강제 변경 플래그도 해제 (부트스트랩 계정 등)
+  await db
+    .update(users)
+    .set({ passwordHash: newHash, mustChangePassword: false })
+    .where(eq(users.id, user.id));
 
   // 보안: 모든 세션 무효화 — 공격자가 이미 로그인 중일 가능성 차단
   await db.delete(sessions).where(eq(sessions.userId, user.id));
