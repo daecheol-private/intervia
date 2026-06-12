@@ -28,8 +28,9 @@ export type CultureFitProfile = {
   };
   /**
    * 선호 Big Five 특성 프로필 — AI 면접 시작부 인성검사 문항 구성·해석에 연계.
-   * null/미설정 = 전 특성 medium (기본 세트만 출제). 인재상 텍스트에서 LLM 제안 후
-   * 관리자가 확정하는 값 — 후보자별 LLM 매핑이 아니라 법인당 1회 결정.
+   * null/미설정 = 전 특성 medium (기본 세트만 출제).
+   * 2026-06 부터 공고 단위(job_postings.trait_profile)로 관리 — 법인 JSON 의 이 필드는
+   * 레거시이며, 평가 경로는 읽기 시점에 공고 값으로 대체해 채운다.
    */
   traitProfile?: TraitProfile | null;
 };
@@ -767,7 +768,7 @@ function cultureFitEvalSection(
     const desired = TRAIT_KEYS.map(
       (k) => `${TRAIT_LABELS[k]} ${TRAIT_LEVEL_LABELS[tp[k]]}`
     ).join(" · ");
-    parts.push(`- 법인 선호 특성 프로필: ${desired}`);
+    parts.push(`- 공고 선호 특성 프로필: ${desired}`);
   }
 
   if (personality) {
@@ -801,11 +802,11 @@ function cultureFitEvalSection(
 
   return `
 
-## 컬처핏·정성 검증 자료 (법인 설정 + 면접 전 인성검사 — 후보자 비공개)
+## 컬처핏·정성 검증 자료 (법인·공고 설정 + 면접 전 인성검사 — 후보자 비공개)
 ${parts.join("\n")}
 
 ### culture_fit 필드 작성 지시
-- 위 자료(주목 응답·법인 선호 특성)와 법인 컬처핏 기준의 정성 항목을 대화록의 **후보자 발언**과 대조하라.
+- 위 자료(주목 응답·공고 선호 특성)와 법인 컬처핏 기준의 정성 항목을 대화록의 **후보자 발언**과 대조하라.
 - items 각 원소: topic(검증 주제 — 예: "개방성·도전"), self_report(자가응답 요약), verification("일치"|"불일치"|"미검증"), evidence(후보자 발언 인용 20자 이내. 발언이 없으면 "면접에서 다루지 못함").
 - "일치"/"불일치"는 인용 가능한 후보자 발언이 있을 때만. 발언이 없으면 반드시 "미검증".
 - fit_note: 법인 선호 특성 대비 관찰 1~2줄. **"조직 적합/부적합" 단정 금지** — 사람 면접관이 참고할 관찰만.

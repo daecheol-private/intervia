@@ -5,6 +5,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { TraitProfileSelector } from "@/app/components/TraitProfileSelector";
+import {
+  DEFAULT_TRAIT_PROFILE,
+  parseTraitProfile,
+  type TraitProfile,
+} from "@/lib/personality";
 
 type Form = {
   title: string;
@@ -20,6 +26,7 @@ type Form = {
   hasPassword: boolean;
   password: string; // 변경할 때만 입력 (빈문자열이면 유지/제거 토글)
   clearPassword: boolean;
+  traitProfile: TraitProfile;
 };
 
 export default function EditJobPage() {
@@ -47,6 +54,9 @@ export default function EditJobPage() {
           hasPassword: !!j.hasPassword,
           password: "",
           clearPassword: false,
+          // GET 응답은 DB 원본 JSON 문자열 — 파싱 실패·미설정은 전 특성 medium
+          traitProfile:
+            parseTraitProfile(j.traitProfile) ?? { ...DEFAULT_TRAIT_PROFILE },
         })
       );
   }, [id]);
@@ -275,6 +285,27 @@ export default function EditJobPage() {
               </button>
             ))}
           </div>
+        </Field>
+
+        <Field label="AI 면접 인성검사 — 선호 특성">
+          <p className="text-[11px] text-slate-500 mb-1.5 leading-relaxed">
+            면접 시작 시 후보자가 응답하는 인성검사(강제선택형)의 문항 구성과
+            면접 검증에 사용됩니다. 높음은 점수 가중치가 아니라 검증
+            우선순위입니다 — 높음 특성은 심화 문항이 추가되고 면접에서 행동
+            사례로 검증됩니다 (최대 3개). 검사 결과는 점수에 반영되지 않는 참고
+            정보입니다.
+          </p>
+          <TraitProfileSelector
+            value={form.traitProfile}
+            onChange={(traitProfile) => setForm({ ...form, traitProfile })}
+            suggestSource={{
+              position: form.position,
+              level: form.level,
+              responsibilities: form.responsibilities,
+              requirements: form.requirements,
+              idealProfile: form.idealProfile,
+            }}
+          />
         </Field>
       </div>
 

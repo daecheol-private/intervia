@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Sparkles, Link2, Loader2 } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { TraitProfileSelector } from "@/app/components/TraitProfileSelector";
+import { DEFAULT_TRAIT_PROFILE, type TraitProfile } from "@/lib/personality";
 
 export default function NewJobPage() {
   const router = useRouter();
@@ -22,6 +24,7 @@ export default function NewJobPage() {
     tone: "중립적인" as "친절한" | "중립적인" | "엄격한",
     interviewDurationMinutes: 10,
     password: "",
+    traitProfile: { ...DEFAULT_TRAIT_PROFILE } as TraitProfile,
   });
 
   // URL 임포트 상태
@@ -331,6 +334,23 @@ export default function NewJobPage() {
               </button>
             ))}
           </div>
+        </Field>
+
+        <Field
+          label="AI 면접 인성검사 — 선호 특성"
+          hint="면접 시작 시 후보자가 응답하는 인성검사(강제선택형)의 문항 구성과 면접 검증에 사용됩니다. 높음은 점수 가중치가 아니라 검증 우선순위입니다 — 높음 특성은 심화 문항이 추가되고 면접에서 행동 사례로 검증됩니다 (최대 3개). 검사 결과는 점수에 반영되지 않는 참고 정보입니다."
+        >
+          <TraitProfileSelector
+            value={form.traitProfile}
+            onChange={(traitProfile) => setForm({ ...form, traitProfile })}
+            suggestSource={{
+              position: form.position,
+              level: form.level,
+              responsibilities: form.responsibilities,
+              requirements: form.requirements,
+              idealProfile: form.idealProfile,
+            }}
+          />
         </Field>
       </div>
 

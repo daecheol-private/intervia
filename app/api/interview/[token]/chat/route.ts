@@ -13,7 +13,11 @@ import {
   type CultureFitProfile,
   type PersonalityAnchor,
 } from "@/lib/prompts";
-import { buildItemSet, notableResponses } from "@/lib/personality";
+import {
+  buildItemSet,
+  notableResponses,
+  parseTraitProfile,
+} from "@/lib/personality";
 import { hasValidConsent } from "@/lib/consent";
 import { sanitizeUserInput, detectSystemPromptLeak } from "@/lib/prompt-safety";
 import { maskText } from "@/lib/mask";
@@ -88,6 +92,7 @@ export async function POST(
           idealProfile: jobPostings.idealProfile,
           tone: jobPostings.tone,
           interviewDurationMinutes: jobPostings.interviewDurationMinutes,
+          traitProfile: jobPostings.traitProfile,
         },
         // 회사명 — 공고가 속한 법인 이름. AI 면접관 자기소개에 사용.
         orgName: organizations.name,
@@ -132,11 +137,13 @@ export async function POST(
   let personalityAnchors: PersonalityAnchor[] | null = null;
   let personalityReliabilityNote: string | null = null;
   if (cultureFit && session.personalityProfile && session.personalityResponses) {
-    const items = buildItemSet(cultureFit.traitProfile);
+    // 출제·앵커 모두 공고의 선호 특성 프로필 기준 (검사 출제 세트와 동일해야 함)
+    const jobTrait = parseTraitProfile(job.traitProfile);
+    const items = buildItemSet(jobTrait);
     personalityAnchors = notableResponses(
       items,
       session.personalityResponses,
-      cultureFit.traitProfile
+      jobTrait
     ).map((n) => ({
       question: n.statement,
       answer: n.answerLabel,

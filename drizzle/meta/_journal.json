@@ -169,6 +169,13 @@
       "when": 1781275621557,
       "tag": "0023_daffy_warbound",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1781279702568,
+      "tag": "0024_organic_lilandra",
+      "breakpoints": true
     }
   ]
 }

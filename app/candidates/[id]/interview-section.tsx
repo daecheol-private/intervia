@@ -325,14 +325,14 @@ export function InterviewEvaluationRetry({
 
 export function InterviewResult({
   session,
-  orgTraitProfile,
+  jobTraitProfile,
   onShowTranscript,
   onRegenerate,
   onReevaluated,
   disabled = false,
 }: {
   session: Session;
-  orgTraitProfile?: Record<string, string> | null;
+  jobTraitProfile?: Record<string, string> | null;
   onShowTranscript: () => void;
   onRegenerate: () => void;
   onReevaluated: () => void;
@@ -437,7 +437,7 @@ export function InterviewResult({
       <CultureFitBlock
         cultureFit={ev.culture_fit}
         personalityProfile={session.personalityProfile}
-        orgTraitProfile={orgTraitProfile}
+        jobTraitProfile={jobTraitProfile}
       />
 
       {ev.llm_assist_note && (
@@ -543,17 +543,17 @@ export function InterviewResult({
 }
 
 /**
- * 컬처핏·정성 검증 블록 — 인성검사 특성 프로필(vs 법인 선호) + 자가응답·면접 발언 대조.
+ * 컬처핏·정성 검증 블록 — 인성검사 특성 프로필(vs 공고 선호) + 자가응답·면접 발언 대조.
  * 무점수 참고 정보 — overall_score 와 무관함을 UI 에 명시.
  */
 function CultureFitBlock({
   cultureFit,
   personalityProfile,
-  orgTraitProfile,
+  jobTraitProfile,
 }: {
   cultureFit?: InterviewEvaluation["culture_fit"];
   personalityProfile?: Session["personalityProfile"];
-  orgTraitProfile?: Record<string, string> | null;
+  jobTraitProfile?: Record<string, string> | null;
 }) {
   if (!cultureFit && !personalityProfile) return null;
 
@@ -585,7 +585,7 @@ function CultureFitBlock({
           {TRAIT_KEYS.map((k) => {
             const t = personalityProfile.traits[k];
             if (!t) return null;
-            const desired = orgTraitProfile?.[k];
+            const desired = jobTraitProfile?.[k];
             return (
               <div key={k} className="flex items-center gap-2.5">
                 <span className="text-[11px] text-slate-600 w-32 shrink-0 truncate">
@@ -607,9 +607,9 @@ function CultureFitBlock({
                         ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                         : "border-amber-200 bg-amber-50 text-amber-700"
                     }`}
-                    title="법인이 높음으로 지정한 선호 특성"
+                    title="공고에서 높음으로 지정한 선호 특성"
                   >
-                    법인 선호
+                    공고 선호
                   </span>
                 )}
               </div>

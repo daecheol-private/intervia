@@ -10,6 +10,7 @@ import { logAudit } from "@/lib/audit";
 import { refundFeature } from "@/lib/tokens";
 import { stripBiasedLines } from "@/lib/job-bias-filter";
 import { parseDbTimestamp } from "@/lib/utils";
+import { traitProfileInputToJson } from "@/lib/personality";
 import {
   generateRequirementChecklist,
   serializeChecklist,
@@ -110,6 +111,13 @@ export async function PUT(
     tone: body.tone,
     interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
   };
+
+  // 키가 없으면 기존 값 유지 (부분 업데이트 클라이언트 호환)
+  if ("traitProfile" in body) {
+    const trait = traitProfileInputToJson(body.traitProfile);
+    if (trait.error) return new Response(trait.error, { status: 400 });
+    update.traitProfile = trait.json;
+  }
 
   // 주요업무/자격요건이 바뀐 경우에만 JD 요건 체크리스트 재생성 (그 외 수정은 LLM 호출 생략).
   // LLM 호출이 느리므로 응답을 막지 않는다 — 기존 체크리스트는 그대로 두고(빈 구간 없이 잠깐 stale),

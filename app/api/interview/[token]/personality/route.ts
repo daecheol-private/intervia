@@ -12,9 +12,9 @@ import {
 import { eq } from "drizzle-orm";
 import { hasValidConsent } from "@/lib/consent";
 import { rateLimit } from "@/lib/rate-limit";
-import type { CultureFitProfile } from "@/lib/prompts";
 import {
   buildItemSet,
+  parseTraitProfile,
   validateResponses,
   scoreResponses,
   type PersonalityResponse,
@@ -55,17 +55,21 @@ export async function POST(
   }
 
   const [row] = await db
-    .select({ cultureFitProfile: organizations.cultureFitProfile })
+    .select({
+      cultureFitProfile: organizations.cultureFitProfile,
+      jobTraitProfile: jobPostings.traitProfile,
+    })
     .from(candidates)
     .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
     .leftJoin(organizations, eq(organizations.id, jobPostings.orgId))
     .where(eq(candidates.id, session.candidateId));
-  if (!row?.cultureFitProfile)
-    return new Response("이 면접에는 인성검사가 없습니다.", { status: 400 });
-
-  let cultureFit: CultureFitProfile | null = null;
-  try { cultureFit = JSON.parse(row.cultureFitProfile) as CultureFitProfile; } catch { /* ignore */ }
-  if (!cultureFit)
+  // 법인 컬처핏 설정 존재 = 인성검사 활성 (출제 세트는 공고 프로필 기준).
+  // GET 출제 게이트와 동일하게 손상 JSON 은 미설정으로 취급.
+  let personalityEnabled = false;
+  if (row?.cultureFitProfile) {
+    try { personalityEnabled = !!JSON.parse(row.cultureFitProfile); } catch { /* ignore */ }
+  }
+  if (!personalityEnabled)
     return new Response("이 면접에는 인성검사가 없습니다.", { status: 400 });
 
   const { responses, elapsedMs } = (await req.json()) as {
@@ -75,7 +79,7 @@ export async function POST(
   if (!Array.isArray(responses) || responses.length === 0)
     return new Response("응답이 없습니다.", { status: 400 });
 
-  const items = buildItemSet(cultureFit.traitProfile);
+  const items = buildItemSet(parseTraitProfile(row.jobTraitProfile));
   const invalid = validateResponses(items, responses);
   if (invalid) return new Response(invalid, { status: 400 });
 

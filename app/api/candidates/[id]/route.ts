@@ -4,6 +4,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
+import { parseTraitProfile } from "@/lib/personality";
 import { deleteFilesForCandidate } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
 
@@ -52,34 +53,20 @@ export async function GET(
             eq(userCandidateFavorites.candidateId, cid)
           )
         ),
-      // 법인명 + 컬처핏 프로필 — 메일 본문·면접 리포트의 특성 프로필 대조에 사용.
+      // 법인명 — 메일 본문에 사용.
       candidate.orgId
         ? db
-            .select({
-              name: organizations.name,
-              cultureFitProfile: organizations.cultureFitProfile,
-            })
+            .select({ name: organizations.name })
             .from(organizations)
             .where(eq(organizations.id, candidate.orgId))
             .then(([org]) => org ?? null)
-        : Promise.resolve<{
-            name: string;
-            cultureFitProfile: string | null;
-          } | null>(null),
+        : Promise.resolve<{ name: string } | null>(null),
     ]);
   const [lastJob] = lastJobRows;
   const [fav] = favRows;
   const companyName = orgInfo?.name ?? null;
-  // 면접 리포트의 "후보자 특성 vs 법인 선호" 대조용 — 선호 특성 프로필만 노출
-  let orgTraitProfile: Record<string, string> | null = null;
-  if (orgInfo?.cultureFitProfile) {
-    try {
-      orgTraitProfile =
-        (JSON.parse(orgInfo.cultureFitProfile) as {
-          traitProfile?: Record<string, string> | null;
-        }).traitProfile ?? null;
-    } catch { /* ignore */ }
-  }
+  // 면접 리포트의 "후보자 특성 vs 공고 선호" 대조용 — 공고의 선호 특성 프로필
+  const jobTraitProfile = parseTraitProfile(job?.traitProfile);
 
   // 시스템관리자가 타 법인 데이터 조회한 경우 특별히 감사 로깅 (A-8)
   if (me!.role === "system_admin" && me!.orgId !== candidate.orgId) {
@@ -126,7 +113,7 @@ export async function GET(
     candidate: { ...candidate, favorited },
     job: jobSafe,
     companyName,
-    orgTraitProfile,
+    jobTraitProfile,
     sessions,
     schedules,
     screeningPhase,

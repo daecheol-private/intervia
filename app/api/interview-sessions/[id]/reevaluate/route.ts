@@ -23,6 +23,7 @@ import { isJobUnlocked } from "@/lib/job-lock";
 import { rateLimit } from "@/lib/rate-limit";
 import { generateJSON } from "@/lib/gemini";
 import { buildSummaryPrompt, type CultureFitProfile } from "@/lib/prompts";
+import { parseTraitProfile } from "@/lib/personality";
 import { computeTranscriptStats } from "@/lib/interview-signals";
 import { chargeRepeatable } from "@/lib/tokens";
 import {
@@ -114,6 +115,8 @@ export async function POST(
   if (orgRow?.cultureFitProfile) {
     try { cultureFit = JSON.parse(orgRow.cultureFitProfile) as CultureFitProfile; } catch { /* ignore */ }
   }
+  // 선호 특성 프로필은 공고 단위 — 법인 JSON 의 레거시 값을 공고 값으로 대체
+  if (cultureFit) cultureFit.traitProfile = parseTraitProfile(job.traitProfile);
   const personality =
     session.personalityProfile && session.personalityResponses
       ? {

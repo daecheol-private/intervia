@@ -18,6 +18,7 @@ import {
   generateRequirementChecklist,
   serializeChecklist,
 } from "@/lib/job-checklist";
+import { traitProfileInputToJson } from "@/lib/personality";
 
 export const runtime = "nodejs";
 
@@ -102,6 +103,9 @@ export async function POST(req: Request) {
     passwordHash = await hashPassword(body.password);
   }
 
+  const trait = traitProfileInputToJson(body.traitProfile);
+  if (trait.error) return new Response(trait.error, { status: 400 });
+
   const orgId =
     me!.role === "system_admin"
       ? Number(body.orgId ?? me!.orgId ?? 0) || null
@@ -128,6 +132,7 @@ export async function POST(req: Request) {
       // 그 사이 체크리스트는 "" 라 이력서 평가는 기존 즉석 분해로 폴백 (정상 동작).
       requirementChecklist: "",
       idealProfile: (body.idealProfile ?? "").toString().slice(0, 3000),
+      traitProfile: trait.json,
       // 차별 금지 항목(성별·나이·결혼 등) 포함 라인은 저장 전 제거 (채용절차법 §4의3)
       evaluationFocus: stripBiasedLines(
         (body.evaluationFocus ?? "").toString().slice(0, 3000)

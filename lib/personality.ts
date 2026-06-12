@@ -7,7 +7,7 @@
  * 정답 찍기를 어렵게 만든다 (상용 인적성의 위장 방지 방식과 동일 계열).
  *
  * 설계 원칙:
- * - 문항·채점은 전원 동일(법인 단위로만 세트가 달라짐) — 비교 가능성·공정성 방어.
+ * - 문항·채점은 전원 동일(공고 단위로만 세트가 달라짐) — 같은 공고 후보자 간 비교 가능성·공정성 방어.
  * - 채점은 LLM 이 아니라 이 모듈의 결정적 코드 — 같은 응답이면 항상 같은 프로필.
  * - 점수는 본인 내 상대 선호(ipsative)다. 합불 점수에 미반영 — 면접 꼬리질문 앵커 +
  *   리포트 참고 정보로만 사용 (무검증 성격검사의 자동 의사결정 반영은 법적 리스크).
@@ -40,8 +40,14 @@ export const TRAIT_LABELS: Record<TraitKey, string> = {
 
 export type TraitLevel = "high" | "medium" | "low";
 
-/** 법인이 설정하는 선호 특성 프로필 — high 특성은 검사에서 심화 문항이 추가된다. */
+/**
+ * 공고가 설정하는 선호 특성 프로필 — high 특성은 검사에서 심화 문항이 추가되고
+ * 면접에서 행동 사례로 검증된다 (점수 가중치가 아니라 검증 우선순위).
+ */
 export type TraitProfile = Record<TraitKey, TraitLevel>;
+
+/** high(심화 검증) 특성 상한 — 전부 high 면 변별·면접 시간이 모두 무너진다 */
+export const MAX_HIGH_TRAITS = 3;
 
 export const DEFAULT_TRAIT_PROFILE: TraitProfile = {
   openness: "medium",
@@ -50,6 +56,48 @@ export const DEFAULT_TRAIT_PROFILE: TraitProfile = {
   agreeableness: "medium",
   emotionalStability: "medium",
 };
+
+/** 외부 입력을 TraitProfile 로 정규화 — 객체가 아니면 null, 이상값 레벨은 medium */
+export function sanitizeTraitProfile(input: unknown): TraitProfile | null {
+  if (!input || typeof input !== "object") return null;
+  const out = {} as TraitProfile;
+  for (const k of TRAIT_KEYS) {
+    const v = (input as Record<string, unknown>)[k];
+    out[k] = v === "high" || v === "medium" || v === "low" ? v : "medium";
+  }
+  return out;
+}
+
+export function highTraitCount(p: TraitProfile): number {
+  return TRAIT_KEYS.filter((k) => p[k] === "high").length;
+}
+
+/** job_postings.trait_profile JSON 파싱 — null·손상 JSON 은 null (전 특성 medium 취급) */
+export function parseTraitProfile(
+  json: string | null | undefined
+): TraitProfile | null {
+  if (!json) return null;
+  try {
+    return sanitizeTraitProfile(JSON.parse(json));
+  } catch {
+    return null;
+  }
+}
+
+/** 공고 API 입력 → 저장용 JSON. 형식 오류·high 초과는 error (공고 POST/PUT 공용 검증) */
+export function traitProfileInputToJson(
+  input: unknown
+): { json: string | null; error: null } | { json: null; error: string } {
+  if (input == null) return { json: null, error: null };
+  const tp = sanitizeTraitProfile(input);
+  if (!tp) return { json: null, error: "선호 특성 형식이 잘못되었습니다." };
+  if (highTraitCount(tp) > MAX_HIGH_TRAITS)
+    return {
+      json: null,
+      error: `높음(심화 검증) 특성은 최대 ${MAX_HIGH_TRAITS}개까지 지정할 수 있습니다.`,
+    };
+  return { json: JSON.stringify(tp), error: null };
+}
 
 /**
  * 특성별 긍정 진술 10개 — 전부 바람직하게 들리도록 작성 (부정·역채점 진술 없음:
@@ -125,7 +173,7 @@ export type PersonalityItem = {
   a: { trait: TraitKey; text: string };
   /** 선택지 2 */
   b: { trait: TraitKey; text: string };
-  /** base: 1라운드 / repeat: 같은 특성 쌍 재질문(플립 검사) / emphasis: 법인 high 특성 심화 */
+  /** base: 1라운드 / repeat: 같은 특성 쌍 재질문(플립 검사) / emphasis: 공고 high 특성 심화 */
   kind: "base" | "repeat" | "emphasis";
   /** 특성 쌍 식별자 (정렬 결합) — base↔repeat 플립 비교용 */
   pairingKey: string;
@@ -184,7 +232,7 @@ function buildBaseItems(): PersonalityItem[] {
 const BASE_ITEMS: PersonalityItem[] = buildBaseItems();
 
 /**
- * 법인 특성 프로필에 따른 출제 세트 — base 20쌍은 항상, high 특성당 심화 2쌍 추가.
+ * 공고 특성 프로필에 따른 출제 세트 — base 20쌍은 항상, high 특성당 심화 2쌍 추가.
  * 같은 프로필이면 항상 같은 세트·순서 (결정적).
  */
 export function buildItemSet(profile?: TraitProfile | null): PersonalityItem[] {
@@ -334,7 +382,7 @@ export const TRAIT_LEVEL_LABELS: Record<TraitLevel, string> = {
 };
 
 /**
- * 면접 꼬리질문 앵커 — 법인이 중시하는(high) 특성에서 선택이 한쪽으로 뚜렷하게
+ * 면접 꼬리질문 앵커 — 공고가 중시하는(high) 특성에서 선택이 한쪽으로 뚜렷하게
  * 쏠린(≥75% 선택 또는 ≤25% 선택) 경우를 골라낸다. 최대 3개 — 면접 시간 잠식 방지.
  * (v1 리커트 응답 등 현재 문항 은행과 매칭되지 않는 응답이면 빈 배열 — 하위 호환)
  */
@@ -397,7 +445,7 @@ export function notableResponses(
             ? appearedItem.item.a.text
             : appearedItem.item.b.text,
         answerLabel: "거의 선택하지 않음",
-        whyNotable: `법인이 중시하는 ${TRAIT_LABELS[t]} 진술을 다른 가치보다 후순위로 선택 — 맥락 확인`,
+        whyNotable: `공고에서 중시하는 ${TRAIT_LABELS[t]} 진술을 다른 가치보다 후순위로 선택 — 맥락 확인`,
       });
     }
   }

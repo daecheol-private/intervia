@@ -179,6 +179,9 @@ export const jobPostings = sqliteTable("job_postings", {
   requirementChecklist: text("requirement_checklist").notNull().default(""),
   // 선호 인재상 — 평가·면접 시 추가 컨텍스트. 빈 문자열 허용.
   idealProfile: text("ideal_profile").notNull().default(""),
+  // AI 면접 인성검사 선호 특성 프로필 (TraitProfile JSON). null = 전 특성 medium(기본 세트만 출제).
+  // 직무마다 검증할 특성이 달라 법인 설정이 아닌 공고 단위로 관리. high 는 최대 3개 (검증 우선순위).
+  traitProfile: text("trait_profile"),
   // AI 평가 중점 사항 — **HR 내부용. 후보자에게 비공개**.
   // 채용 담당자가 AI 평가 가중치를 직접 코멘트 ("보안 경력 최우선" 등).
   // 서류평가/면접 진행/면접 평가 프롬프트에 별도 가이드 블록으로 주입됨.

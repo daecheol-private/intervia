@@ -56,7 +56,7 @@ export default function CandidateDetailPage() {
     candidate: Candidate;
     job: Job;
     companyName?: string | null;
-    orgTraitProfile?: Record<string, string> | null;
+    jobTraitProfile?: Record<string, string> | null;
     sessions: Session[];
     schedules: Schedule[];
     screeningPhase: "not_started" | "in_queue" | "done" | "failed";
@@ -716,7 +716,7 @@ export default function CandidateDetailPage() {
         {completedSession && completedSession.evaluation && (
           <InterviewResult
             session={completedSession}
-            orgTraitProfile={data.orgTraitProfile ?? null}
+            jobTraitProfile={data.jobTraitProfile ?? null}
             onShowTranscript={() => setShowTranscript(true)}
             onRegenerate={createLink}
             onReevaluated={load}

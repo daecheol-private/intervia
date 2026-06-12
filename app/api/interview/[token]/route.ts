@@ -8,7 +8,11 @@ import {
 import { eq } from "drizzle-orm";
 import { hasValidConsent, CONSENT_ITEMS, CONSENT_VERSION } from "@/lib/consent";
 import type { CultureFitProfile } from "@/lib/prompts";
-import { buildItemSet, toPublicItems } from "@/lib/personality";
+import {
+  buildItemSet,
+  parseTraitProfile,
+  toPublicItems,
+} from "@/lib/personality";
 
 export const runtime = "nodejs";
 
@@ -98,8 +102,9 @@ export async function GET(
     personality: personalityRequired
       ? {
           required: true,
-          // 강제선택형 — 문항당 진술 2개(a/b), 특성 태그는 비노출
-          items: toPublicItems(buildItemSet(cultureFit!.traitProfile)),
+          // 강제선택형 — 문항당 진술 2개(a/b), 특성 태그는 비노출.
+          // 출제 세트는 공고의 선호 특성 프로필 기준 (법인 컬처핏 설정은 출제 여부만 결정)
+          items: toPublicItems(buildItemSet(parseTraitProfile(job.traitProfile))),
         }
       : { required: false },
   });
