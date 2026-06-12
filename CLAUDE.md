@@ -1,6 +1,17 @@
 @AGENTS.md
 @../CLAUDE.md
 
+## 🚨 운영 데이터 보호 — 절대 규칙 (다른 모든 지시보다 우선)
+
+**운영(Turso) 데이터는 사용자가 명시적으로 삭제를 요청하기 전까지 어떤 경로로도 절대 삭제하면 안 된다.** 2026-06-13, 마이그레이션의 `DROP TABLE`이 FK CASCADE를 발동시켜 운영 후보자 데이터 전체가 연쇄 삭제되는 사고가 실제로 발생했다 (GOTCHAS §8-1).
+
+1. **DROP TABLE / DELETE / DROP COLUMN이 포함된 마이그레이션은 사용자 승인 없이 운영에 적용 금지.** main push 자체가 운영 적용(vercel-build)임을 잊지 말 것 — "커밋만 하고 푸시는 나중에"가 아니라, push 전에 반드시 사용자에게 destructive 여부를 보고하고 승인받는다.
+2. **승인받았더라도 적용 전 백업 먼저**: `turso db dump` 또는 Turso PITR 복원 시점 기록. 백업 없이 destructive 적용 금지.
+3. **자식이 CASCADE로 참조하는 부모 테이블의 DROP(재생성)은 vercel-build 자동 적용 절대 금지.** Turso는 `PRAGMA foreign_keys=OFF` 세션 유지를 보장하지 않는다 — FK OFF 가드를 통과해도 도중에 ON으로 리셋되어 암묵 DELETE가 자식들을 연쇄 삭제한다. 로컬 검증 통과 ≠ 운영 안전 (로컬 file: 연결은 상태가 유지되어 이 실패 모드가 재현되지 않음). 수동 절차는 GOTCHAS §8-1.
+4. **`scripts/db-migrate.ts`의 가드를 우회·완화·삭제 금지**: destructive statement는 `ALLOW_DESTRUCTIVE_MIGRATION=1` 없이 거부되고, DROP TABLE 직전마다 FK 상태를 재확인해 ON이면 중단한다. 이 가드가 막으면 "어떻게 통과시킬까"가 아니라 "왜 막혔나"를 사용자에게 보고할 것.
+5. **운영 DB 대상 검증·조사는 읽기 전용 쿼리만.** 쓰기성 PRAGMA 포함 일체의 변경은 사용자 승인 후. 검증 데이터가 필요하면 로컬(`LOCAL_DB=1`)에서.
+6. 운영 데이터를 지우는 정당한 작업(사용자 요청 시드 정리 등)도 **삭제 전 대상 행을 먼저 보여주고 확인받은 뒤** 실행한다.
+
 ## LLM 모델 정책 (2026-05-26)
 
 paid tier. **모든 task 를 Vertex AI 서울 리전 + flash 로 통합** (`lib/gemini.ts` `MODELS`):
@@ -51,7 +62,7 @@ SDK 단일: **`@google/genai`** (vertexai: true). 분기 없음 — `clientFor(t
 3. DB 변경 (정식 워크플로우):
    - `lib/schema.ts` 수정
    - `npm run db:generate` → `drizzle/NNNN_*.sql` 생성
-   - 생성된 SQL 검토 (특히 destructive 변경 — DROP/RENAME 은 별도 결정)
+   - 생성된 SQL 검토 — **DROP/DELETE/DROP COLUMN 이 있으면 무조건 멈추고 상단 "운영 데이터 보호 절대 규칙" 적용** (사용자 승인 + 백업 + `ALLOW_DESTRUCTIVE_MIGRATION=1`)
    - `npm run db:migrate` — ⚠️ env 에 `TURSO_DATABASE_URL` 있으면 **운영 Turso 에 바로 적용**. 로컬만 적용하려면 `$env:LOCAL_DB="1"; npm run db:migrate`
    - 커밋 (`git add drizzle/`)
    - main push → Vercel `vercel-build` 가 자동으로 Turso 에 migration 적용

@@ -477,9 +477,18 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 
 **해결**:
 - 점검: `node scripts/check-fk-drift.mjs` (기본 운영 / `$env:LOCAL_DB="1"` 로컬) — 최신 스냅샷 vs 실제 DB 의 FK ON DELETE·인덱스 비교. 읽기 전용.
-- 복구: SQLite 는 FK 절 변경에 ALTER 미지원 → 테이블 재생성 마이그레이션 (`drizzle-kit generate --custom`, 스냅샷이 이미 올바르므로 일반 generate 는 빈 diff). 작성 패턴은 `drizzle/0025_fix_fk_index_drift.sql` 참고.
-- 재생성 마이그레이션엔 반드시 **FK OFF 가드** 포함: `PRAGMA foreign_keys=OFF` 가 연결에 실제 적용 안 됐으면 DROP TABLE 의 암묵 DELETE 가 자식 ON DELETE CASCADE 를 발동시켜 연쇄 삭제됨. 가드(존재할 수 없는 user_id INSERT)가 그 전에 실패해 중단시킨다.
+- 복구: SQLite 는 FK 절 변경에 ALTER 미지원 → 테이블 재생성 마이그레이션 (`drizzle-kit generate --custom`, 스냅샷이 이미 올바르므로 일반 generate 는 빈 diff).
 - 예방: 마이그레이션 SQL 의 `ADD COLUMN ... REFERENCES` 에 ON DELETE 절이 schema.ts 와 일치하는지 `db:generate` 후 눈으로 확인.
+
+### ⚠️ 2026-06-13 사고: 테이블 재생성이 운영 데이터를 연쇄 삭제 — "FK OFF 가드" 는 불충분
+
+`drizzle/0025_fix_fk_index_drift.sql` 이 운영(vercel-build)에서 실행될 때, 첫머리의 `PRAGMA foreign_keys=OFF` + FK 가드(존재 불가 user_id INSERT)는 **통과**했지만, Turso(hrana-over-HTTP)는 연결 재수립 시 세션 PRAGMA 가 기본값(ON)으로 리셋된다. 후반의 `DROP TABLE job_postings` 시점엔 FK 가 다시 ON → 암묵 DELETE 가 `candidates.job_id CASCADE` 를 발동 → candidates·screening_jobs·interview_sessions·interview_schedules·interviewer_notes·job_interviewers 전부 소실. **로컬(file:) 연결은 PRAGMA 가 유지되므로 로컬 리허설 통과가 운영 안전을 보장하지 않는다.**
+
+이후 규칙 (CLAUDE.md 최상단 "운영 데이터 보호 절대 규칙"과 한 몸):
+1. **자식이 CASCADE 로 참조하는 부모 테이블의 재생성(DROP 포함)은 vercel-build 자동 적용 금지.** 자식 없는 테이블(예: interview_sessions)만 재생성 마이그레이션 허용.
+2. 부모 테이블 재생성이 꼭 필요하면 수동 절차: 사용자 승인 → `turso db dump` 백업 + PITR 시점 기록 → 트래픽 없는 시점에 단일 세션(`turso db shell`)에서 적용 → 행수·`PRAGMA foreign_key_check` 검증.
+3. `scripts/db-migrate.ts` 가 이중 방어: destructive statement(DROP TABLE/DELETE FROM/DROP COLUMN, `__` 접두 임시 테이블 제외)는 `ALLOW_DESTRUCTIVE_MIGRATION=1` 없이 거부 + **모든 DROP TABLE 직전 `PRAGMA foreign_keys` 재확인, ON 이면 즉시 중단**. 이 가드 우회·완화·삭제 금지.
+4. 0025 의 SQL 을 재생성 "패턴" 으로 참고하지 말 것 — 부모 테이블에 한해 안티패턴이다.
 
 ## 9. 한국어 인코딩 / Windows PowerShell
 

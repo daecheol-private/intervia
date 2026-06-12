@@ -36,6 +36,49 @@ console.log(`\n🎯 Target DB: ${url}  [${target}]\n`);
 
 const client = createClient({ url, authToken });
 
+// ───────────────────────────────────────────────────────────────────────────
+// 🚨 운영 데이터 보호 가드 (2026-06-13 cascade 연쇄삭제 사고 후 추가. CLAUDE.md 절대 규칙)
+//
+// 1) destructive statement (DROP TABLE / DELETE FROM / DROP COLUMN) 는
+//    ALLOW_DESTRUCTIVE_MIGRATION=1 없이 실행 거부. rebuild 보조용 `__` 접두
+//    임시 테이블 DROP 만 예외. 이 게이트의 우회·완화·삭제 금지.
+// 2) DROP TABLE 직전마다 PRAGMA foreign_keys 재확인. Turso(hrana-over-HTTP)는
+//    연결 재수립 시 세션 PRAGMA 가 리셋되므로 "마이그레이션 첫머리에서 OFF 했다"
+//    는 가정이 깨진다. FK ON 상태의 DROP 은 암묵 DELETE 가 자식 ON DELETE
+//    CASCADE 를 발동시켜 운영 데이터를 연쇄 삭제한다 (실제 사고 사례).
+// ───────────────────────────────────────────────────────────────────────────
+function destructiveKind(stmt: string): string | null {
+  const drop = stmt.match(/^\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?[`"]?(\w+)/i);
+  if (drop) return drop[1].startsWith("__") ? null : `DROP TABLE ${drop[1]}`;
+  if (/^\s*DELETE\s+FROM/i.test(stmt)) return "DELETE FROM";
+  if (/^\s*ALTER\s+TABLE[\s\S]+?\bDROP\s+COLUMN\b/i.test(stmt)) return "DROP COLUMN";
+  return null;
+}
+
+async function guardStatement(stmt: string): Promise<void> {
+  const kind = destructiveKind(stmt);
+  if (kind && process.env.ALLOW_DESTRUCTIVE_MIGRATION !== "1") {
+    throw new Error(
+      `🚨 destructive statement 차단: ${kind}\n` +
+        `운영 데이터 보호 규칙(CLAUDE.md)에 따라 사용자 명시 승인 없이 실행할 수 없다.\n` +
+        `승인 후 진행하려면: 백업 확보(turso db dump + PITR 시점 기록) → ` +
+        `ALLOW_DESTRUCTIVE_MIGRATION=1 설정(Vercel 배포면 env 에 임시 추가) → 재실행.`
+    );
+  }
+  if (/^\s*DROP\s+TABLE/i.test(stmt)) {
+    const fk = await client.execute("PRAGMA foreign_keys");
+    const fkOn = Number(Object.values(fk.rows[0] ?? {})[0] ?? 1) === 1;
+    if (fkOn) {
+      throw new Error(
+        `🚨 FK 강제 ON 상태에서 DROP TABLE 차단.\n` +
+          `암묵 DELETE 가 자식 ON DELETE CASCADE 를 발동시켜 연쇄 삭제된다 (2026-06-13 사고).\n` +
+          `Turso 는 PRAGMA foreign_keys=OFF 세션 유지를 보장하지 않으므로, 부모 테이블 재생성은\n` +
+          `vercel-build 자동 적용 금지 — GOTCHAS §8-1 의 수동 절차를 따를 것.`
+      );
+    }
+  }
+}
+
 // "이미 적용된 객체" 를 뜻하는, 무시해도 안전한 멱등 에러만 매칭.
 function isIdempotentError(msg: string): boolean {
   const m = msg.toLowerCase();
@@ -84,6 +127,7 @@ async function main(): Promise<void> {
 
     console.log(`▶ ${entry.tag} (${statements.length} statements)`);
     for (const stmt of statements) {
+      await guardStatement(stmt);
       try {
         await client.execute(stmt);
       } catch (e) {
