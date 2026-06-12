@@ -30,6 +30,14 @@ const QUAL_KEYS = [
 
 type QualKey = (typeof QUAL_KEYS)[number];
 
+// 저장 결과 메시지를 누른 버튼 옆에 표시하기 위한 섹션 구분
+type SaveSection = "biz" | "addr" | "ocr" | "cf";
+type SaveMsgState = {
+  section: SaveSection;
+  type: "error" | "success";
+  text: string;
+} | null;
+
 const QUAL_LABELS: Record<QualKey, string> = {
   selfIntro: "자기소개서",
   motivation: "지원동기",
@@ -98,9 +106,7 @@ export default function OrgSettingsPage() {
   const [addrBusy, setAddrBusy] = useState(false);
   const [bizBusy, setBizBusy] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
-  const [msg, setMsg] = useState<{ type: "error" | "success"; text: string } | null>(
-    null
-  );
+  const [msg, setMsg] = useState<SaveMsgState>(null);
 
   // 컬처핏 로컬 상태
   const [cfProfile, setCfProfile] = useState<CultureFitProfile>(defaultProfile());
@@ -157,7 +163,7 @@ export default function OrgSettingsPage() {
     });
     setAddrBusy(false);
     if (!r.ok) {
-      setMsg({ type: "error", text: await r.text() });
+      setMsg({ section: "addr", type: "error", text: await r.text() });
       return;
     }
     setOrg((o) =>
@@ -169,7 +175,7 @@ export default function OrgSettingsPage() {
           }
         : o
     );
-    setMsg({ type: "success", text: "회사 주소가 저장되었습니다." });
+    setMsg({ section: "addr", type: "success", text: "회사 주소가 저장되었습니다." });
   };
 
   const saveBizNo = async () => {
@@ -182,13 +188,13 @@ export default function OrgSettingsPage() {
     });
     setBizBusy(false);
     if (!r.ok) {
-      setMsg({ type: "error", text: await r.text() });
+      setMsg({ section: "biz", type: "error", text: await r.text() });
       return;
     }
     const d = (await r.json()) as { bizRegistrationNo: string | null };
     setBizNo(d.bizRegistrationNo ?? "");
     setOrg((o) => (o ? { ...o, bizRegistrationNo: d.bizRegistrationNo } : o));
-    setMsg({ type: "success", text: "사업자등록번호가 저장되었습니다." });
+    setMsg({ section: "biz", type: "success", text: "사업자등록번호가 저장되었습니다." });
   };
 
   const toggleOcr = async (next: boolean) => {
@@ -201,11 +207,12 @@ export default function OrgSettingsPage() {
     });
     setOcrBusy(false);
     if (!r.ok) {
-      setMsg({ type: "error", text: await r.text() });
+      setMsg({ section: "ocr", type: "error", text: await r.text() });
       return;
     }
     setOrg((o) => (o ? { ...o, allowScanOcr: next } : o));
     setMsg({
+      section: "ocr",
       type: "success",
       text: next
         ? "스캔 PDF AI OCR 을 허용했습니다."
@@ -223,10 +230,10 @@ export default function OrgSettingsPage() {
     });
     setCfBusy(false);
     if (!r.ok) {
-      setMsg({ type: "error", text: await r.text() });
+      setMsg({ section: "cf", type: "error", text: await r.text() });
       return;
     }
-    setMsg({ type: "success", text: "컬처핏 설정이 저장되었습니다." });
+    setMsg({ section: "cf", type: "success", text: "컬처핏 설정이 저장되었습니다." });
   };
 
   const updateQualItem = (key: QualKey, patch: Partial<QualItem>) => {
@@ -299,6 +306,7 @@ export default function OrgSettingsPage() {
                   {bizBusy ? "저장 중..." : "저장"}
                 </button>
               </div>
+              <SaveMsg msg={msg} section="biz" />
               <p className="text-[11px] text-slate-500">
                 가입에는 필요하지 않습니다. 세금계산서 발행 등 정산에 필요할 때
                 입력하세요. 다른 법인이 사용 중인 번호는 등록할 수 없습니다.
@@ -333,6 +341,7 @@ export default function OrgSettingsPage() {
                 >
                   {addrBusy ? "저장 중..." : "주소 저장"}
                 </button>
+                <SaveMsg msg={msg} section="addr" />
               </div>
             </div>
           </section>
@@ -460,13 +469,16 @@ export default function OrgSettingsPage() {
             </div>
 
             {canEdit && (
-              <button
-                onClick={saveCultureFit}
-                disabled={cfBusy}
-                className="px-4 py-2 rounded-md bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
-              >
-                {cfBusy ? "저장 중..." : "컬처핏 설정 저장"}
-              </button>
+              <>
+                <button
+                  onClick={saveCultureFit}
+                  disabled={cfBusy}
+                  className="px-4 py-2 rounded-md bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {cfBusy ? "저장 중..." : "컬처핏 설정 저장"}
+                </button>
+                <SaveMsg msg={msg} section="cf" />
+              </>
             )}
           </section>
 
@@ -542,6 +554,7 @@ export default function OrgSettingsPage() {
                 />
               </button>
             </div>
+            <SaveMsg msg={msg} section="ocr" />
             <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-3 leading-relaxed">
               ⚠️ 켜면 스캔 이력서의 <b>마스킹 전 원본</b>이 AI 처리 수탁자(Vertex
               AI 서울 리전)로 전송됩니다. 일반 이력서의 "로컬 마스킹 후 전송"
@@ -551,21 +564,24 @@ export default function OrgSettingsPage() {
               스캔 이력서는 평가되지 않고 재업로드 안내만 표시됩니다.
             </p>
           </section>
-
-          {msg && (
-            <div
-              className={`text-xs rounded-lg px-3 py-2 ${
-                msg.type === "error"
-                  ? "text-danger bg-danger-soft border border-danger/30"
-                  : "text-primary-deep bg-primary-soft border border-primary/30"
-              }`}
-            >
-              {msg.text}
-            </div>
-          )}
         </div>
       )}
     </main>
+  );
+}
+
+function SaveMsg({ msg, section }: { msg: SaveMsgState; section: SaveSection }) {
+  if (!msg || msg.section !== section) return null;
+  return (
+    <div
+      className={`text-xs rounded-lg px-3 py-2 mt-2 ${
+        msg.type === "error"
+          ? "text-danger bg-danger-soft border border-danger/30"
+          : "text-primary-deep bg-primary-soft border border-primary/30"
+      }`}
+    >
+      {msg.text}
+    </div>
   );
 }
 
