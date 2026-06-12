@@ -1,5 +1,6 @@
 import { sqliteTable, text, integer, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+import type { PersonalityResponse, PersonalityProfile } from "./personality";
 
 export const organizations = sqliteTable("organizations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -586,6 +587,19 @@ export type InterviewEvaluation = {
     signals: string[];
     note: string;
   };
+  /**
+   * 컬처핏·정성 검증 — 인성검사 자가응답 vs 면접 행동 증거 대조 (무점수 참고 정보).
+   * overall_score 에 미반영 — 검증 안 된 성격 자기보고를 자동 의사결정에 넣지 않는다.
+   */
+  culture_fit?: {
+    items: Array<{
+      topic: string;
+      self_report: string;
+      verification: "일치" | "불일치" | "미검증";
+      evidence: string;
+    }>;
+    fit_note: string;
+  };
 };
 
 /**
@@ -761,6 +775,12 @@ export const interviewSessions = sqliteTable("interview_sessions", {
     .notNull()
     .default(sql`'[]'`),
   evaluation: text("evaluation", { mode: "json" }).$type<InterviewEvaluation | null>(),
+  // 인성검사(컬처핏 사전 문항) — 원응답 + 결정적 채점 프로필. null = 미실시
+  // (법인 컬처핏 미설정이거나 검사 도입 전 시작된 세션).
+  personalityResponses: text("personality_responses", { mode: "json" })
+    .$type<PersonalityResponse[] | null>(),
+  personalityProfile: text("personality_profile", { mode: "json" })
+    .$type<PersonalityProfile | null>(),
   startedAt: text("started_at"),
   completedAt: text("completed_at"),
   expiresAt: text("expires_at").notNull(),

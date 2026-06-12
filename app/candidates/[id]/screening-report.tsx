@@ -569,3 +569,67 @@ export function BulletBlock({
     </div>
   );
 }
+
+/**
+ * 법인 정성 평가 항목 검토 — 무점수. 서류에서 확인된 근거 / 면접 확인 필요만 표시.
+ * 점수에 반영되지 않음을 UI 에 명시 (자소서 없는 경력 이력서가 불리해지지 않도록).
+ */
+export function QualitativeReviewBlock({
+  review,
+}: {
+  review: Array<{
+    item: string;
+    finding: string;
+    evidence?: string;
+    needs_interview?: boolean;
+  }>;
+}) {
+  if (review.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-violet-700">
+          법인 정성 평가 항목 검토
+        </div>
+        <span className="text-[10px] px-1.5 py-0.5 rounded border border-violet-200 bg-white text-violet-600">
+          참고 정보 — 점수 미반영
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {review.map((r, i) => (
+          <li
+            key={i}
+            className="bg-white border border-violet-100 rounded-lg px-3 py-2"
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-slate-800">
+                {r.item}
+              </span>
+              {r.needs_interview ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800">
+                  면접 확인 필요
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-100 text-emerald-800">
+                  서류 근거 있음
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-slate-700 mt-1 leading-relaxed">
+              <HL text={r.finding} />
+            </div>
+            {r.evidence && (
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                근거: {r.evidence}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div className="text-[11px] text-slate-500 mt-2">
+        ※ 자기소개서 등 정성 자료가 없는 이력서는 &quot;면접 확인 필요&quot;로
+        분류될 뿐 감점되지 않습니다.
+      </div>
+    </div>
+  );
+}

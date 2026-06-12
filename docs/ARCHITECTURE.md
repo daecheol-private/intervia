@@ -347,3 +347,15 @@ interviewer/
 - 모든 신호는 **단정 금지·중립 톤** — 정당 사용 가능성 명시, 후보자 상세 리포트에 표시.
 - `buildInterviewQuestionsPrompt`: 1차 대면 면접 질문지 (이력서+서류평가+AI면접 평가+법인 컬쳐핏 기준(있으면) 종합 → 섹션별 맞춤 질문지). 1차 일정 확정 후 면접관이 생성, `interview_question_sheets` 에 저장 (round='round1').
 - `buildExecutiveInterviewQuestionsPrompt`: 2차(임원) 면접 질문지 — 기술 재검증 없이 임원 관점 축(컬쳐핏·인재상 적합성/가치관·태도/조직 기여/성장 잠재력/동기·정착)에 집중. 법인 컬쳐핏 기준(`organizations.culture_fit_profile`, 있으면)을 질문 설계의 중심 축으로 주입. 2차 일정 확정 후 생성, 같은 테이블에 round='round2' 로 저장. 과금은 1차와 동일 키(`interview_question_gen`) — UI 단가 표기도 "면접 문제 생성" 단일.
+
+## 컬처핏·인성검사 파이프라인 (lib/personality.ts)
+
+법인 컬처핏 설정(`organizations.culture_fit_profile`)을 서류→AI면접→대면 질문지까지 일관되게 흘리는 무점수 정성 평가 경로. **어느 단계에서도 합불 점수에 산입하지 않는다** (무검증 자기보고의 자동 의사결정 반영 금지 — AI 기본법·채용절차법 방어).
+
+- **문항 은행** (`lib/personality.ts` `STATEMENTS`/`buildItemSet`): Big Five **강제선택형(forced-choice)** — 둘 다 바람직해 보이는 진술 중 더 자신에 가까운 쪽을 고르게 해 "회사가 좋아할 답 찍기"를 차단(상용 인적성의 위장 방지 방식). 특성당 긍정 진술 10개에서 base 20쌍(10개 특성 쌍 × 2라운드, 라운드 간 좌우 교차) + 법인 high 특성당 심화 2쌍을 결정적으로 생성. 점수는 본인 내 **상대 선호**(선택 비율 0~100). 무성의 감지: 한쪽 위치 반복 선택·재질문 플립 다수·과속 응답. **문항·채점은 전원 동일, 법인 단위로만 세트가 달라짐** (LLM 즉석 생성 금지 — 비교 가능성·공정성). 의도적 위장의 최종 변별은 문항이 아니라 면접 행동 검증이 담당.
+- **선호 특성 프로필** (`CultureFitProfile.traitProfile`): 법인 설정 화면에서 인재상 텍스트 → LLM 1회 제안(`/api/orgs/me/culture-fit/trait-suggest`) → 관리자 확정. 후보자별 LLM 매핑 아님.
+- **검사 진행** (`app/interview/[token]/page.tsx` `PersonalityGate`): 동의 후·채팅 전 강제선택(한 문항씩 두 진술 중 택1, 자동 진행). 인트로에 "응답은 면접에서 실제 사례로 확인됩니다" 경고 명시(위장 억제). 제출 → `/personality` 라우트가 **결정적 코드로 채점** 후 세션 저장. 채팅 라우트는 첫 턴에 검사 미완료 시 403 `personality_required` (도입 전 시작 세션은 소급 차단 X).
+- **면접 앵커**: `notableResponses` 가 법인 high 특성의 극단 응답·일관성 불일치 응답 최대 3개를 골라 면접관 프롬프트에 주입 → "사전 문항에서 ○○라고 답하셨는데, 실제 사례는?" 행동 검증 질문 1~2개 (직무 검증 잠식 금지).
+- **평가 반영**: `buildSummaryPrompt` 가 자가응답 vs 후보자 발언 대조를 지시 → `evaluation.culture_fit`(항목별 일치/불일치/미검증 + fit_note). 미검증 항목은 followup_questions 로 → 대면 질문지 생성이 그대로 인계.
+- **서류 단계** (`qualitative_review`): 법인 활성 정성 항목(자소서·지원동기 등)을 서류에서 검토하되 무점수 — 근거 없으면 "면접 확인 필요" 표시만 (자소서 없는 경력 이력서가 감점되지 않도록).
+- **리포트 표시**: 후보자 상세 면접 결과의 `CultureFitBlock` — Big Five 바(법인 선호 high 특성 대비 배지) + 신뢰 플래그 + 검증 결과. "참고 정보 — 점수 미반영" 라벨 고정.

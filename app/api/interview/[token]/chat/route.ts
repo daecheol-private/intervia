@@ -8,7 +8,12 @@ import {
 } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { createChat, startChatStreamWithRetry } from "@/lib/gemini";
-import { buildSystemPrompt } from "@/lib/prompts";
+import {
+  buildSystemPrompt,
+  type CultureFitProfile,
+  type PersonalityAnchor,
+} from "@/lib/prompts";
+import { buildItemSet, notableResponses } from "@/lib/personality";
 import { hasValidConsent } from "@/lib/consent";
 import { sanitizeUserInput, detectSystemPromptLeak } from "@/lib/prompt-safety";
 import { maskText } from "@/lib/mask";
@@ -86,6 +91,7 @@ export async function POST(
         },
         // 회사명 — 공고가 속한 법인 이름. AI 면접관 자기소개에 사용.
         orgName: organizations.name,
+        orgCultureFit: organizations.cultureFitProfile,
       })
       .from(candidates)
       .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
@@ -106,7 +112,43 @@ export async function POST(
   const { candidate, job } = ctx;
   const companyName = ctx.orgName ?? null;
 
+  let cultureFit: CultureFitProfile | null = null;
+  if (ctx.orgCultureFit) {
+    try { cultureFit = JSON.parse(ctx.orgCultureFit) as CultureFitProfile; } catch { /* ignore */ }
+  }
+
   const isFirstTurn = session.messages.length === 0;
+
+  // 인성검사 게이트 — 법인 컬처핏이 설정된 면접은 검사 완료 후에만 채팅 시작.
+  // 첫 턴에만 적용 (검사 도입 전 시작된 진행 중 세션은 소급 차단하지 않음).
+  if (isFirstTurn && cultureFit && !session.personalityProfile) {
+    return Response.json(
+      { error: "면접 시작 전 사전 문항 응답이 필요합니다.", code: "personality_required" },
+      { status: 403 }
+    );
+  }
+
+  // 인성검사 앵커 — 주목할 자가응답을 면접관 프롬프트에 행동 검증 단서로 제공
+  let personalityAnchors: PersonalityAnchor[] | null = null;
+  let personalityReliabilityNote: string | null = null;
+  if (cultureFit && session.personalityProfile && session.personalityResponses) {
+    const items = buildItemSet(cultureFit.traitProfile);
+    personalityAnchors = notableResponses(
+      items,
+      session.personalityResponses,
+      cultureFit.traitProfile
+    ).map((n) => ({
+      question: n.statement,
+      answer: n.answerLabel,
+      why: n.whyNotable,
+    }));
+    const flags = session.personalityProfile.flags;
+    const notes: string[] = [];
+    if (flags.straightLining) notes.push("한쪽 선택지 위치만 반복 선택(무성의 의심)");
+    if (flags.inconsistent) notes.push("같은 특성 쌍 재질문에서 선택 다수 뒤집힘(무작위 응답 의심)");
+    if (flags.rushed) notes.push("비정상적으로 빠른 응답 속도");
+    personalityReliabilityNote = notes.length > 0 ? notes.join(" · ") : null;
+  }
   const rawContent = userMessage ?? (isFirstTurn ? "면접을 시작해주세요." : "");
   const sanitized = sanitizeUserInput(rawContent);
   if (sanitized.injectionAttempt) {
@@ -150,7 +192,10 @@ export async function POST(
       },
       // LLM 에는 항상 마스킹된 텍스트만 전달
       candidate.resumeMaskedText ?? "",
-      candidate.screeningReport ?? null
+      candidate.screeningReport ?? null,
+      cultureFit,
+      personalityAnchors,
+      personalityReliabilityNote
     ),
     history: history.slice(0, -1).map((m) => ({
       role: m.role,

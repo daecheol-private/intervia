@@ -249,6 +249,8 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 |---|---|---|
 | id / candidate_id / access_token / status / messages / evaluation / started_at / completed_at / expires_at / created_at | … | |
 | created_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 링크를 발급한 운영자. 면접 완료 토큰 차감 시 ledger `created_by_user_id` 로 전달 — 누가 면접을 결정했는지 추적. (구 세션은 NULL) |
+| personality_responses | TEXT(JSON) NULL | 인성검사(컬처핏 사전 문항) 원응답 `[{itemId, value}]`. NULL = 미실시 (법인 컬처핏 미설정 또는 도입 전 세션) |
+| personality_profile | TEXT(JSON) NULL | 결정적 채점 결과 (`lib/personality.ts` `PersonalityProfile` — Big Five 0~100 + 신뢰 플래그). 합불 점수 합산에 미사용 — 면접 꼬리질문 앵커·리포트 참고용 |
 
 ## interview_schedules
 

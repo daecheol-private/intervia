@@ -18,6 +18,12 @@ type ConsentItem = {
   legalBasis: string;
 };
 
+type PersonalityInfo = {
+  required: boolean;
+  /** 강제선택형 — 문항당 진술 2개 중 더 나에 가까운 쪽 선택 */
+  items?: Array<{ id: string; a: string; b: string }>;
+};
+
 type SessionInfo = {
   session: {
     id: number;
@@ -41,6 +47,7 @@ type SessionInfo = {
   consentRequired?: boolean;
   consentVersion?: string;
   consentItems?: ConsentItem[];
+  personality?: PersonalityInfo;
 };
 
 export default function InterviewPage() {
@@ -103,6 +110,7 @@ export default function InterviewPage() {
     if (
       info &&
       !info.consentRequired &&
+      !info.personality?.required &&
       !ended &&
       messages.length === 0 &&
       !initRef.current
@@ -308,6 +316,20 @@ export default function InterviewPage() {
         items={info.consentItems}
         onAccepted={() => {
           setInfo({ ...info, consentRequired: false });
+        }}
+      />
+    );
+  }
+
+  // 인성검사 단계 — 동의 후 · 채팅 시작 전. 완료 시 면접 자동 시작.
+  if (!ended && info.personality?.required && info.personality.items) {
+    return (
+      <PersonalityGate
+        token={token}
+        jobTitle={info.job.title}
+        items={info.personality.items}
+        onDone={() => {
+          setInfo({ ...info, personality: { required: false } });
         }}
       />
     );
@@ -711,6 +733,237 @@ function Timer({
         </span>
       </span>
     </div>
+  );
+}
+
+/**
+ * 인성검사(사전 문항) 게이트 — 강제선택형: 둘 다 바람직한 진술 중 더 나에 가까운 쪽 택1.
+ * 한 번에 한 문항, 탭하면 짧은 피드백 후 자동 진행. 점수·특성은 후보자에게 비노출.
+ */
+function PersonalityGate({
+  token,
+  jobTitle,
+  items,
+  onDone,
+}: {
+  token: string;
+  jobTitle: string;
+  items: Array<{ id: string; a: string; b: string }>;
+  onDone: () => void;
+}) {
+  const [started, setStarted] = useState(false);
+  const [idx, setIdx] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState("");
+  // 선택 직후 짧은 하이라이트 동안 추가 탭 방지
+  const advancing = useRef(false);
+  const startedAtRef = useRef<number | null>(null);
+
+  const total = items.length;
+  const current = items[idx];
+  const answeredCount = Object.keys(answers).length;
+
+  const submit = async (finalAnswers: Record<string, number>) => {
+    setSubmitting(true);
+    setErr("");
+    try {
+      const res = await fetch(`/api/interview/${token}/personality`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          responses: items.map((it) => ({
+            itemId: it.id,
+            value: finalAnswers[it.id],
+          })),
+          elapsedMs: startedAtRef.current
+            ? Date.now() - startedAtRef.current
+            : undefined,
+        }),
+      });
+      if (!res.ok) {
+        setErr(await res.text());
+        setSubmitting(false);
+        return;
+      }
+      onDone();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setSubmitting(false);
+    }
+  };
+
+  const select = (value: number) => {
+    if (advancing.current || submitting) return;
+    advancing.current = true;
+    const next = { ...answers, [current.id]: value };
+    setAnswers(next);
+    // 선택 피드백을 잠깐 보여준 뒤 진행 — 즉시 넘기면 탭이 씹힌 듯한 느낌
+    setTimeout(() => {
+      advancing.current = false;
+      if (idx < total - 1) {
+        setIdx(idx + 1);
+      } else {
+        void submit(next);
+      }
+    }, 220);
+  };
+
+  if (!started) {
+    return (
+      <CenteredCard>
+        <div className="text-3xl mb-3">📝</div>
+        <h1 className="text-xl font-bold text-slate-900">면접 전 사전 문항</h1>
+        <p className="text-sm text-slate-600 mt-3 leading-relaxed text-left">
+          <strong>{jobTitle}</strong> AI 면접을 시작하기 전,{" "}
+          <strong>{total}개의 간단한 문항</strong>에 답해 주세요. 각 문항에서{" "}
+          <strong>두 문장 중 나에게 더 가까운 쪽</strong>을 고르면 됩니다. 약
+          2~3분 소요됩니다.
+        </p>
+        <ul className="text-xs text-slate-500 mt-4 space-y-1.5 text-left bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <li>· 정답은 없습니다 — 두 문장 모두 좋은 모습이며, 평소의 나에 더 가까운 쪽을 고르면 됩니다.</li>
+          <li>
+            · <strong className="text-slate-700">응답하신 내용은 이어지는 면접에서 실제 경험 사례로 확인됩니다.</strong>{" "}
+            솔직한 응답이 가장 유리합니다.
+          </li>
+          <li>· 응답은 면접 참고 자료로만 활용되며 합격·불합격을 결정하지 않습니다.</li>
+          <li>· 모든 문항에 응답하면 면접이 자동으로 시작됩니다.</li>
+        </ul>
+        <button
+          onClick={() => {
+            startedAtRef.current = Date.now();
+            setStarted(true);
+          }}
+          className="mt-6 w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-white text-sm font-semibold shadow-sm"
+        >
+          시작하기
+        </button>
+      </CenteredCard>
+    );
+  }
+
+  if (submitting) {
+    return (
+      <CenteredCard>
+        <div className="flex justify-center mb-4">
+          <TypingDots />
+        </div>
+        <h1 className="text-lg font-bold text-slate-900">응답 제출 중...</h1>
+        <p className="text-sm text-slate-500 mt-2">
+          잠시 후 면접이 시작됩니다.
+        </p>
+      </CenteredCard>
+    );
+  }
+
+  const selected = answers[current.id];
+
+  return (
+    <main className="max-w-xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0 justify-center">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        {/* 진행 헤더 */}
+        <div className="px-5 pt-5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              사전 문항
+            </span>
+            <span
+              className="text-xs font-semibold text-slate-600 tabular-nums"
+              aria-label={`${total}문항 중 ${idx + 1}번째`}
+            >
+              {idx + 1} / {total}
+            </span>
+          </div>
+          <div
+            className="h-1.5 bg-slate-100 rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={answeredCount}
+          >
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-300"
+              style={{ width: `${(answeredCount / total) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 문항 — 강제선택: 두 진술 중 더 나에 가까운 쪽 */}
+        <div className="px-5 py-6">
+          <p className="text-sm font-medium text-slate-500">
+            둘 중 <strong className="text-slate-800">나에게 더 가까운 쪽</strong>을
+            골라 주세요
+          </p>
+
+          <div className="mt-4 space-y-3" role="radiogroup" aria-label="응답 선택">
+            {(
+              [
+                [1, current.a],
+                [2, current.b],
+              ] as const
+            ).map(([value, text]) => {
+              const isSelected = selected === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  onClick={() => select(value)}
+                  className={`w-full text-left px-4 py-4 rounded-xl border text-[15px] sm:text-sm font-medium leading-relaxed transition-all min-h-[64px] ${
+                    isSelected
+                      ? "border-primary bg-primary-soft text-primary-deep ring-2 ring-primary/30"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-primary/40 hover:bg-slate-50 active:bg-primary-soft"
+                  }`}
+                >
+                  <span className="flex items-center gap-3">
+                    <span
+                      className={`shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        isSelected ? "border-primary" : "border-slate-300"
+                      }`}
+                      aria-hidden
+                    >
+                      {isSelected && (
+                        <span className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </span>
+                    {text}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {err && (
+            <div className="mt-4 text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
+              {err}
+              <button
+                type="button"
+                onClick={() => void submit(answers)}
+                className="ml-2 underline font-medium"
+              >
+                다시 제출
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 하단 내비게이션 */}
+        <div className="px-5 pb-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => idx > 0 && setIdx(idx - 1)}
+            disabled={idx === 0}
+            className="text-xs text-slate-400 hover:text-slate-600 disabled:opacity-0 px-2 py-1.5"
+          >
+            ← 이전 문항
+          </button>
+          <span className="text-[10px] text-slate-300">
+            둘 다 좋은 모습입니다 — 더 가까운 쪽이면 됩니다
+          </span>
+        </div>
+      </div>
+    </main>
   );
 }
 

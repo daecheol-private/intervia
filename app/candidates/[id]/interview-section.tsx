@@ -7,7 +7,8 @@ import { formatKstDateTime } from "@/lib/utils";
 import { confirmDialog } from "@/app/components/Dialog";
 import { BulletBlock } from "./screening-report";
 import { HL, recColor, scoreColor, showRec } from "./shared";
-import type { Session } from "./types";
+import { TRAIT_KEYS, TRAIT_LABELS } from "@/lib/personality";
+import type { InterviewEvaluation, Session } from "./types";
 
 export function InterviewLinkBox({
   session,
@@ -324,12 +325,14 @@ export function InterviewEvaluationRetry({
 
 export function InterviewResult({
   session,
+  orgTraitProfile,
   onShowTranscript,
   onRegenerate,
   onReevaluated,
   disabled = false,
 }: {
   session: Session;
+  orgTraitProfile?: Record<string, string> | null;
   onShowTranscript: () => void;
   onRegenerate: () => void;
   onReevaluated: () => void;
@@ -430,6 +433,13 @@ export function InterviewResult({
         items={ev.followup_questions}
         color="slate"
       />
+
+      <CultureFitBlock
+        cultureFit={ev.culture_fit}
+        personalityProfile={session.personalityProfile}
+        orgTraitProfile={orgTraitProfile}
+      />
+
       {ev.llm_assist_note && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mt-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
@@ -528,6 +538,130 @@ export function InterviewResult({
           {reMsg.text}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 컬처핏·정성 검증 블록 — 인성검사 특성 프로필(vs 법인 선호) + 자가응답·면접 발언 대조.
+ * 무점수 참고 정보 — overall_score 와 무관함을 UI 에 명시.
+ */
+function CultureFitBlock({
+  cultureFit,
+  personalityProfile,
+  orgTraitProfile,
+}: {
+  cultureFit?: InterviewEvaluation["culture_fit"];
+  personalityProfile?: Session["personalityProfile"];
+  orgTraitProfile?: Record<string, string> | null;
+}) {
+  if (!cultureFit && !personalityProfile) return null;
+
+  const flags = personalityProfile?.flags;
+  const flagNotes: string[] = [];
+  if (flags?.straightLining) flagNotes.push("한쪽 선택지만 반복 선택");
+  if (flags?.inconsistent) flagNotes.push("재질문에서 선택 다수 뒤집힘");
+  if (flags?.rushed) flagNotes.push("비정상적으로 빠른 응답");
+
+  const verdictStyle: Record<string, string> = {
+    일치: "border-emerald-300 bg-emerald-100 text-emerald-800",
+    불일치: "border-rose-300 bg-rose-100 text-rose-800",
+    미검증: "border-slate-300 bg-slate-100 text-slate-600",
+  };
+
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-violet-700">
+          컬처핏 · 정성 검증
+        </div>
+        <span className="text-[10px] px-1.5 py-0.5 rounded border border-violet-200 bg-white text-violet-600">
+          참고 정보 — 점수 미반영
+        </span>
+      </div>
+
+      {personalityProfile && (
+        <div className="mt-3 space-y-1.5">
+          {TRAIT_KEYS.map((k) => {
+            const t = personalityProfile.traits[k];
+            if (!t) return null;
+            const desired = orgTraitProfile?.[k];
+            return (
+              <div key={k} className="flex items-center gap-2.5">
+                <span className="text-[11px] text-slate-600 w-32 shrink-0 truncate">
+                  {TRAIT_LABELS[k]}
+                </span>
+                <div className="flex-1 h-2 bg-white border border-violet-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-violet-400 rounded-full"
+                    style={{ width: `${t.score}%` }}
+                  />
+                </div>
+                <span className="text-[11px] font-semibold text-slate-700 tabular-nums w-7 text-right">
+                  {t.score}
+                </span>
+                {desired === "high" && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${
+                      t.score >= 67
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-amber-200 bg-amber-50 text-amber-700"
+                    }`}
+                    title="법인이 높음으로 지정한 선호 특성"
+                  >
+                    법인 선호
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          {flagNotes.length > 0 && (
+            <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 mt-1.5">
+              ⚠ 응답 신뢰 신호: {flagNotes.join(" · ")} — 자가응답 해석에 주의
+            </div>
+          )}
+        </div>
+      )}
+
+      {cultureFit?.items && cultureFit.items.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {cultureFit.items.map((it, i) => (
+            <li
+              key={i}
+              className="bg-white border border-violet-100 rounded-lg px-3 py-2"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-slate-800">
+                  {it.topic}
+                </span>
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${verdictStyle[it.verification] ?? verdictStyle["미검증"]}`}
+                >
+                  {it.verification}
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1">
+                자가응답: {it.self_report}
+              </div>
+              <div className="text-xs text-slate-700 mt-0.5 leading-relaxed">
+                <HL text={it.evidence} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {cultureFit?.fit_note && (
+        <div className="text-xs text-slate-700 mt-2.5 leading-relaxed">
+          <HL text={cultureFit.fit_note} />
+        </div>
+      )}
+
+      <div className="text-[11px] text-slate-500 mt-2.5">
+        ※ 인성검사는 강제선택 자가보고 기반 참고치(본인 내 상대 선호 — 절대
+        수준 아님)이며, 면접 발언으로 검증된 항목만 신뢰하세요. 합·불 판단은
+        직무 역량 평가를 우선해야 합니다.
+      </div>
     </div>
   );
 }

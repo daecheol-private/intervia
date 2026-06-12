@@ -51,6 +51,8 @@
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
 | GET | `/api/orgs/me/setup-progress` | 🔒 | 첫 실행 가이드 진행 상태 `{show, step1~4, firstJobId}` — 플로팅 위젯(`SetupGuideWidget`)용. 단계 판정은 대시보드 setup1~4 와 동일. `show`는 완료 여부와 무관 — `setup_guide_dismissed_at` NULL 인 동안 true. system_admin/무소속은 `{show:false}` |
 | POST | `/api/orgs/me/setup-progress` | 🔒 | 가이드 숨기기 — `setup_guide_dismissed_at` 기록 (**법인 단위** — 모든 구성원 화면에서 hero/strip/플로팅 모두 사라짐, 멤버도 가능) |
+| GET/PUT | `/api/orgs/me/culture-fit` | 🔒 / 🛡️ | 컬처핏 프로필 조회·저장 (`CultureFitProfile` — 인재상 + 정성 항목 6종 + `traitProfile`(Big Five 선호 특성)) |
+| POST | `/api/orgs/me/culture-fit/trait-suggest` | 🛡️ | 인재상 텍스트 → Big Five 선호 특성 LLM 제안 `{traitProfile, reasons}`. 설정 화면 버튼 1회성 (저장은 별도 PUT). Rate limit 5/분 |
 
 ## 사용자
 
@@ -97,10 +99,10 @@
 
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
-| GET | `/api/interview/[token]` | 🎫 | 세션 + 후보자 + 공고 |
-| GET | `/api/interview/[token]` | 🎫 | 세션 정보. 미동의 시 `consentRequired:true` + `consentItems[]` |
+| GET | `/api/interview/[token]` | 🎫 | 세션 + 후보자 + 공고. 미동의 시 `consentRequired:true` + `consentItems[]`. 법인 컬처핏 설정 시 `personality:{required, items:[{id,a,b}]}` (강제선택형 — 진술 쌍만, 특성 태그 비노출). 세션 응답에서 인성검사 원응답·프로필 제거 |
 | POST | `/api/interview/[token]/consent` | 🎫 | 후보자 동의 기록. **차감 없음** — interview 과금은 여기가 아니라 `complete`/`reevaluate` 평가 성공 시 후차감(`chargeRepeatable`). 필수 항목 누락 시 400 `{code:"consent_missing", missing}`. IP/UA/version 자동 기록 |
-| POST | `/api/interview/[token]/chat` | 🎫 | 스트리밍 응답. **동의 없으면 403 `{code:"consent_required"}`** |
+| POST | `/api/interview/[token]/personality` | 🎫 | 인성검사 응답 제출. body: `{responses:[{itemId, value:1\|2}], elapsedMs?}` (강제선택 — 1=a, 2=b). 서버 결정적 채점(`lib/personality.ts`) 후 세션에 저장. 멱등(재제출 시 최초 결과 유지). 동의 없으면 403. Rate limit 토큰 5/분 |
+| POST | `/api/interview/[token]/chat` | 🎫 | 스트리밍 응답. **동의 없으면 403 `{code:"consent_required"}`**. 법인 컬처핏 설정 + 검사 미완료 + 첫 턴이면 403 `{code:"personality_required"}` |
 | POST | `/api/interview/[token]/complete` | 🎫 | 평가 LLM + 저장. **동의 없으면 403** |
 | POST | `/api/interview/[token]/appeal` | 🎫 | 자동화 의사결정 이의제기. body: `{email, reason}`. 본인 이메일 매칭 + 사유 10~5000자. DPO 알림 메일 (실패해도 제출 성공). Rate limit IP 3/분 |
 | POST | `/api/interview/[token]/inquiry` | 🎫 | 면접 중 문제 신고/문의. body: `{email, category, message}`. 본인 이메일 매칭 **불요**(막힌 후보자 차단 방지) + 내용 5~5000자. 지원 메일 통지 (실패해도 제출 성공). Rate limit IP 3/분 |

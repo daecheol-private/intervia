@@ -28,6 +28,7 @@ import {
   BreakdownBlock,
   BulletBlock,
   LevelMatchBadge,
+  QualitativeReviewBlock,
   RequirementCoverageBlock,
   RequirementGateBadge,
 } from "./screening-report";
@@ -55,6 +56,7 @@ export default function CandidateDetailPage() {
     candidate: Candidate;
     job: Job;
     companyName?: string | null;
+    orgTraitProfile?: Record<string, string> | null;
     sessions: Session[];
     schedules: Schedule[];
     screeningPhase: "not_started" | "in_queue" | "done" | "failed";
@@ -585,6 +587,12 @@ export default function CandidateDetailPage() {
                   emphasis
                 />
               )}
+            {candidate.screeningReport.qualitative_review &&
+              candidate.screeningReport.qualitative_review.length > 0 && (
+                <QualitativeReviewBlock
+                  review={candidate.screeningReport.qualitative_review}
+                />
+              )}
             <div>
               <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 매칭 키워드
@@ -708,6 +716,7 @@ export default function CandidateDetailPage() {
         {completedSession && completedSession.evaluation && (
           <InterviewResult
             session={completedSession}
+            orgTraitProfile={data.orgTraitProfile ?? null}
             onShowTranscript={() => setShowTranscript(true)}
             onRegenerate={createLink}
             onReevaluated={load}

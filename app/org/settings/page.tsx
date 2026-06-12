@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { CultureFitProfile, QualItem } from "@/lib/prompts";
+import {
+  TRAIT_KEYS,
+  TRAIT_LABELS,
+  DEFAULT_TRAIT_PROFILE,
+  type TraitKey,
+  type TraitLevel,
+} from "@/lib/personality";
 
 /**
  * 법인 설정 — 법인 단위 정책을 org_admin / system_admin 이 관리.
@@ -84,6 +91,7 @@ function defaultProfile(): CultureFitProfile {
         "포부가 직무·회사 방향과 맞고 실현 가능한 계획인지"
       ),
     },
+    traitProfile: { ...DEFAULT_TRAIT_PROFILE },
   };
 }
 
@@ -105,6 +113,11 @@ export default function OrgSettingsPage() {
   // 컬처핏 로컬 상태
   const [cfProfile, setCfProfile] = useState<CultureFitProfile>(defaultProfile());
   const [cfBusy, setCfBusy] = useState(false);
+  const [traitBusy, setTraitBusy] = useState(false);
+  // AI 제안 근거 — 제안 직후에만 표시 (저장 대상 아님)
+  const [traitReasons, setTraitReasons] = useState<
+    Partial<Record<TraitKey, string>>
+  >({});
 
   const load = async () => {
     const [orgRes, statusRes, cfRes] = await Promise.all([
@@ -127,7 +140,15 @@ export default function OrgSettingsPage() {
       const { cultureFitProfile } = (await cfRes.json()) as {
         cultureFitProfile: CultureFitProfile | null;
       };
-      if (cultureFitProfile) setCfProfile(cultureFitProfile);
+      if (cultureFitProfile) {
+        // 레거시 프로필(traitProfile 없음)은 전 특성 medium 으로 채워 렌더
+        setCfProfile({
+          ...cultureFitProfile,
+          traitProfile: cultureFitProfile.traitProfile ?? {
+            ...DEFAULT_TRAIT_PROFILE,
+          },
+        });
+      }
     }
     setLoaded(true);
     // 본문이 fetch 후에 렌더되므로 브라우저 기본 앵커 스크롤이 동작하지 않음 — 직접 이동
@@ -237,6 +258,41 @@ export default function OrgSettingsPage() {
         [key]: { ...prev.qualitativeItems[key], ...patch },
       },
     }));
+  };
+
+  const setTrait = (key: TraitKey, level: TraitLevel) => {
+    setCfProfile((prev) => ({
+      ...prev,
+      traitProfile: {
+        ...(prev.traitProfile ?? DEFAULT_TRAIT_PROFILE),
+        [key]: level,
+      },
+    }));
+  };
+
+  const suggestTraits = async () => {
+    setTraitBusy(true);
+    setMsg(null);
+    const r = await fetch("/api/orgs/me/culture-fit/trait-suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idealTalent: cfProfile.idealTalent }),
+    });
+    setTraitBusy(false);
+    if (!r.ok) {
+      setMsg({ type: "error", text: await r.text() });
+      return;
+    }
+    const d = (await r.json()) as {
+      traitProfile: Record<TraitKey, TraitLevel>;
+      reasons: Partial<Record<TraitKey, string>>;
+    };
+    setCfProfile((prev) => ({ ...prev, traitProfile: d.traitProfile }));
+    setTraitReasons(d.reasons);
+    setMsg({
+      type: "success",
+      text: "인재상에서 특성 프로필을 제안했습니다. 확인 후 저장하세요.",
+    });
   };
 
   return (
@@ -452,6 +508,76 @@ export default function OrgSettingsPage() {
                             />
                           </div>
                         </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* AI 면접 인성검사 — 선호 특성 프로필 */}
+            <div className="space-y-1 mb-5">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="text-sm font-medium text-slate-700">
+                  AI 면접 인성검사 — 선호 특성
+                </p>
+                {canEdit && (
+                  <button
+                    onClick={suggestTraits}
+                    disabled={traitBusy || !cfProfile.idealTalent.trim()}
+                    className="shrink-0 px-2.5 py-1.5 rounded-md border border-primary/40 text-primary-deep hover:bg-primary-soft text-xs font-medium disabled:opacity-50"
+                  >
+                    {traitBusy ? "분석 중..." : "✨ 인재상에서 AI 제안 받기"}
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+                AI 면접 시작 시 후보자가 응답하는 인성검사(두 진술 중 더 가까운
+                쪽을 고르는 강제선택형)의 문항 구성과 결과 해석에 사용됩니다.{" "}
+                <strong>높음</strong>으로 지정한 특성은 심화 문항이 추가되고,
+                면접에서 행동 사례로 검증됩니다. 검사 결과는 점수에 반영되지
+                않는 참고 정보입니다.
+              </p>
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                {TRAIT_KEYS.map((key) => {
+                  const level =
+                    cfProfile.traitProfile?.[key] ?? DEFAULT_TRAIT_PROFILE[key];
+                  return (
+                    <div key={key} className="p-3 bg-white">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <span className="text-sm font-medium text-slate-700">
+                          {TRAIT_LABELS[key]}
+                        </span>
+                        <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                          {(
+                            [
+                              ["low", "낮음"],
+                              ["medium", "보통"],
+                              ["high", "높음"],
+                            ] as const
+                          ).map(([val, label]) => (
+                            <button
+                              key={val}
+                              type="button"
+                              disabled={!canEdit}
+                              onClick={() => setTrait(key, val)}
+                              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                                level === val
+                                  ? val === "high"
+                                    ? "bg-primary text-white"
+                                    : "bg-slate-700 text-white"
+                                  : "bg-white text-slate-500 hover:bg-slate-50"
+                              } disabled:cursor-not-allowed`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {traitReasons[key] && (
+                        <p className="text-[11px] text-slate-500 mt-1.5">
+                          💡 {traitReasons[key]}
+                        </p>
                       )}
                     </div>
                   );

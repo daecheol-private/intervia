@@ -321,6 +321,13 @@ type ScreeningResult = {
     reason?: string;
   };
   interview_focus?: string[];
+  // 법인 정성 항목 검토 — 무점수 (recomputeScore 에서 사용하지 않음). 면접 인계용.
+  qualitative_review?: Array<{
+    item: string;
+    finding: string;
+    evidence?: string;
+    needs_interview?: boolean;
+  }>;
   career_info?: {
     career_years?: number | null;
     career_summary?: string | null;
@@ -452,6 +459,20 @@ const SCREENING_SCHEMA = {
     concerns: { type: Type.ARRAY, items: { type: Type.STRING } },
     matched_keywords: { type: Type.ARRAY, items: { type: Type.STRING } },
     interview_focus: { type: Type.ARRAY, items: { type: Type.STRING } },
+    qualitative_review: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          item: { type: Type.STRING },
+          finding: { type: Type.STRING },
+          evidence: { type: Type.STRING },
+          needs_interview: { type: Type.BOOLEAN },
+        },
+        required: ["item", "finding"],
+        propertyOrdering: ["item", "finding", "evidence", "needs_interview"],
+      },
+    },
     career_info: {
       type: Type.OBJECT,
       properties: {
@@ -485,6 +506,7 @@ const SCREENING_SCHEMA = {
     "concerns",
     "matched_keywords",
     "interview_focus",
+    "qualitative_review",
     "career_info",
   ],
 };

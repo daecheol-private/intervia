@@ -1,3 +1,15 @@
+import {
+  TRAIT_KEYS,
+  TRAIT_LABELS,
+  TRAIT_LEVEL_LABELS,
+  traitLevelOf,
+  buildItemSet,
+  notableResponses,
+  type TraitProfile,
+  type PersonalityProfile,
+  type PersonalityResponse,
+} from "./personality";
+
 export type QualItem = {
   enabled: boolean;
   weight: "low" | "medium" | "high";
@@ -14,6 +26,24 @@ export type CultureFitProfile = {
     lifeExperience: QualItem;
     futureAmbition: QualItem;
   };
+  /**
+   * 선호 Big Five 특성 프로필 — AI 면접 시작부 인성검사 문항 구성·해석에 연계.
+   * null/미설정 = 전 특성 medium (기본 세트만 출제). 인재상 텍스트에서 LLM 제안 후
+   * 관리자가 확정하는 값 — 후보자별 LLM 매핑이 아니라 법인당 1회 결정.
+   */
+  traitProfile?: TraitProfile | null;
+};
+
+export const QUAL_ITEM_LABELS: Record<
+  keyof CultureFitProfile["qualitativeItems"],
+  string
+> = {
+  selfIntro: "자기소개서",
+  motivation: "지원동기",
+  interpersonal: "대인관계",
+  strengthWeakness: "장점과 단점",
+  lifeExperience: "학창시절/사회생활",
+  futureAmbition: "입사후 포부",
 };
 
 export type JobInfo = {
@@ -210,6 +240,29 @@ ${checklist.map((r, i) => `  ${i + 1}. ${r}`).join("\n")}
   · status: **"direct"**(실무로 직접 수행한 명확한 근거) / **"indirect"**(인접 경험·전환 가능) / **"none"**(흔적 없음)
   · evidence: 이력서 근거를 30자 이내로 짧게 (none 이면 빈 문자열). 인용은 큰따옴표.
 - 채용담당자가 한눈에 부합/공백을 보고 면접 질문을 설계하는 용도다. 과장 없이 사실대로.`;
+
+  // 법인 활성 정성 항목 → 무점수 qualitative_review 지시. 점수 미반영 — 면접으로 넘기는 참고.
+  const enabledQualItems = cultureFit
+    ? (Object.entries(cultureFit.qualitativeItems ?? {}) as Array<
+        [keyof CultureFitProfile["qualitativeItems"], QualItem]
+      >).filter(([, v]) => v?.enabled)
+    : [];
+  const qualitativeInstruction =
+    enabledQualItems.length === 0
+      ? ""
+      : `
+### 5-1단계 · 법인 정성 평가 항목 검토 (qualitative_review — 무점수)
+법인이 설정한 아래 정성 항목 각각에 대해 이력서·자기소개서 텍스트에서 근거를 찾아 기록하라.
+**이 검토 결과는 6축 점수·종합 점수에 절대 반영하지 말 것** — 면접 단계로 넘기는 참고 정보다.
+${enabledQualItems
+  .map(
+    ([k, v]) =>
+      `- ${QUAL_ITEM_LABELS[k]} (비중 ${v.weight}${v.guide?.trim() ? ` · 가이드: ${v.guide.trim()}` : ""})`
+  )
+  .join("\n")}
+- 근거가 있으면: finding 에 관찰 1줄 + evidence 에 본문 인용 30자 이내, needs_interview=false
+- 근거가 없으면: finding 은 "서류에서 확인 불가", evidence 는 "", needs_interview=true — **감점도 중립도 아니다. 단지 면접 확인 대상일 뿐.**
+- needs_interview=true 인 항목 중 비중 high 는 interview_focus 에도 반영하라.`;
 
   const eduParts: string[] = [];
   if (education?.level) eduParts.push(`학력: ${education.level}`);
@@ -445,6 +498,7 @@ ${requirementCoverageInstruction}
   · JD 핵심 업무 중 **이력서에 흔적이 약한 항목**의 잠재력
   · 짧은 재직·도메인 전환 같은 **우려 신호의 진짜 이유**
   · 선호 인재상이 요구하는 **행동·태도가 관찰 가능한지**
+${qualitativeInstruction}
 
 ## 점수 보정 anchor (자가 점검용)
 
@@ -517,7 +571,14 @@ ${requirementCoverageInstruction}
   "strengths": ["강점 한 줄 + (이력서 근거 인용 30자 이내)"],
   "concerns": ["우려 한 줄 + 면접 질문 1개"],
   "matched_keywords": ["JD 요구 중 이력서에서 실제로 발견된 항목만"],
-  "interview_focus": ["면접에서 깊게 검증할 주제 2~3개 — 면접관이 그대로 받아 질문 설계에 사용함"],
+  "interview_focus": ["면접에서 깊게 검증할 주제 2~3개 — 면접관이 그대로 받아 질문 설계에 사용함"],${
+    enabledQualItems.length > 0
+      ? `
+  "qualitative_review": [
+    { "item": "정성 항목명 (위 5-1단계 목록 그대로)", "finding": "관찰 1줄 또는 '서류에서 확인 불가'", "evidence": "본문 인용 30자 이내 (없으면 \\"\\")", "needs_interview": true | false }
+  ],`
+      : ""
+  }
   "career_info": {
     "career_years": 정수 (신입 0, 추정 불가 null),
     "career_summary": "한 줄 (도메인/직무 중심, 회사명 제외)"
@@ -536,10 +597,37 @@ ${requirementCoverageInstruction}
 - 모든 단어를 다 강조하지 말 것. 사용자가 그 줄에서 가장 먼저 읽어야 할 1~2개 토큰만.`;
 }
 
+/** 인성검사 자가응답 중 면접에서 행동 검증할 앵커 (lib/personality.ts notableResponses 산출) */
+export type PersonalityAnchor = {
+  question: string;
+  answer: string;
+  why: string;
+};
+
+function personalitySection(
+  anchors?: PersonalityAnchor[] | null,
+  reliabilityNote?: string | null
+): string {
+  if ((!anchors || anchors.length === 0) && !reliabilityNote) return "";
+  const lines = (anchors ?? []).map(
+    (a) => `- "${a.question}" → **${a.answer}** (${a.why})`
+  );
+  return `
+
+## 인성검사 사전 응답 (면접 직전 후보자 자가응답 — 점수가 아니라 검증 단서)
+후보자가 면접 시작 전, 둘 다 바람직해 보이는 진술 중 더 자신에 가까운 쪽을 고르는 **강제선택형** 문항에 답했다. 주목할 선택 경향:
+${lines.length > 0 ? lines.join("\n") : "- (주목할 응답 없음)"}${reliabilityNote ? `\n- 응답 신뢰 신호: ${reliabilityNote}` : ""}
+- 면접 중 자연스러운 시점에 위 경향 중 1~2개를 골라 **행동 검증 질문**으로 연결하라: "사전 문항에서 '○○' 쪽을 일관되게 선택하셨는데, 실제로 그렇게 행동했던 최근 사례를 들려주시겠어요?" 식으로 선택한 진술 문장은 인용해도 된다.
+- 단, 검사 점수·특성 평가·신뢰 신호를 후보자에게 언급·암시하지 말 것. 자가응답과 실제 사례의 일치 여부는 평가 단계에서 판단한다.`;
+}
+
 export function buildSystemPrompt(
   job: JobInfo,
   resume: string,
-  screening?: ScreeningContext | null
+  screening?: ScreeningContext | null,
+  cultureFit?: CultureFitProfile | null,
+  personalityAnchors?: PersonalityAnchor[] | null,
+  personalityReliabilityNote?: string | null
 ): string {
   const tone = job.tone ?? "중립적인";
   const minutes = job.interviewDurationMinutes ?? 20;
@@ -583,12 +671,12 @@ export function buildSystemPrompt(
 - 직급/연차: ${job.level}
 - 근무형태: ${job.employmentType}
 - 주요 업무: ${job.responsibilities}
-- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}${cultureFitSection(cultureFit)}
 - 예상 면접 소요 시간: 약 ${minutes}분
 
 ## 후보자 이력서 (개인정보 마스킹됨)
 ${resume}
-${screenSection}
+${screenSection}${personalitySection(personalityAnchors, personalityReliabilityNote)}
 ## 면접 설계 원칙 — 이렇게 사고하라
 
 ### 1. 무엇을 검증해야 하는가 (우선순위 순)
@@ -602,7 +690,7 @@ ${
       : ""
   }  C. **JD 주요 업무·자격 요건 중 이력서에 흔적이 약한 항목** — 인접 경험·학습 의지·전환 가능성으로 메울 수 있는지 본다.
   D. **서류상 강점의 실제 깊이** — "직접 한 일인지 / 옆에서 본 일인지 / 어떤 의사결정을 했고 어떤 트레이드오프를 알았는지" 까지 캐묻는다. 이력서에 적힌 키워드를 그대로 받아 칭찬만 하지 말 것.
-  E. **협업·커뮤니케이션·동기** — 위 A~D 사이 사이에 자연스럽게 섞는다. 별도 블록으로 몰지 말 것.
+  E. **협업·커뮤니케이션·동기** — 위 A~D 사이 사이에 자연스럽게 섞는다. 별도 블록으로 몰지 말 것. 법인 컬처핏 기준·인성검사 사전 응답(위 제공 시)의 행동 검증 질문 1~2개도 여기에 포함하되, 직무 검증(A~D)을 잠식하지 않는 분량으로 제한.
 
 ### 2. 좋은 질문의 형태
 - **이력서 본문을 인용한 후 깊이를 묻는다**: "이력서에 '○○○' 라고 쓰셨는데, 그때 본인이 직접 결정한 부분은 어디였나요?"
@@ -663,14 +751,89 @@ export type TranscriptStats = {
   };
 };
 
+/** 면접 평가용 컬처핏·인성검사 자료 — 자가응답 vs 면접 발언 대조 지시 포함 */
+function cultureFitEvalSection(
+  cultureFit?: CultureFitProfile | null,
+  personality?: {
+    profile: PersonalityProfile;
+    responses: PersonalityResponse[];
+  } | null
+): string {
+  if (!cultureFit) return "";
+  const parts: string[] = [];
+
+  const tp = cultureFit.traitProfile;
+  if (tp) {
+    const desired = TRAIT_KEYS.map(
+      (k) => `${TRAIT_LABELS[k]} ${TRAIT_LEVEL_LABELS[tp[k]]}`
+    ).join(" · ");
+    parts.push(`- 법인 선호 특성 프로필: ${desired}`);
+  }
+
+  if (personality) {
+    const { profile, responses } = personality;
+    const traitLine = TRAIT_KEYS.map((k) => {
+      const t = profile.traits[k];
+      return `${TRAIT_LABELS[k]} ${t.score}(${TRAIT_LEVEL_LABELS[traitLevelOf(t.score)]})`;
+    }).join(" · ");
+    parts.push(
+      `- 인성검사 자가응답 특성 (0~100, 강제선택 기반 **본인 내 상대 선호** — 절대 수준 아님, 참고치): ${traitLine}`
+    );
+    const flags: string[] = [];
+    if (profile.flags.straightLining) flags.push("한쪽 선택지 위치만 반복 선택(무성의 의심)");
+    if (profile.flags.inconsistent) flags.push("같은 특성 쌍 재질문에서 선택이 다수 뒤집힘(무작위 응답 의심)");
+    if (profile.flags.rushed) flags.push("비정상적으로 빠른 응답");
+    parts.push(`- 응답 신뢰 신호: ${flags.length > 0 ? flags.join(" · ") : "특이 없음"}`);
+
+    const anchors = notableResponses(
+      buildItemSet(cultureFit.traitProfile),
+      responses,
+      cultureFit.traitProfile
+    );
+    if (anchors.length > 0) {
+      parts.push(
+        `- 면접에서 검증 대상이었던 주목 선택 경향:\n${anchors
+          .map((a) => `  · "${a.statement}" → ${a.answerLabel} (${a.whyNotable})`)
+          .join("\n")}`
+      );
+    }
+  }
+
+  return `
+
+## 컬처핏·정성 검증 자료 (법인 설정 + 면접 전 인성검사 — 후보자 비공개)
+${parts.join("\n")}
+
+### culture_fit 필드 작성 지시
+- 위 자료(주목 응답·법인 선호 특성)와 법인 컬처핏 기준의 정성 항목을 대화록의 **후보자 발언**과 대조하라.
+- items 각 원소: topic(검증 주제 — 예: "개방성·도전"), self_report(자가응답 요약), verification("일치"|"불일치"|"미검증"), evidence(후보자 발언 인용 20자 이내. 발언이 없으면 "면접에서 다루지 못함").
+- "일치"/"불일치"는 인용 가능한 후보자 발언이 있을 때만. 발언이 없으면 반드시 "미검증".
+- fit_note: 법인 선호 특성 대비 관찰 1~2줄. **"조직 적합/부적합" 단정 금지** — 사람 면접관이 참고할 관찰만.
+- "미검증" 항목은 followup_questions 에 행동 검증 질문으로 1개 이상 반영하라.
+- **culture_fit 은 overall_score·recommendation 산정에 절대 반영하지 말 것.** 검증 안 된 자기보고가 합불에 흘러들면 안 된다.`;
+}
+
 export function buildSummaryPrompt(
   job: JobInfo,
   resume: string,
   transcript: string,
   screening?: ScreeningContext | null,
-  stats?: TranscriptStats | null
+  stats?: TranscriptStats | null,
+  cultureFit?: CultureFitProfile | null,
+  personality?: {
+    profile: PersonalityProfile;
+    responses: PersonalityResponse[];
+  } | null
 ): string {
   const screenSection = screeningBlock(screening);
+  const cfSection = cultureFitEvalSection(cultureFit, personality);
+  const cfOutputField = cfSection
+    ? `
+  "culture_fit": {
+    "items": [ { "topic": "검증 주제", "self_report": "자가응답 요약", "verification": "일치" | "불일치" | "미검증", "evidence": "후보자 발언 인용 또는 '면접에서 다루지 못함'" } ],
+    "fit_note": "법인 선호 특성 대비 관찰 1~2줄 (적합 단정 금지)"
+  },`
+    : "";
   const llmAssistLine = stats?.llmAssistSignal
     ? `\n## 외부 LLM 보조 의심 신호 (객관 수치 — 단정은 금물, 종합 판단 근거로만 사용)
 - 붙여넣기 이벤트: ${stats.llmAssistSignal.pasteEvents}회
@@ -728,7 +891,7 @@ ${llmAssistLine}`
 
 ## 후보자 이력서 (마스킹됨 — 보조 참고용. 점수는 면접 발언 기반.)
 ${resume}
-${screenSection}${statsLine}
+${screenSection}${statsLine}${cfSection}
 ## 면접 대화록 (이 안에서 "후보자:" 발언만 점수 근거로 사용)
 ${transcript}
 
@@ -790,7 +953,7 @@ ${transcript}
   },
   "strengths": ["면접에서 확인된 강점 3~5개 + (대화 인용 20자 이내)"],
   "concerns": ["면접에서 드러난 우려 2~4개 + (대화 인용 또는 구체 사례)"],
-  "followup_questions": ["면접에서 다 못 본 부분 — 다음 단계에서 검증할 질문 2~3개"],
+  "followup_questions": ["면접에서 다 못 본 부분 — 다음 단계에서 검증할 질문 2~3개"],${cfOutputField}
   "llm_assist_note": "위 'LLM 보조 의심 신호' 섹션 기반 한 줄 평. suspicious=true 면 '붙여넣기 X% · 탭이탈 Y회 · 복사시도 Z회 — 외부 LLM 보조 가능성 있음, 본인 발언 재확인 권장' 식. 정상이면 '특이 신호 없음'. 단정 금지·중립적 톤.",
   "ai_authorship": {
     "likelihood": "낮음" | "보통" | "높음",

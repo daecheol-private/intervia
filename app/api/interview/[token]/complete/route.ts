@@ -8,7 +8,7 @@ import {
 } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { generateJSON } from "@/lib/gemini";
-import { buildSummaryPrompt } from "@/lib/prompts";
+import { buildSummaryPrompt, type CultureFitProfile } from "@/lib/prompts";
 import { hasValidConsent } from "@/lib/consent";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { chargeRepeatable } from "@/lib/tokens";
@@ -65,12 +65,26 @@ export async function POST(
   const orgRow = job?.orgId
     ? (
         await db
-          .select({ name: organizations.name })
+          .select({
+            name: organizations.name,
+            cultureFitProfile: organizations.cultureFitProfile,
+          })
           .from(organizations)
           .where(eq(organizations.id, job.orgId))
       )[0]
     : null;
   const companyName = orgRow?.name ?? null;
+  let cultureFit: CultureFitProfile | null = null;
+  if (orgRow?.cultureFitProfile) {
+    try { cultureFit = JSON.parse(orgRow.cultureFitProfile) as CultureFitProfile; } catch { /* ignore */ }
+  }
+  const personality =
+    session.personalityProfile && session.personalityResponses
+      ? {
+          profile: session.personalityProfile,
+          responses: session.personalityResponses,
+        }
+      : null;
 
   const transcript = session.messages
     .map((m) => `${m.role === "user" ? "후보자" : "면접관"}: ${m.content}`)
@@ -157,7 +171,9 @@ export async function POST(
         candidate!.resumeMaskedText ?? "",
         transcript,
         candidate!.screeningReport ?? null,
-        stats
+        stats,
+        cultureFit,
+        personality
       ),
       { task: "interviewEval" }
     );

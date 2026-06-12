@@ -25,7 +25,7 @@ export async function GET(
   const { candidate, job } = g;
 
   // guard 이후 보조 조회는 전부 상호 독립 — 병렬 실행 (상세 페이지 + 평가 중 4초 폴링 핫패스).
-  const [sessions, schedules, lastJobRows, favRows, companyName] =
+  const [sessions, schedules, lastJobRows, favRows, orgInfo] =
     await Promise.all([
       db
         .select()
@@ -52,17 +52,34 @@ export async function GET(
             eq(userCandidateFavorites.candidateId, cid)
           )
         ),
-      // 법인명 — 합·불 통보 메일 본문에 사용 (지원자에게 어느 회사인지 명시).
+      // 법인명 + 컬처핏 프로필 — 메일 본문·면접 리포트의 특성 프로필 대조에 사용.
       candidate.orgId
         ? db
-            .select({ name: organizations.name })
+            .select({
+              name: organizations.name,
+              cultureFitProfile: organizations.cultureFitProfile,
+            })
             .from(organizations)
             .where(eq(organizations.id, candidate.orgId))
-            .then(([org]): string | null => org?.name ?? null)
-        : Promise.resolve<string | null>(null),
+            .then(([org]) => org ?? null)
+        : Promise.resolve<{
+            name: string;
+            cultureFitProfile: string | null;
+          } | null>(null),
     ]);
   const [lastJob] = lastJobRows;
   const [fav] = favRows;
+  const companyName = orgInfo?.name ?? null;
+  // 면접 리포트의 "후보자 특성 vs 법인 선호" 대조용 — 선호 특성 프로필만 노출
+  let orgTraitProfile: Record<string, string> | null = null;
+  if (orgInfo?.cultureFitProfile) {
+    try {
+      orgTraitProfile =
+        (JSON.parse(orgInfo.cultureFitProfile) as {
+          traitProfile?: Record<string, string> | null;
+        }).traitProfile ?? null;
+    } catch { /* ignore */ }
+  }
 
   // 시스템관리자가 타 법인 데이터 조회한 경우 특별히 감사 로깅 (A-8)
   if (me!.role === "system_admin" && me!.orgId !== candidate.orgId) {
@@ -109,6 +126,7 @@ export async function GET(
     candidate: { ...candidate, favorited },
     job: jobSafe,
     companyName,
+    orgTraitProfile,
     sessions,
     schedules,
     screeningPhase,

@@ -49,6 +49,12 @@ export type Candidate = {
       reason: string;
     };
     interview_focus?: string[];
+    qualitative_review?: Array<{
+      item: string;
+      finding: string;
+      evidence?: string;
+      needs_interview?: boolean;
+    }>;
   } | null;
   stage: string;
   outcome: "hired" | "rejected" | "withdrawn" | null;
@@ -85,6 +91,24 @@ export type InterviewEvaluation = {
     signals: string[];
     note: string;
   };
+  culture_fit?: {
+    items: Array<{
+      topic: string;
+      self_report: string;
+      verification: "일치" | "불일치" | "미검증";
+      evidence: string;
+    }>;
+    fit_note: string;
+  };
+};
+
+export type PersonalityProfileView = {
+  traits: Record<string, { score: number; answered: number }>;
+  flags: {
+    straightLining: boolean;
+    inconsistent: boolean;
+    rushed: boolean;
+  };
 };
 
 export type Session = {
@@ -93,6 +117,7 @@ export type Session = {
   status: "pending" | "in_progress" | "completed" | "expired";
   messages: { role: string; content: string }[];
   evaluation: InterviewEvaluation | null;
+  personalityProfile?: PersonalityProfileView | null;
   expiresAt: string;
   startedAt: string | null;
   completedAt: string | null;

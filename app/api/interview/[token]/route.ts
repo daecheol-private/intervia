@@ -1,7 +1,14 @@
 import { db } from "@/lib/db";
-import { interviewSessions, candidates, jobPostings } from "@/lib/schema";
+import {
+  interviewSessions,
+  candidates,
+  jobPostings,
+  organizations,
+} from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { hasValidConsent, CONSENT_ITEMS, CONSENT_VERSION } from "@/lib/consent";
+import type { CultureFitProfile } from "@/lib/prompts";
+import { buildItemSet, toPublicItems } from "@/lib/personality";
 
 export const runtime = "nodejs";
 
@@ -49,8 +56,31 @@ export async function GET(
 
   const consented = await hasValidConsent(session.id);
 
+  // 인성검사 단계 — 법인 컬처핏 설정이 있고, 아직 미실시이며, 채팅이 시작되지 않은
+  // 세션만 출제 (도입 전 시작된 진행 중 세션은 소급 차단하지 않음).
+  let cultureFit: CultureFitProfile | null = null;
+  if (job.orgId) {
+    const [orgRow] = await db
+      .select({ cultureFitProfile: organizations.cultureFitProfile })
+      .from(organizations)
+      .where(eq(organizations.id, job.orgId));
+    if (orgRow?.cultureFitProfile) {
+      try { cultureFit = JSON.parse(orgRow.cultureFitProfile) as CultureFitProfile; } catch { /* ignore */ }
+    }
+  }
+  const personalityCompleted = !!session.personalityProfile;
+  const personalityRequired =
+    !!cultureFit &&
+    !personalityCompleted &&
+    session.messages.length === 0 &&
+    session.status !== "completed";
+
+  // 세션 원본에는 인성검사 응답·프로필이 포함 — 후보자에게 점수류는 비노출
+  const { personalityResponses: _pr, personalityProfile: _pp, ...safeSession } =
+    session;
+
   return Response.json({
-    session,
+    session: safeSession,
     candidate: { id: candidate.id, name: candidate.name },
     job: {
       id: job.id,
@@ -65,5 +95,12 @@ export async function GET(
     consentRequired: !consented,
     consentVersion: CONSENT_VERSION,
     consentItems: CONSENT_ITEMS,
+    personality: personalityRequired
+      ? {
+          required: true,
+          // 강제선택형 — 문항당 진술 2개(a/b), 특성 태그는 비노출
+          items: toPublicItems(buildItemSet(cultureFit!.traitProfile)),
+        }
+      : { required: false },
   });
 }
