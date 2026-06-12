@@ -247,10 +247,10 @@ interviewer/
 
 신규/방문 사용자의 인지 부담을 낮추기 위한 **표시 계층** 단순화. 핵심 원칙은 **기능 삭제가 아니라 "필요할 때까지 숨김"** — 내부 데이터·라우트·stage enum 은 그대로 두고 첫 사용자의 시야에서만 치운다.
 
-- **대시보드 첫 실행 가이드** (`app/page.tsx` `SetupGuide`): 법인의 "공고 → 이력서 → AI 면접" 첫 사이클 완료 여부로 3스텝 진행도를 계산.
-  - 진행 판정: `setup1`=공고>0, `setup2`=후보>0, `setup3`=stage 가 `ai_pending` 이상 도달(후보자 집계 `interviewReached`).
+- **대시보드 첫 실행 가이드** (`app/page.tsx` `SetupGuide`): 법인의 "인재상·컬쳐핏 확인 → 공고 → 이력서 → AI 면접" 첫 사이클 완료 여부로 4스텝 진행도를 계산.
+  - 진행 판정: `setup1`=`organizations.culture_fit_profile` 저장됨(설정 페이지 기본값 확인 후 저장 1회, CTA 는 `/org/settings#culture-fit`), `setup2`=공고>0, `setup3`=후보>0, `setup4`=stage 가 `ai_pending` 이상 도달(후보자 집계 `interviewReached`).
   - **공고 0개** → KPI/알림/공고목록 대신 hero 가이드만 노출 (가장 비어 있는 시점에 가장 빽빽하던 화면을 제거).
-  - **일부 진행** → 대시보드 상단에 슬림 진행 스트립(`시작 가이드 N/3` + 다음 단계 CTA). **3스텝 완료** → 자동 숨김.
+  - **일부 진행** → 대시보드 상단에 슬림 진행 스트립(`시작 가이드 N/4` + 다음 단계 CTA). **4스텝 완료** → 자동 숨김. 컬처핏 스텝 추가로 기존 3스텝 완료 법인도 컬처핏 미저장이면 스트립이 다시 노출(신기능 확인 유도 — 의도된 동작).
   - 서버 렌더, 영속 상태 없음(localStorage 미사용). 공고 등록 CTA 는 기존 정책대로 PC 전용 + 모바일 안내문.
 - **네비 정리** (`app/components/NavBar.tsx`): org_admin "법인" 드롭다운에서 **메일서버(`/org/smtp`)·줌(`/org/zoom`) 제외** → 법인 설정(`/org/settings`) 의 "외부 연동" 섹션으로 이동. 모바일 메뉴는 원래 둘을 숨기고 있어 데스크톱과 일관성도 맞췄다. 미설정 시 Intervia 기본값으로 동작하므로 첫 흐름에서 빠져도 무방(SMTP 는 후보자 상세에서도 맥락 링크로 도달 가능).
 - **단계 필터 4버킷 그룹화** (`app/jobs/[id]/page.tsx` 후보자 필터 `<select>`): 12개 세부 stage 를 `<optgroup>` 4그룹(**서류 전형 / AI 면접 / 대면 면접 / 결정**)으로 묶어 표시. 매핑은 `lib/stage-meta.ts` 의 `STAGE_GROUPS` / `STAGE_GROUP_LABELS` / `STAGE_GROUP_OF` (재사용 가능). 내부 stage enum 과 "전형 단계 현황" 보드(이미 색상 그룹 구분)는 불변.

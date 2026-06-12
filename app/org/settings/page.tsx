@@ -130,6 +130,12 @@ export default function OrgSettingsPage() {
       if (cultureFitProfile) setCfProfile(cultureFitProfile);
     }
     setLoaded(true);
+    // 본문이 fetch 후에 렌더되므로 브라우저 기본 앵커 스크롤이 동작하지 않음 — 직접 이동
+    if (window.location.hash === "#culture-fit") {
+      requestAnimationFrame(() =>
+        document.getElementById("culture-fit")?.scrollIntoView({ behavior: "smooth" })
+      );
+    }
   };
 
   useEffect(() => {
@@ -331,14 +337,18 @@ export default function OrgSettingsPage() {
             </div>
           </section>
 
-          {/* 컬처핏 & 정성 평가 설정 */}
-          <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+          {/* 컬처핏 & 정성 평가 설정 — 대시보드 첫 실행 가이드 1단계가 #culture-fit 으로 진입 */}
+          <section
+            id="culture-fit"
+            className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm scroll-mt-6"
+          >
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
               컬처핏 &amp; 정성 평가 설정
             </h2>
             <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
-              설정하면 AI 이력서 평가와 면접 질문 생성에 자동 반영됩니다.
-              직무 공고(JD)와는 별개로, 법인 전반의 인재 선호 기준을 지정합니다.
+              AI 이력서 평가와 면접 질문 생성에 자동 반영됩니다. 직무 공고(JD)와는
+              별개로, 법인 전반의 인재 선호 기준을 지정합니다. 기본값이 채워져
+              있으니 내용을 확인하고 저장하세요. 언제든지 수정할 수 있습니다.
             </p>
 
             {/* 선호 인재상 */}

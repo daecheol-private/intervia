@@ -60,7 +60,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   // 상호 독립 쿼리 전부 병렬 — 순차 await 는 원격 DB(Turso) RTT × 쿼리 수가
   // 첫 화면 TTFB 에 그대로 더해진다.
   const [
-    orgName,
+    orgRow,
     totalJobs,
     candAgg,
     queueCount,
@@ -75,14 +75,17 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     resultDueRows,
     orgCount,
   ] = await Promise.all([
-    // 인사말에 표시할 법인명 — orgId 있는 경우만 조회.
+    // 인사말 법인명 + 첫 실행 가이드용 컬처핏 설정 여부 — orgId 있는 경우만 조회.
     me.orgId
       ? db
-          .select({ name: organizations.name })
+          .select({
+            name: organizations.name,
+            cultureFitProfile: organizations.cultureFitProfile,
+          })
           .from(organizations)
           .where(eq(organizations.id, me.orgId))
-          .then(([org]): string | null => org?.name ?? null)
-      : Promise.resolve<string | null>(null),
+          .then(([org]) => org ?? null)
+      : Promise.resolve(null),
     // -- 공고 통계 --------------------------------------------------------
     db
       .select({ total: count() })
@@ -448,10 +451,12 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   // -- 첫 실행 가이드 (신규 법인 온보딩) ----------------------------------
   // 멤버는 공고 등록 권한이 없을 수 있으나, 첫 사이클 안내 자체는 동일하게 노출.
   // (system_admin 은 이 Dashboard 에 도달하지 않음 — 운영 대시보드로 리다이렉트)
-  const setup1 = totalJobs > 0; // 공고 등록
-  const setup2 = totalCand > 0; // 이력서 업로드
-  const setup3 = interviewReached > 0; // AI 면접 발송(응시 대기 이상)
-  const setupComplete = setup1 && setup2 && setup3;
+  const orgName = orgRow?.name ?? null;
+  const setup1 = orgRow?.cultureFitProfile != null; // 인재상·컬쳐핏 확인(설정 저장)
+  const setup2 = totalJobs > 0; // 공고 등록
+  const setup3 = totalCand > 0; // 이력서 업로드
+  const setup4 = interviewReached > 0; // AI 면접 발송(응시 대기 이상)
+  const setupComplete = setup1 && setup2 && setup3 && setup4;
   const firstJobId = jobsWithActions[0]?.id ?? null;
 
   return (
@@ -463,7 +468,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </h1>
         <p className="text-sm text-ink-soft mt-1">
           {totalJobs === 0
-            ? "Intervia 에 오신 걸 환영합니다. 아래 3단계로 첫 채용을 시작해 보세요."
+            ? "Intervia 에 오신 걸 환영합니다. 아래 4단계로 첫 채용을 시작해 보세요."
             : "오늘의 채용 현황을 한눈에 확인하세요."}
         </p>
       </header>
@@ -475,6 +480,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           step1={setup1}
           step2={setup2}
           step3={setup3}
+          step4={setup4}
           firstJobId={firstJobId}
         />
       ) : (
@@ -486,6 +492,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
               step1={setup1}
               step2={setup2}
               step3={setup3}
+              step4={setup4}
               firstJobId={firstJobId}
             />
           )}
@@ -678,7 +685,7 @@ type SetupStep = {
 };
 
 /**
- * 첫 실행 가이드 — 신규 법인이 "공고 → 이력서 → AI 면접" 첫 사이클을 마치도록 안내.
+ * 첫 실행 가이드 — 신규 법인이 "인재상·컬쳐핏 확인 → 공고 → 이력서 → AI 면접" 첫 사이클을 마치도록 안내.
  * variant="hero": 공고 0개일 때 대시보드 본문을 대체하는 큰 카드.
  * variant="strip": 일부만 진행됐을 때 대시보드 상단의 슬림 진행 스트립.
  * 3단계 모두 완료되면 호출 측에서 렌더하지 않음.
@@ -688,25 +695,38 @@ function SetupGuide({
   step1,
   step2,
   step3,
+  step4,
   firstJobId,
 }: {
   variant: "hero" | "strip";
   step1: boolean;
   step2: boolean;
   step3: boolean;
+  step4: boolean;
   firstJobId: number | null;
 }) {
   const steps: SetupStep[] = [
     {
       n: 1,
       done: step1,
+      title: "인재상·컬쳐핏 확인",
+      desc: "기본값이 준비되어 있어요. AI 서류 평가와 면접 질문 생성에 활용되니 내용만 확인하고 저장해 주세요. 언제든지 수정할 수 있습니다.",
+      cta: {
+        href: "/org/settings#culture-fit",
+        label: "인재상·컬쳐핏 확인하기",
+        pcOnly: false,
+      },
+    },
+    {
+      n: 2,
+      done: step2,
       title: "공고 만들기",
       desc: "직무·자격·면접 시간을 입력해 채용 공고를 등록합니다.",
       cta: { href: "/jobs/new", label: "공고 등록하기", pcOnly: true },
     },
     {
-      n: 2,
-      done: step2,
+      n: 3,
+      done: step3,
       title: "이력서 올리기",
       desc: "지원자 이력서 PDF를 올리면 자동 마스킹 후 AI 서류 평가가 진행됩니다.",
       cta: firstJobId
@@ -714,8 +734,8 @@ function SetupGuide({
         : null,
     },
     {
-      n: 3,
-      done: step3,
+      n: 4,
+      done: step4,
       title: "AI 면접 보내기",
       desc: "서류를 통과한 지원자에게 링크를 보내면 AI 면접관이 채팅으로 면접을 진행합니다.",
       cta: firstJobId
@@ -731,7 +751,7 @@ function SetupGuide({
       <div className="mb-6 rounded-xl border border-primary/20 bg-primary-soft/40 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <span className="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md bg-primary text-surface tabular-nums">
-            시작 가이드 {doneCount}/3
+            시작 가이드 {doneCount}/4
           </span>
           <span className="text-sm text-ink truncate">
             {activeStep ? (
@@ -762,9 +782,9 @@ function SetupGuide({
       <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-2">
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-soft text-primary-deep text-[11px] font-semibold mb-3">
           <Sparkles className="w-3 h-3" strokeWidth={2.5} />
-          시작 가이드 · {doneCount}/3 완료
+          시작 가이드 · {doneCount}/4 완료
         </div>
-        <h2 className="text-xl font-bold text-ink">첫 채용, 3단계면 시작돼요</h2>
+        <h2 className="text-xl font-bold text-ink">첫 채용, 4단계면 시작돼요</h2>
         <p className="text-sm text-ink-soft mt-1">
           아래 순서대로 진행하면 첫 AI 면접까지 한 번에 경험할 수 있어요.
         </p>
