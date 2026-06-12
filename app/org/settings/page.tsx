@@ -39,20 +39,50 @@ const QUAL_LABELS: Record<QualKey, string> = {
   futureAmbition: "입사후 포부",
 };
 
-function defaultQualItem(): QualItem {
-  return { enabled: false, weight: "medium", guide: "" };
+function qualItem(
+  enabled: boolean,
+  weight: QualItem["weight"],
+  guide: string
+): QualItem {
+  return { enabled, weight, guide };
 }
 
+// 미설정 법인의 초기 기본값 — "저장" 을 눌러야 평가에 반영됨
 function defaultProfile(): CultureFitProfile {
   return {
-    idealTalent: "",
+    idealTalent:
+      "자기주도적으로 문제를 정의하고 실행까지 책임지며, 동료와 협력해 함께 성장하는 인재",
     qualitativeItems: {
-      selfIntro: defaultQualItem(),
-      motivation: defaultQualItem(),
-      interpersonal: defaultQualItem(),
-      strengthWeakness: defaultQualItem(),
-      lifeExperience: defaultQualItem(),
-      futureAmbition: defaultQualItem(),
+      selfIntro: qualItem(
+        true,
+        "medium",
+        "핵심 경험이 직무와 연결되는지, 구체적인 사례 중심으로 서술했는지"
+      ),
+      motivation: qualItem(
+        true,
+        "high",
+        "회사·직무에 대한 이해도와 지원 이유의 진정성·구체성"
+      ),
+      interpersonal: qualItem(
+        true,
+        "medium",
+        "협업·갈등 상황에서의 소통 방식과 해결 경험"
+      ),
+      strengthWeakness: qualItem(
+        true,
+        "medium",
+        "단점을 스스로 인지하고 보완하려는 노력이 있는지"
+      ),
+      lifeExperience: qualItem(
+        false,
+        "medium",
+        "성실함과 꾸준함을 보여주는 경험이 있는지"
+      ),
+      futureAmbition: qualItem(
+        true,
+        "medium",
+        "포부가 직무·회사 방향과 맞고 실현 가능한 계획인지"
+      ),
     },
   };
 }
@@ -301,88 +331,6 @@ export default function OrgSettingsPage() {
             </div>
           </section>
 
-          {/* 외부 연동 — 메일 서버 / 화상 면접 */}
-          <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-              외부 연동
-            </h2>
-            <p className="text-[11px] text-slate-500 mb-3">
-              필요할 때만 설정하세요. 미설정 시 Intervia 기본값으로 동작합니다.
-            </p>
-            <div className="divide-y divide-slate-100">
-              <Link
-                href="/org/smtp"
-                className="flex items-center justify-between gap-3 py-3 group"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-800">
-                    메일 서버 (SMTP)
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    자사 도메인으로 면접 안내·합불 통보 메일을 발송합니다.
-                  </p>
-                </div>
-                <span className="shrink-0 text-slate-400 group-hover:text-primary transition-colors">
-                  →
-                </span>
-              </Link>
-              <Link
-                href="/org/zoom"
-                className="flex items-center justify-between gap-3 py-3 group"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-800">
-                    화상 면접 (Zoom)
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    1차 면접 일정이 확정되면 Zoom 회의를 자동으로 생성합니다.
-                  </p>
-                </div>
-                <span className="shrink-0 text-slate-400 group-hover:text-primary transition-colors">
-                  →
-                </span>
-              </Link>
-            </div>
-          </section>
-
-          {/* 스캔 PDF AI OCR */}
-          <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-slate-700">
-                  스캔 PDF 이력서 AI OCR
-                </p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  글자가 이미지로 들어간 스캔 이력서를 평가할 수 있게 합니다.
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={!!org.allowScanOcr}
-                disabled={ocrBusy}
-                onClick={() => toggleOcr(!org.allowScanOcr)}
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                  org.allowScanOcr ? "bg-primary" : "bg-slate-300"
-                }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                    org.allowScanOcr ? "translate-x-5" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </div>
-            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-3 leading-relaxed">
-              ⚠️ 켜면 스캔 이력서의 <b>마스킹 전 원본</b>이 AI 처리 수탁자(Vertex
-              AI 서울 리전)로 전송됩니다. 일반 이력서의 "로컬 마스킹 후 전송"
-              원칙과 달라지므로, <b>개인정보 처리방침·후보자 동의 범위를 먼저
-              정비</b>한 뒤 켜세요. 데이터는 국내(서울 리전)에 머물러 국외이전은
-              발생하지 않으며, 모든 OCR 전송은 감사 로그에 기록됩니다. 꺼두면
-              스캔 이력서는 평가되지 않고 재업로드 안내만 표시됩니다.
-            </p>
-          </section>
-
           {/* 컬처핏 & 정성 평가 설정 */}
           <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
@@ -510,6 +458,88 @@ export default function OrgSettingsPage() {
                 {cfBusy ? "저장 중..." : "컬처핏 설정 저장"}
               </button>
             )}
+          </section>
+
+          {/* 외부 연동 — 메일 서버 / 화상 면접 */}
+          <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              외부 연동
+            </h2>
+            <p className="text-[11px] text-slate-500 mb-3">
+              필요할 때만 설정하세요. 미설정 시 Intervia 기본값으로 동작합니다.
+            </p>
+            <div className="divide-y divide-slate-100">
+              <Link
+                href="/org/smtp"
+                className="flex items-center justify-between gap-3 py-3 group"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800">
+                    메일 서버 (SMTP)
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    자사 도메인으로 면접 안내·합불 통보 메일을 발송합니다.
+                  </p>
+                </div>
+                <span className="shrink-0 text-slate-400 group-hover:text-primary transition-colors">
+                  →
+                </span>
+              </Link>
+              <Link
+                href="/org/zoom"
+                className="flex items-center justify-between gap-3 py-3 group"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800">
+                    화상 면접 (Zoom)
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    1차 면접 일정이 확정되면 Zoom 회의를 자동으로 생성합니다.
+                  </p>
+                </div>
+                <span className="shrink-0 text-slate-400 group-hover:text-primary transition-colors">
+                  →
+                </span>
+              </Link>
+            </div>
+          </section>
+
+          {/* 스캔 PDF AI OCR */}
+          <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-slate-700">
+                  스캔 PDF 이력서 AI OCR
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  글자가 이미지로 들어간 스캔 이력서를 평가할 수 있게 합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!org.allowScanOcr}
+                disabled={ocrBusy}
+                onClick={() => toggleOcr(!org.allowScanOcr)}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  org.allowScanOcr ? "bg-primary" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    org.allowScanOcr ? "translate-x-5" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-3 leading-relaxed">
+              ⚠️ 켜면 스캔 이력서의 <b>마스킹 전 원본</b>이 AI 처리 수탁자(Vertex
+              AI 서울 리전)로 전송됩니다. 일반 이력서의 "로컬 마스킹 후 전송"
+              원칙과 달라지므로, <b>개인정보 처리방침·후보자 동의 범위를 먼저
+              정비</b>한 뒤 켜세요. 데이터는 국내(서울 리전)에 머물러 국외이전은
+              발생하지 않으며, 모든 OCR 전송은 감사 로그에 기록됩니다. 꺼두면
+              스캔 이력서는 평가되지 않고 재업로드 안내만 표시됩니다.
+            </p>
           </section>
 
           {msg && (
