@@ -51,8 +51,7 @@
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
 | GET | `/api/orgs/me/setup-progress` | 🔒 | 첫 실행 가이드 진행 상태 `{show, step1~4, firstJobId}` — 플로팅 위젯(`SetupGuideWidget`)용. 단계 판정은 대시보드 setup1~4 와 동일. `show`는 완료 여부와 무관 — `setup_guide_dismissed_at` NULL 인 동안 true. system_admin/무소속은 `{show:false}` |
 | POST | `/api/orgs/me/setup-progress` | 🔒 | 가이드 숨기기 — `setup_guide_dismissed_at` 기록 (**법인 단위** — 모든 구성원 화면에서 hero/strip/플로팅 모두 사라짐, 멤버도 가능) |
-| GET/PUT | `/api/orgs/me/culture-fit` | 🔒 / 🛡️ | 컬처핏 프로필 조회·저장 (`CultureFitProfile` — 인재상 + 정성 항목 6종 + `traitProfile`(Big Five 선호 특성)) |
-| POST | `/api/orgs/me/culture-fit/trait-suggest` | 🛡️ | 인재상 텍스트 → Big Five 선호 특성 LLM 제안 `{traitProfile, reasons}`. 설정 화면 버튼 1회성 (저장은 별도 PUT). Rate limit 5/분 |
+| GET/PUT | `/api/orgs/me/culture-fit` | 🔒 / 🛡️ | 컬처핏 프로필 조회·저장 (`CultureFitProfile` — 인재상 + 정성 항목 6종). Big Five 선호 특성은 공고 단위로 이동 (`job_postings.trait_profile`) — 법인 JSON 의 `traitProfile` 은 레거시·미사용 |
 
 ## 사용자
 
@@ -67,11 +66,12 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/api/jobs` | 자기 법인 공고 + 통계. system_admin은 전체 |
-| POST | `/api/jobs` | 공고 생성. **`job_post` 토큰 차감** |
+| POST | `/api/jobs` | 공고 생성. **`job_post` 토큰 차감**. body `traitProfile?`(Big Five 선호 특성 — high 최대 3개, 초과 400) |
 | GET | `/api/jobs/[id]` | 🔑 |
-| PUT | `/api/jobs/[id]` | 🔑 |
+| PUT | `/api/jobs/[id]` | 🔑. `traitProfile` 키가 있을 때만 갱신 (high 최대 3개) |
 | DELETE | `/api/jobs/[id]` | 🔑 + cascade. **생성 5분 내 삭제 시 자동 환불** |
 | POST | `/api/jobs/[id]/unlock` | PIN 잠금 해제 쿠키 세팅 |
+| POST | `/api/jobs/trait-suggest` | 공고 텍스트(직무·담당업무·자격요건·우대사항) → Big Five 선호 특성 LLM 제안 `{traitProfile, reasons}`. 공고 폼 버튼 1회성 (저장 전 폼에서도 사용 가능 — id 불필요). Rate limit 5/분 |
 
 ## 후보자 (Candidates)
 

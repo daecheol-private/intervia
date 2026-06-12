@@ -17,7 +17,7 @@
 | office_address | TEXT NULL | 오프라인 면접 시 후보자에게 안내될 회사 주소 (1차 면접 스케쥴 제시에 사용) |
 | office_address_detail | TEXT NULL | 상세 주소 |
 | allow_scan_ocr | INTEGER NOT NULL DEFAULT 0 | **OCR 개인정보 게이트** (boolean) — 스캔 PDF(텍스트 레이어 없음)를 Gemini 멀티모달 OCR 로 처리할지. OCR 은 마스킹 전 **원본** 이력서를 AI 수탁자에 전송하므로 처리방침·동의를 정비한 법인만 ON. OFF 면 스캔 PDF 는 평가 실패 → 재업로드 안내 |
-| culture_fit_profile | TEXT NULL | 법인 전반의 선호 인재상·정성 평가 기준 (`CultureFitProfile` JSON — 선호 인재상 + 정성 평가 항목 6종). `/org/settings` 에서 입력 — JD 와 별개로 AI 이력서 평가·면접 질문지(1·2차) 생성에 자동 반영. NULL=미설정 |
+| culture_fit_profile | TEXT NULL | 법인 전반의 선호 인재상·정성 평가 기준 (`CultureFitProfile` JSON — 선호 인재상 + 정성 평가 항목 6종). `/org/settings` 에서 입력 — JD 와 별개로 AI 이력서 평가·면접 질문지(1·2차) 생성에 자동 반영. NULL=미설정. **존재 여부가 인성검사 출제 게이트**. JSON 내 `traitProfile` 은 레거시 — Big Five 선호 특성은 `job_postings.trait_profile` 로 이동(2026-06), 읽기 경로는 전부 공고 값 사용 |
 | setup_guide_dismissed_at | TEXT NULL | 시작 가이드(온보딩)를 법인 구성원이 직접 숨긴 시각. NULL=계속 표시. 4단계 완료와 무관하게 이 값이 찍히기 전까지 가이드(대시보드 hero/strip + 플로팅 위젯) 노출 |
 | suspended_at | TEXT NULL | 시스템 관리자가 법인을 정지한 시각. NULL=정상. 정지 시 멤버 로그인 차단 + 신규 합류 차단 (진행 중 면접 세션은 종료까지 유지) |
 | suspended_reason | TEXT NULL | 정지 사유 |
@@ -133,6 +133,7 @@
 | title / position / level / employment_type / responsibilities / requirements | TEXT NOT NULL | |
 | requirement_checklist | TEXT NOT NULL DEFAULT '' | JD 요건 체크리스트 — 공고 저장 시 LLM 이 주요업무+자격요건을 4~8개 항목으로 1회 분해해 저장 (JSON `string[]`). 이력서 평가가 이 고정 목록으로 `requirement_coverage` 를 판정 → **같은 공고는 후보자가 달라도 항상 동일한 JD 항목** 보장. 빈 ''=미생성(구버전 공고) |
 | ideal_profile | TEXT NOT NULL DEFAULT '' | 선호 인재상 — 평가·면접 시 추가 컨텍스트. 빈 문자열 허용 |
+| trait_profile | TEXT NULL | AI 면접 인성검사 선호 Big Five 특성 (`TraitProfile` JSON). NULL=전 특성 medium(기본 세트만 출제). **공고 단위** — 직무마다 검증 특성이 달라 법인 설정이 아님. high 는 검증 우선순위(심화 문항 + 면접 행동 검증) — 최대 3개 서버 검증. 공고 폼에서 `/api/jobs/trait-suggest` LLM 제안 가능. 마이그레이션 0024 가 기존 공고에 법인 레거시 값 복사 |
 | evaluation_focus | TEXT NOT NULL DEFAULT '' | AI 평가 중점 사항 — **HR 내부용, 후보자 비공개**. 평가 가중치 코멘트("보안 경력 최우선" 등)를 서류평가/면접 진행/면접 평가 프롬프트에 가이드 블록으로 주입. 차별 금지 항목(성별·나이·출신지·종교 등) 입력은 정책상 금지 |
 | tone | TEXT NOT NULL DEFAULT '중립적인' | 친절한/중립적인/엄격한 |
 | interview_duration_minutes | INTEGER NOT NULL DEFAULT 20 | |
