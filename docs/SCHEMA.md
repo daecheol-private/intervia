@@ -492,7 +492,7 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 이력서(마스킹) + 서류평가(`screeningReport`) + AI 면접 평가(`interviewSessions.evaluation`, 있으면)
 + 법인 컬쳐핏 기준(`organizations.culture_fit_profile`, 있으면 — 두 라운드 공통)을
 종합해 LLM(task=`questionGen`)이 생성. 1차는 `buildInterviewQuestionsPrompt`(직무·기술 검증 중심),
-2차는 `buildExecutiveInterviewQuestionsPrompt`(임원 관점 — 컬쳐핏·인재상·가치관·성장 잠재력 중심).
+2차는 `buildExecutiveInterviewQuestionsPrompt`(임원 관점 — 선호 인재상·컬쳐핏·가치관 70~80% + 임원 시선 직무 질문 1섹션 20~30%. 기술 재검증 X).
 **`interview_question_gen` 토큰 차감(기본 5, 라운드 구분 없이 동일 단가)** — 생성 성공 시 후차감,
 재생성·라운드 추가 생성도 매번 과금(`chargeRepeatable`, refType `candidate`/`candidate_re{N}` — 회차는 라운드 합산). (과거 "무료" 서술은 stale)
 
