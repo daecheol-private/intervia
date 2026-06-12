@@ -46,6 +46,7 @@
 | PATCH | `/api/orgs/join-requests/[id]` | 🛡️ | `{action: 'approve'|'reject'}` |
 | GET | `/api/orgs/members?orgId?` | 🛡️ | 자기 법인 멤버 (system_admin은 orgId 지정 가능) |
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
+| GET | `/api/orgs/me/setup-progress` | 🔒 | 첫 실행 가이드 진행 상태 `{show, step1~4, firstJobId}` — 플로팅 위젯(`SetupGuideWidget`)용. 판정 기준은 대시보드 setup1~4 와 동일. system_admin/무소속은 `{show:false}` |
 
 ## 사용자
 
