@@ -21,7 +21,8 @@ export default function NewJobPage() {
     requirements: "",
     idealProfile: "",
     evaluationFocus: "",
-    tone: "중립적인" as "친절한" | "중립적인" | "엄격한",
+    // 면접관 톤 선택 UI는 제거 — 모든 공고를 "친절한" 톤으로 고정 (API 계약 유지용으로 값만 전송)
+    tone: "친절한" as "친절한" | "중립적인" | "엄격한",
     interviewDurationMinutes: 10,
     password: "",
     traitProfile: { ...DEFAULT_TRAIT_PROFILE } as TraitProfile,
@@ -146,7 +147,10 @@ export default function NewJobPage() {
         등록된 정보는 면접관 페르소나 생성에 사용됩니다.
       </p>
 
-      <div className="bg-primary-soft/40 border border-primary/20 rounded-2xl p-4 mb-5">
+      <div
+        data-tour="job-import-url"
+        className="bg-primary-soft/40 border border-primary/20 rounded-2xl p-4 mb-5"
+      >
         <div className="flex items-center gap-2 mb-2">
           <Sparkles className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-semibold text-primary-deep">
@@ -297,6 +301,16 @@ export default function NewJobPage() {
           </p>
         </Field>
 
+        <Field
+          label="AI 면접 인성검사 — 선호 특성"
+          hint="합불 점수에 반영되지 않는 참고용입니다 — 후보자가 면접 시작 전 응답하는 강제선택형 사전 문항이며, 결과는 면접 꼬리질문 설계에만 쓰입니다. 여기서 고른 특성(최대 3개)은 점수 가중치가 아니라 검증 우선순위로, 심화 문항이 추가되고 면접에서 행동 사례로 확인됩니다."
+        >
+          <TraitProfileSelector
+            value={form.traitProfile}
+            onChange={(traitProfile) => setForm({ ...form, traitProfile })}
+          />
+        </Field>
+
         <Field label="공고 비밀번호 (선택)">
           <PasswordInput
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-widest placeholder:font-sans placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -315,35 +329,6 @@ export default function NewJobPage() {
           <p className="text-xs text-slate-500 mt-1">
             설정하면 상세 페이지 진입 시 비밀번호를 입력해야 합니다.
           </p>
-        </Field>
-
-        <Field label="면접관 톤">
-          <div className="grid grid-cols-3 gap-2">
-            {(["친절한", "중립적인", "엄격한"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setForm({ ...form, tone: t })}
-                className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
-                  form.tone === t
-                    ? "border-primary bg-primary-soft text-primary-deep font-medium"
-                    : "border-slate-200 hover:border-slate-300 text-slate-600"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        <Field
-          label="AI 면접 인성검사 — 선호 특성"
-          hint="합불 점수에 반영되지 않는 참고용입니다 — 후보자가 면접 시작 전 응답하는 강제선택형 사전 문항이며, 결과는 면접 꼬리질문 설계에만 쓰입니다. 여기서 고른 특성(최대 3개)은 점수 가중치가 아니라 검증 우선순위로, 심화 문항이 추가되고 면접에서 행동 사례로 확인됩니다."
-        >
-          <TraitProfileSelector
-            value={form.traitProfile}
-            onChange={(traitProfile) => setForm({ ...form, traitProfile })}
-          />
         </Field>
       </div>
 

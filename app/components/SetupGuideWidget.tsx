@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, ChevronDown, Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import { buildSetupSteps } from "@/lib/setup-steps";
+import { GuideStepList } from "./tour/guide-steps";
 
 type Progress = {
   show: boolean;
@@ -204,73 +204,11 @@ export function SetupGuideWidget() {
           <ChevronDown className="w-4 h-4" />
         </button>
       </header>
-      <ol className="p-2.5 space-y-1">
-        {steps.map((s) => {
-          const isActive = active?.n === s.n;
-          return (
-            <li
-              key={s.n}
-              className={`rounded-lg px-2.5 py-2 ${
-                isActive ? "bg-primary-soft/40 ring-1 ring-primary/20" : ""
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <span
-                  className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                    s.done
-                      ? "bg-primary text-surface"
-                      : isActive
-                        ? "bg-primary-soft text-primary-deep border border-primary/40"
-                        : "bg-surface-alt text-ink-muted border border-border-default"
-                  }`}
-                >
-                  {s.done ? <Check className="w-3 h-3" strokeWidth={3} /> : s.n}
-                </span>
-                <span
-                  className={`text-xs font-medium ${
-                    s.done ? "text-ink-soft line-through" : "text-ink"
-                  }`}
-                >
-                  {s.title}
-                </span>
-              </div>
-              {isActive && (
-                <div className="mt-1.5 pl-[30px]">
-                  <p className="text-[11px] text-ink-soft leading-relaxed">
-                    {s.desc}
-                  </p>
-                  {s.cta && (
-                    <div className="mt-2">
-                      {s.cta.pcOnly ? (
-                        <>
-                          <Link
-                            href={s.cta.href}
-                            className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface transition-colors"
-                          >
-                            {s.cta.label}
-                            <ArrowRight className="w-3 h-3" />
-                          </Link>
-                          <span className="sm:hidden text-[11px] text-ink-soft">
-                            공고 등록은 PC(데스크톱)에서 진행해 주세요.
-                          </span>
-                        </>
-                      ) : (
-                        <Link
-                          href={s.cta.href}
-                          className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface transition-colors"
-                        >
-                          {s.cta.label}
-                          <ArrowRight className="w-3 h-3" />
-                        </Link>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+      <GuideStepList
+        steps={steps}
+        activeN={active?.n ?? null}
+        variant="widget"
+      />
       <footer className="px-4 pb-3 pt-1 border-t border-border-default">
         {active == null && (
           <p className="text-[11px] text-primary-deep font-medium pt-2">

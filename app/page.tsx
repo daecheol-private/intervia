@@ -15,6 +15,7 @@ import { getUnlockChecker } from "@/lib/job-lock";
 import { ChatPreview } from "./components/ChatPreview";
 import { HowItWorksCarousel } from "./components/HowItWorksCarousel";
 import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
+import { GuideStepList, GuideStripCta } from "./components/tour/guide-steps";
 import {
   getAllPricing,
   WELCOME_BONUS_TOKENS,
@@ -33,7 +34,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { buildSetupSteps, type SetupStep } from "@/lib/setup-steps";
+import { buildSetupSteps } from "@/lib/setup-steps";
 
 export const dynamic = "force-dynamic";
 
@@ -724,15 +725,7 @@ function SetupGuide({
             )}
           </span>
         </div>
-        {activeStep?.cta && (
-          <Link
-            href={activeStep.cta.href}
-            className="shrink-0 inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface transition-colors"
-          >
-            {activeStep.cta.label}
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        )}
+        {activeStep && <GuideStripCta step={activeStep} />}
       </div>
     );
   }
@@ -749,81 +742,12 @@ function SetupGuide({
           아래 순서대로 진행하면 첫 AI 면접까지 한 번에 경험할 수 있어요.
         </p>
       </div>
-      <ol className="px-4 sm:px-6 pb-6 pt-4 space-y-2">
-        {steps.map((s) => (
-          <StepRow key={s.n} step={s} active={activeStep?.n === s.n} />
-        ))}
-      </ol>
+      <GuideStepList
+        steps={steps}
+        activeN={activeStep?.n ?? null}
+        variant="hero"
+      />
     </section>
-  );
-}
-
-function StepRow({ step, active }: { step: SetupStep; active: boolean }) {
-  return (
-    <li
-      className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 transition-colors ${
-        step.done
-          ? "border-primary/20 bg-primary-soft/30"
-          : active
-            ? "border-primary/40 bg-card ring-1 ring-primary/20"
-            : "border-border-default bg-surface-alt/40"
-      }`}
-    >
-      <span
-        className={`shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${
-          step.done
-            ? "bg-primary text-surface"
-            : active
-              ? "bg-primary-soft text-primary-deep border border-primary/40"
-              : "bg-surface-alt text-ink-muted border border-border-default"
-        }`}
-      >
-        {step.done ? <Check className="w-4 h-4" strokeWidth={3} /> : step.n}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className={`text-sm font-semibold ${
-              step.done ? "text-ink-soft line-through" : "text-ink"
-            }`}
-          >
-            {step.title}
-          </span>
-          {step.done && (
-            <span className="text-[11px] text-primary font-medium">완료</span>
-          )}
-        </div>
-        <p className="text-xs text-ink-soft mt-0.5 leading-relaxed">
-          {step.desc}
-        </p>
-        {active && step.cta && (
-          <div className="mt-2.5">
-            {step.cta.pcOnly ? (
-              <>
-                <Link
-                  href={step.cta.href}
-                  className="hidden sm:inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface transition-colors"
-                >
-                  {step.cta.label}
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-                <span className="sm:hidden text-xs text-ink-soft">
-                  공고 등록은 PC(데스크톱)에서 진행해 주세요.
-                </span>
-              </>
-            ) : (
-              <Link
-                href={step.cta.href}
-                className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface transition-colors"
-              >
-                {step.cta.label}
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            )}
-          </div>
-        )}
-      </div>
-    </li>
   );
 }
 

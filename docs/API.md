@@ -51,6 +51,7 @@
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
 | GET | `/api/orgs/me/setup-progress` | 🔒 | 첫 실행 가이드 진행 상태 `{show, step1~4, firstJobId}` — 플로팅 위젯(`SetupGuideWidget`)용. 단계 판정은 대시보드 setup1~4 와 동일. `show`는 완료 여부와 무관 — `setup_guide_dismissed_at` NULL 인 동안 true. system_admin/무소속은 `{show:false}` |
 | POST | `/api/orgs/me/setup-progress` | 🔒 | 가이드 숨기기 — `setup_guide_dismissed_at` 기록 (**법인 단위** — 모든 구성원 화면에서 hero/strip/플로팅 모두 사라짐, 멤버도 가능) |
+| GET | `/api/orgs/me/tour-targets` | 🔒 | 인터랙티브 가이드(둘러보기) 대상 `{firstJobId, screenedCandidateId}` — 시작 가이드 단계(`guide-steps`) 런처용. 이력서 업로드 시나리오가 이동할 최신 공고 + AI 면접 시나리오 대상(`stage='screened'` 미종결 후보). 없으면 해당 시나리오 비활성. system_admin/무소속은 둘 다 null |
 | GET/PUT | `/api/orgs/me/culture-fit` | 🔒 / 🛡️ | 컬처핏 프로필 조회·저장 (`CultureFitProfile` — 인재상 + 정성 항목 6종). Big Five 선호 특성은 공고 단위로 이동 (`job_postings.trait_profile`) — 법인 JSON 의 `traitProfile` 은 레거시·미사용 |
 
 ## 사용자

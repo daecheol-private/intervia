@@ -674,6 +674,7 @@ export default function CandidateDetailPage() {
                   아직 면접이 진행되지 않았습니다.
                 </p>
                 <button
+                  data-tour="ai-interview-btn"
                   onClick={createLink}
                   disabled={creating}
                   className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm inline-flex items-center justify-center gap-1.5"

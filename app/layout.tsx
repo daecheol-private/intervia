@@ -4,6 +4,7 @@ import { NavBar } from "./components/NavBar";
 import { Footer } from "./components/Footer";
 import { ForcePasswordChange } from "./components/ForcePasswordChange";
 import { SetupGuideWidget } from "./components/SetupGuideWidget";
+import { TourOverlay } from "./components/tour/TourOverlay";
 import { DialogHost } from "./components/Dialog";
 import "./globals.css";
 
@@ -59,6 +60,7 @@ export default async function RootLayout({
         <div className="flex-1 flex flex-col">{children}</div>
         <Footer loggedIn={!!user} />
         {user && user.role !== "system_admin" && <SetupGuideWidget />}
+        {user && user.role !== "system_admin" && <TourOverlay />}
         {user?.mustChangePassword && (
           <ForcePasswordChange email={user.email} />
         )}

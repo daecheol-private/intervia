@@ -1363,6 +1363,7 @@ export default function JobDetailPage() {
       >
       {/* 지원자 동의 확인 게이트 — 업로드 전 필수 (PIPA §15·§26·§28의8·§37의2)
          체크 시 모달로 명시 재확인을 요구해 "무심코 체크" 차단. */}
+      <div data-tour="consent-gate">
       <ApplicantConsentGate
         confirmed={consentConfirmed}
         busy={consentBusy}
@@ -1398,9 +1399,11 @@ export default function JobDetailPage() {
           setConsentConfirmed(false);
         }}
       />
+      </div>
 
       {/* Upload zone */}
       <div
+        data-tour="upload-zone"
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);

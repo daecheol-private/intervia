@@ -254,6 +254,12 @@ interviewer/
   - 서버 렌더, 영속 상태 없음(localStorage 미사용). 공고 등록 CTA 는 기존 정책대로 PC 전용 + 모바일 안내문.
 - **네비 정리** (`app/components/NavBar.tsx`): org_admin "법인" 드롭다운에서 **메일서버(`/org/smtp`)·줌(`/org/zoom`) 제외** → 법인 설정(`/org/settings`) 의 "외부 연동" 섹션으로 이동. 모바일 메뉴는 원래 둘을 숨기고 있어 데스크톱과 일관성도 맞췄다. 미설정 시 Intervia 기본값으로 동작하므로 첫 흐름에서 빠져도 무방(SMTP 는 후보자 상세에서도 맥락 링크로 도달 가능).
 - **단계 필터 4버킷 그룹화** (`app/jobs/[id]/page.tsx` 후보자 필터 `<select>`): 12개 세부 stage 를 `<optgroup>` 4그룹(**서류 전형 / AI 면접 / 대면 면접 / 결정**)으로 묶어 표시. 매핑은 `lib/stage-meta.ts` 의 `STAGE_GROUPS` / `STAGE_GROUP_LABELS` / `STAGE_GROUP_OF` (재사용 가능). 내부 stage enum 과 "전형 단계 현황" 보드(이미 색상 그룹 구분)는 불변.
+- **인터랙티브 가이드(게임 튜토리얼식 둘러보기)** — 정적 안내를 넘어 실제 화면에서 대상 요소를 스포트라이트(딤+구멍) + 글로우 링 + 말풍선으로 짚어 준다. **별도 런처 섹션 없이, 시작 가이드 4단계 항목 자체가 곧 둘러보기 버튼**(단계를 누르면 단순 이동 대신 해당 투어 실행).
+  - 정의: `lib/tour-scenarios.ts` (4 시나리오 = 컬쳐핏 등록 / 공고 등록 / 이력서 업로드[2스텝] / AI 면접). 각 스텝은 `path`(+hash, `{jobId}`/`{candidateId}` 치환) + `target`(CSS 선택자, 페이지의 `data-tour="..."` 속성) + 말풍선 문구 + 선택적 `presets`(이동 전 localStorage 세팅 — 접힌 Section 펼치기, 키도 `{jobId}` 치환). 단계↔시나리오 매핑은 `lib/setup-steps.ts` `SetupStep.tour`.
+  - 상태: `app/components/tour/tour-store.ts` — sessionStorage 영속 + 구독 모듈 싱글톤(컨텍스트 대신). 라우트 이동에도 유지, 새로고침 복원.
+  - 오버레이: `app/components/tour/TourOverlay.tsx` (layout 마운트, system_admin 제외). 경로 불일치 시 `router.push` → 대상 요소 폴링(~5s) → 중앙 스크롤 → 스포트라이트(box-shadow 트릭) + 글로우 링(globals.css `tour-glow-ring`) + 말풍선(이전/다음/건너뛰기, ESC 닫기). 컨테이너 `pointer-events-none` 라 사용자가 안내 중에도 실제로 따라 할 수 있음.
+  - 단계 런처: `app/components/tour/guide-steps.tsx` `GuideStepList`(hero/widget 공용) + `GuideStripCta`(슬림 스트립). 시작 가이드(`app/page.tsx`)와 플로팅 위젯(`SetupGuideWidget`)이 공유. `GET /api/orgs/me/tour-targets`(최신 공고 id + `stage='screened'` 미종결 후보 id)로 시나리오 3·4 활성/잠금 판정 — **AI 면접 시나리오는 평가 끝난 이력서가 있어야 활성**.
+  - 대상 요소 마킹: `data-tour="job-import-url"`(`/jobs/new`), `consent-gate`·`upload-zone`(`/jobs/[id]`), `ai-interview-btn`(`/candidates/[id]`), `#culture-fit`(`/org/settings`).
 
 ### 13. 후보자 파생 상태 — 버킷·서브상태·대기주체 (`lib/candidate-state.ts`)
 
