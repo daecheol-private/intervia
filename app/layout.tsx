@@ -5,6 +5,7 @@ import { Footer } from "./components/Footer";
 import { ForcePasswordChange } from "./components/ForcePasswordChange";
 import { SetupGuideWidget } from "./components/SetupGuideWidget";
 import { TourOverlay } from "./components/tour/TourOverlay";
+import { TourAutoStart } from "./components/tour/TourAutoStart";
 import { DialogHost } from "./components/Dialog";
 import "./globals.css";
 
@@ -61,6 +62,7 @@ export default async function RootLayout({
         <Footer loggedIn={!!user} />
         {user && user.role !== "system_admin" && <SetupGuideWidget />}
         {user && user.role !== "system_admin" && <TourOverlay />}
+        {user && user.role !== "system_admin" && <TourAutoStart />}
         {user?.mustChangePassword && (
           <ForcePasswordChange email={user.email} />
         )}

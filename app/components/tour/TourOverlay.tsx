@@ -36,6 +36,11 @@ export function TourOverlay() {
   const [phase, setPhase] = useState<Phase>("searching");
   const targetRef = useRef<Element | null>(null);
   const [mounted, setMounted] = useState(false);
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
+  const [bubbleH, setBubbleH] = useState(200);
+  // 대상 페이지에서 이미 보여준 단계 키 — 사용자가 그 페이지를 떠났을 때
+  // "붙잡아 되돌리기" 대신 "가이드 종료"로 구분하기 위함.
+  const reachedRef = useRef<string | null>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -48,6 +53,7 @@ export function TourOverlay() {
   useEffect(() => {
     if (!active || !scenario || !step) return;
     const params = active.params;
+    const stepKey = `${active.scenarioId}:${active.step}`;
 
     // 이동 전 presets (접힌 섹션 펼치기 등) 적용. 키도 {jobId} 등 치환.
     if (step.presets) {
@@ -62,6 +68,14 @@ export function TourOverlay() {
 
     const wantPath = pathnameOf(resolvePath(step.path, params));
     if (pathname !== wantPath) {
+      // 이미 이 단계를 대상 페이지에서 보여준 뒤 사용자가 다른 페이지로
+      // 이동했다면, 붙잡아 되돌리지 말고 가이드를 종료한다. (예: '공고 등록'
+      // 가이드 중 공고를 만들어 상세 페이지로 이동 → 되돌리지 않고 종료 →
+      // 상세 페이지에서 다음 가이드가 자동으로 뜨도록 양보)
+      if (reachedRef.current === stepKey) {
+        tourStore.stop();
+        return;
+      }
       setPhase("navigating");
       setRect(null);
       targetRef.current = null;
@@ -78,12 +92,26 @@ export function TourOverlay() {
       if (cancelled) return;
       const el = document.querySelector(step.target);
       if (el) {
-        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        // 뷰포트보다 큰 섹션에 'top' 말풍선을 붙일 땐, 섹션 상단을 화면
+        // 위쪽으로 끌어내려 말풍선이 들어갈 공간을 확보한다. (말풍선이
+        // 화면 밖으로 나가지 않도록 — computeBubble 세로 클램프와 함께.)
+        const r0 = el.getBoundingClientRect();
+        const placement = step.placement ?? "bottom";
+        const tall = r0.height > window.innerHeight - 200;
+        if (tall && placement === "top") {
+          window.scrollBy({ top: r0.top - 260, behavior: "smooth" });
+        } else {
+          el.scrollIntoView({
+            block: tall ? "start" : "center",
+            behavior: "smooth",
+          });
+        }
         targetRef.current = el;
         // 스크롤이 안정된 뒤 측정.
         timer = window.setTimeout(() => {
           if (cancelled) return;
           setRect(el.getBoundingClientRect());
+          reachedRef.current = stepKey;
           setPhase("shown");
         }, 360);
         return;
@@ -121,6 +149,18 @@ export function TourOverlay() {
     };
   }, [phase]);
 
+  // 말풍선 실제 높이 측정 — 세로 클램프(화면 밖 방지) 계산에 사용.
+  useEffect(() => {
+    if (phase !== "shown" && phase !== "notfound") return;
+    const el = bubbleRef.current;
+    if (!el) return;
+    const measure = () => setBubbleH(el.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [phase, idx]);
+
   // ESC 로 닫기.
   useEffect(() => {
     if (!active) return;
@@ -150,8 +190,8 @@ export function TourOverlay() {
   const isLast = idx >= total - 1;
   const pad = step.padding ?? 8;
 
-  // 말풍선 위치 — 대상 rect 기준, 화면 밖이면 반대편으로 플립 + 가로 클램프.
-  const bubblePos = computeBubble(rect, step.placement ?? "bottom", pad);
+  // 말풍선 위치 — 대상 rect 기준, 공간 부족 시 반대편 플립 + 가로/세로 클램프.
+  const bubblePos = computeBubble(rect, step.placement ?? "bottom", pad, bubbleH);
 
   return createPortal(
     <div className="fixed inset-0 z-[120] pointer-events-none">
@@ -200,6 +240,7 @@ export function TourOverlay() {
       {/* 말풍선 */}
       {(phase === "shown" || phase === "notfound") && (
         <div
+          ref={bubbleRef}
           className="absolute pointer-events-auto"
           style={
             phase === "notfound" || !bubblePos
@@ -300,7 +341,8 @@ export function TourOverlay() {
 function computeBubble(
   rect: DOMRect | null,
   placement: "top" | "bottom" | "left" | "right",
-  pad: number
+  pad: number,
+  bubbleH: number
 ): { left: number; top: number; transform: string } | null {
   if (!rect) return null;
   if (typeof window === "undefined") return null;
@@ -311,6 +353,10 @@ function computeBubble(
   const cy = rect.top + rect.height / 2;
   const half = Math.min(BUBBLE_W, vw - 32) / 2;
   const clampX = (x: number) => Math.min(Math.max(x, half + 8), vw - half - 8);
+  // 세로 클램프 — 대상이 뷰포트보다 커도 말풍선이 화면 밖으로 나가지 않게.
+  // top 은 말풍선의 실제 상단 좌표(좌표계: 뷰포트). transform 은 X 정렬만 담당.
+  const clampY = (top: number) =>
+    Math.min(Math.max(top, 8), Math.max(8, vh - bubbleH - 8));
 
   let p = placement;
   // 세로 플립 — 공간 부족 시 반대편.
@@ -323,27 +369,27 @@ function computeBubble(
     case "top":
       return {
         left: clampX(cx),
-        top: rect.top - gap,
-        transform: "translate(-50%, -100%)",
+        top: clampY(rect.top - gap - bubbleH),
+        transform: "translateX(-50%)",
       };
     case "left":
       return {
         left: rect.left - gap,
-        top: cy,
-        transform: "translate(-100%, -50%)",
+        top: clampY(cy - bubbleH / 2),
+        transform: "translateX(-100%)",
       };
     case "right":
       return {
         left: rect.right + gap,
-        top: cy,
-        transform: "translate(0, -50%)",
+        top: clampY(cy - bubbleH / 2),
+        transform: "translateX(0)",
       };
     case "bottom":
     default:
       return {
         left: clampX(cx),
-        top: rect.bottom + gap,
-        transform: "translate(-50%, 0)",
+        top: clampY(rect.bottom + gap),
+        transform: "translateX(-50%)",
       };
   }
 }
