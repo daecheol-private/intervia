@@ -110,8 +110,8 @@ export const PROCESSORS: readonly Processor[] = [
 
 /** 정책 본문 versioning — 본문 변경 시 effective date 올림. */
 export const PRIVACY_EFFECTIVE_DATE = "2026-06-10";
-export const TERMS_EFFECTIVE_DATE = "2026-06-10";
+export const TERMS_EFFECTIVE_DATE = "2026-06-13";
 
 /** 가입 시 동의 시점 기록용 버전 식별자. 본문 개정 시 함께 갱신. */
 export const PRIVACY_VERSION = "1.4.0-2026-06-10"; // 합격자 보유 예외·파기 절차·쿠키 조항·수탁자 지위·영업양도·수탁자 연락처(§28의8)·OCR 원본 전달 고지 추가
-export const TERMS_VERSION = "1.2.0-2026-06-10"; // 약관 개정 절차(제12조)·환불 정책 전면 개정·후불 문구 실동작 일치·재위탁 동의·AI 기본법 이용사업자 지위·해지 시 잔액 정산·장애 보상 추가
+export const TERMS_VERSION = "1.2.1-2026-06-13"; // §5 동의 취득 방법 명확화: 사람인/잡코리아 '추가 동의 항목'(실제 미제공) → 공고 상세 내용 본문 게시 또는 자체 지원폼. 권리 변경 없는 경미한 정정이라 기존 가입자 재동의 불요. (이전: 1.2.0 — 약관 개정 절차·환불 정책·재위탁 동의·AI 기본법 이용사업자 지위·해지 정산·장애 보상)

@@ -3,265 +3,386 @@ import {
   SITE_INFO,
   PROCESSORS,
 } from "@/lib/site-info";
+import { buildApplicantConsentTemplate } from "@/lib/consent-template";
+import { CopyButton } from "@/app/components/CopyButton";
+import { BackLink } from "@/app/components/BackLink";
 import Link from "next/link";
 
 export const metadata = {
-  title: `지원자 동의 문구 템플릿 — ${SITE_INFO.serviceName}`,
+  title: `지원자 안내 문구 — ${SITE_INFO.serviceName}`,
 };
 
 /**
- * 채용기업(고객사)이 사람인/잡코리아 추가 동의 항목 또는 자체 지원폼에
- * 그대로 복붙해서 쓸 수 있는 표준 동의 문구.
+ * 채용기업(고객사)이 공고 상세 내용(본문) 또는 자체 지원폼에
+ * 그대로 복붙해서 쓸 수 있는 표준 안내 문구.
  *
- * 법적 의미: 본 서비스가 위탁받은 데이터 처리에 대한 §15·§26·§28의8·§37의2 동의를
- * 채용기업이 적법하게 취득하는 것을 돕는 가이드. 동의 취득 책임 자체는
- * 이용약관 §5 에 따라 채용기업에 있음.
+ * 톤 원칙: HR 이 겁먹지 않도록 "30초 1단계" 액션을 맨 위에, 법조문·책임 배분은
+ * 맨 아래 접힘 섹션으로. 법적 효력(약관 §5 진술·보증)은 그대로 유지.
  */
 export default function ApplicantConsentTemplatePage() {
-  const koreanTemplate = `[AI 채용 평가 적용 동의 — 본 채용 한정]
-
-귀하가 본 채용에 지원하신 이력서·자기소개서·포트폴리오 및 (해당 시) AI 면접 응답은,
-당사가 위탁한 "${SITE_INFO.serviceName}" (제공: ${COMPANY_INFO.name}) 의 AI 평가 시스템에서
-다음과 같이 처리됩니다.
-
-1) 처리위탁 수탁자
-   - ${COMPANY_INFO.name} (대한민국) — 서비스 운영
-   - Google Cloud (서울 리전 asia-northeast3, 대한민국) — 서류 평가·AI 면접 채팅·면접 평가 AI 호출 (Gemini), 응답 처리 후 즉시 폐기 (학습 미사용)
-   - Vercel Inc. (미국) — 호스팅 및 이력서 파일 보관
-   - Turso (일본 도쿄) — 데이터베이스
-   - Resend (미국) — 시스템 기본 면접 안내·결과 통보 메일 발송 (지원자 이메일 주소·메일 본문)
-
-2) 처리 항목
-   - 이력서·자기소개서·포트폴리오 본문 (식별 가능한 정보를 자동 마스킹 처리하여 AI 에 전달)
-   - AI 면접 진행 시 후보자 응답 텍스트 (식별 가능한 정보를 자동 마스킹 처리하여 AI 에 전달)
-   - 스캔(이미지) 형태 이력서는 텍스트 추출(OCR)을 위해 마스킹 전 원본이 AI 수탁자에게
-     전달될 수 있습니다 (OCR 기능을 사용하는 경우)
-   - 평가 결과 점수 및 코멘트
-
-3) 처리 목적
-   - 본 채용의 서류 평가 및 면접 평가 보조 (최종 합·불 결정은 사람이 검토)
-
-4) 국외 이전
-   - AI 처리(서류 평가·면접 채팅·면접 평가)는 모두 Google Cloud 서울 리전에서 처리되어 AI 단계의 국외이전이 발생하지 않습니다.
-   - 인프라 단계 이전: Vercel Inc. (미국, 호스팅·이력서 파일), Turso (일본 도쿄, 데이터베이스), Resend (미국, 메일 발송)
-   - 이전 시점·방법: 서비스 이용 전 과정에서 HTTPS 로 전송·저장
-   - 보유 기간: 합·불 결정 시점 즉시 폐기 (이력서 원본·파일), 공고 종결 +14일 후 자동 삭제 (평가 결과)
-
-5) 자동화된 의사결정에 관한 권리
-   - 본 평가는 AI 가 점수·추천을 산출하나, 최종 합·불 결정은 채용 담당자가 수행합니다.
-   - 귀하는 AI 평가 결과에 대한 설명 요구 및 이의제기를 할 수 있습니다.
-     (이의제기 채널: 면접 종료 화면 또는 ${COMPANY_INFO.email} )
-   - AI 평가 자체를 거부할 권리가 있으며, 거부 시 본 AI 평가 절차는 제외되고
-     일반 채용 절차로 진행됩니다. (단, 채용기업의 절차상 AI 평가가 필수인 경우는 별도)
-
-6) 보유 및 이용 기간
-   - 합·불 결정 시점에 이력서 원본·마스킹 텍스트는 즉시 폐기
-   - 평가 결과는 채용 공고 종결 +14일 후 자동 삭제
-   - 본 채용서류는 홈페이지·전자우편 등 전자적 방법으로 제출되어 채용절차의 공정화에 관한
-     법률 §11 에 따른 반환 의무 대상이 아니며, 불합격 확정 시 즉시, 늦어도 공고 종결 후
-     14일 이내 파기됩니다 (최종 합격자 정보는 입사 절차 목적으로 보유)
-   - 파기 관련 문의: (채용기업 연락처 기재)
-
-☐ 위 사항에 동의합니다 (필수, 거부 시 본 채용 지원 불가)`;
-
-  const englishTemplate = `[AI Evaluation Consent — This Recruitment Only]
-
-Your resume, cover letter, portfolio and (if applicable) AI interview responses for this
-recruitment will be processed by "${SITE_INFO.serviceName}" (operated by ${COMPANY_INFO.name}),
-which we have contracted as a data processor, as follows:
-
-1) Processors
-   - ${COMPANY_INFO.name} (Republic of Korea) — Service operation
-   - Google Cloud (Seoul region asia-northeast3, Republic of Korea) — Resume screening / AI interview chat / interview evaluation AI (Gemini), no training use, discarded after response
-   - Vercel Inc. (USA) — Hosting and resume file storage
-   - Turso (Tokyo, Japan) — Database
-   - Resend (USA) — System default email delivery (interview invitations / result notifications)
-
-2) Data Items
-   - Resume / CV / cover letter / portfolio (PII masked before AI invocation)
-   - Candidate responses during AI interview
-   - Evaluation scores and comments
-
-3) Purpose
-   - Resume and interview screening assistance for this recruitment
-     (final hiring decision made by a human reviewer)
-
-4) Cross-Border Transfer
-   - All AI processing (resume screening / interview chat / interview evaluation)
-     is performed in the Seoul region; no cross-border transfer at the AI stage.
-   - Infrastructure-level transfer: Vercel Inc. (USA, hosting & file storage),
-     Turso (Tokyo, Japan, database), Resend (USA, email delivery)
-   - Method: HTTPS throughout service usage
-   - Retention: Disposal upon hiring decision (resume original/files),
-     +14 days after job closure (evaluation results)
-
-5) Rights Regarding Automated Decisions
-   - AI produces scores/recommendations; final hiring decision is made by a human reviewer.
-   - You may request explanation of and object to the AI evaluation result.
-     (Channel: end of interview screen, or ${COMPANY_INFO.email})
-   - You may refuse AI evaluation; in such case the AI step is skipped and you proceed
-     via the standard recruitment process.
-
-6) Retention Period
-   - Resume original and masked text deleted immediately upon hiring decision
-   - Evaluation results auto-deleted +14 days after job posting closure
-   - Compliant with Article 11 of the Korean Fair Hiring Procedure Act
-
-☐ I consent to the above (required; refusal precludes application)`;
+  const {
+    koreanShort,
+    korean: koreanTemplate,
+    english: englishTemplate,
+  } = buildApplicantConsentTemplate();
 
   return (
     <main className="max-w-3xl mx-auto w-full px-6 py-10">
-      <Link href="/" className="text-xs text-slate-500 hover:underline">
-        ← 홈
-      </Link>
+      <BackLink fallbackHref="/" label="← 뒤로" />
       <h1 className="text-2xl font-bold text-slate-900 mt-3">
-        지원자 동의 문구 표준 템플릿
+        지원자 안내 문구 — 복사해서 공고에 붙여넣기
       </h1>
-      <p className="text-sm text-slate-600 mt-2">
-        본 페이지는 채용기업(고객사)이 사람인·잡코리아 등 채용 플랫폼의{" "}
-        <strong>&quot;추가 동의 항목&quot;</strong> 또는 자체 지원폼에 그대로
-        복붙해서 사용할 수 있는 표준 문구입니다.
-      </p>
 
-      <section className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <div className="font-semibold mb-1">⚠️ 왜 필요한가요?</div>
+      {/* 안심 톤 — 무엇을 더 할 필요가 없는지 먼저 말한다 */}
+      <section className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+        <div className="font-semibold mb-1">✅ 딱 1단계, 30초면 끝납니다</div>
         <p className="leading-relaxed">
-          {SITE_INFO.serviceName} 이용약관 §5 에 따라, 이력서를 본 서비스에
-          업로드하기 전 지원자로부터{" "}
-          <strong>AI 평가 적용·국외이전·처리위탁</strong> 에 대한 적법한 동의를
-          취득할 책임은 채용기업에 있습니다. 동의 없이 업로드한 경우 발생하는
-          법적 책임(개인정보보호법 §15·§26·§28의8·§37의2)은 채용기업이
-          부담하며, {COMPANY_INFO.name} 은 면책됩니다.
-        </p>
-        <p className="leading-relaxed mt-2">
-          업로드 화면의 <strong>&quot;지원자 동의 확인&quot;</strong> 체크박스를
-          체크할 수 있도록, 사람인/잡코리아 공고 등록 시{" "}
-          <strong>&quot;추가 동의 항목&quot;</strong> 기능에 아래 문구를 그대로
-          등록해 주세요.
+          AI 채용은 지원자에게 <strong>“AI 평가를 활용한다”</strong> 는 안내만
+          보이면 됩니다. <strong>새 시스템도, 별도 계약도 필요 없어요.</strong>{" "}
+          지금 쓰시는 채용 플랫폼(사람인·잡코리아) 공고에 아래 문구 한 번만
+          넣으면 법적 안내 의무가 충족됩니다.
         </p>
       </section>
 
-      <section className="mt-8">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-base font-semibold text-slate-900">
-            한국어 (기본)
-          </h2>
-          <span className="text-xs text-slate-500">
-            사람인·잡코리아 추가 동의 항목에 그대로 붙여넣기
-          </span>
+      {/* 이게 되는지도 모르는 분이 많아서 — 개념부터 쉽게 */}
+      <section className="mt-5 rounded-lg border border-slate-200 bg-white p-4">
+        <div className="text-sm font-semibold text-slate-900 mb-1">
+          💡 “공고에 동의 항목을 넣는다고요?”
         </div>
-        <pre className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs whitespace-pre-wrap font-mono text-slate-800 leading-relaxed">
-          {koreanTemplate}
-        </pre>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="text-base font-semibold text-slate-900 mb-2">
-          English (외국인 지원자 대비)
-        </h2>
-        <pre className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs whitespace-pre-wrap font-mono text-slate-800 leading-relaxed">
-          {englishTemplate}
-        </pre>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="text-base font-semibold text-slate-900 mb-2">
-          현재 등록된 처리위탁 수탁자 (참고)
-        </h2>
-        <table className="w-full text-xs border border-slate-200 mt-2">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-3 py-2 text-left">수탁자</th>
-              <th className="px-3 py-2 text-left">목적</th>
-              <th className="px-3 py-2 text-left">국가</th>
-              <th className="px-3 py-2 text-left">연락처</th>
-            </tr>
-          </thead>
-          <tbody>
-            {PROCESSORS.map((p) => (
-              <tr key={p.name} className="border-t border-slate-200">
-                <td className="px-3 py-2 font-medium text-slate-900">
-                  {p.name}
-                </td>
-                <td className="px-3 py-2 text-slate-700">{p.purpose}</td>
-                <td className="px-3 py-2 text-slate-700">{p.country}</td>
-                <td className="px-3 py-2 text-slate-700 break-all">
-                  {p.contact}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="text-xs text-slate-500 mt-2">
-          전체 항목·보유기간은{" "}
-          <Link
-            href="/privacy"
-            className="text-primary hover:underline"
-          >
-            개인정보 처리방침
-          </Link>{" "}
-          §5 참고.
+        <p className="text-sm text-slate-700 leading-relaxed">
+          어렵지 않아요. 사람인·잡코리아 공고를 올릴 때 직무·자격요건을 적는{" "}
+          <strong>‘상세 내용(모집 요강)’ 영역</strong>이 있죠? 거기엔 아래{" "}
+          <strong>짧은 안내문(3~4줄)</strong>만 넣으면 됩니다 — 긴 전문을 통째로
+          넣을 필요 없어요. (처리위탁·국외이전까지 담은 전체 문구는 자체
+          지원폼에서 체크 동의받을 때만 쓰면 됩니다.)
+        </p>
+        <p className="text-sm text-slate-700 leading-relaxed mt-2">
+          꼭 플랫폼 기능이 아니어도 괜찮아요.{" "}
+          <strong>자체 지원폼이나 지원 안내 메일</strong>로도 됩니다 — 상황별
+          방법은{" "}
+          <a href="#how" className="text-primary hover:underline">
+            아래에서 하나씩
+          </a>{" "}
+          알려드릴게요.
         </p>
       </section>
 
+      {/* ① 공고 본문용 — 짧은 안내문 (핵심) */}
       <section className="mt-8">
-        <h2 className="text-base font-semibold text-slate-900 mb-2">
-          자주 묻는 질문
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+          <h2 className="text-base font-semibold text-slate-900">
+            ① 공고 본문에 넣는 짧은 안내문
+          </h2>
+          <CopyButton
+            text={koreanShort}
+            label="📋 짧은 안내문 복사"
+            copiedLabel="✓ 복사됐어요"
+          />
+        </div>
+        <p className="text-xs text-slate-500 mb-2">
+          대부분 이거 하나면 됩니다. 공고 ‘상세 내용’ 맨 아래에 그대로
+          붙여넣으세요.
+        </p>
+        <pre className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs whitespace-pre-wrap font-mono text-slate-800 leading-relaxed">
+          {koreanShort}
+        </pre>
+        <p className="text-[11px] text-slate-400 mt-1.5">
+          <strong className="text-slate-500">[채용 담당 연락처]</strong> 부분만
+          회사 이메일·전화로 바꿔서 넣어주세요.
+        </p>
+      </section>
+
+      {/* ② 자체 지원폼/동의서용 — 전체 문구 (체크박스 동의용, 접힘) */}
+      <section className="mt-6">
+        <details className="rounded-lg border border-slate-200 bg-white">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 select-none flex items-center justify-between gap-2">
+            <span>② 자체 지원폼·동의서용 전체 문구 (체크박스 동의용)</span>
+            <span className="text-xs text-slate-400 shrink-0">펼치기</span>
+          </summary>
+          <div className="px-4 pb-4">
+            <p className="text-xs text-slate-500 mb-2">
+              구글폼·자사 채용페이지 등에서 <strong>체크박스 동의</strong>까지 받을
+              때 쓰는 전체 문구입니다 (처리위탁·국외이전·보유기간 포함).{" "}
+              <strong>공고 본문에는 위 ① 짧은 안내문이면 충분</strong>해요.
+            </p>
+            <div className="flex justify-end mb-2">
+              <CopyButton
+                text={koreanTemplate}
+                label="📋 전체 문구 복사"
+                copiedLabel="✓ 복사됐어요"
+              />
+            </div>
+            <pre className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs whitespace-pre-wrap font-mono text-slate-800 leading-relaxed">
+              {koreanTemplate}
+            </pre>
+          </div>
+        </details>
+      </section>
+
+      {/* 어디에 어떻게 넣나요 — 상황별 (메뉴 이름에 의존하지 않게 + 못 찾을 때 대비) */}
+      <section id="how" className="mt-10 scroll-mt-4">
+        <h2 className="text-base font-semibold text-slate-900">
+          어디에, 어떻게 넣나요?
         </h2>
-        <dl className="text-sm text-slate-700 space-y-3 leading-relaxed">
-          <div>
-            <dt className="font-medium text-slate-900">
-              Q. 공고 본문에 한 줄 적는 것만으로는 안 되나요?
-            </dt>
-            <dd className="mt-1">
-              A. 안 됩니다. 개인정보보호법은 동의를{" "}
-              <strong>명시적 의사표시(체크박스·서명)</strong> 로 받도록 합니다.
-              공고 본문에 적어둔 것만으로는 묵시적 동의로 인정되지 않습니다.
-              특히 §28의8 국외이전은 <strong>별도 동의 항목</strong> 이
-              필요하며, §37의2 자동화 결정은 별도 동의 대신{" "}
-              <strong>AI 평가 활용 사실·기준을 고지하고 거부권·이의제기
-              절차를 보장</strong>해야 합니다.
-            </dd>
+        <p className="text-sm text-slate-600 mt-1">
+          아래 셋 중 <strong>아무거나 하나</strong>만 하면 됩니다. 가장 편한
+          방법을 고르세요.
+        </p>
+
+        <div className="mt-4 space-y-3">
+          {/* 방법 1 — 공고 상세 내용(본문) */}
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="shrink-0 rounded-md bg-primary/10 text-primary text-[11px] font-semibold px-2 py-0.5">
+                방법 1 · 가장 쉬움
+              </span>
+              <span className="text-sm font-semibold text-slate-900">
+                공고 ‘상세 내용(모집 요강)’에 넣기
+              </span>
+            </div>
+            <ol className="mt-2.5 space-y-1.5 text-sm text-slate-700 list-decimal list-inside leading-relaxed">
+              <li>
+                사람인·잡코리아 공고 <strong>등록(또는 수정)</strong> 화면에서,
+                직무·자격요건을 적는{" "}
+                <strong>‘상세 모집내용(상세 요강)’</strong> 큰 입력칸으로 갑니다.
+              </li>
+              <li>
+                맨 아래에 위 <strong>① 짧은 안내문</strong>을 그대로 붙여넣습니다.{" "}
+                <span className="text-slate-500">
+                  (문구에 ‘■ AI 평가 활용 안내’ 제목이 이미 포함돼 있어요)
+                </span>
+              </li>
+              <li>
+                저장하면 끝. 지원자가 공고를 볼 때 이 안내가 함께 보입니다.
+              </li>
+            </ol>
+            <p className="mt-2.5 text-xs text-slate-500 leading-relaxed">
+              사람인·잡코리아에 회사가 임의로 ‘필수 동의 체크박스’를 추가하는
+              별도 칸은 없는 경우가 많아요. 그래서{" "}
+              <strong className="text-slate-700">
+                상세 내용 본문에 짧은 안내문을 넣는 것
+              </strong>
+              이 가장 확실하고 빠릅니다. 체크 형태의 ‘동의’까지 받고 싶다면 방법
+              2를 쓰세요.
+            </p>
           </div>
-          <div>
-            <dt className="font-medium text-slate-900">
-              Q. 사람인/잡코리아의 기본 동의서로 커버되나요?
-            </dt>
-            <dd className="mt-1">
-              A. 부분적으로만 커버됩니다. 기본 동의서는 &quot;지원 기업이
-              평가에 활용&quot; 까지만 포함되고,{" "}
-              <strong>제3자 처리위탁·국외이전·자동화 결정 적용</strong> 은
-              포함되지 않습니다. 사람인·잡코리아 모두 채용기업이 &quot;추가
-              동의 항목&quot; 을 등록할 수 있는 기능을 제공합니다.
-            </dd>
+
+          {/* 방법 2 — 자체 지원폼 */}
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="shrink-0 rounded-md bg-emerald-100 text-emerald-700 text-[11px] font-semibold px-2 py-0.5">
+                방법 2 · 가장 확실
+              </span>
+              <span className="text-sm font-semibold text-slate-900">
+                자체 지원폼(구글폼·자사 채용페이지)에 넣기
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-slate-700 leading-relaxed">
+              지원자가 이메일이나 자체 폼으로 지원한다면, 그 폼/동의서에 위{" "}
+              <strong>② 전체 문구</strong>와 <strong>필수 체크박스</strong>를
+              넣으세요. 받은 동의 기록은 분쟁 대비 <strong>5년 보관</strong>을
+              권장합니다.
+            </p>
           </div>
-          <div>
-            <dt className="font-medium text-slate-900">
-              Q. 자체 지원폼/오프라인 채용은 어떻게 하나요?
-            </dt>
-            <dd className="mt-1">
-              A. 위 문구를 동의서 양식에 그대로 포함시키고{" "}
-              <strong>체크박스 또는 서명</strong> 을 받으세요. 받은 동의서는
-              분쟁 시 입증 자료로 보관(5년 권장).
-            </dd>
+
+          {/* 방법 3 — 안내 메일 */}
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="shrink-0 rounded-md bg-slate-100 text-slate-600 text-[11px] font-semibold px-2 py-0.5">
+                방법 3 · 보조
+              </span>
+              <span className="text-sm font-semibold text-slate-900">
+                지원 접수 후 첫 안내 메일에 넣기
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-slate-700 leading-relaxed">
+              지원자에게 보내는 <strong>첫 안내 메일·문자</strong>에 위 문구를
+              넣고, “회신 시 동의로 간주” 또는 동의 링크를 안내하세요. 플랫폼
+              기능을 못 찾을 때의 보조 수단입니다.
+            </p>
           </div>
-          <div>
-            <dt className="font-medium text-slate-900">
-              Q. 지원자가 AI 평가 거부 의사를 밝히면?
-            </dt>
-            <dd className="mt-1">
-              A. 본 서비스에 업로드하지 마시고, 일반 채용 절차(사람 면접)로
-              진행해 주세요. 거부권 보장은 §37의2 의 핵심 요건입니다.
-            </dd>
+        </div>
+
+        {/* 못 찾을 때 안심 */}
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900">
+          <div className="font-medium mb-0.5">플랫폼에서 못 찾으시겠어요?</div>
+          <p className="text-[13px] leading-relaxed">
+            메뉴 이름은 자주 바뀝니다. 못 찾아도 괜찮아요 —{" "}
+            <strong>방법 2·3</strong>으로도 법적 안내 의무는 충족됩니다. 그래도
+            막히면{" "}
+            <a
+              href={`mailto:${COMPANY_INFO.email}`}
+              className="underline hover:text-amber-950"
+            >
+              {COMPANY_INFO.email}
+            </a>{" "}
+            로 문의 주세요. 같이 봐드릴게요.
+          </p>
+        </div>
+      </section>
+
+      {/* 영어 — 외국인 지원자 대비 (접힘) */}
+      <section className="mt-6">
+        <details className="rounded-lg border border-slate-200 bg-white">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 select-none flex items-center justify-between">
+            <span>English (외국인 지원자 대비)</span>
+            <span className="text-xs text-slate-400">펼치기</span>
+          </summary>
+          <div className="px-4 pb-4">
+            <div className="flex justify-end mb-2">
+              <CopyButton
+                text={englishTemplate}
+                label="📋 Copy (English)"
+                copiedLabel="✓ Copied"
+              />
+            </div>
+            <pre className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs whitespace-pre-wrap font-mono text-slate-800 leading-relaxed">
+              {englishTemplate}
+            </pre>
           </div>
-        </dl>
+        </details>
+      </section>
+
+      {/* 법적 배경 — 궁금한 사람만 (접힘) */}
+      <section className="mt-8">
+        <details className="rounded-lg border border-slate-200 bg-slate-50/60">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-800 select-none flex items-center justify-between">
+            <span>법적 근거가 궁금하다면 (선택)</span>
+            <span className="text-xs text-slate-400">펼치기</span>
+          </summary>
+          <div className="px-4 pb-5 pt-1 space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">
+                왜 이 문구가 필요한가요?
+              </h3>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                개인정보보호법은 AI(자동화) 평가를 적용할 때 지원자에게 그 사실을{" "}
+                <strong>고지</strong>하고 <strong>거부·이의제기 권리</strong>를
+                보장하도록 합니다(§37의2). 또 이력서가 {SITE_INFO.serviceName}{" "}
+                등 처리위탁 수탁자를 거치는 점(§26)도 함께 안내하면 가장
+                안전합니다. 위 한 문구가 이 안내를 모두 담고 있어, 별도로 더
+                준비하실 것은 없습니다.
+              </p>
+              <p className="text-xs text-slate-500 leading-relaxed mt-2">
+                참고: <strong>‘AI 평가를 쓴다’는 안내(고지)</strong>는 지원자가
+                보는 곳(공고 상세 내용)에 적어두면 됩니다 — 별도 체크박스가 꼭
+                필요한 건 아니에요(§37의2 는 고지 + 거부권 보장이 요건).
+                국외이전·처리위탁처럼 ‘동의’가 필요한 부분은 지원자가 면접에
+                들어올 때 {SITE_INFO.serviceName} 동의 화면에서 한 번 더
+                받으므로, 공고 단계에선 본문 안내로 충분합니다. 더 꼼꼼히 하려면
+                자체 지원폼에 체크박스를 두세요(방법 2).
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 mb-1">
+                책임은 누구에게 있나요?
+              </h3>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                지원자 안내·동의 취득의 주체는 채용을 진행하는 기업(이용약관 §5)
+                입니다. 업로드 화면의 체크는 “공고에 안내 문구를 넣었다”는 확인
+                이며, {COMPANY_INFO.name} 은 이를 신뢰하여 위탁 처리를 수행합니다.
+                안내 문구·표준 템플릿·마스킹·서울 리전 처리 등 실무 부담을 줄이는
+                장치는 모두 {SITE_INFO.serviceName} 이 제공합니다.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                현재 등록된 처리위탁 수탁자 (참고)
+              </h3>
+              <table className="w-full text-xs border border-slate-200">
+                <thead className="bg-white">
+                  <tr>
+                    <th className="px-3 py-2 text-left">수탁자</th>
+                    <th className="px-3 py-2 text-left">목적</th>
+                    <th className="px-3 py-2 text-left">국가</th>
+                    <th className="px-3 py-2 text-left">연락처</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {PROCESSORS.map((p) => (
+                    <tr key={p.name} className="border-t border-slate-200">
+                      <td className="px-3 py-2 font-medium text-slate-900">
+                        {p.name}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">{p.purpose}</td>
+                      <td className="px-3 py-2 text-slate-700">{p.country}</td>
+                      <td className="px-3 py-2 text-slate-700 break-all">
+                        {p.contact}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-slate-500 mt-2">
+                전체 항목·보유기간은{" "}
+                <Link href="/privacy" className="text-primary hover:underline">
+                  개인정보 처리방침
+                </Link>{" "}
+                §5 참고.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                자주 묻는 질문
+              </h3>
+              <dl className="text-sm text-slate-700 space-y-3 leading-relaxed">
+                <div>
+                  <dt className="font-medium text-slate-900">
+                    Q. 우리는 사람인·잡코리아에만 공고를 올려요. 더 해야 할 게
+                    있나요?
+                  </dt>
+                  <dd className="mt-1">
+                    A. 없습니다. 지금 쓰시는 그 공고의{" "}
+                    <strong>‘상세 모집내용’ 본문</strong>에 위 문구를 한 단락
+                    넣으시면 됩니다. 새로운 시스템 도입이나 사람인·잡코리아와의
+                    별도 계약은 필요 없습니다.
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-slate-900">
+                    Q. 사람인/잡코리아 기본 동의서로는 안 되나요?
+                  </dt>
+                  <dd className="mt-1">
+                    A. 부분적으로만 커버됩니다. 기본 동의서는 “지원 기업이 평가에
+                    활용”까지만 포함하고,{" "}
+                    <strong>처리위탁·국외이전·자동화 결정 적용</strong>은
+                    빠져 있어, 위 안내 문구를 공고 본문에 더해 보완합니다.
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-slate-900">
+                    Q. 자체 지원폼/오프라인 채용은요?
+                  </dt>
+                  <dd className="mt-1">
+                    A. 위 문구를 동의서 양식에 그대로 넣고{" "}
+                    <strong>체크박스 또는 서명</strong>을 받으세요. 받은 동의서는
+                    분쟁 대비 보관(5년 권장).
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-slate-900">
+                    Q. 지원자가 AI 평가를 거부하면?
+                  </dt>
+                  <dd className="mt-1">
+                    A. 그 지원자는 {SITE_INFO.serviceName} 에 올리지 마시고, 일반
+                    채용 절차(사람 면접)로 진행해 주세요. 거부권 보장은 §37의2 의
+                    핵심 요건입니다.
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </details>
       </section>
 
       <hr className="my-8 border-slate-200" />
       <div className="text-xs text-slate-500 space-y-1">
         <div>
-          본 템플릿은 일반적 가이드입니다. 채용 형태·산업 특성에 따라 법무
-          검토가 필요할 수 있습니다.
+          본 템플릿은 일반적 가이드입니다. 채용 형태·산업 특성에 따라 법무 검토가
+          필요할 수 있습니다.
         </div>
         <div>
           문의:{" "}

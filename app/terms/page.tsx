@@ -102,11 +102,11 @@ export default function TermsPage() {
               href="/legal/applicant-consent-template"
               className="text-primary hover:underline"
             >
-              표준 동의 문구 템플릿
+              표준 안내·동의 문구 템플릿
             </Link>
-            을 제공한다. 이용자는 본 템플릿을 사람인·잡코리아 등 채용 플랫폼의
-            추가 동의 항목 또는 자체 지원폼에 등록하여 후보자로부터 명시적
-            동의(체크박스·서명)를 받을 수 있다.
+            을 제공한다. 이용자는 본 템플릿을 채용 공고의 상세 내용(본문)에
+            게시하여 AI 평가 적용 사실·거부권을 고지하거나, 자체 지원폼·동의서에
+            등록하여 후보자로부터 명시적 동의(체크박스·서명)를 받을 수 있다.
           </li>
           <li>
             업로드 화면의 &quot;지원자 동의 확인&quot; 체크박스 클릭은 이용자가
