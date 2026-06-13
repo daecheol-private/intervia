@@ -31,6 +31,9 @@ import {
   CheckCircle2,
   Workflow,
   Check,
+  Users,
+  User,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -1102,7 +1105,9 @@ async function Landing() {
   const freeJobs = Math.floor(WELCOME_BONUS_TOKENS / pricing.job_post);
   return (
     <main className="flex-1">
-      <section className="relative overflow-hidden bg-surface">
+      {/* 첫 화면 — Hero + 통계 밴드를 한 뷰포트에 (데스크톱). Hero 가 남는 높이를 채운다. */}
+      <div className="lg:flex lg:flex-col lg:min-h-[calc(100vh-3.5rem)]">
+      <section className="relative overflow-hidden bg-surface lg:flex-1 lg:flex lg:flex-col lg:justify-center">
         {/* 배경 장식 — radial primary + apricot accent + 미세 grid */}
         <div
           aria-hidden
@@ -1122,7 +1127,7 @@ async function Landing() {
           }}
         />
 
-        <div className="max-w-6xl mx-auto px-6 pt-16 pb-20 sm:pt-24 sm:pb-28 grid lg:grid-cols-[1.25fr_1fr] gap-12 lg:gap-12 items-center">
+        <div className="w-full max-w-6xl mx-auto px-6 pt-16 pb-12 sm:pt-20 sm:pb-16 grid lg:grid-cols-[1.25fr_1fr] gap-12 lg:gap-12 items-center">
           {/* Left — copy */}
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-card border border-border-default text-xs text-ink-soft shadow-sm mb-6">
@@ -1177,6 +1182,9 @@ async function Landing() {
           * 베타 사용자 내부 측정값 · 출시 후 실데이터로 갱신
         </p>
       </section>
+      </div>
+
+      <WhyNotJobBoard />
 
       <section className="relative overflow-hidden">
         {/* 배경 — 미세 dot + apricot glow 우측 */}
@@ -1435,6 +1443,251 @@ async function Landing() {
         </div>
       </section>
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 차별화 섹션 — "구인 사이트(사람인/잡코리아)와 다르다"를 양 vs 질로 대비.
+// 왼쪽: 구인 사이트가 주는 것 = 이력서 더미. 오른쪽: Intervia 가 주는 것 =
+// 면접 끝낸 후보 + 평가 리포트. 랜딩의 미니 목업·glow·반전 톤을 그대로 차용.
+// ---------------------------------------------------------------------------
+
+function WhyNotJobBoard() {
+  return (
+    <section className="relative overflow-hidden bg-card border-y border-border-default">
+      <div
+        aria-hidden
+        className="absolute -z-10 -left-40 top-1/3 w-[520px] h-[520px] rounded-full bg-primary-soft/50 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="absolute -z-10 right-0 top-10 w-[400px] h-[400px] rounded-full bg-accent/15 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10 opacity-[0.04]"
+        style={{
+          backgroundImage: "radial-gradient(var(--ink) 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+        }}
+      />
+
+      <div className="max-w-6xl mx-auto px-6 pt-12 pb-20 sm:pt-16 sm:pb-24">
+        {/* 헤더 */}
+        <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-14">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-card border border-border-default text-[11px] uppercase tracking-widest text-primary font-semibold mb-5 shadow-sm">
+            <Workflow className="w-3 h-3" strokeWidth={2.5} />
+            사람인·잡코리아와 다른 점
+          </div>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-ink leading-[1.15]">
+            공고를 올리는 곳이 아니라,
+            <br />
+            <span className="text-primary">지원자를 만나보는 곳</span>입니다.
+          </h2>
+          <p className="mt-5 text-base text-ink-soft leading-relaxed">
+            구인 사이트는 이력서를{" "}
+            <strong className="text-ink font-semibold">모아주고</strong> 끝납니다.
+            Intervia 는 그 다음 — 한 명 한 명{" "}
+            <strong className="text-ink font-semibold">면접하고 평가</strong>해
+            드립니다.
+          </p>
+        </div>
+
+        {/* 비교 — 데스크톱 가로(좌 더미 / 마커 / 우 리포트), 모바일 세로 */}
+        <div className="grid lg:grid-cols-[1fr_auto_1fr] items-center gap-6 lg:gap-3">
+          {/* 왼쪽 — 구인 사이트: 이력서 더미 */}
+          <div className="lg:scale-[0.97] lg:opacity-90">
+            <PanelLabel
+              eyebrow="구인 사이트가 주는 것"
+              title="이력서 더미"
+              Icon={Users}
+              tone="muted"
+            />
+            <div className="rounded-2xl bg-surface-alt/70 border border-border-default p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3 px-1">
+                <span className="text-xs font-semibold text-ink-soft">
+                  지원자 목록
+                </span>
+                <span className="text-[11px] text-ink-muted tabular-nums">
+                  247명
+                </span>
+              </div>
+              <div className="space-y-2">
+                <ResumeRow />
+                <ResumeRow />
+                <ResumeRow dim />
+                <ResumeRow dim />
+              </div>
+              <p className="mt-3.5 text-center text-[11px] text-ink-muted italic">
+                …이력서는 쌓이는데, 누가 좋은지는 직접 봐야 합니다
+              </p>
+            </div>
+          </div>
+
+          {/* 연결 마커 */}
+          <div className="flex lg:flex-col items-center justify-center gap-2 shrink-0">
+            <div className="w-11 h-11 rounded-full bg-card border border-border-strong shadow-md flex items-center justify-center">
+              <ArrowRight
+                className="w-5 h-5 text-primary rotate-90 lg:rotate-0"
+                strokeWidth={2.5}
+              />
+            </div>
+            <span className="text-[10px] uppercase tracking-widest text-ink-muted font-semibold">
+              그 다음
+            </span>
+          </div>
+
+          {/* 오른쪽 — Intervia: 면접 끝낸 후보 + 평가 리포트 */}
+          <div className="relative">
+            <div
+              aria-hidden
+              className="absolute -inset-4 -z-10 rounded-3xl bg-primary-soft/60 blur-2xl opacity-70"
+            />
+            <PanelLabel
+              eyebrow="Intervia 가 주는 것"
+              title="면접 끝낸 후보 + 평가"
+              Icon={Sparkles}
+              tone="brand"
+            />
+            <div className="rounded-2xl bg-card border-2 border-primary/25 ring-1 ring-primary/10 p-4 shadow-lg">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                    <User className="w-4 h-4 text-primary" strokeWidth={2} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-ink truncate">
+                      후보 ▦▦▦ · 백엔드 5년
+                    </div>
+                    <div className="text-[10px] text-ink-soft">
+                      AI 면접 완료 · 20분
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-0.5 px-2 py-1 rounded-lg bg-primary-soft shrink-0">
+                  <span className="text-base font-bold text-primary tabular-nums">
+                    4.6
+                  </span>
+                  <span className="text-[9px] text-primary/70">/5</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <SkillBar label="문제해결" pct={92} />
+                <SkillBar label="커뮤니케이션" pct={100} />
+                <SkillBar label="컬처핏" pct={84} />
+              </div>
+
+              <div className="mt-3.5 rounded-lg bg-surface-alt/60 border border-border-default px-3 py-2">
+                <p className="text-[11px] text-ink-soft leading-relaxed">
+                  <span className="text-primary font-semibold">AI 요약 · </span>
+                  결제 시스템 무중단 마이그레이션 경험이 직무와 정확히 부합.
+                </p>
+              </div>
+
+              <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-primary">
+                <CheckCircle2 className="w-4 h-4" strokeWidth={2.5} />
+                1차 면접 진행 권장
+              </div>
+            </div>
+
+            {/* 떠 있는 배지 */}
+            <div className="absolute -top-3 -right-3 rounded-lg bg-ink text-surface px-2.5 py-1.5 shadow-lg flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-accent" strokeWidth={2.5} />
+              <span className="text-[10px] font-semibold">자동 평가 완료</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 보완재 한 줄 */}
+        <div className="mt-16 pt-8 border-t border-border-default/60 text-center">
+          <p className="text-sm sm:text-base text-ink-soft">
+            사람인 · 잡코리아 · 자체 채용페이지 —{" "}
+            <span className="text-ink font-semibold">
+              어디서 지원자를 받든, 면접은 Intervia 로.
+            </span>
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PanelLabel({
+  eyebrow,
+  title,
+  Icon,
+  tone,
+}: {
+  eyebrow: string;
+  title: string;
+  Icon: LucideIcon;
+  tone: "muted" | "brand";
+}) {
+  const brand = tone === "brand";
+  return (
+    <div className="flex items-center gap-2.5 mb-3 px-1">
+      <div
+        className={
+          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border " +
+          (brand ? "bg-primary border-primary" : "bg-card border-border-default")
+        }
+      >
+        <Icon
+          className={"w-4 h-4 " + (brand ? "text-surface" : "text-ink-soft")}
+          strokeWidth={2.25}
+        />
+      </div>
+      <div>
+        <div
+          className={
+            "text-[10px] uppercase tracking-widest font-semibold " +
+            (brand ? "text-primary" : "text-ink-muted")
+          }
+        >
+          {eyebrow}
+        </div>
+        <div className="text-sm font-bold text-ink">{title}</div>
+      </div>
+    </div>
+  );
+}
+
+function ResumeRow({ dim }: { dim?: boolean }) {
+  return (
+    <div
+      className={
+        "flex items-center gap-2.5 rounded-lg bg-card border border-border-default px-3 py-2 " +
+        (dim ? "opacity-45" : "")
+      }
+    >
+      <div className="w-6 h-6 rounded-full bg-surface-alt shrink-0" />
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="h-2 w-20 rounded bg-border-strong/70" />
+        <div className="h-1.5 w-12 rounded bg-border-default" />
+      </div>
+      <span className="text-[9px] text-ink-muted bg-surface-alt rounded px-1.5 py-0.5 shrink-0 inline-flex items-center gap-1">
+        <FileText className="w-2.5 h-2.5" />
+        이력서.pdf
+      </span>
+    </div>
+  );
+}
+
+function SkillBar({ label, pct }: { label: string; pct: number }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="text-[10px] text-ink-soft w-16 shrink-0">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-surface-alt overflow-hidden">
+        <div
+          className="h-full rounded-full bg-primary"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-[9px] text-ink-muted tabular-nums w-6 text-right shrink-0">
+        {pct}
+      </span>
+    </div>
   );
 }
 

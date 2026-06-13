@@ -205,7 +205,24 @@ export function NavBar({
               />
             </div>
           </>
-        ) : null}
+        ) : (
+          // 비로그인 — 헤더 우측 상시 CTA (스크롤 위치와 무관하게 항상 노출)
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Link
+              href="/login"
+              className="text-sm font-medium text-ink-soft hover:text-ink px-2.5 py-1.5 rounded-lg hover:bg-surface-alt transition-colors"
+            >
+              로그인
+            </Link>
+            <Link
+              href="/signup"
+              className="inline-flex items-center text-sm font-semibold text-surface bg-primary hover:bg-primary-deep px-3 sm:px-4 py-1.5 rounded-lg shadow-sm transition-colors whitespace-nowrap"
+            >
+              <span className="sm:hidden">시작하기</span>
+              <span className="hidden sm:inline">무료로 시작하기</span>
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   );
