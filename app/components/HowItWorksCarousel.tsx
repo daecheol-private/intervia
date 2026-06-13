@@ -639,12 +639,18 @@ function SlideView({
             {slide.points.map((p, k) => (
               <li
                 key={k}
-                className="relative flex items-start gap-3 rounded-2xl rounded-tl-sm bg-surface-alt border border-border-default px-4 py-3"
+                className="relative flex items-start gap-3 rounded-2xl bg-surface-alt border border-border-default px-4 py-3"
               >
-                {/* 말풍선 꼬리 — 좌측(목업 쪽)을 향함 */}
+                {/* 말풍선 꼬리 — 좌측(목업 쪽)을 향하는 삼각형.
+                    바깥(테두리색)·안쪽(배경색) 2겹으로 그린다. 밑변이 풍선 본체
+                    안쪽까지 파고들도록 오른쪽으로 밀어, 목 부분 테두리 선을 덮는다. */}
                 <span
                   aria-hidden
-                  className="hidden lg:block absolute -left-1.5 top-4 w-3 h-3 rotate-45 bg-surface-alt border-l border-b border-border-default"
+                  className="absolute top-1/2 -translate-y-1/2 -left-[7px] w-0 h-0 border-y-[9px] border-y-transparent border-r-[9px] border-r-[color:var(--border)]"
+                />
+                <span
+                  aria-hidden
+                  className="absolute top-1/2 -translate-y-1/2 -left-[6px] w-0 h-0 border-y-[8px] border-y-transparent border-r-[8px] border-r-[color:var(--surface-alt)]"
                 />
                 <span className="relative shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-accent text-ink text-[11px] font-bold shadow-sm">
                   {k + 1}
