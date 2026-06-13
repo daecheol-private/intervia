@@ -1,0 +1,1 @@
+ALTER TABLE `job_postings` ADD `ai_screening_disabled` integer DEFAULT false NOT NULL;

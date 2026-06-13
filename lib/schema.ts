@@ -212,6 +212,12 @@ export const jobPostings = sqliteTable("job_postings", {
   // 공고 안내문(§37의2)의 [채용 담당 연락처] 자리에 주입되며 공고에 공개됨.
   // 생성 시 기본값 = 작성자 이메일, 같은 회사 도메인으로만 변경 가능. 구버전 공고는 null.
   recruitingContactEmail: text("recruiting_contact_email"),
+  // "AI 이력서 평가 없이 진행" — 동의(§37의2 고지)를 못 받은 경우 서류 AI평가를 끄고
+  // 업로드 허용. 이력서는 사람이 검토하고 AI는 면접(자체 동의)부터 적용. true 면 업로드 시
+  // 동의 attest 불요 + screening 큐 미등록.
+  aiScreeningDisabled: integer("ai_screening_disabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
   // 공고 라이프사이클 — 기본 2개월. 종결 후 +7일 = PDF 폐기 / +14일 = PII 폐기.
   status: text("status", { enum: ["active", "closed"] })
     .notNull()

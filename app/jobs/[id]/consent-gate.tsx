@@ -16,15 +16,43 @@ export function ApplicantConsentGate({
   confirmed,
   busy,
   jobId,
+  aiScreeningDisabled,
   onConfirm,
   onRevoke,
+  onSkipScreening,
+  onResumeScreening,
 }: {
   confirmed: boolean;
   busy: boolean;
   jobId?: number | string;
+  aiScreeningDisabled?: boolean;
   onConfirm: () => void | Promise<void>;
   onRevoke: () => void | Promise<void>;
+  onSkipScreening?: () => void | Promise<void>;
+  onResumeScreening?: () => void | Promise<void>;
 }) {
+  // 상태 1: AI 이력서 평가 없이 진행 중 — 동의 게이트 대신 안내 배너.
+  if (aiScreeningDisabled) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-2.5 flex items-center gap-2.5">
+        <div className="flex-1 min-w-0 text-xs text-amber-900 leading-relaxed">
+          <span className="font-semibold">AI 이력서 평가 없이 진행 중</span> — 이력서는
+          채용 담당자가 직접 검토하고, AI는 면접 단계(지원자 동의 후)부터 적용됩니다. 이
+          경우 공고에 AI 평가 안내를 넣지 않아도 됩니다.
+        </div>
+        {onResumeScreening && (
+          <button
+            onClick={onResumeScreening}
+            disabled={busy}
+            className="shrink-0 text-xs text-amber-700 hover:text-amber-900 hover:underline disabled:opacity-50"
+          >
+            AI 평가 다시 켜기
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (confirmed) {
     return (
       <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-2.5 flex items-center gap-2.5">
@@ -87,6 +115,20 @@ export function ApplicantConsentGate({
           </div>
         </div>
       </label>
+
+      {/* 보조 경로 — 동의(고지)를 넣기 어려운 경우: AI 이력서 평가 자체를 끄고 진행.
+         서류는 사람이 검토하고 AI 는 면접부터 적용되므로 §37의2 공고 고지가 불요해진다. */}
+      {onSkipScreening && (
+        <div className="mt-2.5 pt-2.5 border-t border-primary/10 text-center">
+          <button
+            onClick={onSkipScreening}
+            disabled={busy}
+            className="text-xs text-slate-500 hover:text-slate-700 hover:underline disabled:opacity-50"
+          >
+            안내를 넣기 어렵나요? AI 이력서 평가 없이 진행하기 →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

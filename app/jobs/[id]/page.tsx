@@ -116,6 +116,11 @@ export default function JobDetailPage() {
   // 공고 단위 DB 영구 저장 — job.applicantConsentConfirmedAt 으로 부터 복원.
   const [consentConfirmed, setConsentConfirmed] = useState(false);
   const [consentBusy, setConsentBusy] = useState(false);
+  // "AI 이력서 평가 없이 진행" — 동의(고지)를 못 받은 경우 서류 AI평가를 끄고 업로드 허용.
+  // true 면: 동의 attest 없이도 업로드 가능 + 업로드된 이력서는 AI 평가 큐에 안 들어감.
+  const [aiScreeningDisabled, setAiScreeningDisabled] = useState(false);
+  // 업로드 가능 조건 — 동의 확인됨 OR AI 서류평가 끔.
+  const canUpload = consentConfirmed || aiScreeningDisabled;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   // 업로드 진행 중 재진입 방지 — state 는 비동기 반영이라 빠른 연속 드롭을 못 막아 ref 로 동기 가드
@@ -141,9 +146,13 @@ export default function JobDetailPage() {
       }
       setLocked(null);
       setLoadError(null);
-      const j = (await r.json()) as Job & { applicantConsentConfirmedAt?: string | null };
+      const j = (await r.json()) as Job & {
+        applicantConsentConfirmedAt?: string | null;
+        aiScreeningDisabled?: boolean;
+      };
       setJob(j);
       setConsentConfirmed(!!j.applicantConsentConfirmedAt);
+      setAiScreeningDisabled(!!j.aiScreeningDisabled);
     } catch {
       setLoadError("failed");
     }
@@ -252,8 +261,9 @@ export default function JobDetailPage() {
   ) => {
     // 이미 업로드 진행 중이면 무시 (드래그앤드롭 등으로 인한 중복 업로드 방지)
     if (uploadingRef.current) return;
-    // 지원자 동의 확인 가드 — 서버에서도 게이트하지만 UX 위해 사전 차단
-    if (!consentConfirmed) {
+    // 지원자 동의 확인 가드 — 서버에서도 게이트하지만 UX 위해 사전 차단.
+    // 단, "AI 이력서 평가 없이 진행"(aiScreeningDisabled)이면 §37의2 고지가 불요라 통과.
+    if (!consentConfirmed && !aiScreeningDisabled) {
       notify(
         "이력서를 업로드하기 전, 지원자에게 'AI 평가 적용 + 거부 시 일반 절차 가능' 을 안내하셨는지 체크박스로 확인해 주세요.\n\n표준 안내 문구는 '자세히' 링크에서 확인할 수 있습니다.",
         { tone: "warn", title: "AI 평가 적용 고지 확인 필요" }
@@ -390,7 +400,7 @@ export default function JobDetailPage() {
         res = await fetch(`/api/jobs/${jobId}/candidates`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ blobs, applicantConsentConfirmed: true }),
+          body: JSON.stringify({ blobs, applicantConsentConfirmed: consentConfirmed }),
         });
       } else {
         setUploadProgress({
@@ -403,7 +413,7 @@ export default function JobDetailPage() {
         for (const { file, relativePath } of entries) {
           fd.append("file", file, relativePath);
         }
-        fd.append("applicantConsentConfirmed", "true");
+        fd.append("applicantConsentConfirmed", consentConfirmed ? "true" : "false");
         res = await fetch(`/api/jobs/${jobId}/candidates`, {
           method: "POST",
           body: fd,
@@ -1356,7 +1366,7 @@ export default function JobDetailPage() {
         summary={
           uploading
             ? `업로드 진행 중… ${uploadProgress?.pct ?? 0}%`
-            : !consentConfirmed
+            : !canUpload
               ? "AI 평가 적용 고지 확인 필요"
               : undefined
         }
@@ -1368,6 +1378,7 @@ export default function JobDetailPage() {
         confirmed={consentConfirmed}
         busy={consentBusy}
         jobId={jobId}
+        aiScreeningDisabled={aiScreeningDisabled}
         onConfirm={async () => {
           setConsentBusy(true);
           const r = await fetch(`/api/jobs/${jobId}/applicant-consent`, {
@@ -1399,6 +1410,37 @@ export default function JobDetailPage() {
           }
           setConsentConfirmed(false);
         }}
+        onSkipScreening={async () => {
+          if (
+            !(await confirmDialog(
+              "AI 이력서 평가 없이 진행합니다.\n이력서는 채용 담당자가 직접 검토하고, AI 는 면접 단계(지원자 동의 후)부터 적용됩니다. 이 경우 공고에 AI 평가 안내를 넣지 않아도 됩니다.",
+              { tone: "warn", title: "AI 이력서 평가 없이 진행", confirmText: "진행" }
+            ))
+          )
+            return;
+          setConsentBusy(true);
+          const r = await fetch(`/api/jobs/${jobId}/skip-screening`, {
+            method: "POST",
+          });
+          setConsentBusy(false);
+          if (!r.ok) {
+            notify(await r.text(), { tone: "danger", title: "설정 저장 실패" });
+            return;
+          }
+          setAiScreeningDisabled(true);
+        }}
+        onResumeScreening={async () => {
+          setConsentBusy(true);
+          const r = await fetch(`/api/jobs/${jobId}/skip-screening`, {
+            method: "DELETE",
+          });
+          setConsentBusy(false);
+          if (!r.ok) {
+            notify(await r.text(), { tone: "danger", title: "되돌리기 실패" });
+            return;
+          }
+          setAiScreeningDisabled(false);
+        }}
       />
       </div>
 
@@ -1425,7 +1467,7 @@ export default function JobDetailPage() {
             ? "border-slate-200 bg-slate-50 opacity-50 pointer-events-none"
             : uploading
               ? "border-slate-200 bg-slate-50 opacity-60 pointer-events-none"
-              : !consentConfirmed
+              : !canUpload
               ? "border-slate-200 bg-slate-50 opacity-60"
               : dragOver
                 ? "border-primary bg-primary-soft"
@@ -1454,12 +1496,12 @@ export default function JobDetailPage() {
         <div className="flex flex-col items-center gap-2">
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || !consentConfirmed || isExpired}
+            disabled={uploading || !canUpload || isExpired}
             className="text-sm font-medium text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
             title={
               isExpired
                 ? "공고 종결일이 지났습니다. 연장 후 업로드 가능"
-                : !consentConfirmed
+                : !canUpload
                   ? "먼저 AI 평가 적용 고지 확인을 완료해 주세요"
                   : ""
             }
@@ -1471,7 +1513,7 @@ export default function JobDetailPage() {
                 <span className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-primary animate-spin" />
                 업로드 중...
               </span>
-            ) : !consentConfirmed ? (
+            ) : !canUpload ? (
               "AI 평가 적용 고지 확인 후 업로드 가능"
             ) : (
               "파일을 끌어다 놓거나 클릭해 선택"
@@ -1479,7 +1521,7 @@ export default function JobDetailPage() {
           </button>
           <button
             onClick={() => folderInputRef.current?.click()}
-            disabled={uploading || !consentConfirmed || isExpired}
+            disabled={uploading || !canUpload || isExpired}
             className="text-xs text-slate-600 hover:text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
             📁 폴더로 선택하기

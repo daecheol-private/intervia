@@ -342,8 +342,9 @@ export async function POST(
     formName = (manifest.name || "").trim();
     formEmail = (manifest.email || "").trim();
     consentConfirmed = manifest.applicantConsentConfirmed === true;
-    // 동의 게이트는 blob fetch (외부 URL) 보다 먼저 수행 — SSRF 위험 + UX 지연 방지
-    if (!consentConfirmed) {
+    // 동의 게이트는 blob fetch (외부 URL) 보다 먼저 수행 — SSRF 위험 + UX 지연 방지.
+    // "AI 이력서 평가 없이 진행"(job.aiScreeningDisabled)이면 §37의2 고지가 불요라 통과.
+    if (!consentConfirmed && !job.aiScreeningDisabled) {
       return Response.json(
         {
           code: "applicant_consent_required",
@@ -429,8 +430,9 @@ export async function POST(
     }
   }
 
-  // 지원자 동의 확인 미체크 시 거부 — body 파싱 후 공통 게이트
-  if (!consentConfirmed) {
+  // 지원자 동의 확인 미체크 시 거부 — body 파싱 후 공통 게이트.
+  // 단, AI 이력서 평가를 끈 공고(job.aiScreeningDisabled)는 고지 불요라 업로드 허용.
+  if (!consentConfirmed && !job.aiScreeningDisabled) {
     return Response.json(
       {
         code: "applicant_consent_required",
@@ -561,7 +563,11 @@ export async function POST(
         resourceType: "candidate",
         resourceId: r.candidateId,
         orgId: job.orgId,
-        metadata: { name: r.name, attachments: r.attachments },
+        metadata: {
+          name: r.name,
+          attachments: r.attachments,
+          aiScreeningDisabled: job.aiScreeningDisabled,
+        },
       });
     }
   }
@@ -703,8 +709,11 @@ async function processGroup(args: {
       resumeFilePath: storedResumeKey,
       resumeText: "",
       resumeMaskedText: null,
-      applicantConsentConfirmedAt: new Date().toISOString(),
-      applicantConsentConfirmedByUserId: me.id,
+      // AI 평가를 끈 공고는 §37의2 동의 attest 가 없으므로 null (사람 검토 + 면접 단계 동의).
+      applicantConsentConfirmedAt: job.aiScreeningDisabled
+        ? null
+        : new Date().toISOString(),
+      applicantConsentConfirmedByUserId: job.aiScreeningDisabled ? null : me.id,
     })
     .returning();
 
@@ -751,16 +760,19 @@ async function processGroup(args: {
   //   2) POST 응답 후 triggerWorker 가 즉시 워커를 깨움 (+ cron 안전망).
   //
   // enqueue 단계가 실패해도 업로드 자체는 성공 처리 — 후보자 상세에서 "평가" 재시도 가능.
+  // AI 평가를 끈 공고는 서류평가 큐에 등록하지 않는다 (사람이 직접 검토 → 면접 단계로 진행).
   let enqueued = false;
-  try {
-    await enqueueScreening(inserted.id, me.id);
-    enqueued = true;
-  } catch (err) {
-    log.warn("auto_enqueue_after_upload_failed", {
-      candidateId: inserted.id,
-      jobId,
-      error: err instanceof Error ? err.message : String(err),
-    });
+  if (!job.aiScreeningDisabled) {
+    try {
+      await enqueueScreening(inserted.id, me.id);
+      enqueued = true;
+    } catch (err) {
+      log.warn("auto_enqueue_after_upload_failed", {
+        candidateId: inserted.id,
+        jobId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   return {
