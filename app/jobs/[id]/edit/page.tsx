@@ -289,11 +289,13 @@ export default function EditJobPage() {
 
         <Field label="AI 면접 인성검사 — 선호 특성">
           <p className="text-[11px] text-slate-500 mb-1.5 leading-relaxed">
-            면접 시작 시 후보자가 응답하는 인성검사(강제선택형)의 문항 구성과
-            면접 검증에 사용됩니다. 선택은 점수 가중치가 아니라 검증
-            우선순위입니다 — 선택한 특성은 심화 문항이 추가되고 면접에서 행동
-            사례로 검증됩니다 (최대 3개). 검사 결과는 점수에 반영되지 않는 참고
-            정보입니다.
+            <strong className="text-slate-600">
+              합불 점수에 반영되지 않는 참고용
+            </strong>
+            입니다 — 후보자가 면접 시작 전 응답하는 강제선택형 사전 문항이며,
+            결과는 면접 꼬리질문 설계에만 쓰입니다. 여기서 고른 특성(최대 3개)은
+            점수 가중치가 아니라 검증 우선순위로, 심화 문항이 추가되고 면접에서
+            행동 사례로 확인됩니다.
           </p>
           <TraitProfileSelector
             value={form.traitProfile}

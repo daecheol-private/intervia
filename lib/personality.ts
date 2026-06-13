@@ -102,7 +102,7 @@ export function traitProfileInputToJson(
 /**
  * 특성별 긍정 진술 10개 — 전부 바람직하게 들리도록 작성 (부정·역채점 진술 없음:
  * 강제선택에서는 "덜 좋아 보이는 쪽"이 생기면 그쪽이 자동으로 기피되어 변별이 깨진다).
- * 인덱스 0~3: 1라운드 / 4~7: 2라운드(같은 쌍 재질문) / 8~9: 심화(법인 high 특성).
+ * 인덱스 0~3: 1라운드(전체 10쌍) / 4~: 2라운드(앞 N쌍만 재질문) / 8: 심화(법인 high 특성). 나머지는 예비.
  */
 const STATEMENTS: Record<TraitKey, string[]> = {
   openness: [
@@ -200,8 +200,14 @@ function pairingKeyOf(x: TraitKey, y: TraitKey): string {
   return [x, y].sort().join("|");
 }
 
-// base 20문항(10쌍 × 2라운드) 결정적 생성 — 라운드별로 좌우를 뒤집어 위치 편향을 상쇄.
-// 진술 배정: 특성별 등장 순서대로 1라운드 0~3, 2라운드 4~7 사용 (재사용 없음).
+/**
+ * 2라운드(같은 특성쌍 재질문) 쌍 수 — 문항 길이 ↔ 무성의·무작위 응답 감지력의 트레이드오프.
+ * 1라운드는 항상 10쌍 전부(전 특성 커버), 2라운드는 앞 N쌍만 재질문해 플립 검사에 쓴다.
+ */
+const REPEAT_PAIRINGS_COUNT = 5;
+
+// 결정적 생성 — 라운드별로 좌우를 뒤집어 위치 편향을 상쇄.
+// 진술 배정: 특성별 등장 순서대로 1라운드 0~, 2라운드 4~ 사용 (재사용 없음).
 function buildBaseItems(): PersonalityItem[] {
   const items: PersonalityItem[] = [];
   for (const round of [0, 1] as const) {
@@ -212,7 +218,9 @@ function buildBaseItems(): PersonalityItem[] {
       agreeableness: 0,
       emotionalStability: 0,
     };
-    PAIRINGS.forEach(([x, y], i) => {
+    const pairings =
+      round === 0 ? PAIRINGS : PAIRINGS.slice(0, REPEAT_PAIRINGS_COUNT);
+    pairings.forEach(([x, y], i) => {
       const sx = STATEMENTS[x][round * 4 + used[x]++];
       const sy = STATEMENTS[y][round * 4 + used[y]++];
       const first = round === 0 ? { trait: x, text: sx } : { trait: y, text: sy };
@@ -232,8 +240,8 @@ function buildBaseItems(): PersonalityItem[] {
 const BASE_ITEMS: PersonalityItem[] = buildBaseItems();
 
 /**
- * 공고 특성 프로필에 따른 출제 세트 — base 20쌍은 항상, high 특성당 심화 2쌍 추가.
- * 같은 프로필이면 항상 같은 세트·순서 (결정적).
+ * 공고 특성 프로필에 따른 출제 세트 — base(1라운드 10 + 2라운드 N)는 항상, high 특성당 심화 1쌍 추가.
+ * 같은 프로필이면 항상 같은 세트·순서 (결정적). 총 문항 = (10 + REPEAT_PAIRINGS_COUNT) + high 수(0~3).
  */
 export function buildItemSet(profile?: TraitProfile | null): PersonalityItem[] {
   const p = profile ?? DEFAULT_TRAIT_PROFILE;
@@ -241,22 +249,17 @@ export function buildItemSet(profile?: TraitProfile | null): PersonalityItem[] {
   for (const t of TRAIT_KEYS) {
     if (p[t] !== "high") continue;
     const idx = TRAIT_KEYS.indexOf(t);
-    // 파트너는 순환상 다음 두 특성 — 결정적이고 특정 특성에 쏠리지 않음
-    const partners = [
-      TRAIT_KEYS[(idx + 1) % TRAIT_KEYS.length],
-      TRAIT_KEYS[(idx + 2) % TRAIT_KEYS.length],
-    ];
-    partners.forEach((partner, j) => {
-      const self = { trait: t, text: STATEMENTS[t][8 + j] };
-      const other = { trait: partner, text: STATEMENTS[partner][8 + j] };
-      items.push({
-        id: `em-${t}-${j + 1}`,
-        // 심화에서도 high 특성이 한쪽에 고정되지 않도록 좌우 교차
-        a: j === 0 ? self : other,
-        b: j === 0 ? other : self,
-        kind: "emphasis",
-        pairingKey: pairingKeyOf(t, partner),
-      });
+    // 파트너는 순환상 다음 특성 — 결정적이고 특정 특성에 쏠리지 않음
+    const partner = TRAIT_KEYS[(idx + 1) % TRAIT_KEYS.length];
+    const self = { trait: t, text: STATEMENTS[t][8] };
+    const other = { trait: partner, text: STATEMENTS[partner][8] };
+    items.push({
+      id: `em-${t}-1`,
+      // high 특성이 한쪽에 고정되지 않도록 idx 짝/홀로 좌우 교차 (위치 균형)
+      a: idx % 2 === 0 ? self : other,
+      b: idx % 2 === 0 ? other : self,
+      kind: "emphasis",
+      pairingKey: pairingKeyOf(t, partner),
     });
   }
   return items;
@@ -342,9 +345,10 @@ export function scoreResponses(
   const straightLining =
     answeredN >= 10 && Math.max(pos1, answeredN - pos1) / answeredN >= 0.9;
 
-  // 플립 검사 — 같은 특성 쌍의 base vs repeat 에서 선택 특성이 뒤집힌 쌍 수.
-  // 절반 이상(≥6/10) 뒤집히면 내용 기반 선택이 아니라는 신호.
+  // 플립 검사 — 같은 특성 쌍의 base vs repeat 에서 선택 특성이 뒤집힌 비율.
+  // 재질문 쌍의 60% 이상 뒤집히면 내용 기반 선택이 아니라는 신호 (재질문 수가 바뀌어도 비례 유지).
   let flips = 0;
+  let repeatTotal = 0;
   const baseChoice = new Map<string, TraitKey>();
   for (const it of items) {
     if (it.kind !== "base") continue;
@@ -355,9 +359,12 @@ export function scoreResponses(
     if (it.kind !== "repeat") continue;
     const v = byId.get(it.id);
     const prev = baseChoice.get(it.pairingKey);
-    if (v != null && prev && chosenTraitOf(it, v) !== prev) flips++;
+    if (v == null || !prev) continue;
+    repeatTotal++;
+    if (chosenTraitOf(it, v) !== prev) flips++;
   }
-  const inconsistent = flips >= 6;
+  // 재질문이 4쌍 미만이면 표본 부족 — 신호로 쓰지 않음
+  const inconsistent = repeatTotal >= 4 && flips / repeatTotal >= 0.6;
 
   const rushed =
     elapsedMs != null && elapsedMs > 0 && elapsedMs < answeredN * 2000;
