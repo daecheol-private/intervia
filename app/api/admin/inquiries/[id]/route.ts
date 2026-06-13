@@ -4,6 +4,7 @@
  * 권한: **system_admin 전용** (운영자 지원 데스크). org_admin·member 차단.
  * adminNote 는 고객의 "내 문의 내역"에 답변으로 노출되므로 신중히 작성.
  */
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { inquiries } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -42,6 +43,7 @@ export async function PATCH(
       status: inquiries.status,
       adminNote: inquiries.adminNote,
       contactEmail: inquiries.contactEmail,
+      userId: inquiries.userId,
     })
     .from(inquiries)
     .where(eq(inquiries.id, iid));
@@ -97,14 +99,18 @@ export async function PATCH(
   const shouldReply = becameResolved || noteChanged;
 
   if (shouldReply) {
-    void notifyInquiryReply({
-      source: row.source,
-      category: row.category,
-      status: next.status ?? row.status,
-      // 이번 PATCH 에 답변이 없으면 기존 답변을 그대로 사용.
-      adminNote: nextNote ?? row.adminNote,
-      contactEmail: row.contactEmail,
-    }).catch((e) => console.error("[inquiry] 회신 메일 실패:", e));
+    // after() — 응답 반환 후 실행 보장. void fire-and-forget 은 서버리스 suspend 로 유실됨.
+    after(() =>
+      notifyInquiryReply({
+        source: row.source,
+        category: row.category,
+        status: next.status ?? row.status,
+        // 이번 PATCH 에 답변이 없으면 기존 답변을 그대로 사용.
+        adminNote: nextNote ?? row.adminNote,
+        contactEmail: row.contactEmail,
+        userId: row.userId,
+      }).catch((e) => console.error("[inquiry] 회신 통지 실패:", e))
+    );
   }
 
   logAudit(req, {

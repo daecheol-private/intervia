@@ -370,7 +370,7 @@ PK 없음 — `(job_id, user_id)` UNIQUE.
 |---|---|---|
 | id | INTEGER PK auto | |
 | user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | 수신자 |
-| type | TEXT NOT NULL | `ai_interview_done`(내가 면접관인 공고의 AI 면접 평가 완료) / `round1_decision`(1차 면접 후 합·불 결정 대기) / `join_request`(신규 합류 요청 — org_admin) / `low_balance`(토큰 잔액 부족 — org_admin) / `new_org`(신규 법인 등록 — system_admin) / `candidate_appeal`(후보자 이의제기) / `schedule_confirmed` · `schedule_counter_proposed` · `schedule_withdrawn`(면접 일정 확정/역제시/지원취소) / `announcement`(공지) / `new_inquiry`(고객센터 접수 — system_admin) |
+| type | TEXT NOT NULL | `ai_interview_done`(내가 면접관인 공고의 AI 면접 평가 완료) / `round1_decision`(1차 면접 후 합·불 결정 대기) / `join_request`(신규 합류 요청 — org_admin) / `low_balance`(토큰 잔액 부족 — org_admin) / `new_org`(신규 법인 등록 — system_admin) / `candidate_appeal`(후보자 이의제기) / `schedule_confirmed` · `schedule_counter_proposed` · `schedule_withdrawn`(면접 일정 확정/역제시/지원취소) / `announcement`(공지) / `new_inquiry`(고객센터 접수 — system_admin) / `inquiry_replied`(문의 답변/완료 — 문의한 고객) |
 | title | TEXT NOT NULL | |
 | href | TEXT NOT NULL | 클릭 시 이동 경로 |
 | payload | TEXT NULL | JSON 문자열 — 알림별 부가 정보 (candidate_id, job_id, org_id 등) |
@@ -405,8 +405,9 @@ PK 없음 — `(job_id, user_id)` UNIQUE.
 
 - 후보자: 면접 화면/종료 화면 → `/interview/[token]/inquiry` (본인 이메일 매칭 불요 — 막힌 후보자 차단 방지).
 - 고객: `/support` 폼 + 본인 문의 내역. 관리자: `/admin/inquiries` 인박스 — **system_admin 전용**(고객센터=운영자 데스크, org_admin 은 제출만). 페이지는 서버 컴포넌트에서 역할 가드 + redirect.
-- 접수 시 (`notifyNewInquiry`, `lib/inquiry-notify.ts`): ① **시스템 관리자 인앱 알림**(`notifications.type='new_inquiry'`, SMTP 무관 항상) + ② 지원 이메일(`APPEAL_CONTACT`) 통지(SMTP 있을 때). 모두 실패해도 제출 성공.
-- 처리 시 (`notifyInquiryReply`, PATCH `/api/admin/inquiries/[id]`): **완료 전환 또는 운영팀 답변 작성/변경 시** `contact_email` 로 회신 메일 1회 발송 (운영팀 발신=시스템 기본 SMTP, `orgId:null`). 후보자(비로그인)가 처리 결과를 확인하는 유일한 채널. 단순 처리중 전환·답변 없는 재저장은 미발송.
+- 접수 시 (`notifyNewInquiry`, `lib/inquiry-notify.ts`): ① **시스템 관리자 인앱 알림**(`notifications.type='new_inquiry'`, SMTP 무관 항상) + ② 지원 이메일(`APPEAL_CONTACT`) 통지(수신자가 운영팀이므로 **시스템 기본 SMTP 고정**, `orgId:null` — 법인 SMTP 라우팅 시 법인 설정 오류로 누락). 모두 실패해도 제출 성공.
+- 처리 시 (`notifyInquiryReply`, PATCH `/api/admin/inquiries/[id]`): **완료 전환 또는 운영팀 답변 작성/변경 시** ① 문의자가 로그인 고객(`user_id` 있음)이면 **인앱 알림**(`type='inquiry_replied'`, href `/support`) + ② `contact_email` 로 회신 메일 1회 발송 (운영팀 발신=시스템 기본 SMTP, `orgId:null`). 후보자(비로그인)는 메일이 처리 결과를 확인하는 유일한 채널. 단순 처리중 전환·답변 없는 재저장은 미발송.
+- 통지 호출은 모두 라우트에서 next/server `after()` 로 — 응답 반환 후 실행 보장 (`void` fire-and-forget 은 서버리스 suspend 시 유실).
 
 ## consent_logs
 

@@ -8,6 +8,7 @@
  *
  * 접수 시 지원 이메일 통지 — 실패해도 DB 저장은 성공 응답.
  */
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import {
   interviewSessions,
@@ -98,14 +99,17 @@ export async function POST(
     metadata: { category, message_length: message.length },
   });
 
-  void notifyNewInquiry({
-    source: "candidate",
-    category,
-    message,
-    contactEmail: email,
-    orgName,
-    orgId,
-  }).catch((e) => console.error("[inquiry] 통지 메일 실패:", e));
+  // after() — 응답 반환 후 실행 보장. void fire-and-forget 은 서버리스 suspend 로 유실됨.
+  after(() =>
+    notifyNewInquiry({
+      source: "candidate",
+      category,
+      message,
+      contactEmail: email,
+      orgName,
+      orgId,
+    }).catch((e) => console.error("[inquiry] 접수 통지 실패:", e))
+  );
 
   return Response.json({ ok: true });
 }

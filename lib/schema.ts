@@ -1149,6 +1149,7 @@ export const notifications = sqliteTable("notifications", {
       "schedule_withdrawn",
       "announcement",
       "new_inquiry",
+      "inquiry_replied",
     ],
   }).notNull(),
   title: text("title").notNull(),
