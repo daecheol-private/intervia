@@ -83,7 +83,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           .select({
             name: organizations.name,
             cultureFitProfile: organizations.cultureFitProfile,
-            setupGuideDismissedAt: organizations.setupGuideDismissedAt,
           })
           .from(organizations)
           .where(eq(organizations.id, me.orgId))
@@ -460,8 +459,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const setup3 = totalCand > 0; // 이력서 업로드
   const setup4 = interviewReached > 0; // AI 면접 발송(응시 대기 이상)
   const setupComplete = setup1 && setup2 && setup3 && setup4;
-  // 법인 구성원이 가이드를 숨겼으면 hero/strip 모두 표시 안 함 (플로팅 위젯과 동일 정책)
-  const guideDismissed = orgRow?.setupGuideDismissedAt != null;
+  // 본인이 가이드를 숨겼으면 hero/strip 모두 표시 안 함 (플로팅 위젯과 동일 정책 — 개인 단위)
+  const guideDismissed = me.setupGuideDismissedAt != null;
   const firstJobId = jobsWithActions[0]?.id ?? null;
 
   return (

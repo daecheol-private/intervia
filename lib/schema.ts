@@ -20,8 +20,9 @@ export const organizations = sqliteTable("organizations", {
   // JD 와 별개로 법인 전반의 선호 인재상·정성 평가 기준을 저장 (CultureFitProfile JSON).
   // AI 이력서 평가·면접 질문 생성에 자동 반영. null = 미설정.
   cultureFitProfile: text("culture_fit_profile"),
-  // 시작 가이드(온보딩)를 법인 구성원이 직접 숨긴 시각. null = 계속 표시.
-  // 4단계 완료 여부와 무관하게 이 값이 찍히기 전까지 가이드 노출.
+  // [deprecated] 과거 "법인 단위" 가이드 숨김 시각. 숨김은 users.setupGuideDismissedAt
+  // (개인 단위)로 이관됨 — 한 구성원의 숨김이 다른 구성원(특히 인재상 설정 권한자)의
+  // 가이드까지 꺼버리던 문제 해소. 컬럼은 백필 소스·이력 보존용으로 유지(DROP 금지).
   setupGuideDismissedAt: text("setup_guide_dismissed_at"),
   // 시스템 관리자가 법인을 정지한 시각. null = 정상.
   // 정지 시 멤버 로그인 차단 + 신규 합류 차단. (진행 중 면접 세션은 그대로 종료까지)
@@ -86,6 +87,9 @@ export const users = sqliteTable("users", {
   // TOTP replay 방어 — 마지막으로 검증 성공한 timestep(counter). 이하(또는 같은) counter
   // 코드는 재사용 거부 (RFC 6238 권고). null 이면 아직 검증 이력 없음.
   lastTotpCounter: integer("last_totp_counter"),
+  // 시작 가이드(온보딩)를 본인이 직접 숨긴 시각 — 개인 단위. null = 계속 표시.
+  // 대시보드 hero/strip + 플로팅 위젯이 모두 이 값을 기준으로 함. 4단계 완료와 무관.
+  setupGuideDismissedAt: text("setup_guide_dismissed_at"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),

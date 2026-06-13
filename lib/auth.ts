@@ -75,6 +75,8 @@ export type CurrentUser = {
   status: "active" | "pending" | "disabled";
   /** 임시 비밀번호로 생성됨 — 변경 전까지 전역 오버레이로 차단 */
   mustChangePassword: boolean;
+  /** 시작 가이드를 본인이 숨긴 시각(개인 단위). null = 계속 표시 */
+  setupGuideDismissedAt: string | null;
   sessionToken: string; // 현재 세션 식별용 (UI 에서 "현재 디바이스" 표시)
 };
 
@@ -97,6 +99,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
       role: users.role,
       status: users.status,
       mustChangePassword: users.mustChangePassword,
+      setupGuideDismissedAt: users.setupGuideDismissedAt,
       orgSuspendedAt: organizations.suspendedAt,
     })
     .from(sessions)
@@ -137,6 +140,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     role: row.role,
     status: row.status,
     mustChangePassword: !!row.mustChangePassword,
+    setupGuideDismissedAt: row.setupGuideDismissedAt ?? null,
     sessionToken: token,
   };
 });

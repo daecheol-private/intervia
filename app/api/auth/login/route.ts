@@ -144,6 +144,7 @@ export async function POST(req: Request) {
       role: user.role,
       status: user.status,
       mustChangePassword: !!user.mustChangePassword,
+      setupGuideDismissedAt: user.setupGuideDismissedAt,
       sessionToken: token,
     },
     action: "login.success",

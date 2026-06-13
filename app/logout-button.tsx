@@ -14,6 +14,14 @@ export default function LogoutButton({
   const logout = async () => {
     setBusy(true);
     await fetch("/api/auth/logout", { method: "POST" });
+    // 세션 단위 클라이언트 캐시 비우기 — 같은 탭에서 다른 사용자가 재로그인할 때
+    // 이전 사용자의 상태가 새지 않도록. (가이드 숨김 캐시는 개인 단위이므로 특히 중요.
+    // localStorage 의 기기 환경설정(가이드 접힘/위치)은 보존)
+    try {
+      sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
     router.replace("/login");
     router.refresh();
   };

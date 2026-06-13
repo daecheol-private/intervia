@@ -218,7 +218,7 @@ export function SetupGuideWidget() {
         {confirmHide ? (
           <div className="flex items-center justify-between gap-2 pt-2">
             <span className="text-[11px] text-ink-soft">
-              법인 모든 구성원에게서 숨겨집니다.
+              내 화면에서만 숨겨집니다.
             </span>
             <span className="flex gap-1.5 shrink-0">
               <button

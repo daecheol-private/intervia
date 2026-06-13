@@ -18,7 +18,7 @@
 | office_address_detail | TEXT NULL | 상세 주소 |
 | allow_scan_ocr | INTEGER NOT NULL DEFAULT 0 | **OCR 개인정보 게이트** (boolean) — 스캔 PDF(텍스트 레이어 없음)를 Gemini 멀티모달 OCR 로 처리할지. OCR 은 마스킹 전 **원본** 이력서를 AI 수탁자에 전송하므로 처리방침·동의를 정비한 법인만 ON. OFF 면 스캔 PDF 는 평가 실패 → 재업로드 안내 |
 | culture_fit_profile | TEXT NULL | 법인 전반의 선호 인재상·정성 평가 기준 (`CultureFitProfile` JSON — 선호 인재상 + 정성 평가 항목 6종). `/org/settings` 에서 입력 — JD 와 별개로 AI 이력서 평가·면접 질문지(1·2차) 생성에 자동 반영. NULL=미설정. **존재 여부가 인성검사 출제 게이트**. JSON 내 `traitProfile` 은 레거시 — Big Five 선호 특성은 `job_postings.trait_profile` 로 이동(2026-06), 읽기 경로는 전부 공고 값 사용 |
-| setup_guide_dismissed_at | TEXT NULL | 시작 가이드(온보딩)를 법인 구성원이 직접 숨긴 시각. NULL=계속 표시. 4단계 완료와 무관하게 이 값이 찍히기 전까지 가이드(대시보드 hero/strip + 플로팅 위젯) 노출 |
+| setup_guide_dismissed_at | TEXT NULL | **[deprecated]** 과거 "법인 단위" 가이드 숨김 시각. 숨김은 `users.setup_guide_dismissed_at`(개인 단위)로 이관됨(0026). 백필 소스·이력 보존용으로 유지(DROP 금지) |
 | suspended_at | TEXT NULL | 시스템 관리자가 법인을 정지한 시각. NULL=정상. 정지 시 멤버 로그인 차단 + 신규 합류 차단 (진행 중 면접 세션은 종료까지 유지) |
 | suspended_reason | TEXT NULL | 정지 사유 |
 | verification_status | TEXT NOT NULL DEFAULT 'pending_review' | **사칭 방지 게이트** — `dart_matched`(DART 등록 사업자번호 일치 → 자동 검증) / `verified`(운영자 수동 확인) / `pending_review`(DART 미매칭 — 비상장사·신생법인, 운영자 검토 대기) / `rejected`(운영자가 사칭 판단해 거절) |
@@ -47,6 +47,7 @@
 | totp_secret | TEXT NULL | 2FA(TOTP) base32 시크릿 — AES-256-GCM 암호화 저장 (`lib/crypto.ts`) |
 | totp_enabled_at | TEXT NULL | 2FA 활성 시각. NULL=미활성 |
 | last_totp_counter | INTEGER NULL | TOTP replay 방어 — 마지막 검증 성공 timestep(counter). 이하(또는 같은) counter 코드는 재사용 거부 (RFC 6238). NULL=검증 이력 없음 |
+| setup_guide_dismissed_at | TEXT NULL | 시작 가이드(온보딩)를 본인이 직접 숨긴 시각 — **개인 단위**(0026). NULL=계속 표시. 4단계 완료와 무관하게 이 값이 찍히기 전까지 가이드(대시보드 hero/strip + 플로팅 위젯) 노출. `getCurrentUser`가 세션 조인으로 함께 로드 → `app/page.tsx`·`setup-progress` 라우트가 공유. (구 `organizations.setup_guide_dismissed_at`에서 이관) |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
 ## password_resets

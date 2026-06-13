@@ -1,10 +1,10 @@
 /**
  * 첫 실행 가이드 진행 상태 — 플로팅 위젯(SetupGuideWidget)용.
  * 단계 판정 기준은 대시보드(app/page.tsx)의 setup1~4 와 동일.
- * 노출 여부는 완료와 무관 — 법인 구성원이 숨기기(POST) 전까지 계속 표시.
+ * 노출 여부는 완료와 무관 — 본인이 숨기기(POST) 전까지 계속 표시(개인 단위).
  */
 import { db } from "@/lib/db";
-import { organizations, jobPostings, candidates } from "@/lib/schema";
+import { organizations, jobPostings, candidates, users } from "@/lib/schema";
 import { eq, count, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
@@ -23,7 +23,6 @@ export async function GET() {
     db
       .select({
         cultureFitProfile: organizations.cultureFitProfile,
-        setupGuideDismissedAt: organizations.setupGuideDismissedAt,
       })
       .from(organizations)
       .where(eq(organizations.id, orgId))
@@ -51,7 +50,9 @@ export async function GET() {
   const step3 = Number(candAgg?.total ?? 0) > 0;
   const step4 = Number(candAgg?.interviewReached ?? 0) > 0;
   return Response.json({
-    show: org != null && org.setupGuideDismissedAt == null,
+    // 숨김은 개인 단위(users.setupGuideDismissedAt) — 한 구성원의 숨김이 다른
+    // 구성원 화면에 영향 주지 않음. org 존재 여부만 추가로 가드.
+    show: org != null && me!.setupGuideDismissedAt == null,
     step1,
     step2,
     step3,
@@ -60,7 +61,7 @@ export async function GET() {
   });
 }
 
-/** 가이드 숨기기 — 법인 단위 (모든 구성원 화면에서 사라짐). 멤버도 가능. */
+/** 가이드 숨기기 — 개인 단위 (본인 화면에서만 사라짐). 멤버도 가능. */
 export async function POST() {
   const me = await getCurrentUser();
   const guard = requireUser(me);
@@ -69,8 +70,8 @@ export async function POST() {
     return new Response("법인 소속만 가능", { status: 400 });
 
   await db
-    .update(organizations)
+    .update(users)
     .set({ setupGuideDismissedAt: new Date().toISOString() })
-    .where(eq(organizations.id, me!.orgId));
+    .where(eq(users.id, me!.id));
   return Response.json({ ok: true });
 }
