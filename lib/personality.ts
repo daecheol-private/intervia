@@ -102,7 +102,8 @@ export function traitProfileInputToJson(
 /**
  * 특성별 긍정 진술 10개 — 전부 바람직하게 들리도록 작성 (부정·역채점 진술 없음:
  * 강제선택에서는 "덜 좋아 보이는 쪽"이 생기면 그쪽이 자동으로 기피되어 변별이 깨진다).
- * 인덱스 0~3: 1라운드(전체 10쌍) / 4~: 2라운드(앞 N쌍만 재질문) / 8: 심화(법인 high 특성). 나머지는 예비.
+ * 인덱스 0~3: 1라운드(전체 10쌍) / 4~5: 2라운드(앞 N쌍만 재질문) /
+ * 8: 심화 자기 진술 / 9: 심화 파트너 진술(자기 진술과 인덱스를 분리해야 high 특성이 인접해도 문장이 겹치지 않음). 6·7: 예비.
  */
 const STATEMENTS: Record<TraitKey, string[]> = {
   openness: [
@@ -251,8 +252,11 @@ export function buildItemSet(profile?: TraitProfile | null): PersonalityItem[] {
     const idx = TRAIT_KEYS.indexOf(t);
     // 파트너는 순환상 다음 특성 — 결정적이고 특정 특성에 쏠리지 않음
     const partner = TRAIT_KEYS[(idx + 1) % TRAIT_KEYS.length];
+    // 자기 진술은 8번, 파트너 진술은 9번 — 인덱스를 분리해야 파트너 특성도 high 라
+    // 자기 심화에서 파트너[8]을 자기 진술로 다시 써(같은 문장 중복) 출제되는 일이 없다.
+    // (각 특성은 정확히 한 번만 누군가의 파트너 → 파트너[9]끼리도 겹치지 않음)
     const self = { trait: t, text: STATEMENTS[t][8] };
-    const other = { trait: partner, text: STATEMENTS[partner][8] };
+    const other = { trait: partner, text: STATEMENTS[partner][9] };
     items.push({
       id: `em-${t}-1`,
       // high 특성이 한쪽에 고정되지 않도록 idx 짝/홀로 좌우 교차 (위치 균형)
