@@ -16,6 +16,7 @@ import { AppealsPanel } from "./appeals-panel";
 import { AttachmentsPanel } from "./attachments-panel";
 import { EditCandidateButton } from "./edit-candidate";
 import {
+  InterviewEvaluationPending,
   InterviewEvaluationRetry,
   InterviewLinkBox,
   InterviewResult,
@@ -46,6 +47,17 @@ import {
 } from "./shared";
 import { OutcomeBadge, StageBadge, StagePanel } from "./stage-panel";
 import type { Candidate, Job, Schedule, Session } from "./types";
+
+// 면접 종료 후 평가는 complete 요청 안에서 inline 생성된다(실측 약 1분, 최대 1~2분).
+// 이 유예시간 안에 evaluation=null 이면 "실패"가 아니라 "생성 중"으로 본다.
+const EVAL_GRACE_MS = 3 * 60 * 1000;
+
+/** 종료됐지만 아직 평가가 생성되는 중일 가능성이 높은 세션인지 (유예시간 내). */
+function evalLikelyRunning(s: Session | undefined): boolean {
+  if (!s || s.status !== "completed" || s.evaluation || !s.completedAt)
+    return false;
+  return Date.now() - Date.parse(s.completedAt) < EVAL_GRACE_MS;
+}
 
 export default function CandidateDetailPage() {
   const params = useParams<{ id: string }>();
@@ -108,6 +120,16 @@ export default function CandidateDetailPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.screeningPhase, data?.rescreening, data?.candidate]);
+
+  // AI 면접 평가가 inline 생성 중인 구간이면 완료/유예만료까지 폴링 → 자동으로 결과 반영.
+  // (completedSession 은 아래에서 계산되므로 여기선 data 에서 직접 파생 — 훅 순서 보존.)
+  useEffect(() => {
+    const cs = data?.sessions?.find((s) => s.status === "completed");
+    if (!evalLikelyRunning(cs)) return;
+    const t = setTimeout(() => void load(), 4000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   const createLink = async () => {
     setCreating(true);
@@ -780,13 +802,21 @@ export default function CandidateDetailPage() {
             disabled={aiStagePassed}
           />
         )}
-        {completedSession && !completedSession.evaluation && (
-          <InterviewEvaluationRetry
-            sessionId={completedSession.id}
-            onShowTranscript={() => setShowTranscript(true)}
-            onSuccess={load}
-          />
-        )}
+        {completedSession &&
+          !completedSession.evaluation &&
+          (evalLikelyRunning(completedSession) ? (
+            // 종료 직후 ~ 평가 완료 전: "실패" 대신 "생성 중" + 재평가 버튼 미노출.
+            <InterviewEvaluationPending
+              onShowTranscript={() => setShowTranscript(true)}
+            />
+          ) : (
+            // 유예시간이 지나도 evaluation 이 없으면 실제 실패 → 재평가 허용.
+            <InterviewEvaluationRetry
+              sessionId={completedSession.id}
+              onShowTranscript={() => setShowTranscript(true)}
+              onSuccess={load}
+            />
+          ))}
       </Section>
 
       {activeSchedule && (

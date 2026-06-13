@@ -218,8 +218,42 @@ export function InterviewLinkBox({
   );
 }
 
-/** 면접 종료됐는데 evaluation=null 인 케이스(LLM 평가 실패). 면접은 후차감이라 실패 시
- *  과금된 적이 없다(환불도 없음). 재시도해서 평가가 성공하면 그때 1건 차감된다. */
+/** 면접 종료 직후 ~ 평가 완료 전 구간: 평가는 complete 요청 안에서 inline 으로 생성되며
+ *  보통 1분 내외 걸린다. 이 구간을 "실패"로 표시하면 운영자가 재평가를 눌러 LLM 비용·중복
+ *  과금이 발생하므로(2026-06-13 사고), "생성 중"으로 표시하고 재평가 버튼을 노출하지 않는다.
+ *  부모가 폴링으로 결과를 받아 자동으로 InterviewResult 로 전환한다. */
+export function InterviewEvaluationPending({
+  onShowTranscript,
+}: {
+  onShowTranscript: () => void;
+}) {
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-start gap-3">
+        <Loader2 className="w-5 h-5 animate-spin text-blue-500 shrink-0 mt-0.5" />
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-700 mb-0.5">
+            AI 평가 생성 중
+          </div>
+          <p className="text-blue-900 leading-relaxed">
+            면접이 정상 종료되어 AI 평가를 생성하고 있습니다. 보통 1분 내외
+            소요되며, 완료되면 결과가 자동으로 표시됩니다. 이 화면을 떠나도 평가는
+            계속 진행됩니다.
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={onShowTranscript}
+        className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+      >
+        대화록 보기
+      </button>
+    </div>
+  );
+}
+
+/** 면접 종료됐는데 evaluation=null 이고 생성 유예시간도 지난 케이스(LLM 평가 실패). 면접은
+ *  후차감이라 실패 시 과금된 적이 없다(환불도 없음). 재시도해서 평가가 성공하면 그때 1건 차감된다. */
 export function InterviewEvaluationRetry({
   sessionId,
   onShowTranscript,
