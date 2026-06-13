@@ -145,7 +145,7 @@
 
 ## 4. 백업 & 복구
 
-**정책 (C-2 결정 2026-06-07): Turso PITR(주) + 주간 오프사이트 dump(부).**
+**정책 (C-2 결정 2026-06-07, 갱신 2026-06-14): Turso PITR(주) + 일간 오프사이트 dump(부, 14일 보존).**
 
 별도 serverless export cron 은 두지 않는다 — Turso 의 PITR(시점 복구)와 공식 `turso db dump` 가
 자체 구현보다 견고하고, 서버리스에서의 전체 dump 는 함수 타임아웃·부분실패 위험이 크다.
@@ -154,23 +154,63 @@
 - Turso 가 시점 복구를 제공. 실수 삭제·손상 시 특정 시각으로 복구.
 - 복구: `turso db shell` 또는 대시보드에서 PITR 으로 새 DB 생성 → 검증 → URL 교체. (정확한 절차는 Turso 문서 — 플랜별 보존기간 확인.)
 
-### 4-2. 2차 — 주간 오프사이트 dump (Turso 계정 자체 손실·오삭제 대비)
+### 4-2. 2차 — 일간 오프사이트 dump (자동, GitHub Actions)
 PITR 은 Turso 계정·DB 가 살아있을 때만 유효 → 계정 손실/오삭제 대비 **off-Turso 사본**을 둔다.
+**자동화됨**: [`.github/workflows/db-backup.yml`](../.github/workflows/db-backup.yml) — 매일 03:00 KST(18:00 UTC) +
+`workflow_dispatch` 수동 실행. `turso db dump` → **age 공개키로 암호화** → GitHub 아티팩트(14일 보존).
+읽기 전용(dump)만 하며 운영 DB 에 쓰지 않는다. 덤프는 후보자 PII 포함 → **평문/공개 저장 금지**(워크플로우가 암호화 후 평문 즉시 삭제).
 
-```bash
-# 운영자 로컬 또는 스케줄 머신(주 1회 권장)
-turso db dump <db-name> --output backups/intervia-$(date +%Y%m%d).sql
-# 안전한 곳에 보관 (암호화 저장소 — 후보자 PII 포함이므로 접근통제 필수)
+**1회 설정** (GitHub repo → Settings):
+| 종류 | 키 | 값 | 비고 |
+|---|---|---|---|
+| Variable | `TURSO_DB_NAME` | 운영 DB 이름 | `turso db list` 또는 Turso 대시보드 |
+| Secret | `TURSO_API_TOKEN` | 플랫폼 API 토큰 | 대시보드 Account → API Tokens(또는 `turso auth api-tokens mint backup-ci`). DB auth token 과 **다름** |
+| Secret | `BACKUP_AGE_PUBLIC_KEY` | `age1...` 공개키 | 아래 키페어 생성 |
+
+```powershell
+# age 키페어 생성 (로컬, 1회) — age-keygen.exe 는 github.com/FiloSottile/age releases
+age-keygen -o intervia-backup-key.txt
+# 출력된 "Public key: age1..." → BACKUP_AGE_PUBLIC_KEY secret 에 등록
+# ⚠️ intervia-backup-key.txt(private key)는 비밀번호 관리자에 보관 — 이게 없으면 백업 복호화 불가
 ```
-- (선택) GitHub Actions `schedule` 로 자동화 가능 — turso CLI + `TURSO_AUTH_TOKEN` secret, dump 를 아티팩트/암호화 스토리지로. 덤프는 PII 포함이라 공개 저장소·평문 보관 금지.
+> 비대칭(age 공개키) 채택 이유: 러너·아티팩트엔 **공개키만** 올라가 복호화 비밀이 GitHub 에 일절 없다.
+> GitHub 계정이 통째로 털려도 private key(오프라인) 없이는 PII 를 못 읽는다. 대신 **private key 분실 = 백업 영구 복호화 불가**이므로 반드시 durable 보관.
 
 ### 4-3. 복구 절차
+
+**공통 0~2단계 — 백업을 스크래치 DB 로 복원** (운영 아님, 안전):
 ```bash
-# 빈/새 DB 에 dump 적용
+# 0) 아티팩트 내려받기: GitHub → Actions → Weekly DB Backup → 해당 run → Artifacts → intervia-db-YYYYMMDD
+# 1) 복호화 (오프라인 보관한 private key 로만 가능)
+age -d -i intervia-backup-key.txt -o dump.sql dump.sql.age
+# 2) 스크래치 DB 로 복원
 turso db create intervia-restore
-turso db shell intervia-restore < backups/intervia-YYYYMMDD.sql
-# 검증 후 앱의 TURSO_DATABASE_URL/TOKEN 교체 → redeploy
+turso db shell intervia-restore < dump.sql
 ```
+
+**(A) 전체 복구** — 운영 DB 자체가 손상/소실:
+```bash
+# 검증(행 수·핵심 테이블 스팟체크) 후 앱의 TURSO_DATABASE_URL/TOKEN 을
+# intervia-restore 로 교체 → redeploy.  (시점 단위면 PITR 가 더 정밀 — §4-1)
+```
+
+**(B) 법인 단위 복구** — 한 법인만 잘못 삭제/손상 (다른 법인 활동은 보존):
+전체 스왑/PITR 은 *다른 법인들의 그동안 정상 활동까지* 되돌리므로 부적절. 해당 법인 서브트리만
+추출해 운영에 재삽입한다. [`scripts/restore-org.ts`](../scripts/restore-org.ts) 가 읽기 전용으로
+INSERT SQL 을 뽑아준다 (운영 직접 쓰기 X — 사람이 검토 후 수동 적용).
+```powershell
+# 스크래치 DB 를 소스로 지정
+$env:RESTORE_DATABASE_URL = "libsql://intervia-restore-....turso.io"
+$env:RESTORE_AUTH_TOKEN   = "<intervia-restore 토큰>"   # turso db tokens create intervia-restore
+npm run db:restore-org                    # 법인 목록 (org_id 확인)
+npm run db:restore-org -- --org <id>      # → restore-org-<id>.sql 생성 (FK 순서대로)
+# 생성 SQL 검토 → 🚨 사용자 승인 + 직전 백업 확보 후 운영 적용:
+turso db shell <운영DB> < restore-org-<id>.sql
+```
+- 삭제분 재삽입은 기본(`--conflict error`). 이미 있는 행 덮어쓰기(롤백)는 `--conflict replace` →
+  **운영 데이터 변경이므로 절대 규칙 적용**(승인+백업+대상 행 확인).
+- 전역/공유(screening_cache·token_pricing·marketing_recipients)·휘발 인증 테이블은 추출 제외.
+  포함 테이블·FK 순서·근거는 스크립트 상단 주석 참조. 로컬 검증: FK ON 빈 스키마 라운드트립 통과(2026-06-14).
 
 ### 4-4. 분기 복구 드릴 (3-2-2)
 분기 1회: 최신 dump 를 임시 DB 에 복구 → 행 수·핵심 테이블 스팟체크. "백업이 실제로 복구되는가"를 확인(백업의 존재 ≠ 복구 가능).
