@@ -71,7 +71,6 @@
 | PUT | `/api/jobs/[id]` | 🔑. `traitProfile` 키가 있을 때만 갱신 (high 최대 3개) |
 | DELETE | `/api/jobs/[id]` | 🔑 + cascade. **생성 5분 내 삭제 시 자동 환불** |
 | POST | `/api/jobs/[id]/unlock` | PIN 잠금 해제 쿠키 세팅 |
-| POST | `/api/jobs/trait-suggest` | 공고 텍스트(직무·담당업무·자격요건·우대사항) → Big Five 선호 특성 LLM 제안 `{traitProfile, reasons}`. 공고 폼 버튼 1회성 (저장 전 폼에서도 사용 가능 — id 불필요). Rate limit 5/분 |
 
 ## 후보자 (Candidates)
 

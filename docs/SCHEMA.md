@@ -133,7 +133,7 @@
 | title / position / level / employment_type / responsibilities / requirements | TEXT NOT NULL | |
 | requirement_checklist | TEXT NOT NULL DEFAULT '' | JD 요건 체크리스트 — 공고 저장 시 LLM 이 주요업무+자격요건을 4~8개 항목으로 1회 분해해 저장 (JSON `string[]`). 이력서 평가가 이 고정 목록으로 `requirement_coverage` 를 판정 → **같은 공고는 후보자가 달라도 항상 동일한 JD 항목** 보장. 빈 ''=미생성(구버전 공고) |
 | ideal_profile | TEXT NOT NULL DEFAULT '' | 선호 인재상 — 평가·면접 시 추가 컨텍스트. 빈 문자열 허용 |
-| trait_profile | TEXT NULL | AI 면접 인성검사 선호 Big Five 특성 (`TraitProfile` JSON). NULL=전 특성 medium(기본 세트만 출제). **공고 단위** — 직무마다 검증 특성이 달라 법인 설정이 아님. high 는 검증 우선순위(심화 문항 + 면접 행동 검증) — 최대 3개 서버 검증. 공고 폼에서 `/api/jobs/trait-suggest` LLM 제안 가능. 마이그레이션 0024 가 기존 공고에 법인 레거시 값 복사 |
+| trait_profile | TEXT NULL | AI 면접 인성검사 선호 Big Five 특성 (`TraitProfile` JSON). NULL=전 특성 medium(기본 세트만 출제). **공고 단위** — 직무마다 검증 특성이 달라 법인 설정이 아님. high 는 검증 우선순위(심화 문항 + 면접 행동 검증) — 최대 3개 서버 검증, 공고 폼에서 담당자가 직접 선택. 마이그레이션 0024 가 기존 공고에 법인 레거시 값 복사 |
 | evaluation_focus | TEXT NOT NULL DEFAULT '' | AI 평가 중점 사항 — **HR 내부용, 후보자 비공개**. 평가 가중치 코멘트("보안 경력 최우선" 등)를 서류평가/면접 진행/면접 평가 프롬프트에 가이드 블록으로 주입. 차별 금지 항목(성별·나이·출신지·종교 등) 입력은 정책상 금지 |
 | tone | TEXT NOT NULL DEFAULT '중립적인' | 친절한/중립적인/엄격한 |
 | interview_duration_minutes | INTEGER NOT NULL DEFAULT 20 | |

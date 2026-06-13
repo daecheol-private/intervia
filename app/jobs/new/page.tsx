@@ -338,18 +338,11 @@ export default function NewJobPage() {
 
         <Field
           label="AI 면접 인성검사 — 선호 특성"
-          hint="면접 시작 시 후보자가 응답하는 인성검사(강제선택형)의 문항 구성과 면접 검증에 사용됩니다. 높음은 점수 가중치가 아니라 검증 우선순위입니다 — 높음 특성은 심화 문항이 추가되고 면접에서 행동 사례로 검증됩니다 (최대 3개). 검사 결과는 점수에 반영되지 않는 참고 정보입니다."
+          hint="면접 시작 시 후보자가 응답하는 인성검사(강제선택형)의 문항 구성과 면접 검증에 사용됩니다. 선택은 점수 가중치가 아니라 검증 우선순위입니다 — 선택한 특성은 심화 문항이 추가되고 면접에서 행동 사례로 검증됩니다 (최대 3개). 검사 결과는 점수에 반영되지 않는 참고 정보입니다."
         >
           <TraitProfileSelector
             value={form.traitProfile}
             onChange={(traitProfile) => setForm({ ...form, traitProfile })}
-            suggestSource={{
-              position: form.position,
-              level: form.level,
-              responsibilities: form.responsibilities,
-              requirements: form.requirements,
-              idealProfile: form.idealProfile,
-            }}
           />
         </Field>
       </div>
