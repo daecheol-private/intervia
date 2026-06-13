@@ -760,19 +760,18 @@ async function processGroup(args: {
   //   2) POST 응답 후 triggerWorker 가 즉시 워커를 깨움 (+ cron 안전망).
   //
   // enqueue 단계가 실패해도 업로드 자체는 성공 처리 — 후보자 상세에서 "평가" 재시도 가능.
-  // AI 평가를 끈 공고는 서류평가 큐에 등록하지 않는다 (사람이 직접 검토 → 면접 단계로 진행).
+  // AI 평가를 끈 공고도 enqueue 한다 — 워커가 파싱·PII추출·마스킹(기본 분석)까지 수행하고
+  // LLM 평가·점수·레포트만 건너뛴다 (runScreeningOnce 안에서 분기). 사람이 파싱 결과를 보고 진행.
   let enqueued = false;
-  if (!job.aiScreeningDisabled) {
-    try {
-      await enqueueScreening(inserted.id, me.id);
-      enqueued = true;
-    } catch (err) {
-      log.warn("auto_enqueue_after_upload_failed", {
-        candidateId: inserted.id,
-        jobId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+  try {
+    await enqueueScreening(inserted.id, me.id);
+    enqueued = true;
+  } catch (err) {
+    log.warn("auto_enqueue_after_upload_failed", {
+      candidateId: inserted.id,
+      jobId,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   return {

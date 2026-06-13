@@ -204,7 +204,7 @@ export function StagePanel({
   showFullResume: boolean;
   setShowFullResume: (v: boolean) => void;
   rescreening: boolean;
-  screeningPhase: "not_started" | "in_queue" | "done" | "failed";
+  screeningPhase: "not_started" | "in_queue" | "done" | "failed" | "skipped";
   screeningActive: boolean;
 }) {
   const [busy, setBusy] = useState(false);

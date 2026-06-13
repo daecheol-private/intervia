@@ -85,11 +85,18 @@ export async function GET(
   //   in_queue:    queued (워커 대기) 또는 processing (워커 점유) — UI polling
   //   done:        screeningReport 가 있음
   //   failed:      마지막 큐가 failed (리포트 없음)
-  let screeningPhase: "not_started" | "in_queue" | "done" | "failed";
+  let screeningPhase:
+    | "not_started"
+    | "in_queue"
+    | "done"
+    | "failed"
+    | "skipped";
   if (candidate.screeningReport) screeningPhase = "done";
   else if (lastJob?.status === "queued" || lastJob?.status === "processing")
     screeningPhase = "in_queue";
   else if (lastJob?.status === "failed") screeningPhase = "failed";
+  // AI 이력서 평가를 끈 공고 — 파싱만 끝나고 평가는 생략된 상태(점수·리포트 없음).
+  else if (job?.aiScreeningDisabled) screeningPhase = "skipped";
   else screeningPhase = "not_started";
 
   // 재평가 진행 중 — 기존 리포트가 있는데 새 평가 job 이 큐/처리중. (done 으로 가려지므로 별도 플래그)

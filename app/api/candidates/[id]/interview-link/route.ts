@@ -79,7 +79,8 @@ export async function POST(
 
   // AI 면접은 서류평가 결과(interview_focus / strengths / concerns)를 기반으로 진행되므로
   // 서류평가가 끝나지 않은 후보자는 면접 링크 생성 차단.
-  if (!candidate.screeningReport) {
+  // 단, AI 이력서 평가를 끈 공고(job.aiScreeningDisabled)는 리포트 없이도 면접 진행 가능.
+  if (!candidate.screeningReport && !job?.aiScreeningDisabled) {
     const [lastJob] = await db
       .select({ status: screeningJobs.status })
       .from(screeningJobs)

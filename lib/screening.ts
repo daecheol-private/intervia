@@ -780,6 +780,13 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
     throw new ScreeningError(`job ${candidate.jobId} 없음`, false);
   }
 
+  // AI 이력서 평가를 끈 공고 — 파싱·PII추출·마스킹(ensureParsed)과 중복제거까지만 수행하고
+  // LLM 평가·점수·레포트는 생략한다. 후보자는 점수 없이 면접 단계로 바로 진행 가능.
+  if (job.aiScreeningDisabled) {
+    log.info("screening_skipped_parse_only", { candidateId, jobId: job.id });
+    return;
+  }
+
   let cultureFit: CultureFitProfile | null = null;
   if (job.orgId) {
     const [orgRow] = await db
@@ -931,10 +938,17 @@ export async function chargeScreeningSuccess(
   candidateId: number
 ): Promise<void> {
   const [candidate] = await db
-    .select({ orgId: candidates.orgId, name: candidates.name })
+    .select({
+      orgId: candidates.orgId,
+      name: candidates.name,
+      aiScreeningDisabled: jobPostings.aiScreeningDisabled,
+    })
     .from(candidates)
+    .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
     .where(eq(candidates.id, candidateId));
   if (!candidate?.orgId) return;
+  // AI 평가를 끈 공고는 LLM 평가를 하지 않았으므로 서류 평가 과금도 하지 않는다.
+  if (candidate.aiScreeningDisabled) return;
   // 차감 주체 = 평가를 큐에 넣은 운영자 (업로드/재평가 요청자).
   const [sjob] = await db
     .select({ enqueuedByUserId: screeningJobs.enqueuedByUserId })

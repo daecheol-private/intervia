@@ -59,7 +59,7 @@ export default function CandidateDetailPage() {
     jobTraitProfile?: Record<string, string> | null;
     sessions: Session[];
     schedules: Schedule[];
-    screeningPhase: "not_started" | "in_queue" | "done" | "failed";
+    screeningPhase: "not_started" | "in_queue" | "done" | "failed" | "skipped";
     screeningError?: string | null;
     rescreening?: boolean;
     screeningActive?: boolean;
@@ -126,22 +126,49 @@ export default function CandidateDetailPage() {
       return;
     }
     // 링크 생성 직후 후보자 이메일이 있으면 자동 발송 (UX 한 스텝 축소).
-    // 발송 실패해도 링크 자체는 만들어졌으므로 사용자가 InterviewLinkBox 의
-    // "재발송" 버튼으로 수동 재시도 가능.
+    // 발송 결과를 사용자에게 팝업으로 알린다 — 실패해도 링크 자체는 만들어졌으므로
+    // InterviewLinkBox 의 "재발송" 버튼으로 수동 재시도 가능.
     const session = (await res.json().catch(() => null)) as
       | { id: number }
       | null;
     const candidateEmail = data?.candidate.email ?? null;
     if (session?.id && candidateEmail) {
       try {
-        await fetch(`/api/interview-sessions/${session.id}/send-email`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: candidateEmail }),
-        });
+        const sendRes = await fetch(
+          `/api/interview-sessions/${session.id}/send-email`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: candidateEmail }),
+          }
+        );
+        if (sendRes.ok) {
+          notify(`${candidateEmail} 으로 AI 면접 안내 메일을 발송했습니다.`, {
+            title: "면접 링크 발송 완료",
+            tone: "success",
+          });
+        } else {
+          const sendData = (await sendRes.json().catch(() => ({}))) as {
+            message?: string;
+          };
+          notify(
+            sendData.message ??
+              "면접 링크는 생성됐지만 메일 발송에 실패했습니다. 아래 '재발송' 버튼으로 다시 시도해 주세요.",
+            { title: "메일 발송 실패", tone: "danger" }
+          );
+        }
       } catch {
-        /* 발송 실패는 silent — UI 의 재발송 버튼으로 수동 처리 */
+        notify(
+          "면접 링크는 생성됐지만 메일 발송 중 오류가 발생했습니다. 아래 '재발송' 버튼으로 다시 시도해 주세요.",
+          { title: "메일 발송 실패", tone: "danger" }
+        );
       }
+    } else if (session?.id) {
+      // 후보자 이메일이 없어 자동 발송 불가 — 링크는 생성됐음을 안내.
+      notify(
+        "면접 링크가 생성되었습니다. 후보자 이메일이 없어 자동 발송되지 않았으니, 아래에서 이메일을 입력해 발송해 주세요.",
+        { title: "면접 링크 생성됨", tone: "info" }
+      );
     }
     setCreating(false);
     void load();
@@ -458,12 +485,41 @@ export default function CandidateDetailPage() {
             <span className="text-blue-600">⏳ 평가 진행 중</span>
           ) : screeningPhase === "failed" ? (
             <span className="text-danger">평가 실패</span>
+          ) : screeningPhase === "skipped" ? (
+            <span className="text-slate-500">AI 평가 안 함 · 동의 미확보</span>
           ) : (
             <span className="text-slate-400">평가 전</span>
           )
         }
       >
-        {screeningPhase === "not_started" ? (
+        {screeningPhase === "skipped" ? (
+          <div className="space-y-4">
+            <div className="text-sm bg-slate-50 border border-slate-200 text-slate-700 rounded-lg p-3 leading-relaxed">
+              <strong className="text-slate-800">
+                이력서 AI 평가 없이 진행 중입니다.
+              </strong>{" "}
+              지원자 동의(AI 평가 고지)를 받지 못해, 이 공고는 서류를 AI 로 평가하지
+              않습니다. 이력서는 파싱·정리만 되어 있고 채용 담당자가 직접 검토합니다.
+              <br />
+              나중에 지원자 동의를 확보하면, 공고의{" "}
+              <strong>“AI 평가 다시 켜기”</strong> 로 전환한 뒤 아래{" "}
+              <strong>“AI 검토 요청”</strong> 으로 평가할 수 있습니다.
+            </div>
+            {screenErr && (
+              <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
+                {screenErr}
+              </div>
+            )}
+            <button
+              onClick={startScreening}
+              disabled={screening}
+              className="px-5 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+            >
+              {screening && <Loader2 className="w-4 h-4 animate-spin" />}
+              {screening ? "요청 중..." : "AI 검토 요청"}
+            </button>
+          </div>
+        ) : screeningPhase === "not_started" ? (
           <div className="space-y-4">
             <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3">
               <strong>AI 평가가 시작되지 않았습니다.</strong> 보통 업로드 직후 자동으로 시작됩니다.
@@ -668,7 +724,7 @@ export default function CandidateDetailPage() {
                 AI 면접 전형이 종료되었습니다. 이미 다음 전형으로 진행된
                 후보자에게는 AI 면접 링크를 생성할 수 없습니다.
               </p>
-            ) : candidate.screeningReport ? (
+            ) : candidate.screeningReport || screeningPhase === "skipped" ? (
               <>
                 <p className="text-sm text-slate-600 mb-4">
                   아직 면접이 진행되지 않았습니다.

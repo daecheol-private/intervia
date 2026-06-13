@@ -1141,7 +1141,9 @@ export default function JobDetailPage() {
             {bulkBusy === "rescreen" ? "처리 중..." : "🔄 재평가"}
           </button>
         )}
-        {(onlyStage === "screened" || onlyStage === "ai_pending") && (
+        {(onlyStage === "screened" ||
+          onlyStage === "ai_pending" ||
+          (aiScreeningDisabled && onlyStage === "applied")) && (
           <button
             onClick={() => void bulkInterviewSend(inProgress.map((c) => c.id))}
             disabled={bulkBusy !== null}

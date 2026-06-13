@@ -176,7 +176,9 @@ export async function POST(
       results.push({ candidateId: c.id, status: "skipped", reason: "이메일 없음" });
       continue;
     }
-    if (!c.screeningReport) {
+    // AI 평가를 끈 공고(job.aiScreeningDisabled)는 서류평가 리포트 없이도 면접을 보낸다
+    // (파싱·마스킹만 된 후보자 → 면접 단계부터 AI 적용).
+    if (!c.screeningReport && !job.aiScreeningDisabled) {
       results.push({
         candidateId: c.id,
         status: "skipped",
