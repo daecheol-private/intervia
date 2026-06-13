@@ -11,6 +11,7 @@ import {
   parseTraitProfile,
   type TraitProfile,
 } from "@/lib/personality";
+import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
 
 type Form = {
   title: string;
@@ -26,6 +27,7 @@ type Form = {
   hasPassword: boolean;
   password: string; // 변경할 때만 입력 (빈문자열이면 유지/제거 토글)
   clearPassword: boolean;
+  recruitingContactEmail: string;
   traitProfile: TraitProfile;
 };
 
@@ -35,37 +37,62 @@ export default function EditJobPage() {
   const id = params.id;
   const [form, setForm] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
+  // 채용 담당자 이메일 기본값/도메인 검증용 — 로그인 사용자 이메일.
+  const [myEmail, setMyEmail] = useState<string | null>(null);
+  const myDomain = myEmail ? getEmailDomain(myEmail) : null;
 
   useEffect(() => {
-    void fetch(`/api/jobs/${id}`)
-      .then((r) => r.json())
-      .then((j) =>
-        setForm({
-          title: j.title,
-          position: j.position,
-          level: j.level,
-          employmentType: j.employmentType,
-          responsibilities: j.responsibilities,
-          requirements: j.requirements,
-          idealProfile: j.idealProfile ?? "",
-          evaluationFocus: j.evaluationFocus ?? "",
-          // 면접관 톤 선택 UI 제거 — 저장 시 "친절한"으로 통일 (API 계약 유지용으로 값만 전송)
-          tone: "친절한",
-          interviewDurationMinutes: j.interviewDurationMinutes ?? 20,
-          hasPassword: !!j.hasPassword,
-          password: "",
-          clearPassword: false,
-          // GET 응답은 DB 원본 JSON 문자열 — 파싱 실패·미설정은 전 특성 medium
-          traitProfile:
-            parseTraitProfile(j.traitProfile) ?? { ...DEFAULT_TRAIT_PROFILE },
-        })
-      );
+    void (async () => {
+      // 먼저 로그인 이메일을 받아 구버전(연락처 null) 공고의 기본값으로 쓴다.
+      let me: string | null = null;
+      try {
+        const s = await fetch("/api/auth/status").then((r) => r.json());
+        me = (s?.user?.email as string | undefined) ?? null;
+        if (me) setMyEmail(me);
+      } catch {
+        /* 비치명적 */
+      }
+      const j = await fetch(`/api/jobs/${id}`).then((r) => r.json());
+      setForm({
+        title: j.title,
+        position: j.position,
+        level: j.level,
+        employmentType: j.employmentType,
+        responsibilities: j.responsibilities,
+        requirements: j.requirements,
+        idealProfile: j.idealProfile ?? "",
+        evaluationFocus: j.evaluationFocus ?? "",
+        // 면접관 톤 선택 UI 제거 — 저장 시 "친절한"으로 통일 (API 계약 유지용으로 값만 전송)
+        tone: "친절한",
+        interviewDurationMinutes: j.interviewDurationMinutes ?? 20,
+        hasPassword: !!j.hasPassword,
+        password: "",
+        clearPassword: false,
+        recruitingContactEmail: j.recruitingContactEmail || me || "",
+        // GET 응답은 DB 원본 JSON 문자열 — 파싱 실패·미설정은 전 특성 medium
+        traitProfile:
+          parseTraitProfile(j.traitProfile) ?? { ...DEFAULT_TRAIT_PROFILE },
+      });
+    })();
   }, [id]);
 
   const submit = async () => {
     if (!form) return;
     if (form.password && !/^\d{4}$/.test(form.password)) {
       alert("비밀번호는 4자리 숫자여야 합니다.");
+      return;
+    }
+    const contactEmail = form.recruitingContactEmail.trim();
+    if (!contactEmail) {
+      alert("채용 담당자 이메일을 입력하세요.");
+      return;
+    }
+    if (!isValidEmail(contactEmail)) {
+      alert("채용 담당자 이메일 형식이 올바르지 않습니다.");
+      return;
+    }
+    if (myDomain && getEmailDomain(contactEmail) !== myDomain) {
+      alert(`채용 담당자 이메일은 회사 도메인(@${myDomain})만 사용할 수 있습니다.`);
       return;
     }
     setSaving(true);
@@ -196,6 +223,28 @@ export default function EditJobPage() {
               setForm({ ...form, requirements: e.target.value })
             }
           />
+        </Field>
+        <Field label="채용 담당자 이메일">
+          <input
+            className={inputCls}
+            type="email"
+            placeholder="예: recruiting@회사도메인.com"
+            value={form.recruitingContactEmail}
+            onChange={(e) =>
+              setForm({ ...form, recruitingContactEmail: e.target.value })
+            }
+          />
+          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+            지원자가 AI 평가 거부·이의제기 시 연락할 곳으로, 공고 안내문에
+            공개됩니다.
+            {myDomain && (
+              <>
+                {" "}
+                회사 도메인 <span className="font-mono">@{myDomain}</span> 만
+                사용할 수 있어요.
+              </>
+            )}
+          </p>
         </Field>
         <Field label="우대사항">
           <textarea

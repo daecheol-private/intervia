@@ -7,6 +7,11 @@ import { buildApplicantConsentTemplate } from "@/lib/consent-template";
 import { CopyButton } from "@/app/components/CopyButton";
 import { BackLink } from "@/app/components/BackLink";
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { jobPostings } from "@/lib/schema";
+import { ownsOrg } from "@/lib/tenant";
+import { eq } from "drizzle-orm";
 
 export const metadata = {
   title: `지원자 안내 문구 — ${SITE_INFO.serviceName}`,
@@ -19,12 +24,33 @@ export const metadata = {
  * 톤 원칙: HR 이 겁먹지 않도록 "30초 1단계" 액션을 맨 위에, 법조문·책임 배분은
  * 맨 아래 접힘 섹션으로. 법적 효력(약관 §5 진술·보증)은 그대로 유지.
  */
-export default function ApplicantConsentTemplatePage() {
+export default async function ApplicantConsentTemplatePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ jobId?: string }>;
+}) {
+  // 특정 공고에서 진입(?jobId=)하면 그 공고의 채용 담당자 이메일을 안내문에 주입.
+  // 본인 소속 공고만 조회 — 타 법인 연락처 열람 차단.
+  const sp = await searchParams;
+  let contactEmail: string | null = null;
+  if (sp.jobId) {
+    const me = await getCurrentUser();
+    if (me) {
+      const [job] = await db
+        .select({
+          orgId: jobPostings.orgId,
+          email: jobPostings.recruitingContactEmail,
+        })
+        .from(jobPostings)
+        .where(eq(jobPostings.id, Number(sp.jobId)));
+      if (job && ownsOrg(me, job.orgId)) contactEmail = job.email;
+    }
+  }
   const {
     koreanShort,
     korean: koreanTemplate,
     english: englishTemplate,
-  } = buildApplicantConsentTemplate();
+  } = buildApplicantConsentTemplate(contactEmail ?? undefined);
 
   return (
     <main className="max-w-3xl mx-auto w-full px-6 py-10">
@@ -86,10 +112,21 @@ export default function ApplicantConsentTemplatePage() {
         <pre className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs whitespace-pre-wrap font-mono text-slate-800 leading-relaxed">
           {koreanShort}
         </pre>
-        <p className="text-[11px] text-slate-400 mt-1.5">
-          <strong className="text-slate-500">[채용 담당 연락처]</strong> 부분만
-          회사 이메일·전화로 바꿔서 넣어주세요.
-        </p>
+        {contactEmail ? (
+          <p className="text-[11px] text-emerald-600 mt-1.5">
+            ✓ 이 공고의 채용 담당자 이메일(
+            <span className="font-mono">{contactEmail}</span>)이 자동으로
+            채워졌습니다. 그대로 복사해 공고에 붙여넣으세요.
+          </p>
+        ) : (
+          <p className="text-[11px] text-slate-400 mt-1.5">
+            <strong className="text-slate-500">[채용 담당 연락처]</strong> 부분은{" "}
+            <strong className="text-slate-500">반드시</strong> 회사 이메일로
+            바꿔서 넣어주세요. 비워 두면 지원자의 거부·이의제기 통로가 없어 안내
+            효력이 약해집니다. (AI 평가 기준·절차 안내 링크는 자동으로
+            채워집니다.)
+          </p>
+        )}
       </section>
 
       {/* ② 자체 지원폼/동의서용 — 전체 문구 (체크박스 동의용, 접힘) */}
@@ -182,6 +219,15 @@ export default function ApplicantConsentTemplatePage() {
               <strong>② 전체 문구</strong>와 <strong>필수 체크박스</strong>를
               넣으세요. 받은 동의 기록은 분쟁 대비 <strong>5년 보관</strong>을
               권장합니다.
+            </p>
+            <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+              건강·이력 등 민감정보가 오갈 수 있는 직군이거나 합·불 영향이 큰
+              채용이라면{" "}
+              <strong className="text-slate-700">
+                이 방법(체크박스 동의)을 권장
+              </strong>
+              합니다. 공고 본문 안내(방법 1)는 ‘고지’라, 분쟁 시 “지원자가
+              봤다·동의했다”는 사실을 입증하기 어렵습니다.
             </p>
           </div>
 
@@ -370,6 +416,18 @@ export default function ApplicantConsentTemplatePage() {
                     A. 그 지원자는 {SITE_INFO.serviceName} 에 올리지 마시고, 일반
                     채용 절차(사람 면접)로 진행해 주세요. 거부권 보장은 §37의2 의
                     핵심 요건입니다.
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-slate-900">
+                    Q. 이력서에 건강·종교 같은 민감정보가 있으면요?
+                  </dt>
+                  <dd className="mt-1">
+                    A. 채용에 꼭 필요하지 않은 민감정보(건강·종교·노조·정치성향
+                    등)는 공고에서 요구하지 마세요. {SITE_INFO.serviceName} 은 평가
+                    단계에서 이런 항목을 자동 마스킹하지만,{" "}
+                    <strong>수집·저장 단계의 책임은 채용기업</strong>에 있으므로
+                    처음부터 받지 않는 것이 가장 안전합니다.
                   </dd>
                 </div>
               </dl>

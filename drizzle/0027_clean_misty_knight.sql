@@ -1,0 +1,1 @@
+ALTER TABLE `job_postings` ADD `recruiting_contact_email` text;

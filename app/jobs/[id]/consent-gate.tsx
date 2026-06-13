@@ -15,11 +15,13 @@ import Link from "next/link";
 export function ApplicantConsentGate({
   confirmed,
   busy,
+  jobId,
   onConfirm,
   onRevoke,
 }: {
   confirmed: boolean;
   busy: boolean;
+  jobId?: number | string;
   onConfirm: () => void | Promise<void>;
   onRevoke: () => void | Promise<void>;
 }) {
@@ -55,7 +57,11 @@ export function ApplicantConsentGate({
 
       <div className="mt-2.5">
         <Link
-          href="/legal/applicant-consent-template"
+          href={
+            jobId
+              ? `/legal/applicant-consent-template?jobId=${jobId}`
+              : "/legal/applicant-consent-template"
+          }
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-2 text-xs font-medium text-white hover:bg-primary/90"
         >
           📋 안내 문구 보기 · 공고에 넣는 법 →

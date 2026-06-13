@@ -1367,6 +1367,7 @@ export default function JobDetailPage() {
       <ApplicantConsentGate
         confirmed={consentConfirmed}
         busy={consentBusy}
+        jobId={jobId}
         onConfirm={async () => {
           setConsentBusy(true);
           const r = await fetch(`/api/jobs/${jobId}/applicant-consent`, {

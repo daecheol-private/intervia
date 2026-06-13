@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Sparkles, Link2, Loader2 } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { TraitProfileSelector } from "@/app/components/TraitProfileSelector";
 import { DEFAULT_TRAIT_PROFILE, type TraitProfile } from "@/lib/personality";
+import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
 
 export default function NewJobPage() {
   const router = useRouter();
@@ -25,8 +26,26 @@ export default function NewJobPage() {
     tone: "친절한" as "친절한" | "중립적인" | "엄격한",
     interviewDurationMinutes: 10,
     password: "",
+    recruitingContactEmail: "",
     traitProfile: { ...DEFAULT_TRAIT_PROFILE } as TraitProfile,
   });
+
+  // 채용 담당자 이메일 기본값 = 로그인 사용자 이메일(공고에 공개될 §37의2 연락처).
+  // 같은 회사 도메인으로만 변경 가능 — 도메인은 안내·검증에 사용.
+  const [myDomain, setMyDomain] = useState<string | null>(null);
+  useEffect(() => {
+    void fetch("/api/auth/status")
+      .then((r) => r.json())
+      .then((d) => {
+        const email = d?.user?.email as string | undefined;
+        if (!email) return;
+        setMyDomain(getEmailDomain(email));
+        setForm((f) =>
+          f.recruitingContactEmail ? f : { ...f, recruitingContactEmail: email }
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   // URL 임포트 상태
   const [importUrl, setImportUrl] = useState("");
@@ -97,6 +116,19 @@ export default function NewJobPage() {
   const submit = async () => {
     if (!form.title || !form.position || !form.responsibilities || !form.requirements) {
       alert("필수 항목을 입력하세요.");
+      return;
+    }
+    const contactEmail = form.recruitingContactEmail.trim();
+    if (!contactEmail) {
+      alert("채용 담당자 이메일을 입력하세요.");
+      return;
+    }
+    if (!isValidEmail(contactEmail)) {
+      alert("채용 담당자 이메일 형식이 올바르지 않습니다.");
+      return;
+    }
+    if (myDomain && getEmailDomain(contactEmail) !== myDomain) {
+      alert(`채용 담당자 이메일은 회사 도메인(@${myDomain})만 사용할 수 있습니다.`);
       return;
     }
     if (form.password && !/^\d{4}$/.test(form.password)) {
@@ -273,6 +305,24 @@ export default function NewJobPage() {
             onChange={(v) => setForm({ ...form, requirements: v })}
           />
           <LengthHint value={form.requirements} min={10} />
+        </Field>
+
+        <Field
+          label="채용 담당자 이메일"
+          required
+          hint="지원자가 AI 평가 거부·이의제기 시 연락할 곳입니다. 공고 안내문에 표시되어 지원자에게 공개됩니다. 회사 이메일 도메인만 사용할 수 있어요."
+        >
+          <Input
+            placeholder="예: recruiting@회사도메인.com"
+            value={form.recruitingContactEmail}
+            onChange={(v) => setForm({ ...form, recruitingContactEmail: v })}
+          />
+          {myDomain && (
+            <p className="text-[11px] text-slate-400 mt-1">
+              회사 도메인 <span className="font-mono">@{myDomain}</span> · 기본값은
+              본인 이메일이며 같은 도메인으로 변경할 수 있습니다.
+            </p>
+          )}
         </Field>
 
         <Field label="우대사항">

@@ -8,11 +8,15 @@ import { COMPANY_INFO, SITE_INFO } from "./site-info";
  * /legal/applicant-consent-template 페이지가 동일 문구를 사용한다.
  * 법적 내용(처리위탁·국외이전·§37의2 권리·보유기간)은 여기서만 관리.
  */
-export function buildApplicantConsentTemplate(): {
+export function buildApplicantConsentTemplate(contactEmail?: string): {
   koreanShort: string;
   korean: string;
   english: string;
 } {
+  // 공고에 채용 담당자 이메일이 지정돼 있으면 그 값을 안내문에 주입. 없으면 placeholder 유지.
+  const contactForNotice = contactEmail?.trim() || "[채용 담당 연락처]";
+  const contactForForm = contactEmail?.trim() || "(채용기업 연락처 기재)";
+
   const korean = `[AI 채용 평가 적용 동의 — 본 채용 한정]
 
 귀하가 본 채용에 지원하신 이력서·자기소개서·포트폴리오 및 (해당 시) AI 면접 응답은,
@@ -44,6 +48,7 @@ export function buildApplicantConsentTemplate(): {
 
 5) 자동화된 의사결정에 관한 권리
    - 본 평가는 AI 가 점수·추천을 산출하나, 최종 합·불 결정은 채용 담당자가 수행합니다.
+   - AI 평가의 기준·절차·처리 방식 안내: ${SITE_INFO.baseUrl}/legal/ai-evaluation-disclosure
    - 귀하는 AI 평가 결과에 대한 설명 요구 및 이의제기를 할 수 있습니다.
      (이의제기 채널: 면접 종료 화면 또는 ${COMPANY_INFO.email} )
    - AI 평가 자체를 거부할 권리가 있으며, 거부 시 본 AI 평가 절차는 제외되고
@@ -55,7 +60,7 @@ export function buildApplicantConsentTemplate(): {
    - 본 채용서류는 홈페이지·전자우편 등 전자적 방법으로 제출되어 채용절차의 공정화에 관한
      법률 §11 에 따른 반환 의무 대상이 아니며, 불합격 확정 시 즉시, 늦어도 공고 종결 후
      14일 이내 파기됩니다 (최종 합격자 정보는 입사 절차 목적으로 보유)
-   - 파기 관련 문의: (채용기업 연락처 기재)
+   - 파기 관련 문의: ${contactForForm}
 
 ☐ 위 사항에 동의합니다 (필수, 거부 시 본 채용 지원 불가)`;
 
@@ -92,6 +97,7 @@ which we have contracted as a data processor, as follows:
 
 5) Rights Regarding Automated Decisions
    - AI produces scores/recommendations; final hiring decision is made by a human reviewer.
+   - Evaluation criteria, procedure and processing: ${SITE_INFO.baseUrl}/legal/ai-evaluation-disclosure
    - You may request explanation of and object to the AI evaluation result.
      (Channel: end of interview screen, or ${COMPANY_INFO.email})
    - You may refuse AI evaluation; in such case the AI step is skipped and you proceed
@@ -109,11 +115,11 @@ which we have contracted as a data processor, as follows:
   // 받고, 인프라 국외이전 명시 동의는 면접 시작 전 동의 화면에서 별도 취득.
   const koreanShort = `■ AI 평가 활용 안내
 
-본 채용은 지원 서류 및 (해당 시) 면접 평가에 AI(자동 분석)를 활용하며, 최종 합격 여부는 채용 담당자가 직접 결정합니다.
+본 채용은 지원 서류 및 (해당 시) 면접 평가에 AI(자동 분석)를 활용하며, 최종 합격 여부는 채용 담당자가 직접 결정합니다. AI 평가의 기준·절차·처리 방식은 다음에서 확인하실 수 있습니다: ${SITE_INFO.baseUrl}/legal/ai-evaluation-disclosure
 
-AI 평가를 원하지 않으시는 경우, 지원 시 또는 [채용 담당 연락처]로 알려주시면 AI 평가 없이 일반 채용 절차로 진행됩니다. AI 평가 결과에 대한 설명 요청·이의제기도 하실 수 있습니다.
+AI 평가를 원하지 않으시는 경우, 지원 시 또는 ${contactForNotice}로 알려주시면 AI 평가 없이 일반 채용 절차로 진행됩니다. AI 평가 결과에 대한 설명 요청·이의제기도 하실 수 있습니다.
 
-제출하신 서류는 본 채용 목적으로만 이용되며, 합격 여부 결정 시 파기됩니다.`;
+제출하신 서류는 본 채용 목적으로만 이용되며, 합격 여부 결정 시 파기됩니다(최종 합격자 정보는 입사 절차 목적으로 보유).`;
 
   return { koreanShort, korean, english };
 }

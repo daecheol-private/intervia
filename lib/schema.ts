@@ -208,6 +208,10 @@ export const jobPostings = sqliteTable("job_postings", {
   applicantConsentConfirmedByUserId: integer(
     "applicant_consent_confirmed_by_user_id"
   ).references(() => users.id, { onDelete: "set null" }),
+  // 지원자가 AI 평가 거부·이의제기 시 연락할 채용 담당자 이메일.
+  // 공고 안내문(§37의2)의 [채용 담당 연락처] 자리에 주입되며 공고에 공개됨.
+  // 생성 시 기본값 = 작성자 이메일, 같은 회사 도메인으로만 변경 가능. 구버전 공고는 null.
+  recruitingContactEmail: text("recruiting_contact_email"),
   // 공고 라이프사이클 — 기본 2개월. 종결 후 +7일 = PDF 폐기 / +14일 = PII 폐기.
   status: text("status", { enum: ["active", "closed"] })
     .notNull()

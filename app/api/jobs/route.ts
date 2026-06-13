@@ -7,6 +7,8 @@ import {
 } from "@/lib/schema";
 import { desc, eq, count, sql, and } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { getEmailDomain } from "@/lib/email-domain";
+import { validateRecruitingContactEmail } from "@/lib/job-contact";
 import { jobOrgFilter, requireUser } from "@/lib/tenant";
 import { isValidPin } from "@/lib/job-lock";
 import { rateLimit } from "@/lib/rate-limit";
@@ -111,6 +113,16 @@ export async function POST(req: Request) {
       ? Number(body.orgId ?? me!.orgId ?? 0) || null
       : me!.orgId;
 
+  // 채용 담당자 이메일 — §37의2 안내문에 공개될 연락처(지원자의 거부·이의제기 채널).
+  // 미입력 시 작성자 이메일로 폴백(빈칸 방지). 회사 도메인 외 이메일은 거부.
+  const expectedDomain =
+    me!.role === "system_admin" ? null : getEmailDomain(me!.email);
+  const contact = validateRecruitingContactEmail(
+    body.recruitingContactEmail || me!.email,
+    expectedDomain
+  );
+  if (!contact.ok) return new Response(contact.message, { status: 400 });
+
   // 잔액 가드 — 0 이하면 차단 (공고 생성도 토큰 차감 대상)
   const balanceGuard = await requireSpendableBalance(orgId, {
     isSystemAdmin: me!.role === "system_admin",
@@ -140,6 +152,7 @@ export async function POST(req: Request) {
       tone: body.tone ?? "중립적인",
       interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
       passwordHash,
+      recruitingContactEmail: contact.email,
       publishedAt: now.toISOString(),
       closesAt: defaultClosesAt(now),
       createdByUserId: me!.id,
