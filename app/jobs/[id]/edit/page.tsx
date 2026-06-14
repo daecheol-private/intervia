@@ -224,28 +224,6 @@ export default function EditJobPage() {
             }
           />
         </Field>
-        <Field label="채용 담당자 이메일">
-          <input
-            className={inputCls}
-            type="email"
-            placeholder="예: recruiting@회사도메인.com"
-            value={form.recruitingContactEmail}
-            onChange={(e) =>
-              setForm({ ...form, recruitingContactEmail: e.target.value })
-            }
-          />
-          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-            지원자가 AI 평가 거부·이의제기 시 연락할 곳으로, 공고 안내문에
-            공개됩니다.
-            {myDomain && (
-              <>
-                {" "}
-                회사 도메인 <span className="font-mono">@{myDomain}</span> 만
-                사용할 수 있어요.
-              </>
-            )}
-          </p>
-        </Field>
         <Field label="우대사항">
           <textarea
             className={inputCls + " h-24 resize-y"}
@@ -284,6 +262,29 @@ export default function EditJobPage() {
             value={form.traitProfile}
             onChange={(traitProfile) => setForm({ ...form, traitProfile })}
           />
+        </Field>
+
+        <Field label="채용 담당자 이메일">
+          <input
+            className={inputCls}
+            type="email"
+            placeholder="예: recruiting@회사도메인.com"
+            value={form.recruitingContactEmail}
+            onChange={(e) =>
+              setForm({ ...form, recruitingContactEmail: e.target.value })
+            }
+          />
+          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+            지원자가 AI 평가 거부·이의제기 시 연락할 곳으로, 공고 안내문에
+            공개됩니다.
+            {myDomain && (
+              <>
+                {" "}
+                회사 도메인 <span className="font-mono">@{myDomain}</span> 만
+                사용할 수 있어요.
+              </>
+            )}
+          </p>
         </Field>
 
         <Field label="공고 비밀번호">

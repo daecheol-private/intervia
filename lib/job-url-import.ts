@@ -15,6 +15,7 @@ import type { LookupOptions, LookupAddress } from "node:dns";
 import { isIP } from "node:net";
 import { Agent } from "undici";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
+import { TRAIT_KEYS, MAX_HIGH_TRAITS, type TraitKey } from "./personality";
 
 const FETCH_TIMEOUT_MS = 15_000;
 const MAX_HTML_BYTES = 2_000_000; // 2MB cap
@@ -37,6 +38,8 @@ export type ImportedJob = {
   responsibilities: string;
   requirements: string;
   idealProfile: string;
+  /** 직무 분석 기반 추천 인성 특성 (최대 MAX_HIGH_TRAITS개). 폼에서 high 로 미리 선택된다. */
+  preferredTraits: TraitKey[];
   /** 추출 신뢰도 (0~1). 빈 필드가 많으면 낮게. */
   confidence: number;
   /** 추가 메타. UI 안내용. */
@@ -367,14 +370,21 @@ const EXTRACTION_SCHEMA_HINT = `
   "employmentType": "고용 형태 (예: '정규직', '계약직', '인턴', '프리랜서')",
   "responsibilities": "담당 업무. 줄바꿈으로 구분된 bullet 리스트. 각 줄 앞에 '- '.",
   "requirements": "지원 자격/필수 요건. 줄바꿈으로 구분된 bullet 리스트. 각 줄 앞에 '- '.",
-  "idealProfile": "우대사항/선호 인재상. 줄바꿈으로 구분된 bullet 리스트. 각 줄 앞에 '- '. 없으면 빈 문자열."
+  "idealProfile": "우대사항/선호 인재상. 줄바꿈으로 구분된 bullet 리스트. 각 줄 앞에 '- '. 없으면 빈 문자열.",
+  "preferredTraits": ["이 직무를 잘 수행하는 데 가장 중요한 인성 특성 키 1~3개. 아래 5개 중에서만 고르고 가장 중요한 순서대로 나열."]
 }
 
 규칙:
 - 한국어 채용 공고. 응답도 한국어.
 - 광고·추천공고·복리후생·회사 소개는 제외 (요구된 필드에 포함시키지 말 것).
 - **학력·전공 요건은 추출하지 말 것** (블라인드 채용 — 채용절차 공정화법). requirements·idealProfile 에서 최종학력(고졸/초대졸/대졸/석사/박사 등) 조건과 전공(관련 전공 우대 등) 항목은 제외한다. 나이·성별·출신지역 등 차별 금지 항목도 동일하게 제외.
-- 추측·날조 X. 페이지에 없으면 빈 문자열.
+- title~idealProfile 은 추측·날조 X. 페이지에 없으면 빈 문자열.
+- preferredTraits 는 위 규칙의 예외 — 담당 업무·자격 요건을 분석해 직무 성격에서 추론한다 (공고에 명시되지 않아도 됨). 키는 영어 그대로, 아래 5개 중에서만 선택:
+  - "openness" (개방성·도전): 새로운 기술·방식을 시도하고 변화가 잦은 환경에 강함. 예) 신규 서비스 개발, 기획, R&D, 신기술 도입.
+  - "conscientiousness" (성실성·꼼꼼함): 계획적이고 세부를 꼼꼼히 챙겨 끝까지 마무리. 예) 회계·재무, QA, 운영, 품질·정확성이 중요한 직무.
+  - "extraversion" (외향성·표현력): 사람들과 적극적으로 소통하고 주도. 예) 영업, 마케팅, 고객상담, PM, 대외 협력.
+  - "agreeableness" (우호성·협업): 팀을 돕고 공동 목표를 우선. 예) 협업 중심 직무, 고객지원, HR, 조율 역할.
+  - "emotionalStability" (정서 안정성·회복탄력성): 압박·실패에도 침착. 예) 장애·위기 대응, 고강도 마감, 응급 상황 대처.
 - 마크다운 백틱 코드블록 없이 raw JSON 만 반환.
 `.trim();
 
@@ -423,6 +433,22 @@ ${text}
   }
 }
 
+/** LLM 이 준 preferredTraits 정규화 — 유효 TraitKey 만, 중복 제거, 최대 MAX_HIGH_TRAITS 개. */
+function normalizePreferredTraits(input: unknown): TraitKey[] {
+  if (!Array.isArray(input)) return [];
+  const out: TraitKey[] = [];
+  for (const v of input) {
+    if (out.length >= MAX_HIGH_TRAITS) break;
+    if (
+      typeof v === "string" &&
+      (TRAIT_KEYS as string[]).includes(v) &&
+      !out.includes(v as TraitKey)
+    )
+      out.push(v as TraitKey);
+  }
+  return out;
+}
+
 function finalize(j: Partial<ImportedJob>): ImportedJob {
   const filled = {
     title: (j.title ?? "").trim(),
@@ -441,7 +467,14 @@ function finalize(j: Partial<ImportedJob>): ImportedJob {
     1,
     filledCount / 3 + Math.min(0.2, responsibilityLines * 0.05)
   );
-  return { ...filled, confidence, meta: {} as ImportedJob["meta"] };
+  return {
+    ...filled,
+    preferredTraits: normalizePreferredTraits(
+      (j as { preferredTraits?: unknown }).preferredTraits
+    ),
+    confidence,
+    meta: {} as ImportedJob["meta"],
+  };
 }
 
 function isThin(j: ImportedJob): boolean {

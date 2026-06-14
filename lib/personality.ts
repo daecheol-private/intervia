@@ -72,6 +72,24 @@ export function highTraitCount(p: TraitProfile): number {
   return TRAIT_KEYS.filter((k) => p[k] === "high").length;
 }
 
+/**
+ * 추천 특성 키 배열 → TraitProfile. 배열에 든 유효 키는 high(심화 검증), 나머지는 medium.
+ * 앞쪽 우선으로 MAX_HIGH_TRAITS 개까지만 high 로 채우고, 알 수 없는 키는 무시한다.
+ * URL 임포트의 직무 분석 추천을 폼 상태로 변환하는 데 사용.
+ */
+export function traitProfileFromKeys(keys: readonly string[]): TraitProfile {
+  const out: TraitProfile = { ...DEFAULT_TRAIT_PROFILE };
+  let n = 0;
+  for (const k of keys) {
+    if (n >= MAX_HIGH_TRAITS) break;
+    if ((TRAIT_KEYS as string[]).includes(k) && out[k as TraitKey] !== "high") {
+      out[k as TraitKey] = "high";
+      n++;
+    }
+  }
+  return out;
+}
+
 /** job_postings.trait_profile JSON 파싱 — null·손상 JSON 은 null (전 특성 medium 취급) */
 export function parseTraitProfile(
   json: string | null | undefined

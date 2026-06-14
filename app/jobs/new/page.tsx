@@ -7,7 +7,11 @@ import { Sparkles, Link2, Loader2 } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { TraitProfileSelector } from "@/app/components/TraitProfileSelector";
-import { DEFAULT_TRAIT_PROFILE, type TraitProfile } from "@/lib/personality";
+import {
+  DEFAULT_TRAIT_PROFILE,
+  traitProfileFromKeys,
+  type TraitProfile,
+} from "@/lib/personality";
 import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
 
 export default function NewJobPage() {
@@ -79,6 +83,7 @@ export default function NewJobPage() {
       responsibilities: string;
       requirements: string;
       idealProfile: string;
+      preferredTraits: string[];
       confidence: number;
       meta: { usedImageFallback: boolean; imageCount: number; siteHint?: string };
     };
@@ -104,12 +109,16 @@ export default function NewJobPage() {
       responsibilities: d.responsibilities,
       requirements: d.requirements,
       idealProfile: d.idealProfile,
+      // 직무 분석으로 추천된 선호 특성을 미리 선택 (없으면 전 특성 medium 으로 초기화)
+      traitProfile: traitProfileFromKeys(d.preferredTraits ?? []),
     }));
     const bits = [
       `${d.meta.siteHint ?? "외부 사이트"}에서 추출`,
       `신뢰도 ${(d.confidence * 100).toFixed(0)}%`,
     ];
     if (d.meta.usedImageFallback) bits.push(`이미지 ${d.meta.imageCount}장 분석`);
+    if ((d.preferredTraits?.length ?? 0) > 0)
+      bits.push(`선호 특성 ${d.preferredTraits.length}개 자동 선택`);
     setImportInfo(`✓ 자동 채움 완료 — ${bits.join(" · ")}. 내용 확인 후 수정/저장하세요.`);
   };
 
@@ -307,24 +316,6 @@ export default function NewJobPage() {
           <LengthHint value={form.requirements} min={10} />
         </Field>
 
-        <Field
-          label="채용 담당자 이메일"
-          required
-          hint="지원자가 AI 평가 거부·이의제기 시 연락할 곳입니다. 공고 안내문에 표시되어 지원자에게 공개됩니다. 회사 이메일 도메인만 사용할 수 있어요."
-        >
-          <Input
-            placeholder="예: recruiting@회사도메인.com"
-            value={form.recruitingContactEmail}
-            onChange={(v) => setForm({ ...form, recruitingContactEmail: v })}
-          />
-          {myDomain && (
-            <p className="text-[11px] text-slate-400 mt-1">
-              회사 도메인 <span className="font-mono">@{myDomain}</span> · 기본값은
-              본인 이메일이며 같은 도메인으로 변경할 수 있습니다.
-            </p>
-          )}
-        </Field>
-
         <Field label="우대사항">
           <Textarea
             placeholder="예: 자율적으로 문제를 정의하고 풀어가는 사람, 팀과 적극적으로 소통하는 사람, 새 기술 학습에 열린 태도 등"
@@ -359,6 +350,24 @@ export default function NewJobPage() {
             value={form.traitProfile}
             onChange={(traitProfile) => setForm({ ...form, traitProfile })}
           />
+        </Field>
+
+        <Field
+          label="채용 담당자 이메일"
+          required
+          hint="지원자가 AI 평가 거부·이의제기 시 연락할 곳입니다. 공고 안내문에 표시되어 지원자에게 공개됩니다. 회사 이메일 도메인만 사용할 수 있어요."
+        >
+          <Input
+            placeholder="예: recruiting@회사도메인.com"
+            value={form.recruitingContactEmail}
+            onChange={(v) => setForm({ ...form, recruitingContactEmail: v })}
+          />
+          {myDomain && (
+            <p className="text-[11px] text-slate-400 mt-1">
+              회사 도메인 <span className="font-mono">@{myDomain}</span> · 기본값은
+              본인 이메일이며 같은 도메인으로 변경할 수 있습니다.
+            </p>
+          )}
         </Field>
 
         <Field label="공고 비밀번호 (선택)">
