@@ -51,7 +51,9 @@
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
 | GET | `/api/orgs/me/setup-progress` | 🔒 | 첫 실행 가이드 진행 상태 `{show, step1~4, firstJobId}` — 플로팅 위젯(`SetupGuideWidget`)용. 단계 판정은 대시보드 setup1~4 와 동일. `show`는 완료 여부와 무관 — 본인의 `users.setup_guide_dismissed_at` NULL 인 동안 true. system_admin/무소속은 `{show:false}` |
 | POST | `/api/orgs/me/setup-progress` | 🔒 | 가이드 숨기기 — 본인 `users.setup_guide_dismissed_at` 기록 (**개인 단위** — 본인 화면의 hero/strip/플로팅만 사라짐, 다른 구성원엔 영향 없음. 멤버도 가능) |
-| GET | `/api/orgs/me/tour-targets` | 🔒 | 인터랙티브 가이드(둘러보기) 대상 `{firstJobId, screenedCandidateId}` — 시작 가이드 단계(`guide-steps`) 런처용. 이력서 업로드 시나리오가 이동할 최신 공고 + AI 면접 시나리오 대상(`stage='screened'` 미종결 후보). 없으면 해당 시나리오 비활성. system_admin/무소속은 둘 다 null |
+| GET | `/api/orgs/me/tour-targets` | 🔒 | 인터랙티브 가이드(둘러보기) 대상 `{firstJobId, screenedCandidateId}` — 시작 가이드 단계(`guide-steps`) 런처용. 이력서 업로드 시나리오가 이동할 최신 공고 + AI 면접 시나리오 대상(`stage='screened'` 미종결 후보). 없으면 해당 시나리오 비활성. system_admin/무소속은 둘 다 null. **멤버는 접근 가능한 공고(PIN 없거나 본인이 면접관)로 한정** — 접근 불가 대상으로 안내해 따라하기→403→무한 리다이렉트 나던 것 방지 (`isAdmin`은 전체) |
+| GET | `/api/orgs/me/member-guides` | 🔒 | 멤버(면접관)가 본 페이지 가이드 키 `{seen: string[]}` — 멤버 전용(그 외 빈 배열). 멤버는 순차 온보딩 대신 공고/후보 페이지 첫 진입 시 자동 가이드 1회, 본 뒤로는 안 뜸 |
+| POST | `/api/orgs/me/member-guides` | 🔒 | 가이드 봤음 기록 — `{key}`(`job_page`/`candidate_page`)를 `users.seen_member_guides`에 누적(멱등). 멤버 전용 |
 | GET/PUT | `/api/orgs/me/culture-fit` | 🔒 / 🛡️ | 컬처핏 프로필 조회·저장 (`CultureFitProfile` — 인재상 + 정성 항목 6종). Big Five 선호 특성은 공고 단위로 이동 (`job_postings.trait_profile`) — 법인 JSON 의 `traitProfile` 은 레거시·미사용 |
 
 ## 사용자

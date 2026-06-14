@@ -60,9 +60,12 @@ export default async function RootLayout({
         />
         <div className="flex-1 flex flex-col">{children}</div>
         <Footer loggedIn={!!user} />
-        {user && user.role !== "system_admin" && <SetupGuideWidget />}
+        {/* 순차 온보딩 위젯은 법인담당자 전용 — 멤버(면접관)는 페이지 진입형 가이드를 쓴다. */}
+        {user && user.role === "org_admin" && <SetupGuideWidget />}
         {user && user.role !== "system_admin" && <TourOverlay />}
-        {user && user.role !== "system_admin" && <TourAutoStart />}
+        {user && user.role !== "system_admin" && (
+          <TourAutoStart role={user.role} />
+        )}
         {user?.mustChangePassword && (
           <ForcePasswordChange email={user.email} />
         )}

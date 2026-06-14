@@ -41,6 +41,10 @@ export function TourOverlay() {
   // 대상 페이지에서 이미 보여준 단계 키 — 사용자가 그 페이지를 떠났을 때
   // "붙잡아 되돌리기" 대신 "가이드 종료"로 구분하기 위함.
   const reachedRef = useRef<string | null>(null);
+  // 이 단계 목적지로 이미 router.push 를 한 번 보냈는지 — 목적지 페이지가
+  // 접근 거부(PIN·권한·만료·삭제)로 우리를 다른 경로로 튕겨낼 때, 끝없이 다시
+  // 보내는 무한 루프를 끊기 위한 1회 가드.
+  const navAttemptRef = useRef<string | null>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -48,6 +52,15 @@ export function TourOverlay() {
   const step: TourStep | undefined = scenario?.steps[active?.step ?? 0];
   const total = scenario?.steps.length ?? 0;
   const idx = active?.step ?? 0;
+
+  // 시나리오가 (재)시작될 때(step 0) 직전 세션의 도달/이동 기록을 비운다 —
+  // 같은 시나리오를 다시 실행했을 때 stale 기록 때문에 곧장 종료되지 않게.
+  useEffect(() => {
+    if (active?.step === 0) {
+      reachedRef.current = null;
+      navAttemptRef.current = null;
+    }
+  }, [active?.scenarioId, active?.step]);
 
   // 대상 탐색 + 이동. (시나리오/스텝/경로 변화마다)
   useEffect(() => {
@@ -80,12 +93,24 @@ export function TourOverlay() {
         tourStore.stop();
         return;
       }
+      // 이 단계 목적지로 이미 한 번 보냈는데 아직도 다른 경로에 있다 =
+      // 목적지가 접근 거부(PIN·권한·만료·삭제)로 우리를 튕겨낸 것. 무한히
+      // 다시 보내지 말고 가이드를 종료한다. (대상 선정 단계에서 막는 게 1차
+      // 방어, 이건 어떤 리다이렉트성 목적지든 막는 최종 안전장치.)
+      if (navAttemptRef.current === stepKey) {
+        navAttemptRef.current = null;
+        tourStore.stop();
+        return;
+      }
+      navAttemptRef.current = stepKey;
       setPhase("navigating");
       setRect(null);
       targetRef.current = null;
       router.push(resolvePath(step.path, params));
       return;
     }
+    // 목적지 경로에 도달 — 이동 시도 기록 해제(같은 단계 정상 재방문 허용).
+    navAttemptRef.current = null;
 
     let cancelled = false;
     let timer: number | undefined;

@@ -79,6 +79,41 @@ const AUTO_GUIDES: AutoGuide[] = [
   },
 ];
 
+// 멤버(면접관) 전용 페이지 가이드 — 진입한 페이지의 "할 일"을 1회 안내.
+// org_admin 의 데이터 기반 순차 가이드와 달리, 순서·완료 판정이 아니라 "이 멤버가
+// 이 페이지 가이드를 봤는가"(users.seenMemberGuides)로만 노출 여부를 정한다.
+type MemberGuide = {
+  key: string; // seenMemberGuides 에 기록할 키 (member-guides API 화이트리스트와 일치)
+  scenario: TourScenarioId;
+  match: (p: string) => Record<string, string> | null;
+  // 이 타깃이 DOM 에 떠야 시작 — 없으면 시작·기록 모두 안 함(정상 진입 시 재시도).
+  // 잠긴 공고(언락 전엔 job-header 없음)·평가 전 후보(screening-report 없음) 대응.
+  awaitTarget: string;
+};
+const MEMBER_GUIDES: MemberGuide[] = [
+  {
+    key: "job_page",
+    scenario: "member-job-page",
+    match: (p) => {
+      const m = /^\/jobs\/(\d+)$/.exec(p);
+      return m ? { jobId: m[1] } : null;
+    },
+    awaitTarget: '[data-tour="job-header"]',
+  },
+  {
+    // 후보 상세의 멤버 가이드는 법인담당자 step4(ai-interview)를 그대로 재사용.
+    key: "candidate_page",
+    scenario: "ai-interview",
+    match: (p) => {
+      const m = /^\/candidates\/(\d+)$/.exec(p);
+      return m ? { candidateId: m[1] } : null;
+    },
+    // 'AI면접 요청' 버튼이 있는 후보(평가완료·미발송)에서만 시작 — 법인담당자 step4 와 동일.
+    // 평가 전·이미 발송된 후보면 버튼이 없어 시작·기록 안 함(다음 대상 후보에서 재시도).
+    awaitTarget: '[data-tour="ai-interview-btn"]',
+  },
+];
+
 /** sel 이 DOM 에 나타나면 true, tries 회(×150ms) 안에 못 찾으면 false. */
 function waitForSelector(
   sel: string,
@@ -97,10 +132,43 @@ function waitForSelector(
   });
 }
 
-export function TourAutoStart() {
+export function TourAutoStart({
+  role,
+}: {
+  role: "org_admin" | "member";
+}) {
   const pathname = usePathname() ?? "";
 
   useEffect(() => {
+    // 멤버(면접관): 공고/후보 페이지 첫 진입 시 그 페이지 가이드 1회 (계정별 seen 기록).
+    // 진입한 페이지의 할 일을 한 번 안내하고, 노출된 뒤로는 다시 띄우지 않는다.
+    if (role === "member") {
+      const cfg = MEMBER_GUIDES.find((g) => g.match(pathname));
+      if (!cfg || tourStore.get()) return;
+      const params = cfg.match(pathname)!;
+      let cancelled = false;
+      fetch("/api/orgs/me/member-guides", { cache: "no-store" })
+        .then((r) => (r.ok ? (r.json() as Promise<{ seen: string[] }>) : null))
+        .then(async (data) => {
+          if (cancelled || !data || data.seen.includes(cfg.key)) return;
+          // 타깃이 떠야 시작 — 없으면(잠긴 공고·평가 전 후보) 시작·기록 모두 안 함.
+          const ok = await waitForSelector(cfg.awaitTarget, 40, () => cancelled);
+          if (!ok || cancelled || tourStore.get()) return;
+          tourStore.start(cfg.scenario, params);
+          // 노출 = 한 번 봄 → 즉시 기록. 다음 진입부터 안 뜸.
+          void fetch("/api/orgs/me/member-guides", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: cfg.key }),
+          }).catch(() => {});
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // org_admin: 미완료 단계 페이지 진입 시 자동 (데이터 상태 기반).
     if (settledForSession) return;
     const cfg = AUTO_GUIDES.find((g) => g.match(pathname));
     if (!cfg) return;
@@ -132,7 +200,7 @@ export function TourAutoStart() {
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, [pathname, role]);
 
   return null;
 }

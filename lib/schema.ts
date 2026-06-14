@@ -90,6 +90,11 @@ export const users = sqliteTable("users", {
   // 시작 가이드(온보딩)를 본인이 직접 숨긴 시각 — 개인 단위. null = 계속 표시.
   // 대시보드 hero/strip + 플로팅 위젯이 모두 이 값을 기준으로 함. 4단계 완료와 무관.
   setupGuideDismissedAt: text("setup_guide_dismissed_at"),
+  // 멤버(면접관)가 이미 본 페이지 컨텍스트 가이드 키 목록 — JSON 배열 문자열.
+  // 예: ["job_page","candidate_page"]. 멤버는 순차 온보딩(setupGuideDismissedAt) 대신
+  // "공고/후보 페이지 첫 진입 시 그 페이지 가이드가 한 번 뜨고, 본 뒤로는 안 뜸" 방식이라,
+  // 본 가이드 키를 여기 누적해 재노출을 막는다. 개인 단위(계정별). null = 아직 아무것도 안 봄.
+  seenMemberGuides: text("seen_member_guides"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),

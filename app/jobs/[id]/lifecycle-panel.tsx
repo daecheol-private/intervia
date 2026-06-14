@@ -250,7 +250,10 @@ export function InterviewersInline({ jobId }: { jobId: number }) {
   if (!data) return null;
 
   return (
-    <div className="flex items-center flex-wrap justify-end gap-1.5 text-xs">
+    <div
+      data-tour="interviewers-inline"
+      className="flex items-center flex-wrap justify-end gap-1.5 text-xs"
+    >
       <span className="text-slate-400">면접관</span>
       {data.interviewers.length === 0 ? (
         <span className="text-slate-400">미지정</span>

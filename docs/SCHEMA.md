@@ -47,7 +47,8 @@
 | totp_secret | TEXT NULL | 2FA(TOTP) base32 시크릿 — AES-256-GCM 암호화 저장 (`lib/crypto.ts`) |
 | totp_enabled_at | TEXT NULL | 2FA 활성 시각. NULL=미활성 |
 | last_totp_counter | INTEGER NULL | TOTP replay 방어 — 마지막 검증 성공 timestep(counter). 이하(또는 같은) counter 코드는 재사용 거부 (RFC 6238). NULL=검증 이력 없음 |
-| setup_guide_dismissed_at | TEXT NULL | 시작 가이드(온보딩)를 본인이 직접 숨긴 시각 — **개인 단위**(0026). NULL=계속 표시. 4단계 완료와 무관하게 이 값이 찍히기 전까지 가이드(대시보드 hero/strip + 플로팅 위젯) 노출. `getCurrentUser`가 세션 조인으로 함께 로드 → `app/page.tsx`·`setup-progress` 라우트가 공유. (구 `organizations.setup_guide_dismissed_at`에서 이관) |
+| setup_guide_dismissed_at | TEXT NULL | 시작 가이드(온보딩)를 본인이 직접 숨긴 시각 — **개인 단위**(0026). NULL=계속 표시. 4단계 완료와 무관하게 이 값이 찍히기 전까지 가이드(대시보드 hero/strip + 플로팅 위젯) 노출. `getCurrentUser`가 세션 조인으로 함께 로드 → `app/page.tsx`·`setup-progress` 라우트가 공유. (구 `organizations.setup_guide_dismissed_at`에서 이관) **법인담당자(org_admin) 전용** — 멤버는 이 순차 가이드를 안 보고 `seen_member_guides` 기반 페이지 가이드를 쓴다 |
+| seen_member_guides | TEXT NULL | 멤버(면접관)가 이미 본 **페이지 가이드** 키 목록 — JSON 배열 문자열 (예: `["job_page","candidate_page"]`). 멤버는 순차 온보딩 대신 "공고/후보 페이지 첫 진입 시 그 페이지 가이드 1회" 방식이라, 노출된 키를 누적해 재노출을 막는다(계정별). NULL=아직 없음. `/api/orgs/me/member-guides`(GET 조회·POST 기록)가 사용. org_admin·system_admin 은 미사용 (0030) |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
 ## password_resets

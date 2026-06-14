@@ -28,7 +28,9 @@ export type TourScenarioId =
   | "culture-fit"
   | "job-create"
   | "resume-upload"
-  | "ai-interview";
+  | "ai-interview"
+  // 멤버(면접관) 전용 — 공고 상세(이력서 목록) 페이지 첫 진입 시 자동 노출.
+  | "member-job-page";
 
 export type TourScenario = {
   id: TourScenarioId;
@@ -126,6 +128,37 @@ export const TOUR_SCENARIOS: TourScenario[] = [
         ],
         title: "확인했다면, AI 면접을 보내세요",
         body: "이 버튼을 누르면 면접 링크가 만들어지고 지원자 이메일로 자동 발송돼요. 지원자가 링크에 접속하면 AI 면접관이 채팅으로 면접을 진행합니다.",
+      },
+    ],
+  },
+  // 멤버(면접관) 전용 — /jobs/{jobId} 첫 진입 시 자동 노출. 순서 의존(데이터 상태)이
+  // 아니라 "이 페이지에서 할 일"을 위→아래로 안내. 후보 상세(/candidates/{id})의
+  // 멤버 가이드는 위 'ai-interview' 시나리오를 그대로 재사용한다(법인담당자 step4와 동일).
+  {
+    id: "member-job-page",
+    label: "이력서 목록 둘러보기",
+    emoji: "📑",
+    steps: [
+      {
+        path: "/jobs/{jobId}",
+        target: '[data-tour="job-header"]',
+        placement: "bottom",
+        title: "먼저 공고 내용을 확인하세요",
+        body: "상단에서 직무·자격요건·평가 항목 등 공고 내용을 확인할 수 있어요. 면접을 진행하기 전에 어떤 자리인지 먼저 파악해 두세요.",
+      },
+      {
+        path: "/jobs/{jobId}",
+        target: '[data-tour="interviewers-inline"]',
+        placement: "bottom",
+        title: "이 공고의 면접관으로 등록하세요",
+        body: "비밀번호로 잠긴 공고는 면접관으로 등록돼 있어야 열람할 수 있어요. 공유받아 들어온 공고는 자동으로 등록되지만, 직접 찾아온 공고는 여기 '+ 면접관 지정'으로 본인을 등록하세요. (이미 등록돼 있으면 이름이 표시됩니다.)",
+      },
+      {
+        path: "/jobs/{jobId}",
+        target: '[data-tour="candidate-list"]',
+        placement: "top",
+        title: "여기서 지원자 이력서를 확인해요",
+        body: "지원자 목록이에요. 상태별로 필터링할 수 있고, 한 명을 클릭하면 이력서 상세와 AI 서류평가 결과로 들어가 면접을 진행할 수 있어요.",
       },
     ],
   },

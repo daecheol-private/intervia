@@ -247,7 +247,7 @@ interviewer/
 
 신규/방문 사용자의 인지 부담을 낮추기 위한 **표시 계층** 단순화. 핵심 원칙은 **기능 삭제가 아니라 "필요할 때까지 숨김"** — 내부 데이터·라우트·stage enum 은 그대로 두고 첫 사용자의 시야에서만 치운다.
 
-- **대시보드 첫 실행 가이드** (`app/page.tsx` `SetupGuide`): 법인의 "인재상·컬쳐핏 확인 → 공고 → 이력서 → AI 면접" 첫 사이클 완료 여부로 4스텝 진행도를 계산.
+- **대시보드 첫 실행 가이드** (`app/page.tsx` `SetupGuide`, **법인담당자 org_admin 전용**): 법인의 "인재상·컬쳐핏 확인 → 공고 → 이력서 → AI 면접" 첫 사이클 완료 여부로 4스텝 진행도를 계산. (멤버는 아래 "멤버(면접관) 페이지 가이드"를 쓴다)
   - 진행 판정: `setup1`=`organizations.culture_fit_profile` 저장됨(설정 페이지 기본값 확인 후 저장 1회, CTA 는 `/org/settings#culture-fit`), `setup2`=공고>0, `setup3`=후보>0, `setup4`=stage 가 `ai_pending` 이상 도달(후보자 집계 `interviewReached`).
   - **공고 0개** → KPI/알림/공고목록 대신 hero 가이드만 노출 (가장 비어 있는 시점에 가장 빽빽하던 화면을 제거).
   - **일부 진행** → 대시보드 상단에 슬림 진행 스트립(`시작 가이드 N/4` + 다음 단계 CTA). **4스텝 완료** → 자동 숨김. 컬처핏 스텝 추가로 기존 3스텝 완료 법인도 컬처핏 미저장이면 스트립이 다시 노출(신기능 확인 유도 — 의도된 동작).
@@ -257,9 +257,13 @@ interviewer/
 - **인터랙티브 가이드(게임 튜토리얼식 둘러보기)** — 정적 안내를 넘어 실제 화면에서 대상 요소를 스포트라이트(딤+구멍) + 글로우 링 + 말풍선으로 짚어 준다. **별도 런처 섹션 없이, 시작 가이드 4단계 항목 자체가 곧 둘러보기 버튼**(단계를 누르면 단순 이동 대신 해당 투어 실행).
   - 정의: `lib/tour-scenarios.ts` (4 시나리오 = 컬쳐핏 등록 / 공고 등록 / 이력서 업로드[2스텝] / AI 면접). 각 스텝은 `path`(+hash, `{jobId}`/`{candidateId}` 치환) + `target`(CSS 선택자, 페이지의 `data-tour="..."` 속성) + 말풍선 문구 + 선택적 `presets`(이동 전 localStorage 세팅 — 접힌 Section 펼치기, 키도 `{jobId}` 치환). 단계↔시나리오 매핑은 `lib/setup-steps.ts` `SetupStep.tour`.
   - 상태: `app/components/tour/tour-store.ts` — sessionStorage 영속 + 구독 모듈 싱글톤(컨텍스트 대신). 라우트 이동에도 유지, 새로고침 복원.
-  - 오버레이: `app/components/tour/TourOverlay.tsx` (layout 마운트, system_admin 제외). 경로 불일치 시 `router.push` → 대상 요소 폴링(~5s) → 중앙 스크롤 → 스포트라이트(box-shadow 트릭) + 글로우 링(globals.css `tour-glow-ring`) + 말풍선(이전/다음/건너뛰기, ESC 닫기). 컨테이너 `pointer-events-none` 라 사용자가 안내 중에도 실제로 따라 할 수 있음.
+  - 오버레이: `app/components/tour/TourOverlay.tsx` (layout 마운트, system_admin 제외). 경로 불일치 시 `router.push` → 대상 요소 폴링(~5s) → 중앙 스크롤 → 스포트라이트(box-shadow 트릭) + 글로우 링(globals.css `tour-glow-ring`) + 말풍선(이전/다음/건너뛰기, ESC 닫기). 컨테이너 `pointer-events-none` 라 사용자가 안내 중에도 실제로 따라 할 수 있음. 목적지가 접근 거부(PIN·권한·만료·삭제)로 다른 경로로 튕겨내면 무한 재이동 대신 종료(`navAttemptRef` 1회 가드).
   - 단계 런처: `app/components/tour/guide-steps.tsx` `GuideStepList`(hero/widget 공용) + `GuideStripCta`(슬림 스트립). 시작 가이드(`app/page.tsx`)와 플로팅 위젯(`SetupGuideWidget`)이 공유. `GET /api/orgs/me/tour-targets`(최신 공고 id + `stage='screened'` 미종결 후보 id)로 시나리오 3·4 활성/잠금 판정 — **AI 면접 시나리오는 평가 끝난 이력서가 있어야 활성**.
-  - 대상 요소 마킹: `data-tour="job-import-url"`(`/jobs/new`), `consent-gate`·`upload-zone`(`/jobs/[id]`), `ai-interview-btn`(`/candidates/[id]`), `#culture-fit`(`/org/settings`).
+  - 대상 요소 마킹: `data-tour="job-import-url"`(`/jobs/new`), `consent-gate`·`upload-zone`·`job-header`·`interviewers-inline`·`candidate-list`(`/jobs/[id]`), `screening-report`·`ai-interview-btn`(`/candidates/[id]`), `#culture-fit`(`/org/settings`).
+- **멤버(면접관) 페이지 가이드** — 멤버는 위 순차 온보딩(위젯/hero/strip)을 쓰지 않는다. "대상이 있어야 단계가 열리는" 순차 모델이 면접관 역할(공고는 org_admin 이 만들고 멤버는 배정받아 면접 진행)과 안 맞기 때문. 대신 **진입한 페이지의 할 일을 1회 안내**하고, 노출된 뒤로는 다시 띄우지 않는다(계정별 `users.seen_member_guides`).
+  - `/jobs/{id}` 첫 진입 → `member-job-page` 시나리오(공고 헤더 → 면접관 영역 → 이력서 목록). 면접관 등록은 **이미 등록돼 있어도** 면접관 영역(`interviewers-inline`)을 비추며 무조건 안내 — 공유 안 받은 공고는 직접 등록해야 함을 알리기 위함.
+  - `/candidates/{id}` 첫 진입 → `ai-interview` 시나리오 재사용(법인담당자 step4 와 동일).
+  - 자동시작·기록: `TourAutoStart` 의 role 분기. `awaitTarget` 이 떠야 시작 → 잠긴 공고(언락 전)·대상 아닌 후보(평가 전·발송 완료)에선 시작·기록 안 함(정상 진입 시 재시도). 노출 즉시 `POST /api/orgs/me/member-guides` 로 기록. 위젯/hero/strip 은 `org_admin` 에게만 마운트(`layout.tsx`/`page.tsx`).
 
 ### 13. 후보자 파생 상태 — 버킷·서브상태·대기주체 (`lib/candidate-state.ts`)
 

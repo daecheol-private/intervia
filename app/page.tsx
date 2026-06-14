@@ -481,7 +481,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       </header>
 
       {/* 공고가 하나도 없으면 KPI/목록 대신 시작 가이드만 — 첫 화면 단순화 */}
-      {totalJobs === 0 && !guideDismissed ? (
+      {me.role === "org_admin" && totalJobs === 0 && !guideDismissed ? (
         <SetupGuide
           variant="hero"
           step1={setup1}
@@ -492,8 +492,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         />
       ) : (
         <>
-          {/* 셋업 미완 시 상단 슬림 진행 스트립 — 완료/숨김 시 사라짐 */}
-          {!setupComplete && !guideDismissed && (
+          {/* 셋업 미완 시 상단 슬림 진행 스트립 — 완료/숨김 시 사라짐. 법인담당자 전용. */}
+          {me.role === "org_admin" && !setupComplete && !guideDismissed && (
             <SetupGuide
               variant="strip"
               step1={setup1}

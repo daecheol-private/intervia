@@ -5,8 +5,8 @@
  *   버튼이 활성인 후보 (stage='screened', 미종결). 없으면 시나리오 비활성.
  */
 import { db } from "@/lib/db";
-import { jobPostings, candidates } from "@/lib/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { jobPostings, candidates, jobInterviewers } from "@/lib/schema";
+import { eq, and, or, sql, desc, isNull, inArray } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 
@@ -20,20 +20,42 @@ export async function GET() {
     return Response.json({ firstJobId: null, screenedCandidateId: null });
 
   const orgId = me!.orgId;
+
+  // 가이드는 "이 사용자가 실제로 들어갈 수 있는" 공고/후보만 가리켜야 한다.
+  // org 전체에서 고르면, 면접관 미배정 + PIN 잠긴 공고의 후보가 대상으로 잡혀
+  // 따라하기 → /candidates/{id} 403 → /jobs/{id} 잠금 → 다시 따라하기 …
+  // 무한 리다이렉트가 났다. 접근 가능 기준은 isJobUnlocked(lib/job-lock) 와 동일:
+  // 관리자거나 / PIN 없는 공고 / 본인이 면접관으로 배정된 공고. (일시적 unlock
+  // 쿠키는 가이드 대상 선정에서 제외 — 구조적 접근 권한만 본다.)
+  const accessibleJob = me!.isAdmin
+    ? undefined
+    : or(
+        isNull(jobPostings.passwordHash),
+        inArray(
+          jobPostings.id,
+          db
+            .select({ id: jobInterviewers.jobId })
+            .from(jobInterviewers)
+            .where(eq(jobInterviewers.userId, me!.id))
+        )
+      );
+
   const [firstJobId, screenedCandidateId] = await Promise.all([
     db
       .select({ id: sql<number | null>`MAX(${jobPostings.id})` })
       .from(jobPostings)
-      .where(eq(jobPostings.orgId, orgId))
+      .where(and(eq(jobPostings.orgId, orgId), accessibleJob))
       .then(([r]) => r?.id ?? null),
     db
       .select({ id: candidates.id })
       .from(candidates)
+      .innerJoin(jobPostings, eq(candidates.jobId, jobPostings.id))
       .where(
         and(
           eq(candidates.orgId, orgId),
           eq(candidates.stage, "screened"),
-          sql`${candidates.outcome} IS NULL`
+          sql`${candidates.outcome} IS NULL`,
+          accessibleJob
         )
       )
       .orderBy(desc(candidates.id))

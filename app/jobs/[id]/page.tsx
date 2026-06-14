@@ -1270,7 +1270,7 @@ export default function JobDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 mt-3 shadow-sm">
+      <div data-tour="job-header" className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 mt-3 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight break-keep">
@@ -1580,6 +1580,7 @@ export default function JobDetailPage() {
          어디서든 새로 고르면 이전 필터를 대체한다 (조합 없음 → 리셋 불필요). */}
       <div
         ref={listTopRef}
+        data-tour="candidate-list"
         className="mt-8 flex flex-wrap items-center gap-1.5 scroll-mt-4"
       >
         <button
