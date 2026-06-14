@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { users, organizations, orgJoinRequests } from "@/lib/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, ne, count } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 
@@ -52,5 +52,25 @@ export async function GET(req: Request) {
     .where(eq(users.orgId, targetOrgId))
     .orderBy(desc(users.createdAt));
 
-  return Response.json(rows);
+  // 같은 이메일 도메인을 여러 법인이 공유하는지 — 공유 도메인이면 합류 승인 화면에 경고(H2).
+  // 메일 소유가 확인돼도 우리 회사 소속이라는 보장이 안 되므로 관리자가 직접 확인하도록 유도.
+  let domainShared = false;
+  const [thisOrg] = await db
+    .select({ emailDomain: organizations.emailDomain })
+    .from(organizations)
+    .where(eq(organizations.id, targetOrgId));
+  if (thisOrg?.emailDomain) {
+    const [{ c }] = await db
+      .select({ c: count() })
+      .from(organizations)
+      .where(
+        and(
+          eq(organizations.emailDomain, thisOrg.emailDomain),
+          ne(organizations.verificationStatus, "rejected")
+        )
+      );
+    domainShared = Number(c) > 1;
+  }
+
+  return Response.json({ members: rows, domainShared });
 }

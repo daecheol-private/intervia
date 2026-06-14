@@ -60,8 +60,10 @@ export function ShareButton({
       ),
     ])
       .then(([list, status, interviewerData]) => {
-        const rows = Array.isArray(list)
-          ? (list as {
+        // /api/orgs/members 응답은 { members, domainShared } 형태 (구버전 배열 응답도 호환).
+        const memberList = Array.isArray(list) ? list : list?.members;
+        const rows = Array.isArray(memberList)
+          ? (memberList as {
               id: number;
               email: string;
               name: string;

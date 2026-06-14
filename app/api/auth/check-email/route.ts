@@ -49,7 +49,7 @@ export async function POST(req: Request) {
 
   // 같은 도메인을 쓰는 법인이 여러 개일 수 있음 (SaaS 메일 공유 케이스).
   // 검증된 법인을 우선으로 정렬 (dart_matched/verified → pending_review → rejected 제외).
-  const { desc, sql, inArray, ne } = await import("drizzle-orm");
+  const { desc, sql, count } = await import("drizzle-orm");
   const matchedOrgs = await db
     .select({
       id: organizations.id,
@@ -70,43 +70,33 @@ export async function POST(req: Request) {
       desc(organizations.id)
     );
 
-  // 각 매칭 법인의 org_admin 정보 마스킹해서 반환.
-  // lastSeenAt(접속 시각)은 의도적으로 노출하지 않음 — 인증 전 활동 시간대 정찰 차단.
+  // 각 매칭 법인의 org_admin "수"만 반환 — 담당자 신원(이름·이메일)은 노출하지 않는다.
+  // 마스킹본이라도 익명 enumeration 으로 모으면 스피어피싱 정찰에 쓰이므로, 합류 요청 제출
+  // 전에는 "검토할 담당자가 있는지(수)"까지만 노출한다. (접속 시각도 노출 안 함)
   const enriched = await Promise.all(
     matchedOrgs.map(async (org) => {
-      const rows = await db
-        .select({
-          email: users.email,
-          name: users.name,
-        })
+      const [{ c }] = await db
+        .select({ c: count() })
         .from(users)
         .where(
           sql`${users.orgId} = ${org.id} AND ${users.role} = 'org_admin' AND ${users.status} = 'active'`
-        )
-        .orderBy(desc(users.id))
-        .limit(3);
+        );
       return {
         ...org,
         bizRegistrationNo: maskBizNo(org.bizRegistrationNo),
-        admins: rows.map((r) => ({
-          email: maskEmail(r.email),
-          name: maskName(r.name),
-        })),
+        adminCount: Number(c),
       };
     })
   );
 
-  // 하위호환: 단일 매칭이면 matchedOrg/admins 유지. 항상 matchedOrgs 도 함께.
+  // 하위호환: 단일 매칭이면 matchedOrg 유지. 항상 matchedOrgs 도 함께.
   const single = enriched.length === 1 ? enriched[0] : null;
-  void inArray;
-  void ne;
 
   return Response.json({
     available: true,
     domain,
     isPublicDomain: false,
     matchedOrg: single ? { id: single.id, name: single.name } : null,
-    admins: single?.admins,
     matchedOrgs: enriched,
     suggestion:
       enriched.length === 0
@@ -115,18 +105,4 @@ export async function POST(req: Request) {
           ? "join"
           : "choose_match",
   });
-}
-
-// PII 노출 최소화 — 회원가입 전 단계에서는 부분 마스킹된 식별자만 노출.
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!domain) return "***";
-  const visible = local.slice(0, Math.max(1, Math.min(2, local.length - 1)));
-  return `${visible}${"*".repeat(Math.max(3, local.length - visible.length))}@${domain}`;
-}
-
-function maskName(name: string): string {
-  if (name.length <= 1) return name;
-  if (name.length === 2) return name[0] + "*";
-  return name[0] + "*".repeat(name.length - 2) + name[name.length - 1];
 }

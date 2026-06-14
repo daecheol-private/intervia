@@ -55,6 +55,12 @@ export async function POST(
     })
     .where(eq(organizations.id, orgId));
 
+  // pending_review 로 보류됐던 웰컴토큰을 승인 시 지급 (멱등 — 이미 받았으면 no-op).
+  if (body.action === "approve") {
+    const { grantWelcomeBonus } = await import("@/lib/tokens");
+    await grantWelcomeBonus(orgId, org.createdByUserId ?? null);
+  }
+
   logAudit(req, {
     actor: me!,
     action: "user.status_change",

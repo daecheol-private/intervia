@@ -51,18 +51,17 @@ export async function PATCH(
     })
     .where(eq(orgJoinRequests.id, reqId));
 
-  // 승인 시: 법인 관리자가 본인확인 역할을 함 — emailVerifiedAt 도 함께 기록.
-  // (별도 인증 메일 발송 없음. 합류 요청 흐름은 §22의2 + admin 검토로 본인확인 충족)
+  // 승인 시: 법인 멤버로 확정(orgId)하되, 메일 소유 인증(emailVerifiedAt)은 자동 기록하지 않는다.
+  // 회원가입 합류 경로는 "법인 관리자 승인 + 본인의 이메일 인증(가입 시 발송된 링크 클릭)" 둘 다
+  // 통과해야 로그인 가능 — 타인 이메일로 합류 요청 후 부주의한 승인만 노리는 사칭(계정 선점)을 막기 위함.
+  // (메일 미도달 멤버 구제는 관리자 수동 인증 버튼으로 별도 처리 — step-up + 감사로그 게이트.)
   const userUpdate: {
     status: typeof userStatus;
-    emailVerifiedAt?: string;
     orgId?: number;
   } = {
     status: userStatus,
   };
-  // 승인 시 합류 요청의 법인으로 확정(무소속 초대 수락 경로 대비) + 본인확인 처리.
   if (action === "approve") {
-    userUpdate.emailVerifiedAt = now;
     userUpdate.orgId = row.orgId;
   }
 

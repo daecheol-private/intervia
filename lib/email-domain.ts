@@ -1,6 +1,11 @@
 /**
- * 공용·SaaS 이메일 도메인 — 회사 단독 도메인이 아니라서 자동 법인 매칭을 사용하지 않음.
- * 가입 시 사업자번호 필수 (#26 가드).
+ * 공용·SaaS 이메일 도메인 — 회사 단독 도메인이 아니라서 자동 법인 매칭/자동 검증을 쓰지 않음.
+ * 여기 걸리면 가입 자체가 차단된다(회사 도메인 이메일만 가입 가능).
+ *
+ * ⚠ 이 리스트는 본질적으로 불완전하다(신생 일회용메일·군소 공유 호스팅은 계속 누락됨).
+ * 따라서 멀티법인 구조의 1차 방어선은 이 데니리스트가 아니라 "같은 도메인 2번째+ 법인은
+ * 사업자번호 검증(국세청/DART) 없이는 운영자 검토(pending_review)"라는 게이트다
+ * (api/orgs/route.ts). 이 리스트는 명백한 공용/일회용만 빠르게 거르는 보조 수단으로 본다.
  *
  * 카테고리:
  *  - 일반 웹메일 (gmail/naver/...)
@@ -88,6 +93,26 @@ export const PUBLIC_EMAIL_DOMAINS = new Set([
   "emailondeck.com",
   "33mail.com",
   "anonbox.net",
+  // 추가 일회용·익명·임시 메일 (신규/누락분 보강 — sybil·토큰파밍 차단)
+  "getnada.com",
+  "nada.email",
+  "tempr.email",
+  "discard.email",
+  "mailnesia.com",
+  "mailcatch.com",
+  "inboxkitten.com",
+  "dropmail.me",
+  "cock.li",
+  "minuteinbox.com",
+  "tmpmail.org",
+  "tmpmail.net",
+  "luxusmail.org",
+  "mailto.plus",
+  "fakemail.net",
+  "burnermail.io",
+  "spamgourmet.com",
+  "trbvm.com",
+  "byom.de",
   // 흔한 SaaS·교육·정부 공용 도메인 (한국)
   "korea.kr", // 정부 공용
   "go.kr",

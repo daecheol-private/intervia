@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
 import { users, organizations, tokenWallets } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth";
 import { sendVerificationMail } from "@/lib/email-verify";
-import { notifySystemAdmins } from "@/lib/notifications";
+import { notifySystemAdmins, notifyOrgAdmins } from "@/lib/notifications";
 import { validatePassword } from "@/lib/password-policy";
 import { rateLimit } from "@/lib/rate-limit";
 import {
@@ -85,6 +85,8 @@ export async function POST(req: Request) {
   } = await import("@/lib/business-registry");
   const { findDartCorpByBizno } = await import("@/lib/dart-corps");
   let canonicalBizNo: string | null = null;
+  // 국세청 "계속사업자"(영업중) 확인 여부 — 같은 도메인 2번째+ 법인의 자동검증 게이트에 사용.
+  let bizVerifiedActive = false;
   if (body.bizRegistrationNo) {
     const norm = normalizeBizNo(body.bizRegistrationNo);
     if (!norm)
@@ -118,25 +120,55 @@ export async function POST(req: Request) {
             { status: 400 }
           );
         }
+        bizVerifiedActive = true; // 국세청 등록 + 영업중 확인됨
       } catch (e) {
         console.error("business registry lookup failed (skipping check)", e);
       }
     }
   }
 
-  // 검증 상태 결정 — 회사 도메인 이메일만 가입 가능하므로 도메인 통제가 곧 소속 증명.
-  //  - 기본: verified (도메인 이메일 인증 기반 자동 검증) → 같은 도메인 동료가 바로 합류 가능
-  //  - 사업자번호가 DART 등록 법인과 매칭 → dart_matched 로 격상
-  let verificationStatus: "dart_matched" | "verified" = "verified";
-  let verifiedAt: string | null = new Date().toISOString();
-  let verificationNote: string | null = `회사 도메인 이메일 인증 (자동): ${emailDomain}`;
-  if (canonicalBizNo) {
-    const dartHit = findDartCorpByBizno(canonicalBizNo);
-    if (dartHit) {
-      verificationStatus = "dart_matched";
-      verifiedAt = new Date().toISOString();
-      verificationNote = `DART 등록 법인 자동 매칭: ${dartHit.name}`;
-    }
+  const now = new Date().toISOString();
+
+  // 같은 도메인을 이미 쓰는(비-rejected) 법인이 있는지 — 멀티법인/공유 도메인 케이스.
+  // 도메인 첫 법인은 도메인 이메일 인증만으로 자동 검증하지만, 2번째+ 법인은
+  // 섀도우 법인(타 회사 도메인 위 사칭) 방지를 위해 사업자번호 검증을 요구한다.
+  const existingOnDomain = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(
+      and(
+        eq(organizations.emailDomain, emailDomain),
+        ne(organizations.verificationStatus, "rejected")
+      )
+    );
+  const domainTaken = existingOnDomain.length > 0;
+
+  // 검증 상태 결정.
+  //  - DART 매칭: 항상 dart_matched (상장·외감법인)
+  //  - 도메인 첫 법인: verified (도메인 이메일 인증 기반 자동 검증)
+  //  - 도메인 2번째+ 법인: 국세청 영업중 확인된 별개 사업자번호면 verified, 아니면 pending_review(운영자 검토)
+  const dartHit = canonicalBizNo ? findDartCorpByBizno(canonicalBizNo) : null;
+  let verificationStatus: "dart_matched" | "verified" | "pending_review";
+  let verifiedAt: string | null;
+  let verificationNote: string | null;
+  if (dartHit) {
+    verificationStatus = "dart_matched";
+    verifiedAt = now;
+    verificationNote = `DART 등록 법인 자동 매칭: ${dartHit.name}`;
+  } else if (!domainTaken) {
+    verificationStatus = "verified";
+    verifiedAt = now;
+    verificationNote = `회사 도메인 이메일 인증 (자동): ${emailDomain}`;
+  } else if (canonicalBizNo && bizVerifiedActive) {
+    verificationStatus = "verified";
+    verifiedAt = now;
+    verificationNote = `국세청 영업중 확인 + 별개 사업자번호 (공유 도메인 ${emailDomain})`;
+  } else {
+    // 같은 도메인에 기존 법인이 있는데 사업자번호로 별개 법인임을 입증 못함 → 운영자 검토 게이트.
+    // pending_review 동안: 타인 합류 차단(join-requests 게이트) + "검토 대기" 배지 + 웰컴토큰 보류.
+    verificationStatus = "pending_review";
+    verifiedAt = null;
+    verificationNote = `같은 도메인(${emailDomain})에 기존 법인 존재 + 사업자번호 미검증 → 운영자 검토 대기`;
   }
 
   const [org] = await db
@@ -152,7 +184,6 @@ export async function POST(req: Request) {
     .returning();
 
   const passwordHash = await hashPassword(password);
-  const now = new Date().toISOString();
   const bootstrapAdmin = process.env.SYSTEM_ADMIN_EMAIL?.toLowerCase().trim();
   const role =
     bootstrapAdmin && bootstrapAdmin === normalizedEmail
@@ -185,9 +216,13 @@ export async function POST(req: Request) {
 
   await db.insert(tokenWallets).values({ orgId: org.id, balance: 0 });
 
-  // 신규 가입 무료 체험 토큰 — ledger 통해 지급 (잔액·내역 동기 보장)
-  const { grantWelcomeBonus } = await import("@/lib/tokens");
-  await grantWelcomeBonus(org.id, user.id);
+  // 신규 가입 무료 체험 토큰 — ledger 통해 지급 (잔액·내역 동기 보장).
+  // 단 pending_review(검토 대기) 법인은 보류 — 웰컴토큰 파밍/섀도우 법인 방지.
+  // 운영자 승인(admin/orgs/[id]/verify) 시점에 지급한다.
+  if (verificationStatus !== "pending_review") {
+    const { grantWelcomeBonus } = await import("@/lib/tokens");
+    await grantWelcomeBonus(org.id, user.id);
+  }
 
   void notifySystemAdmins({
     type: "new_org",
@@ -195,6 +230,23 @@ export async function POST(req: Request) {
     href: "/admin/orgs",
     payload: { orgId: org.id, userId: user.id },
   });
+
+  // 같은 도메인에 기존 법인이 있으면 그 법인 담당자들에게 통지 — 관계사 여부 교차확인(섀도우 법인 백스톱).
+  // 자동검증(verified)으로 통과한 경우에도, 남의 공개 사업자번호를 도용한 사칭을 사람이 잡도록 한다.
+  if (domainTaken) {
+    for (const existing of existingOnDomain) {
+      void notifyOrgAdmins(
+        existing.id,
+        {
+          type: "new_org",
+          title: `같은 도메인(${emailDomain})에 새 법인 "${org.name}"이(가) 등록되었습니다 — 아는 관계사인지 확인해 주세요`,
+          href: "/org/members",
+          payload: { newOrgId: org.id, domain: emailDomain },
+        },
+        { email: true }
+      );
+    }
+  }
 
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
   let mailSent = true;

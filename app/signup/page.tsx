@@ -15,7 +15,6 @@ type CheckResponse = {
   domain?: string | null;
   isPublicDomain?: boolean;
   matchedOrg?: { id: number; name: string } | null;
-  admins?: Array<{ email: string; name: string }>;
   matchedOrgs?: Array<{
     id: number;
     name: string;
@@ -25,7 +24,7 @@ type CheckResponse = {
       | "pending_review"
       | "rejected";
     bizRegistrationNo: string | null;
-    admins: Array<{ email: string; name: string }>;
+    adminCount: number;
   }>;
   suggestion?: "login" | "join" | "create_or_search" | "choose_match";
 };
@@ -46,11 +45,10 @@ type MatchCandidate = {
   reason?: string;
 };
 
-type AdminInfo = { email: string; name: string };
 type MatchedOrgFull = NonNullable<CheckResponse["matchedOrgs"]>[number];
 type Stage =
   | { kind: "check" }
-  | { kind: "join"; org: { id: number; name: string }; admins: AdminInfo[] }
+  | { kind: "join"; org: { id: number; name: string }; adminCount: number }
   | { kind: "choose" }
   | { kind: "create" }
   | { kind: "choose_match"; orgs: MatchedOrgFull[] }
@@ -73,6 +71,9 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [orgName, setOrgName] = useState("");
   const [bizNo, setBizNo] = useState("");
+  // 입력 이메일 도메인에 이미 다른 법인이 있는지(=2번째+ 법인). 새 법인 등록 시
+  // 사업자번호 안내·선택칸 노출 여부 결정 — 첫 법인엔 불필요(번호 없이도 즉시 verified).
+  const [domainHasOrgs, setDomainHasOrgs] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
@@ -122,6 +123,8 @@ export default function SignupPage() {
       return;
     }
     const list = data.matchedOrgs ?? [];
+    // 이 도메인에 이미 법인이 있으면 새 법인은 2번째+ → 사업자번호 안내칸 노출 대상.
+    setDomainHasOrgs(list.length >= 1);
     // 같은 도메인 법인이 1개라도 있으면 자동 합류로 단정하지 않고 picker로 "다시 확인".
     // 계열사 등으로 한 회사 도메인을 여러 법인이 나눠 쓰는 경우, 단일 매칭을 곧바로
     // 합류 폼으로 보내면 두 번째 계열사 직원이 엉뚱한 법인에 합류 유도됨 →
@@ -133,17 +136,16 @@ export default function SignupPage() {
     }
   };
 
-  // 검색 결과로 들어가는 경로 — admin 정보 없으니 한 번 더 조회
+  // 검색 결과로 들어가는 경로 — 담당자 수만 조회 (신원 비노출)
   const enterJoinFromSearch = async (org: { id: number; name: string }) => {
-    // best-effort 로 admin 조회: check-email 이 email 필요하므로 별도 endpoint 호출
-    let admins: AdminInfo[] = [];
+    let adminCount = 0;
     try {
       const r = await fetch(`/api/orgs/${org.id}/admins`);
-      if (r.ok) admins = (await r.json()) as AdminInfo[];
+      if (r.ok) adminCount = ((await r.json()) as { count: number }).count;
     } catch {
       /* ignore — 표시 없이 진행 */
     }
-    setStage({ kind: "join", org, admins });
+    setStage({ kind: "join", org, adminCount });
   };
 
   const submitJoin = async (orgId: number) => {
@@ -394,7 +396,7 @@ export default function SignupPage() {
               </Banner>
               <AdminContactsPanel
                 org={stage.org}
-                admins={stage.admins}
+                adminCount={stage.adminCount}
               />
               <Field label="이름" required>
                 <input
@@ -486,9 +488,9 @@ export default function SignupPage() {
                             ? `사업자번호 ${o.bizRegistrationNo}`
                             : "사업자번호 미등록"}
                         </div>
-                        {o.admins.length > 0 && (
+                        {o.adminCount > 0 && (
                           <div className="text-[11px] text-slate-500 mt-1">
-                            담당자: {o.admins.map((a) => `${a.name} ${a.email}`).join(" · ")}
+                            담당자 {o.adminCount}명 — 합류 요청 시 알림이 전달됩니다
                           </div>
                         )}
                       </div>
@@ -601,6 +603,25 @@ export default function SignupPage() {
                 onChange={setOrgName}
                 onPickBizno={(b) => setBizNo(b)}
               />
+              {domainHasOrgs && (
+                <div className="rounded-lg border border-primary/30 bg-primary-soft px-3 py-2.5 space-y-2">
+                  <div className="text-xs text-primary-deep leading-relaxed">
+                    이 도메인은 이미 다른 법인이 등록되어 있습니다.{" "}
+                    <strong>사업자번호를 입력하면 즉시 이용 + 무료 체험 토큰</strong>이
+                    지급됩니다. 비워두면 가입·이용은 바로 되지만, 무료 토큰은 운영자
+                    확인 후 지급됩니다.
+                  </div>
+                  <Field label="사업자번호">
+                    <input
+                      className={inputCls}
+                      inputMode="numeric"
+                      placeholder="선택 — 숫자 10자리 (예: 123-45-67890)"
+                      value={bizNo}
+                      onChange={(e) => setBizNo(e.target.value)}
+                    />
+                  </Field>
+                </div>
+              )}
               <SimilarOrgsHint
                 query={orgName}
                 onSelect={(o) =>
@@ -906,10 +927,10 @@ function Banner({ children }: { children: React.ReactNode }) {
 
 function AdminContactsPanel({
   org,
-  admins,
+  adminCount,
 }: {
   org: { id: number; name: string };
-  admins: AdminInfo[];
+  adminCount: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [reqName, setReqName] = useState("");
@@ -947,29 +968,15 @@ function AdminContactsPanel({
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
       <div className="text-xs font-semibold text-slate-700">
-        현재 법인 담당자 (org admin)
+        법인 담당자 (org admin)
       </div>
-      {admins.length === 0 ? (
-        <div className="text-xs text-slate-500">
-          담당자 정보를 불러올 수 없습니다.
-        </div>
-      ) : (
-        <ul className="space-y-1">
-          {admins.map((a, i) => (
-            <li
-              key={i}
-              className="flex items-center justify-between text-xs text-slate-700 bg-white border border-slate-200 rounded px-2.5 py-1.5"
-            >
-              <div>
-                <span className="font-medium">{a.name}</span>{" "}
-                <span className="text-slate-500">{a.email}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="text-xs text-slate-600">
+        {adminCount > 0
+          ? `이 법인에는 합류 요청을 검토할 담당자가 ${adminCount}명 있습니다. 요청을 보내면 담당자에게 알림이 전달됩니다.`
+          : "현재 활성 담당자가 확인되지 않습니다. 담당자가 없으면 운영자에게 권한 부여를 요청하세요."}
+      </div>
       <p className="text-[11px] text-slate-500 pt-1">
-        합류 요청은 위 담당자가 승인합니다. 담당자와 연락이 닿지 않으면 운영자에게 권한 부여를 요청할 수 있습니다.
+        개인정보 보호를 위해 담당자 신원은 표시하지 않습니다. 담당자와 연락이 닿지 않으면 운영자에게 권한 부여를 요청할 수 있습니다.
       </p>
 
       {submitted ? (

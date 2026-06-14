@@ -317,7 +317,9 @@ export async function PATCH(
       resourceType: "user",
       resourceId: targetId,
       orgId: updated.orgId,
-      metadata: { email: updated.email, manual: true },
+      // activatedFromPending=true 면 관리자가 합류 승인 + 메일인증을 한 번에 대리 처리한 것
+      // (회원가입 합류 경로의 2중 게이트를 모두 우회) — 사칭 조사 시 추적 신호.
+      metadata: { email: updated.email, manual: true, activatedFromPending: activateFromPending },
     });
   }
 

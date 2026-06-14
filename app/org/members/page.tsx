@@ -19,6 +19,7 @@ type Member = {
 
 export default function OrgMembersPage() {
   const [rows, setRows] = useState<Member[]>([]);
+  const [domainShared, setDomainShared] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -32,12 +33,17 @@ export default function OrgMembersPage() {
       setErr(await res.text());
       return;
     }
-    const data = (await res.json()) as Member[];
+    const data = (await res.json()) as {
+      members: Member[];
+      domainShared: boolean;
+    };
+    const members = data.members ?? [];
     // 승인대기(합류 요청) 행을 맨 위로. 그 외는 API 정렬(createdAt desc) 유지 — JS sort 는 stable.
-    data.sort(
+    members.sort(
       (a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1)
     );
-    setRows(data);
+    setRows(members);
+    setDomainShared(!!data.domainShared);
   }, []);
 
   useEffect(() => {
@@ -177,7 +183,7 @@ export default function OrgMembersPage() {
                 </div>
               </div>
 
-              {isPending && <JoinRequestNotice verified={!!m.emailVerifiedAt} />}
+              {isPending && <JoinRequestNotice verified={!!m.emailVerifiedAt} sharedDomain={domainShared} />}
 
               <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
                 {isPending ? (
@@ -274,7 +280,7 @@ export default function OrgMembersPage() {
                           </button>
                         </div>
                         <div className="max-w-[260px]">
-                          <JoinRequestNotice verified={!!m.emailVerifiedAt} />
+                          <JoinRequestNotice verified={!!m.emailVerifiedAt} sharedDomain={domainShared} />
                         </div>
                       </div>
                     ) : (
@@ -317,7 +323,10 @@ function MemberActions({
           onClick={() => {
             if (
               confirm(
-                `${m.name || m.email} 님의 이메일을 인증 완료로 처리합니다.\n\n인증 메일이 도달하지 않는 멤버를 위한 기능입니다. 본인 소유 이메일이 맞는지 확인 후 진행하세요. 처리 즉시 로그인이 가능해집니다.`
+                `${m.name || m.email} 님의 이메일을 관리자 권한으로 대신 인증 처리합니다.\n\n` +
+                  `⚠ 이메일 인증은 "본인이 그 메일함을 소유한다"는 증명입니다. 관리자가 대신 인증하면 이 증명을 건너뛰므로, 타인이 이 사람의 이메일로 가입을 시도한 경우 사칭 계정을 활성화시킬 수 있습니다.\n\n` +
+                  `반드시 요청자가 실제 본인이자 우리 회사 재직자임을 직접 확인한 뒤에만 진행하세요. (인증 메일이 회사 보안필터에 막혀 도달하지 않는 경우의 구제용)\n\n` +
+                  `이 작업은 감사 로그에 기록됩니다. 처리 즉시 로그인이 가능해집니다.`
               )
             )
               void update(m.id, { emailVerified: true });
@@ -373,18 +382,34 @@ function MemberActions({
 
 // 합류 요청 대기 행의 메일 소유 확인 안내 — 사회공학 방어(사칭 가입 조기 차단).
 // 미확인이면 승인 전에 본인·재직 여부를 직접 확인하도록 경고.
-function JoinRequestNotice({ verified }: { verified: boolean }) {
-  if (verified) {
-    return (
-      <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
-        ✓ 메일 소유 확인됨
-      </div>
-    );
-  }
+// 공유 도메인(여러 법인이 한 도메인 사용)이면 메일 소유가 확인돼도 우리 회사 소속 보장이
+// 안 되므로 별도 경고를 추가로 띄운다 (H2 — 동명이인·외부 co-tenant 침투 방지).
+function JoinRequestNotice({
+  verified,
+  sharedDomain,
+}: {
+  verified: boolean;
+  sharedDomain: boolean;
+}) {
   return (
-    <div className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 leading-relaxed text-left">
-      ⚠ 메일 소유 미확인 — 요청자가 인증 메일을 아직 확인하지 않았습니다. 본인·재직
-      여부를 직접 확인한 뒤 승인하세요.
+    <div className="mt-1.5 space-y-1.5">
+      {verified ? (
+        <div className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+          ✓ 메일 소유 확인됨
+        </div>
+      ) : (
+        <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 leading-relaxed text-left">
+          ⚠ 메일 소유 미확인 — 요청자가 인증 메일을 아직 확인하지 않았습니다. 본인·재직
+          여부를 직접 확인한 뒤 승인하세요.
+        </div>
+      )}
+      {sharedDomain && (
+        <div className="text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded px-2 py-1 leading-relaxed text-left">
+          ⚠ 공유 도메인 — 이 이메일 도메인은 여러 법인이 함께 사용합니다. 메일 소유가
+          확인되더라도 우리 회사 소속이 아닐 수 있으니, 실제 본인·재직 여부를 직접 확인한
+          뒤 승인하세요.
+        </div>
+      )}
     </div>
   );
 }
