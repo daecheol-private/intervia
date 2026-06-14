@@ -506,10 +506,10 @@ export default function SignupPage() {
                   </li>
                 ))}
               </ul>
-              <div className="flex gap-2 pt-1">
+              <div className="pt-2 mt-1 border-t border-slate-100">
                 <button
                   onClick={() => setStage({ kind: "create" })}
-                  className={secondaryBtn}
+                  className="w-full bg-white hover:bg-slate-50 text-slate-600 text-sm font-medium py-2.5 rounded-lg border border-slate-300"
                 >
                   내 회사가 목록에 없어요 — 새 법인 등록
                 </button>
