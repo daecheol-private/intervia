@@ -62,14 +62,22 @@ export async function GET(
 
   // 인성검사 단계 — 법인 컬처핏 설정이 있고, 아직 미실시이며, 채팅이 시작되지 않은
   // 세션만 출제 (도입 전 시작된 진행 중 세션은 소급 차단하지 않음).
+  // 회사명(name)도 함께 조회 — 후보자 화면에 "어느 회사의 AI 면접인지" 맥락 표시용.
   let cultureFit: CultureFitProfile | null = null;
+  let orgName: string | null = null;
   if (job.orgId) {
     const [orgRow] = await db
-      .select({ cultureFitProfile: organizations.cultureFitProfile })
+      .select({
+        name: organizations.name,
+        cultureFitProfile: organizations.cultureFitProfile,
+      })
       .from(organizations)
       .where(eq(organizations.id, job.orgId));
-    if (orgRow?.cultureFitProfile) {
-      try { cultureFit = JSON.parse(orgRow.cultureFitProfile) as CultureFitProfile; } catch { /* ignore */ }
+    if (orgRow) {
+      orgName = orgRow.name;
+      if (orgRow.cultureFitProfile) {
+        try { cultureFit = JSON.parse(orgRow.cultureFitProfile) as CultureFitProfile; } catch { /* ignore */ }
+      }
     }
   }
   const personalityCompleted = !!session.personalityProfile;
@@ -86,6 +94,7 @@ export async function GET(
   return Response.json({
     session: safeSession,
     candidate: { id: candidate.id, name: candidate.name },
+    organization: orgName ? { name: orgName } : null,
     job: {
       id: job.id,
       title: job.title,

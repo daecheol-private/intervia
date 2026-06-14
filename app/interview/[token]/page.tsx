@@ -32,6 +32,8 @@ type SessionInfo = {
     startedAt?: string | null;
   };
   candidate: { id: number; name: string };
+  /** 후보자 화면 맥락 표시용 회사명 (legacy 공고는 orgId 없어 null 가능) */
+  organization?: { name: string } | null;
   job: {
     id: number;
     title: string;
@@ -312,6 +314,7 @@ export default function InterviewPage() {
       <ConsentGate
         token={token}
         candidateName={info.candidate.name}
+        orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
         items={info.consentItems}
         onAccepted={() => {
@@ -326,6 +329,7 @@ export default function InterviewPage() {
     return (
       <PersonalityGate
         token={token}
+        orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
         items={info.personality.items}
         onDone={() => {
@@ -346,6 +350,11 @@ export default function InterviewPage() {
           <div className="min-w-0 flex items-center gap-2.5">
             <LogoMark size={32} className="shrink-0" />
             <div className="min-w-0">
+            {info.organization?.name && (
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate leading-tight">
+                {info.organization.name}
+              </p>
+            )}
             <h1 className="font-bold text-slate-900 truncate text-sm sm:text-base">
               {info.job.title}
             </h1>
@@ -742,11 +751,13 @@ function Timer({
  */
 function PersonalityGate({
   token,
+  orgName,
   jobTitle,
   items,
   onDone,
 }: {
   token: string;
+  orgName: string | null;
   jobTitle: string;
   items: Array<{ id: string; a: string; b: string }>;
   onDone: () => void;
@@ -814,6 +825,10 @@ function PersonalityGate({
       <CenteredCard>
         <div className="text-3xl mb-3">📝</div>
         <h1 className="text-xl font-bold text-slate-900">면접 전 사전 문항</h1>
+        <p className="text-xs text-slate-400 mt-1.5">
+          {orgName ? `${orgName} · ` : ""}
+          {jobTitle} AI 면접
+        </p>
         <p className="text-sm text-slate-600 mt-3 leading-relaxed text-left">
           <strong>{jobTitle}</strong> AI 면접을 시작하기 전,{" "}
           <strong>{total}개의 간단한 문항</strong>에 답해 주세요. 각 문항에서{" "}
@@ -861,8 +876,23 @@ function PersonalityGate({
   return (
     <main className="max-w-xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0 justify-center">
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        {/* 브랜드·맥락 헤더 — 어느 회사·공고의 AI 면접인지 + Intervia 로고 (캡처 문의 반영) */}
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2.5">
+          <LogoMark size={28} className="shrink-0" />
+          <div className="min-w-0 flex-1">
+            {orgName && (
+              <p className="text-[11px] text-slate-400 truncate leading-tight">
+                {orgName}
+              </p>
+            )}
+            <p className="text-sm font-bold text-slate-900 truncate leading-tight">
+              {jobTitle}{" "}
+              <span className="font-normal text-slate-400">AI 면접</span>
+            </p>
+          </div>
+        </div>
         {/* 진행 헤더 */}
-        <div className="px-5 pt-5">
+        <div className="px-5 pt-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
               사전 문항
@@ -983,12 +1013,14 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
 function ConsentGate({
   token,
   candidateName,
+  orgName,
   jobTitle,
   items,
   onAccepted,
 }: {
   token: string;
   candidateName: string;
+  orgName: string | null;
   jobTitle: string;
   items: ConsentItem[];
   onAccepted: () => void;
@@ -1079,6 +1111,9 @@ function ConsentGate({
             <Logo size={32} />
           </div>
           <div className="text-xs text-slate-500 mb-1">{candidateName} 님</div>
+          {orgName && (
+            <div className="text-[11px] text-slate-400 mb-0.5">{orgName}</div>
+          )}
           <h1 className="text-lg font-bold text-slate-900">
             {jobTitle} AI 면접 — 개인정보 처리 동의
           </h1>
