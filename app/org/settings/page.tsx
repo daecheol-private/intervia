@@ -236,6 +236,10 @@ export default function OrgSettingsPage() {
       return;
     }
     setMsg({ section: "cf", type: "success", text: "컬처핏 설정이 저장되었습니다." });
+    // 컬처핏 저장으로 온보딩 step1(인재상·컬쳐핏 확인)이 충족됨 — 플로팅 가이드가
+    // 새로고침 없이 즉시 완료 표시되도록 진행 상태 재조회를 요청.
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new Event("intervia:setup-progress-refresh"));
   };
 
   const updateQualItem = (key: QualKey, patch: Partial<QualItem>) => {
