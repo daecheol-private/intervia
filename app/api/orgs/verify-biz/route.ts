@@ -14,6 +14,7 @@ import {
   normalizeBizNo,
   formatBizNo,
 } from "@/lib/business-registry";
+import { findDartCorpByBizno } from "@/lib/dart-corps";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -31,6 +32,10 @@ export async function POST(req: Request) {
       ok: false,
       reason: "사업자번호는 10자리 숫자입니다.",
     });
+
+  // 0) DART 상장·외감법인 매칭 — 매칭되면 공식 법인명을 돌려줘 법인명칸 자동 채움.
+  //    (국세청 status API 는 영업상태만 주고 상호는 안 줌 → 이름 출처는 DART 뿐)
+  const dart = findDartCorpByBizno(normalized);
 
   // 1) 우리 DB 에 같은 사업자번호 법인 있는지
   const [existing] = await db
@@ -69,5 +74,7 @@ export async function POST(req: Request) {
     externalError,
     apiAvailable: isBusinessRegistryConfigured(),
     existingOrg: existing ?? null,
+    // DART 매칭 시 공식 법인명 — 프론트가 법인명칸에 자동 채움.
+    dartName: dart?.name ?? null,
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PasswordStrength } from "@/app/password-strength";
@@ -76,6 +76,18 @@ export default function SignupPage() {
   const [domainHasOrgs, setDomainHasOrgs] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // 사업자번호 전용 오류 — 입력칸 바로 아래에 인라인 표시 (폼 하단 err 는 제출 버튼
+  // 밑이라 스크롤 밖에 떠서 사용자가 못 보던 문제 해결). bizFieldRef 로 스크롤·포커스.
+  const [bizErr, setBizErr] = useState("");
+  const bizFieldRef = useRef<HTMLInputElement>(null);
+  // 사업자번호 조회 결과 — '조회' 버튼으로 채움. DART 매칭 시 법인명 자동 채움,
+  // 그 외엔 국세청 영업상태/중복 안내만.
+  const [bizLookup, setBizLookup] = useState<{
+    tone: "ok" | "warn" | "error";
+    message: string;
+    existingOrg?: { id: number; name: string } | null;
+  } | null>(null);
+  const [bizBusy, setBizBusy] = useState(false);
   const [info, setInfo] = useState("");
   const [resendInfo, setResendInfo] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -189,8 +201,95 @@ export default function SignupPage() {
     });
   };
 
+  // 사업자번호 '조회' — DART 매칭 시 법인명 자동 채움, 그 외엔 국세청 영업상태/중복 안내.
+  const lookupBiz = async () => {
+    setBizErr("");
+    setBizLookup(null);
+    const digits = bizNo.replace(/\D/g, "");
+    if (digits.length !== 10) {
+      setBizErr("사업자번호는 10자리 숫자여야 합니다.");
+      return;
+    }
+    setBizBusy(true);
+    try {
+      const res = await fetch("/api/orgs/verify-biz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bizNo }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        reason?: string;
+        registered?: boolean | null;
+        status?: string | null;
+        existingOrg?: { id: number; name: string } | null;
+        dartName?: string | null;
+      } | null;
+      if (!res.ok || !data || data.ok === false) {
+        setBizLookup({
+          tone: "error",
+          message: data?.reason ?? "조회에 실패했습니다. 잠시 후 다시 시도해주세요.",
+        });
+        return;
+      }
+      // 1) 이미 등록된 사업자번호 — 중복. 합류로 유도.
+      if (data.existingOrg) {
+        setBizLookup({
+          tone: "warn",
+          message: `이미 '${data.existingOrg.name}' 법인으로 등록된 사업자번호입니다. 같은 회사라면 합류 요청을 보내세요.`,
+          existingOrg: data.existingOrg,
+        });
+        return;
+      }
+      // 2) DART 매칭 — 공식 법인명 자동 채움.
+      if (data.dartName) {
+        setOrgName(data.dartName);
+        setBizLookup({
+          tone: "ok",
+          message: `DART 등록 법인 확인 — 법인명을 '${data.dartName}'(으)로 채웠습니다.`,
+        });
+        return;
+      }
+      // 3) 국세청 영업중 확인(비DART) — 번호는 유효, 법인명은 직접 입력.
+      if (data.registered === true) {
+        setBizLookup({
+          tone: "ok",
+          message: `영업중인 사업자번호로 확인됐습니다${
+            data.status ? ` (${data.status})` : ""
+          }. 법인명은 직접 입력해주세요.`,
+        });
+        return;
+      }
+      // 4) 국세청 미등록/폐업.
+      if (data.registered === false) {
+        setBizLookup({
+          tone: "error",
+          message: `국세청에 등록되지 않았거나 영업중이 아닌 번호입니다${
+            data.status ? ` (${data.status})` : ""
+          }.`,
+        });
+        return;
+      }
+      // 5) 외부 검증 비활성(키 없음) — 형식만 유효, 그래도 가입 가능.
+      setBizLookup({
+        tone: "warn",
+        message:
+          "번호 형식은 유효합니다. 외부 검증은 일시 불가하나 이대로 가입할 수 있습니다.",
+      });
+    } catch {
+      setBizLookup({
+        tone: "error",
+        message: "조회 중 오류가 발생했습니다. 네트워크를 확인해주세요.",
+      });
+    } finally {
+      setBizBusy(false);
+    }
+  };
+
   const submitCreate = async (force = false) => {
     setErr("");
+    setBizErr("");
+    setBizLookup(null);
     if (!name || !password || !orgName) {
       setErr("법인명/이름/비밀번호 필수");
       return;
@@ -245,7 +344,20 @@ export default function SignupPage() {
     });
     setBusy(false);
     if (!res.ok) {
-      setErr(await res.text());
+      const msg = await res.text();
+      // 사업자번호 관련 오류(형식·중복·국세청 미등록/폐업)는 입력칸 바로 아래에
+      // 띄우고 해당 위치로 스크롤·포커스 — 폼 하단 오류는 스크롤 밖이라 못 봤음.
+      // 사업자번호 칸이 실제로 보이는 create 단계 + 멀티법인 도메인일 때만 인라인 표시,
+      // 그 외(match_suggest force 경로 등)는 하단 err 로 폴백해 오류가 묻히지 않게 함.
+      if (msg.startsWith("사업자번호") && domainHasOrgs && stage.kind === "create") {
+        setBizErr(msg);
+        requestAnimationFrame(() => {
+          bizFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+          bizFieldRef.current?.focus();
+        });
+      } else {
+        setErr(msg);
+      }
       return;
     }
     setInfo("");
@@ -598,11 +710,6 @@ export default function SignupPage() {
                   </span>
                 </div>
               )}
-              <DartCorpCombobox
-                value={orgName}
-                onChange={setOrgName}
-                onPickBizno={(b) => setBizNo(b)}
-              />
               {domainHasOrgs && (
                 <div className="rounded-lg border border-primary/30 bg-primary-soft px-3 py-2.5 space-y-2">
                   <div className="text-xs text-primary-deep leading-relaxed">
@@ -611,17 +718,80 @@ export default function SignupPage() {
                     지급됩니다. 비워두면 가입·이용은 바로 되지만, 무료 토큰은 운영자
                     확인 후 지급됩니다.
                   </div>
-                  <Field label="사업자번호">
-                    <input
-                      className={inputCls}
-                      inputMode="numeric"
-                      placeholder="선택 — 숫자 10자리 (예: 123-45-67890)"
-                      value={bizNo}
-                      onChange={(e) => setBizNo(e.target.value)}
-                    />
+                  <Field label="사업자번호 (선택)">
+                    <div className="flex gap-2">
+                      <input
+                        ref={bizFieldRef}
+                        className={
+                          inputCls +
+                          (bizErr
+                            ? " border-danger ring-1 ring-danger focus:ring-danger"
+                            : "")
+                        }
+                        inputMode="numeric"
+                        aria-invalid={bizErr ? true : undefined}
+                        placeholder="숫자 10자리 (예: 123-45-67890)"
+                        value={bizNo}
+                        onChange={(e) => {
+                          setBizNo(formatBizNoInput(e.target.value));
+                          if (bizErr) setBizErr("");
+                          if (bizLookup) setBizLookup(null);
+                        }}
+                        onKeyDown={(e) => e.key === "Enter" && lookupBiz()}
+                      />
+                      <button
+                        type="button"
+                        onClick={lookupBiz}
+                        disabled={bizBusy}
+                        className="shrink-0 px-4 text-sm bg-primary hover:bg-primary-deep text-white rounded-lg disabled:opacity-50"
+                      >
+                        {bizBusy ? "조회 중..." : "조회"}
+                      </button>
+                    </div>
+                    {bizErr && (
+                      <p className="mt-1.5 text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
+                        {bizErr}
+                      </p>
+                    )}
+                    {bizLookup && (
+                      <div
+                        className={
+                          "mt-1.5 text-xs rounded-lg px-3 py-2 border " +
+                          (bizLookup.tone === "ok"
+                            ? "text-primary-deep bg-primary-soft border-primary/30"
+                            : bizLookup.tone === "warn"
+                              ? "text-amber-900 bg-amber-50 border-amber-200"
+                              : "text-danger bg-danger-soft border-danger/30")
+                        }
+                      >
+                        <div>{bizLookup.message}</div>
+                        {bizLookup.existingOrg && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const o = bizLookup.existingOrg;
+                              if (o)
+                                enterJoinFromSearch({ id: o.id, name: o.name });
+                            }}
+                            className="mt-1.5 px-2.5 py-1 text-xs bg-primary hover:bg-primary-deep text-white rounded font-medium"
+                          >
+                            합류 요청 보내기
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
+                      조회 시 상장·외감법인은 법인명을 자동으로 채워드립니다. 그
+                      외 법인은 영업 여부만 확인되며 법인명은 직접 입력해주세요.
+                    </p>
                   </Field>
                 </div>
               )}
+              <DartCorpCombobox
+                value={orgName}
+                onChange={setOrgName}
+                onPickBizno={(b) => setBizNo(formatBizNoInput(b))}
+              />
               <SimilarOrgsHint
                 query={orgName}
                 onSelect={(o) =>
@@ -689,6 +859,16 @@ export default function SignupPage() {
       </div>
     </main>
   );
+}
+
+// 사업자번호 입력 마스킹 — 숫자만 추려 xxx-xx-xxxxx(3-2-5, 10자리) 형식으로 점진 포맷.
+// 입력 도중에도 자리수에 맞춰 '-' 자동 삽입. 서버는 normalizeBizNo 로 '-' 제거하므로
+// 하이픈 포함 값을 그대로 state·API 에 써도 무방.
+function formatBizNoInput(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 10);
+  if (d.length <= 3) return d;
+  if (d.length <= 5) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}`;
 }
 
 const inputCls =

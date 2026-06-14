@@ -154,7 +154,10 @@ export async function POST(req: Request) {
   if (dartHit) {
     verificationStatus = "dart_matched";
     verifiedAt = now;
-    verificationNote = `DART 등록 법인 자동 매칭: ${dartHit.name}`;
+    verificationNote =
+      orgName !== dartHit.name
+        ? `DART 등록 법인 자동 매칭: ${dartHit.name} (사용자 입력 '${orgName}' → 공식명으로 교체)`
+        : `DART 등록 법인 자동 매칭: ${dartHit.name}`;
   } else if (!domainTaken) {
     verificationStatus = "verified";
     verifiedAt = now;
@@ -171,10 +174,13 @@ export async function POST(req: Request) {
     verificationNote = `같은 도메인(${emailDomain})에 기존 법인 존재 + 사업자번호 미검증 → 운영자 검토 대기`;
   }
 
+  // DART 매칭 시 공식 법인명을 강제 — 조회로 자동채움 후 사용자가 다른 이름으로
+  // 바꿔 제출해도 확실한(검증된) 법인명으로 저장 (번호↔이름 불일치 방지).
+  const finalOrgName = dartHit ? dartHit.name : orgName;
   const [org] = await db
     .insert(organizations)
     .values({
-      name: orgName,
+      name: finalOrgName,
       bizRegistrationNo: canonicalBizNo,
       emailDomain,
       verificationStatus,
