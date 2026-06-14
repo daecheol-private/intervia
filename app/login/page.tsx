@@ -7,6 +7,15 @@ import { PasswordStrength } from "@/app/password-strength";
 import { LogoMark } from "@/app/components/Logo";
 import { PasswordInput } from "@/app/components/PasswordInput";
 
+// status=pending 사용자가 로그인 시도 시 받는 정보 — 2단계 진행 상태 + 운영자 권한 요청 폼에 사용.
+type PendingInfo = {
+  orgId: number | null;
+  orgName: string | null;
+  requesterName: string | null;
+  requesterEmail: string;
+  emailVerified: boolean;
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const search = useSearchParams();
@@ -22,6 +31,7 @@ export default function LoginPage() {
   const [info, setInfo] = useState("");
   const [totpChallenge, setTotpChallenge] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState("");
+  const [pending, setPending] = useState<PendingInfo | null>(null);
 
   // 저장된 이메일(ID) 불러오기 — 체크박스 사용 시 다음 방문에 자동 입력
   useEffect(() => {
@@ -73,6 +83,17 @@ export default function LoginPage() {
         if (data?.code === "email_unverified") {
           setNeedsVerify(true);
           setErr(data.error);
+          return;
+        }
+        // 합류 요청 후 담당자 승인 대기 중 — 그 자리에서 운영자 권한 부여 요청 동선 제공
+        if (data?.code === "pending_approval") {
+          setPending({
+            orgId: data.orgId ?? null,
+            orgName: data.orgName ?? null,
+            requesterName: data.requesterName ?? null,
+            requesterEmail: form.email.trim(),
+            emailVerified: !!data.emailVerified,
+          });
           return;
         }
         if (data?.code === "rate_limited") {
@@ -172,7 +193,11 @@ export default function LoginPage() {
         <div className="text-center mb-6">
           <LogoMark size={48} className="mx-auto mb-3 shadow-lg" />
           <h1 className="text-xl font-bold text-slate-900">
-            {setupRequired ? "초기 관리자 계정 생성" : "로그인"}
+            {pending
+              ? "승인 대기 중"
+              : setupRequired
+                ? "초기 관리자 계정 생성"
+                : "로그인"}
           </h1>
           {setupRequired && (
             <p className="text-sm text-slate-500 mt-1">
@@ -182,7 +207,16 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-          {totpChallenge ? (
+          {pending ? (
+            <PendingApprovalPanel
+              info={pending}
+              onBack={() => {
+                setPending(null);
+                setForm((f) => ({ ...f, password: "" }));
+                setErr("");
+              }}
+            />
+          ) : totpChallenge ? (
             <>
               <p className="text-sm text-slate-600">
                 Authenticator 앱의 6자리 코드를 입력하세요.
@@ -336,5 +370,202 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </label>
       {children}
     </div>
+  );
+}
+
+/**
+ * 합류 요청 후 담당자 승인 대기(status=pending) 사용자가 로그인 시도 시 표시.
+ * 승인 지연·담당자 연락 두절 시 시스템 운영자에게 법인 권한 부여를 요청하는 동선.
+ * 회원가입 시점이 아니라 "로그인하려다 막혔을 때" 노출 — 흐름상 자연스럽고, 본인 메일
+ * 소유·비밀번호 검증을 이미 통과한 상태라 요청 주체가 분명하다.
+ */
+function PendingApprovalPanel({
+  info,
+  onBack,
+}: {
+  info: PendingInfo;
+  onBack: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [err, setErr] = useState("");
+
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
+
+  const resend = async () => {
+    setResendMsg("");
+    setResendBusy(true);
+    const res = await fetch("/api/auth/resend-verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: info.requesterEmail }),
+    });
+    setResendBusy(false);
+    setResendMsg(
+      res.ok
+        ? "인증 메일을 재발송했습니다. 메일함(스팸·정크함 포함)을 확인하세요."
+        : "재발송에 실패했습니다. 잠시 후 다시 시도해주세요."
+    );
+  };
+
+  const submit = async () => {
+    setErr("");
+    if (info.orgId == null) {
+      setErr("법인 정보를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+    setBusy(true);
+    const res = await fetch("/api/orgs/admin-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orgId: info.orgId,
+        requesterName: info.requesterName ?? info.requesterEmail,
+        requesterEmail: info.requesterEmail,
+        reason: reason.trim(),
+      }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    setSubmitted(true);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-3 leading-relaxed">
+        <strong>{info.orgName ?? "법인"}</strong> 합류 승인을 기다리는 중입니다.
+        이용하려면 아래 두 단계가 모두 완료되어야 합니다.
+      </div>
+
+      {/* 2단계 진행 상태 — 이메일 인증 + 법인 관리자 승인 둘 다 필요 */}
+      <div className="text-left bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3 space-y-3">
+        <div className="flex items-start gap-2.5">
+          <StepBadge done={info.emailVerified} />
+          <div className="flex-1 space-y-1.5">
+            <div className="text-xs">
+              <strong className="text-slate-800">이메일 인증</strong>{" "}
+              {info.emailVerified ? (
+                <span className="text-emerald-600 font-medium">완료</span>
+              ) : (
+                <span className="text-amber-600 font-medium">미완료</span>
+              )}
+            </div>
+            {!info.emailVerified && (
+              <>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  가입 시 보낸 인증 메일의 링크를 클릭하세요. 메일이 없으면
+                  재발송할 수 있습니다.
+                </p>
+                <button
+                  onClick={resend}
+                  disabled={resendBusy}
+                  className="text-[11px] text-primary hover:underline font-medium disabled:opacity-50"
+                >
+                  {resendBusy ? "발송 중..." : "인증 메일 재발송"}
+                </button>
+                {resendMsg && (
+                  <div className="text-[11px] text-primary-deep bg-primary-soft border border-primary/30 rounded px-2 py-1">
+                    {resendMsg}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex items-start gap-2.5">
+          <StepBadge done={false} />
+          <div className="flex-1">
+            <div className="text-xs">
+              <strong className="text-slate-800">법인 관리자 승인</strong>{" "}
+              <span className="text-amber-600 font-medium">대기 중</span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              담당자가 합류 요청을 검토·승인합니다. 결과는 가입하신 이메일로
+              안내됩니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {submitted ? (
+        <div className="text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2.5 leading-relaxed">
+          운영자에게 권한 부여 요청을 보냈습니다. 신원·재직 증명을 위해 별도
+          회신을 드릴 수 있습니다.
+        </div>
+      ) : !expanded ? (
+        <div className="text-xs text-slate-500 leading-relaxed space-y-2">
+          <p>
+            담당자 승인이 지연되거나 담당자와 연락이 닿지 않나요? 운영자에게 법인
+            권한 부여를 요청할 수 있습니다.
+          </p>
+          <button
+            onClick={() => setExpanded(true)}
+            className="text-primary hover:underline font-medium"
+          >
+            운영자에게 권한 부여 요청 →
+          </button>
+        </div>
+      ) : (
+        <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+          <div className="text-xs font-medium text-slate-700">
+            시스템 운영자에게 법인 권한 부여 요청
+          </div>
+          <div className="text-[11px] text-slate-500">
+            신청자: {info.requesterName ? `${info.requesterName} · ` : ""}
+            {info.requesterEmail}
+          </div>
+          <textarea
+            className={inputCls + " resize-y min-h-[72px]"}
+            placeholder="사유 (예: 회사 인사담당자로 부임, 기존 담당자 퇴사 등). 운영자가 별도 회신으로 증빙을 요청할 수 있습니다."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          {err && (
+            <div className="text-[11px] text-danger bg-danger-soft border border-danger/30 rounded px-2.5 py-1.5">
+              {err}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={submit}
+              disabled={busy}
+              className="px-3 py-1.5 text-xs bg-primary hover:bg-primary-deep text-white rounded font-medium disabled:opacity-50"
+            >
+              {busy ? "전송 중..." : "운영자에게 요청 전송"}
+            </button>
+            <button
+              onClick={() => setExpanded(false)}
+              className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-300"
+            >
+              접기
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={onBack}
+        className="w-full text-xs text-slate-500 hover:underline pt-1"
+      >
+        다른 계정으로 로그인
+      </button>
+    </div>
+  );
+}
+
+// 2단계(이메일 인증 / 법인 승인) 진행 상태 뱃지 — 완료=emerald 체크, 미완료=amber 빈 원.
+function StepBadge({ done }: { done: boolean }) {
+  return done ? (
+    <span className="shrink-0 w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 text-[11px] font-bold flex items-center justify-center mt-0.5">
+      ✓
+    </span>
+  ) : (
+    <span className="shrink-0 w-5 h-5 rounded-full border-2 border-amber-300 bg-white mt-0.5" />
   );
 }

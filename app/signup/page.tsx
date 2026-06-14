@@ -45,10 +45,18 @@ type MatchCandidate = {
   reason?: string;
 };
 
+// 가입 전 합류 안내용 — 부분 마스킹된 담당자 (이름 "홍*동", 이메일 "ki***@회사.com")
+type MaskedAdmin = { name: string; email: string };
+
 type MatchedOrgFull = NonNullable<CheckResponse["matchedOrgs"]>[number];
 type Stage =
   | { kind: "check" }
-  | { kind: "join"; org: { id: number; name: string }; adminCount: number }
+  | {
+      kind: "join";
+      org: { id: number; name: string };
+      adminCount: number;
+      admins: MaskedAdmin[];
+    }
   | { kind: "choose" }
   | { kind: "create" }
   | { kind: "choose_match"; orgs: MatchedOrgFull[] }
@@ -57,10 +65,12 @@ type Stage =
       kind: "done";
       title: string;
       body: string;
-      // 인증 메일 복구 동선을 띄울 대상 이메일 (법인 신규 등록 경로에서만 설정).
-      // 회사 메일서버가 인증 메일을 차단해도 "재가입" 대신 재발송/문의로 유도 — 법인 중복 생성 방지.
+      // 인증 메일 복구 동선을 띄울 대상 이메일 (신규 법인 등록 + 합류 요청 경로 모두 설정).
+      // 회사 메일서버가 인증 메일을 차단해도 "재가입" 대신 재발송/문의로 유도.
       verifyEmail?: string;
       mailSent?: boolean;
+      // 합류 요청 경로 표시 — 이메일 인증 + 법인 관리자 승인 둘 다 필요한 2단계 안내를 띄운다.
+      needsApproval?: boolean;
     };
 
 export default function SignupPage() {
@@ -148,16 +158,21 @@ export default function SignupPage() {
     }
   };
 
-  // 검색 결과로 들어가는 경로 — 담당자 수만 조회 (신원 비노출)
+  // 검색 결과로 들어가는 경로 — 담당자 수 + 부분 마스킹된 신원 조회
   const enterJoinFromSearch = async (org: { id: number; name: string }) => {
     let adminCount = 0;
+    let admins: MaskedAdmin[] = [];
     try {
       const r = await fetch(`/api/orgs/${org.id}/admins`);
-      if (r.ok) adminCount = ((await r.json()) as { count: number }).count;
+      if (r.ok) {
+        const d = (await r.json()) as { count: number; admins?: MaskedAdmin[] };
+        adminCount = d.count;
+        admins = d.admins ?? [];
+      }
     } catch {
       /* ignore — 표시 없이 진행 */
     }
-    setStage({ kind: "join", org, adminCount });
+    setStage({ kind: "join", org, adminCount, admins });
   };
 
   const submitJoin = async (orgId: number) => {
@@ -194,10 +209,14 @@ export default function SignupPage() {
       return;
     }
     setInfo("");
+    const data = (await res.json().catch(() => ({}))) as { mailSent?: boolean };
     setStage({
       kind: "done",
       title: "합류 요청이 접수되었습니다",
-      body: "법인 관리자가 승인하면 로그인할 수 있습니다. 승인 결과는 입력하신 이메일로 안내됩니다.",
+      body: "아래 두 단계를 모두 완료해야 로그인할 수 있습니다.",
+      verifyEmail: email,
+      mailSent: data?.mailSent !== false,
+      needsApproval: true,
     });
   };
 
@@ -414,6 +433,37 @@ export default function SignupPage() {
                   {stage.body}
                 </p>
               </div>
+              {stage.needsApproval && (
+                <div className="text-left bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3 space-y-2.5">
+                  <div className="text-xs font-semibold text-slate-700">
+                    이용하려면 두 단계가 모두 완료되어야 합니다
+                  </div>
+                  <ol className="space-y-2">
+                    <li className="flex items-start gap-2.5">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-primary-soft text-primary-deep text-[11px] font-bold flex items-center justify-center mt-0.5">
+                        1
+                      </span>
+                      <span className="text-xs text-slate-600 leading-relaxed">
+                        <strong className="text-slate-800">이메일 인증</strong> —
+                        방금 보낸 인증 메일의 링크를 클릭하세요.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-primary-soft text-primary-deep text-[11px] font-bold flex items-center justify-center mt-0.5">
+                        2
+                      </span>
+                      <span className="text-xs text-slate-600 leading-relaxed">
+                        <strong className="text-slate-800">법인 관리자 승인</strong>{" "}
+                        — 담당자가 합류 요청을 검토·승인합니다.
+                      </span>
+                    </li>
+                  </ol>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    두 단계가 모두 끝나면 로그인할 수 있으며, 진행 결과는 입력하신
+                    이메일로 안내됩니다.
+                  </p>
+                </div>
+              )}
               {stage.verifyEmail && (
                 <div className="text-left bg-amber-50 border border-amber-200 rounded-lg px-3 py-3 text-xs text-amber-900 leading-relaxed space-y-2">
                   {stage.mailSent === false && (
@@ -430,13 +480,19 @@ export default function SignupPage() {
                       회사 메일 보안 필터가 외부 메일을 지연·격리할 수 있습니다
                       (수 분~수 시간 소요될 수 있음).
                     </li>
-                    <li>
-                      <strong>
-                        다른 이메일로 다시 가입하지 마세요.
-                      </strong>{" "}
-                      같은 회사가 여러 법인으로 중복 등록되어 데이터·권한이
-                      분리됩니다.
-                    </li>
+                    {stage.needsApproval ? (
+                      <li>
+                        이메일 인증을 마쳐도{" "}
+                        <strong>법인 관리자 승인 전에는 로그인할 수 없습니다.</strong>{" "}
+                        승인은 담당자가 별도로 진행합니다.
+                      </li>
+                    ) : (
+                      <li>
+                        <strong>다른 이메일로 다시 가입하지 마세요.</strong>{" "}
+                        같은 회사가 여러 법인으로 중복 등록되어 데이터·권한이
+                        분리됩니다.
+                      </li>
+                    )}
                     <li>
                       재발송 후에도 계속 오지 않으면{" "}
                       <a
@@ -507,8 +563,8 @@ export default function SignupPage() {
                 합류 요청을 보내면 관리자 승인 후 로그인 가능합니다.
               </Banner>
               <AdminContactsPanel
-                org={stage.org}
                 adminCount={stage.adminCount}
+                admins={stage.admins}
               />
               <Field label="이름" required>
                 <input
@@ -1106,114 +1162,50 @@ function Banner({ children }: { children: React.ReactNode }) {
 }
 
 function AdminContactsPanel({
-  org,
   adminCount,
+  admins,
 }: {
-  org: { id: number; name: string };
   adminCount: number;
+  admins: MaskedAdmin[];
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [reqName, setReqName] = useState("");
-  const [reqEmail, setReqEmail] = useState("");
-  const [reqReason, setReqReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [err, setErr] = useState("");
-
-  const submit = async () => {
-    setErr("");
-    if (!reqName.trim() || !reqEmail.trim()) {
-      setErr("이름과 이메일은 필수입니다.");
-      return;
-    }
-    setBusy(true);
-    const res = await fetch("/api/orgs/admin-request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        orgId: org.id,
-        requesterName: reqName.trim(),
-        requesterEmail: reqEmail.trim(),
-        reason: reqReason.trim(),
-      }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      setErr(await res.text());
-      return;
-    }
-    setSubmitted(true);
-  };
-
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
       <div className="text-xs font-semibold text-slate-700">
         법인 담당자 (org admin)
       </div>
-      <div className="text-xs text-slate-600">
-        {adminCount > 0
-          ? `이 법인에는 합류 요청을 검토할 담당자가 ${adminCount}명 있습니다. 요청을 보내면 담당자에게 알림이 전달됩니다.`
-          : "현재 활성 담당자가 확인되지 않습니다. 담당자가 없으면 운영자에게 권한 부여를 요청하세요."}
-      </div>
-      <p className="text-[11px] text-slate-500 pt-1">
-        개인정보 보호를 위해 담당자 신원은 표시하지 않습니다. 담당자와 연락이 닿지 않으면 운영자에게 권한 부여를 요청할 수 있습니다.
-      </p>
-
-      {submitted ? (
-        <div className="text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded px-2.5 py-2">
-          운영자에게 권한 부여 요청을 보냈습니다. 별도 회신으로 신원·재직 증명 요청이 올 수 있습니다.
-        </div>
-      ) : !expanded ? (
-        <button
-          onClick={() => setExpanded(true)}
-          className="text-xs text-primary hover:underline"
-        >
-          담당자와 연락이 안 되나요? 운영자에게 권한 부여 요청 →
-        </button>
-      ) : (
-        <div className="border-t border-slate-200 pt-2 space-y-2">
-          <div className="text-xs font-medium text-slate-700">
-            시스템 운영자에게 법인 권한 이관 요청
+      {adminCount > 0 ? (
+        <>
+          <div className="text-xs text-slate-600">
+            이 법인에는 합류 요청을 검토할 담당자가 {adminCount}명 있습니다. 합류
+            요청을 보내면 담당자에게 알림이 전달됩니다.
           </div>
-          <input
-            className={inputCls}
-            placeholder="본인 이름"
-            value={reqName}
-            onChange={(e) => setReqName(e.target.value)}
-          />
-          <input
-            className={inputCls}
-            type="email"
-            placeholder="연락받을 이메일"
-            value={reqEmail}
-            onChange={(e) => setReqEmail(e.target.value)}
-          />
-          <textarea
-            className={inputCls + " resize-y min-h-[72px]"}
-            placeholder="사유 (예: 회사 인사담당자로 부임, 기존 admin 퇴사 등). 운영자가 별도 회신으로 증빙을 요청할 수 있습니다."
-            value={reqReason}
-            onChange={(e) => setReqReason(e.target.value)}
-          />
-          {err && (
-            <div className="text-[11px] text-danger bg-danger-soft border border-danger/30 rounded px-2.5 py-1.5">
-              {err}
-            </div>
+          {admins.length > 0 && (
+            <ul className="space-y-1">
+              {admins.map((a, i) => (
+                <li
+                  key={i}
+                  className="flex items-center gap-2 text-xs bg-white border border-slate-200 rounded px-2.5 py-1.5"
+                >
+                  <span className="font-medium text-slate-800">{a.name}</span>
+                  {a.email && (
+                    <>
+                      <span className="text-slate-300">·</span>
+                      <span className="text-slate-500">{a.email}</span>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
-          <div className="flex gap-2">
-            <button
-              onClick={submit}
-              disabled={busy}
-              className="px-3 py-1.5 text-xs bg-primary hover:bg-primary-deep text-white rounded font-medium disabled:opacity-50"
-            >
-              {busy ? "전송 중..." : "운영자에게 요청 전송"}
-            </button>
-            <button
-              onClick={() => setExpanded(false)}
-              className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-300"
-            >
-              접기
-            </button>
-          </div>
+          <p className="text-[11px] text-slate-500 pt-1">
+            개인정보 보호를 위해 이름·이메일 일부는 가려서 표시됩니다. 본인 회사
+            담당자가 맞는지 확인한 뒤 합류 요청을 보내주세요.
+          </p>
+        </>
+      ) : (
+        <div className="text-xs text-slate-600">
+          현재 활성 담당자가 확인되지 않습니다. 합류 요청을 보낸 뒤 승인이
+          지연되면, 로그인 화면에서 운영자에게 권한 부여를 요청할 수 있습니다.
         </div>
       )}
     </div>

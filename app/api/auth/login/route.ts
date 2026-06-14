@@ -84,9 +84,28 @@ export async function POST(req: Request) {
   }
 
   // 인증/상태 가드 — 실패 카운터에 포함하지 않음 (정상 사용자가 메일 인증 안 한 케이스 등)
-  // 합류 요청 사용자는 emailVerifiedAt=null + status=pending 이므로 승인 대기 메시지가 우선
-  if (user.status === "pending")
-    return new Response("법인 관리자의 승인 대기 중입니다.", { status: 403 });
+  // 합류 요청 사용자는 emailVerifiedAt=null + status=pending 이므로 승인 대기 메시지가 우선.
+  // 비번 검증을 통과한 본인이므로 소속 법인명·본인 이름을 함께 반환 — 담당자 승인이 지연될 때
+  // 로그인 화면에서 곧바로 운영자(시스템관리자)에게 권한 부여를 요청하도록 동선을 연다.
+  if (user.status === "pending") {
+    let orgName: string | null = null;
+    if (user.orgId != null) {
+      const [org] = await db
+        .select({ name: organizations.name })
+        .from(organizations)
+        .where(eq(organizations.id, user.orgId));
+      orgName = org?.name ?? null;
+    }
+    return jsonError("법인 관리자의 승인 대기 중입니다.", 403, {
+      code: "pending_approval",
+      orgId: user.orgId,
+      orgName,
+      requesterName: user.name,
+      // 합류 사용자는 이메일 인증(가입 시 메일 링크 클릭)도 별도로 통과해야 함 —
+      // 로그인 화면에서 두 단계 진행 상태를 정확히 보여주기 위해 인증 여부를 함께 반환.
+      emailVerified: !!user.emailVerifiedAt,
+    });
+  }
   if (!user.emailVerifiedAt)
     return jsonError("이메일 인증이 필요합니다.", 403, {
       code: "email_unverified",

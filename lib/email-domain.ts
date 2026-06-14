@@ -152,3 +152,31 @@ export function maskBizNo(biz: string | null | undefined): string | null {
   if (digits.length < 10) return "****";
   return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-*****`;
 }
+
+/**
+ * 사람 이름 부분 마스킹 — 가입 전 합류 안내 등 최소 노출용.
+ * 한국 관습(가운데 가림): 2글자 "홍*" / 3글자+ "홍*동"(첫·끝만 남김). 1글자는 그대로.
+ */
+export function maskPersonName(name: string | null | undefined): string {
+  const n = (name ?? "").trim();
+  if (!n) return "";
+  const c = Array.from(n);
+  if (c.length === 1) return c[0];
+  if (c.length === 2) return `${c[0]}*`;
+  return `${c[0]}${"*".repeat(c.length - 2)}${c[c.length - 1]}`;
+}
+
+/**
+ * 이메일 부분 마스킹 — 로컬파트 앞 1~2자만 남기고 가림, 도메인은 유지.
+ * 도메인은 합류 대상 법인의 회사 도메인이라 이미 알려진 정보. 별표는 길이 노출 방지로 고정.
+ * 예: "kildong@acme.com" → "ki***@acme.com"
+ */
+export function maskEmail(email: string | null | undefined): string {
+  const e = (email ?? "").trim();
+  const at = e.indexOf("@");
+  if (at <= 0) return e ? "***" : "";
+  const local = Array.from(e.slice(0, at));
+  const domain = e.slice(at + 1);
+  const keep = local.length >= 3 ? 2 : 1;
+  return `${local.slice(0, keep).join("")}***@${domain}`;
+}
