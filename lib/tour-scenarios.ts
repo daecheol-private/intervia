@@ -84,7 +84,7 @@ export const TOUR_SCENARIOS: TourScenario[] = [
         // 업로드 섹션이 접혀 있을 수 있어 미리 펼쳐 둠 (Section storageKey).
         presets: [{ key: "job-upload:{jobId}", value: "1" }],
         title: "먼저 '지원자 동의 확인'부터",
-        body: "이력서를 AI로 평가하려면, 지원자에게 'AI 평가 적용 + 거부 시 일반 절차 가능'을 안내했는지 먼저 체크해야 해요. 개인정보보호법상 필수 절차라, 이 체크 없이는 업로드가 막혀요.",
+        body: "이력서를 AI로 평가하려면, 지원자에게 'AI 평가 적용 + 거부 시 일반 절차 가능'을 안내했는지 먼저 체크해야 해요. 개인정보보호법상 필요한 절차예요. 체크하지 않아도 업로드와 이후 절차는 진행되지만, 'AI 이력서 평가'는 이용할 수 없어요.",
       },
       {
         path: "/jobs/{jobId}",
@@ -105,12 +105,27 @@ export const TOUR_SCENARIOS: TourScenario[] = [
     steps: [
       {
         path: "/candidates/{candidateId}",
+        target: '[data-tour="screening-report"]',
+        placement: "top",
+        // 1단계는 서류 평가 결과 확인 — 서류 평가 섹션을 펼쳐 둔다. 2단계의 AI 면접
+        // 섹션도 함께 펼쳐, 같은 페이지에서 단계가 넘어갈 때 끊김 없이 이어지게 한다.
+        presets: [
+          { key: "cand-section:서류 평가", value: "1" },
+          { key: "cand-section:AI 면접", value: "1" },
+        ],
+        title: "먼저 서류 평가 결과를 확인하세요",
+        body: "AI가 매긴 종합 점수와 6축 공고 적합도(기술·경험·직무·성과·안정성·태도)예요. 강점과 면접에서 확인할 점을 함께 살펴보고, 이 지원자와 면접을 진행할지 판단해 보세요.",
+      },
+      {
+        path: "/candidates/{candidateId}",
         target: '[data-tour="ai-interview-btn"]',
         placement: "top",
-        // AI 면접 섹션은 기본 접힘 — 이동 전에 펼쳐 둔다 (Section 이 mount 시 localStorage 를 읽음).
-        presets: [{ key: "cand-section:AI 면접", value: "1" }],
-        title: "서류 평가를 확인했다면, AI 면접 시작!",
-        body: "위에서 AI 서류 평가 결과를 확인하고, 이 지원자와 AI 면접을 진행하고 싶다면 이 버튼을 눌러요. 면접 링크가 만들어지고 지원자 이메일로 자동 발송돼요.",
+        presets: [
+          { key: "cand-section:서류 평가", value: "1" },
+          { key: "cand-section:AI 면접", value: "1" },
+        ],
+        title: "확인했다면, AI 면접을 보내세요",
+        body: "이 버튼을 누르면 면접 링크가 만들어지고 지원자 이메일로 자동 발송돼요. 지원자가 링크에 접속하면 AI 면접관이 채팅으로 면접을 진행합니다.",
       },
     ],
   },

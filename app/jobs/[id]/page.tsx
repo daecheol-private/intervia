@@ -462,6 +462,10 @@ export default function JobDetailPage() {
           lines.push(
             `✅ ${okList.length}명 등록 완료${withAtt > 0 ? ` (그 중 ${withAtt}명은 첨부 파일 포함)` : ""}`
           );
+          // 첫 후보 등록으로 온보딩 step3(이력서 올리기) 충족 — 플로팅 가이드가
+          // 새로고침 없이 즉시 완료 표시되도록 진행 상태 재조회를 요청.
+          if (typeof window !== "undefined")
+            window.dispatchEvent(new Event("intervia:setup-progress-refresh"));
         }
         if (failList.length > 0) {
           lines.push(`⚠️ ${failList.length}건 실패:`);

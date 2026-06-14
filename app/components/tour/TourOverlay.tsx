@@ -7,7 +7,7 @@
  *  1) 현재 경로가 단계 경로와 다르면 해당 화면으로 이동
  *  2) 대상 요소(data-tour / #id)를 찾아 화면 중앙으로 스크롤
  *  3) 주변을 어둡게 + 대상만 구멍(스포트라이트) + 반짝이 + 글로우 링
- *  4) 대상 옆 말풍선으로 설명 + 이전/다음/건너뛰기
+ *  4) 대상 옆 말풍선으로 설명 + 이전/다음 (닫기는 우측 상단 X 또는 ESC)
  *
  * 페이지는 그대로 클릭 가능(pointer-events-none 컨테이너) — 사용자가
  * 안내를 보면서 실제로 따라 해 볼 수 있다. 말풍선만 클릭을 받는다.
@@ -64,6 +64,10 @@ export function TourOverlay() {
           /* ignore */
         }
       }
+      // 이미 mount된 섹션(Section)이 이 preset 을 즉시 반영하도록 알림 —
+      // 같은 페이지 내 단계 전환·자동 시작은 router.push 가 없어 재mount 가 안 됨.
+      if (typeof window !== "undefined")
+        window.dispatchEvent(new Event("intervia:section-sync"));
     }
 
     const wantPath = pathnameOf(resolvePath(step.path, params));
@@ -92,19 +96,15 @@ export function TourOverlay() {
       if (cancelled) return;
       const el = document.querySelector(step.target);
       if (el) {
-        // 뷰포트보다 큰 섹션에 'top' 말풍선을 붙일 땐, 섹션 상단을 화면
-        // 위쪽으로 끌어내려 말풍선이 들어갈 공간을 확보한다. (말풍선이
-        // 화면 밖으로 나가지 않도록 — computeBubble 세로 클램프와 함께.)
+        // 뷰포트보다 큰 영역은 말풍선을 영역 밖으로 빼지 않고 안에 겹쳐 띄운다
+        // (computeBubble 의 tall 분기 참조). 여기선 영역 상단을 화면 위쪽에
+        // 맞춰, 점수·차트 같은 핵심이 먼저 눈에 들어오도록 스크롤한다.
         const r0 = el.getBoundingClientRect();
-        const placement = step.placement ?? "bottom";
         const tall = r0.height > window.innerHeight - 200;
-        if (tall && placement === "top") {
-          window.scrollBy({ top: r0.top - 260, behavior: "smooth" });
+        if (tall) {
+          window.scrollBy({ top: r0.top - 72, behavior: "smooth" });
         } else {
-          el.scrollIntoView({
-            block: tall ? "start" : "center",
-            behavior: "smooth",
-          });
+          el.scrollIntoView({ block: "center", behavior: "smooth" });
         }
         targetRef.current = el;
         // 스크롤이 안정된 뒤 측정.
@@ -291,13 +291,7 @@ export function TourOverlay() {
                 </p>
               )}
             </div>
-            <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-surface-alt/50 border-t border-border-default">
-              <button
-                onClick={() => tourStore.stop()}
-                className="text-[11px] text-ink-muted hover:text-ink underline underline-offset-2 transition-colors"
-              >
-                건너뛰기
-              </button>
+            <div className="flex items-center justify-end gap-2 px-4 py-2.5 bg-surface-alt/50 border-t border-border-default">
               <div className="flex items-center gap-1.5">
                 {idx > 0 && (
                   <button
@@ -357,6 +351,16 @@ function computeBubble(
   // top 은 말풍선의 실제 상단 좌표(좌표계: 뷰포트). transform 은 X 정렬만 담당.
   const clampY = (top: number) =>
     Math.min(Math.max(top, 8), Math.max(8, vh - bubbleH - 8));
+
+  // 대상이 뷰포트보다 크면(tall) 말풍선을 영역 밖으로 빼지 않고 영역 안
+  // 상단에 겹쳐 띄운다. (find() 가 영역 상단을 화면 위쪽으로 스크롤해 둠)
+  if (rect.height > vh - 200) {
+    return {
+      left: clampX(cx),
+      top: clampY(Math.max(rect.top, 8) + 16),
+      transform: "translateX(-50%)",
+    };
+  }
 
   let p = placement;
   // 세로 플립 — 공간 부족 시 반대편.

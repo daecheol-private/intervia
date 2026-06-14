@@ -194,6 +194,10 @@ export default function CandidateDetailPage() {
     }
     setCreating(false);
     void load();
+    // 면접 링크 발송으로 온보딩 step4(AI 면접 보내기)가 충족됨 — 플로팅 가이드가
+    // 새로고침 없이 즉시 완료 표시되도록 진행 상태 재조회를 요청.
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new Event("intervia:setup-progress-refresh"));
   };
 
   const startScreening = async () => {
@@ -607,7 +611,7 @@ export default function CandidateDetailPage() {
             </div>
           )
         ) : candidate.screeningReport ? (
-          <div className="space-y-4 text-sm">
+          <div className="space-y-4 text-sm" data-tour="screening-report">
             <div className="flex items-baseline gap-3">
               <div
                 className={`text-5xl font-bold tabular-nums ${scoreColor(

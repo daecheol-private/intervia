@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, Sparkles } from "lucide-react";
 import { buildSetupSteps } from "@/lib/setup-steps";
 import { GuideStepList } from "./tour/guide-steps";
@@ -36,6 +36,7 @@ export function SetupGuideWidget() {
   const [confirmHide, setConfirmHide] = useState(false);
   const boxRef = useRef<HTMLElement | null>(null);
   const draggedRef = useRef(false); // 드래그 직후 클릭 토글 방지
+  const mountedRef = useRef(true); // 언마운트 후 비동기 setState 방지
 
   // 후보자용·관리자 화면은 조회/렌더 모두 제외.
   const hidden =
@@ -64,22 +65,40 @@ export function SetupGuideWidget() {
     return () => window.removeEventListener("resize", onResize);
   }, [pos == null]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 페이지 이동마다 진행 상태 갱신 — 단계 완료가 다음 화면에서 바로 반영되게.
-  useEffect(() => {
+  // 진행 상태 조회 — 페이지 이동 + 커스텀 이벤트가 공유. 언마운트 후엔 setState 생략.
+  const refreshProgress = useCallback(() => {
     if (hidden || sessionStorage.getItem(DONE_KEY)) return;
-    let alive = true;
     fetch("/api/orgs/me/setup-progress", { cache: "no-store" })
       .then((r) => (r.ok ? (r.json() as Promise<Progress>) : null))
       .then((j) => {
-        if (!alive || !j) return;
+        if (!mountedRef.current || !j) return;
         if (!j.show) sessionStorage.setItem(DONE_KEY, "1");
         setProgress(j);
       })
       .catch(() => {});
+  }, [hidden]);
+
+  // 언마운트 후 비동기 응답이 setState 하지 않도록 (StrictMode 재마운트 대응).
+  useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      alive = false;
+      mountedRef.current = false;
     };
-  }, [pathname, hidden]);
+  }, []);
+
+  // 페이지 이동마다 진행 상태 갱신 — 단계 완료가 다음 화면에서 바로 반영되게.
+  useEffect(() => {
+    refreshProgress();
+  }, [pathname, refreshProgress]);
+
+  // 같은 페이지 안에서 끝낸 단계(예: 이력서 업로드)를 새로고침 없이 즉시 반영 —
+  // 업로드 성공 등이 발신하는 커스텀 이벤트를 받아 진행 상태를 재조회한다.
+  useEffect(() => {
+    const onRefresh = () => refreshProgress();
+    window.addEventListener("intervia:setup-progress-refresh", onRefresh);
+    return () =>
+      window.removeEventListener("intervia:setup-progress-refresh", onRefresh);
+  }, [refreshProgress]);
 
   // 접기↔펼치기로 크기가 바뀌면 화면 밖으로 나가지 않게 재클램프.
   useEffect(() => {

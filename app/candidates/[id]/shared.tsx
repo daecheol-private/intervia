@@ -108,9 +108,16 @@ export function Section({
   useEffect(() => {
     if (!collapsible) return;
     if (typeof window === "undefined") return;
-    const v = window.localStorage.getItem(storageKey);
-    if (v === "0") setOpen(false);
-    else if (v === "1") setOpen(true);
+    const sync = () => {
+      const v = window.localStorage.getItem(storageKey);
+      if (v === "0") setOpen(false);
+      else if (v === "1") setOpen(true);
+    };
+    sync();
+    // 가이드 투어가 presets 로 섹션 펼침을 바꿀 때(이미 mount된 뒤에도) 반영 —
+    // 같은 페이지 내 단계 전환·자동 시작은 재mount 가 없어 mount 시 1회 읽기로는 놓침.
+    window.addEventListener("intervia:section-sync", sync);
+    return () => window.removeEventListener("intervia:section-sync", sync);
   }, [storageKey, collapsible]);
   const toggle = () => {
     if (!collapsible) return;
