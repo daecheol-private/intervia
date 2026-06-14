@@ -1,6 +1,11 @@
 import { db } from "@/lib/db";
-import { users, organizations, orgJoinRequests } from "@/lib/schema";
-import { eq, and, desc, ne, count } from "drizzle-orm";
+import {
+  users,
+  organizations,
+  orgJoinRequests,
+  orgDomainReviews,
+} from "@/lib/schema";
+import { eq, and, desc, ne } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 
@@ -59,18 +64,45 @@ export async function GET(req: Request) {
     .select({ emailDomain: organizations.emailDomain })
     .from(organizations)
     .where(eq(organizations.id, targetOrgId));
+  // 같은 도메인을 쓰는 다른 법인(코테넌트) 목록 — "같은 도메인에 새 법인 등록" 알림의
+  // 확인 대상. 관리자가 모르는 법인이면 신고할 수 있도록 최소 정보만 노출
+  // (이름·등록일·검증상태). 사업자번호·멤버 등 민감정보는 비노출.
+  let domainOrgs: Array<{
+    id: number;
+    name: string;
+    createdAt: string | null;
+    verificationStatus: string;
+    // 이 법인(reviewer)이 해당 코테넌트를 검토한 상태. null = 미검토.
+    reviewStatus: "acknowledged" | "reported" | null;
+  }> = [];
   if (thisOrg?.emailDomain) {
-    const [{ c }] = await db
-      .select({ c: count() })
+    const coTenants = await db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        createdAt: organizations.createdAt,
+        verificationStatus: organizations.verificationStatus,
+        reviewStatus: orgDomainReviews.status,
+      })
       .from(organizations)
+      .leftJoin(
+        orgDomainReviews,
+        and(
+          eq(orgDomainReviews.targetOrgId, organizations.id),
+          eq(orgDomainReviews.reviewerOrgId, targetOrgId)
+        )
+      )
       .where(
         and(
           eq(organizations.emailDomain, thisOrg.emailDomain),
+          ne(organizations.id, targetOrgId),
           ne(organizations.verificationStatus, "rejected")
         )
-      );
-    domainShared = Number(c) > 1;
+      )
+      .orderBy(desc(organizations.createdAt));
+    domainOrgs = coTenants;
+    domainShared = coTenants.length > 0;
   }
 
-  return Response.json({ members: rows, domainShared });
+  return Response.json({ members: rows, domainShared, domainOrgs });
 }

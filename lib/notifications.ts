@@ -274,18 +274,65 @@ export async function activeUserCount(): Promise<number> {
   return Number(r?.c ?? 0);
 }
 
-/** 시스템 관리자 전원에게 fanout. */
+/**
+ * 시스템 관리자 전원에게 fanout.
+ *
+ * @param options.email true 면 인앱 알림 + 이메일 동시 발송 (시스템 env SMTP).
+ *   운영자가 매번 어드민에 들어와 있지 않으므로, 사람 검토가 필요한 알림
+ *   (도메인 코테넌트 신고 등)은 메일로도 통지해 누락을 막는다.
+ *   시스템 메일이라 법인 SMTP 가 아닌 환경변수 SMTP(orgId 없음)로 발송.
+ */
 export async function notifySystemAdmins(
-  input: Omit<CreateNotificationInput, "userId">
+  input: Omit<CreateNotificationInput, "userId">,
+  options?: { email?: boolean }
 ): Promise<void> {
   const admins = await db
-    .select({ id: users.id })
+    .select({ id: users.id, email: users.email, name: users.name })
     .from(users)
     .where(eq(users.role, "system_admin"));
   await createNotificationFanout(
     admins.map((a) => a.id),
     input
   );
+
+  if (!options?.email) return;
+  if (admins.length === 0) return;
+  if (!(await isSmtpAvailable(null))) return;
+
+  const base = resolveMailBaseUrl();
+  const fullUrl = input.href.startsWith("http")
+    ? input.href
+    : `${base}${input.href}`;
+  const subject = `[Intervia] ${input.title}`;
+  for (const a of admins) {
+    if (!a.email) continue;
+    const html = wrapEmailCard({
+      innerHtml: `
+        <h1 style="font-size:18px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(a.name)}님, 안녕하세요.</h1>
+        <p style="color:#475569;line-height:1.6;margin:0 0 16px;">
+          시스템 관리자 확인이 필요한 알림이 도착했습니다.
+        </p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:14px;color:#0f172a;line-height:1.6;margin:0 0 20px;">
+          ${escapeHtml(input.title)}
+        </div>
+        <p style="text-align:center;margin:0 0 16px;">
+          <a href="${fullUrl}" style="display:inline-block;background:#0d4f3c;color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">바로 확인하기</a>
+        </p>
+        <p style="font-size:12px;color:#64748b;margin:0;text-align:center;">
+          <a href="${fullUrl}" style="color:#0d4f3c;word-break:break-all;">${fullUrl}</a>
+        </p>
+      `,
+      footer: "본 메일은 Intervia 시스템에서 자동 발송되었습니다.",
+    });
+    try {
+      await sendMail({ to: a.email, subject, html, orgId: null, audience: "org" });
+    } catch (e) {
+      console.error(
+        `[notifySystemAdmins] mail failed (uid=${a.id}):`,
+        e instanceof Error ? e.message : e
+      );
+    }
+  }
 }
 
 /** 내 알림 목록 — 미읽음 전체(최신순) + 최근 읽음 5건. limit 인자는 호환용. */

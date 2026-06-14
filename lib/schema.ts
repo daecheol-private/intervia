@@ -1298,3 +1298,39 @@ export const marketingRecipients = sqliteTable(
 );
 
 export type MarketingRecipient = typeof marketingRecipients.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// 같은 이메일 도메인을 공유하는 코테넌트 법인에 대한 org_admin 의 검토 기록.
+// "같은 도메인에 새 법인 등록됨 — 아는 관계사인지 확인" 알림의 조치 상태를 영속화한다.
+//   acknowledged : 아는(관계사) 법인으로 확인 → 더 이상 안내하지 않음
+//   reported     : 모르는 법인으로 신고 → 시스템 운영자 검토 대기 (버튼 대신 "신고됨" 유지)
+// (reviewerOrgId, targetOrgId) 당 1행 — 액션 변경 시 status 만 갱신(upsert).
+export const orgDomainReviews = sqliteTable(
+  "org_domain_reviews",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    reviewerOrgId: integer("reviewer_org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    targetOrgId: integer("target_org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    status: text("status", { enum: ["acknowledged", "reported"] }).notNull(),
+    reason: text("reason"),
+    reviewedByUserId: integer("reviewed_by_user_id"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    pairUq: uniqueIndex("org_domain_reviews_pair_uq").on(
+      t.reviewerOrgId,
+      t.targetOrgId
+    ),
+  })
+);
+
+export type OrgDomainReview = typeof orgDomainReviews.$inferSelect;

@@ -17,9 +17,25 @@ type Member = {
   joinRequestId: number | null;
 };
 
+// 같은 이메일 도메인을 쓰는 다른 법인 — "같은 도메인 새 법인 등록" 알림의 확인 대상.
+type DomainOrg = {
+  id: number;
+  name: string;
+  createdAt: string | null;
+  verificationStatus:
+    | "dart_matched"
+    | "verified"
+    | "pending_review"
+    | "rejected";
+  // 내 법인이 이 코테넌트를 검토한 상태. null = 미검토 (영속).
+  reviewStatus: "acknowledged" | "reported" | null;
+};
+
 export default function OrgMembersPage() {
   const [rows, setRows] = useState<Member[]>([]);
   const [domainShared, setDomainShared] = useState(false);
+  const [domainOrgs, setDomainOrgs] = useState<DomainOrg[]>([]);
+  const [reviewBusyId, setReviewBusyId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -36,6 +52,7 @@ export default function OrgMembersPage() {
     const data = (await res.json()) as {
       members: Member[];
       domainShared: boolean;
+      domainOrgs?: DomainOrg[];
     };
     const members = data.members ?? [];
     // 승인대기(합류 요청) 행을 맨 위로. 그 외는 API 정렬(createdAt desc) 유지 — JS sort 는 stable.
@@ -44,6 +61,7 @@ export default function OrgMembersPage() {
     );
     setRows(members);
     setDomainShared(!!data.domainShared);
+    setDomainOrgs(data.domainOrgs ?? []);
   }, []);
 
   useEffect(() => {
@@ -113,6 +131,30 @@ export default function OrgMembersPage() {
     void load();
   };
 
+  // 같은 도메인 코테넌트 검토 — acknowledge(아는 법인, 안내 숨김) / report(모르는 법인, 운영자 신고).
+  // 상태는 서버(org_domain_reviews)에 영속 저장되어 리프레시 후에도 유지된다.
+  const review = async (org: DomainOrg, action: "acknowledge" | "report") => {
+    const confirmMsg =
+      action === "report"
+        ? `'${org.name}' 법인을 모르는(미인지) 법인으로 운영자에게 신고합니다.\n\n계열사 등 아는 법인이면 신고하지 마세요. 신고 내용은 시스템 운영자에게 전달되어 검토됩니다.`
+        : `'${org.name}' 법인을 아는(관계사) 법인으로 확인 처리합니다.\n\n확인하면 이 목록에서 더 이상 표시되지 않습니다.`;
+    if (!confirm(confirmMsg)) return;
+    setReviewBusyId(org.id);
+    setErr("");
+    const res = await fetch("/api/orgs/domain-review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orgId: org.id, action }),
+    });
+    setReviewBusyId(null);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    // 서버 상태를 다시 읽어 reviewStatus 반영 (영속 — 리프레시해도 유지).
+    void load();
+  };
+
   return (
     <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
@@ -135,6 +177,67 @@ export default function OrgMembersPage() {
           <li>아래 목록 상단의 <strong>승인대기</strong> 항목에서 승인</li>
         </ol>
       </div>
+
+      {/* 같은 도메인을 쓰는 다른 법인 — "같은 도메인 새 법인 등록" 알림의 확인·조치 지점.
+          아는(관계사) 법인은 "확인"으로 숨기고, 모르는 법인이면 운영자에게 신고(검토 요청).
+          확인된(acknowledged) 법인은 목록에서 제외 — 검토가 필요한 것만 남긴다. */}
+      {domainOrgs.filter((o) => o.reviewStatus !== "acknowledged").length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3">
+          <div className="text-sm font-semibold text-amber-900 mb-1">
+            같은 도메인을 쓰는 다른 법인
+          </div>
+          <p className="text-xs text-amber-800 leading-relaxed mb-3">
+            아래 법인이 같은 이메일 도메인으로 등록되어 있습니다. 계열사 등{" "}
+            <strong>아는 법인</strong>이면 “확인”을 눌러 정리하고,{" "}
+            <strong>모르는 법인</strong>이면 신고해 주세요 — 시스템 운영자가
+            검토합니다.
+          </p>
+          <ul className="space-y-2">
+            {domainOrgs
+              .filter((o) => o.reviewStatus !== "acknowledged")
+              .map((o) => (
+                <li
+                  key={o.id}
+                  className="flex items-center justify-between gap-3 bg-white border border-amber-200 rounded-lg px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium text-slate-900 text-sm break-words">
+                      {o.name}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <OrgVerifyBadge status={o.verificationStatus} />
+                      {o.createdAt && (
+                        <span>등록일 {o.createdAt.slice(0, 10)}</span>
+                      )}
+                    </div>
+                  </div>
+                  {o.reviewStatus === "reported" ? (
+                    <span className="shrink-0 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">
+                      ✓ 신고됨 — 운영자 검토 중
+                    </span>
+                  ) : (
+                    <div className="shrink-0 flex gap-1.5">
+                      <button
+                        onClick={() => review(o, "acknowledge")}
+                        disabled={reviewBusyId === o.id}
+                        className="px-2.5 py-1.5 text-xs bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded disabled:opacity-50"
+                      >
+                        {reviewBusyId === o.id ? "처리 중..." : "아는 법인 (확인)"}
+                      </button>
+                      <button
+                        onClick={() => review(o, "report")}
+                        disabled={reviewBusyId === o.id}
+                        className="px-2.5 py-1.5 text-xs bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 rounded disabled:opacity-50"
+                      >
+                        모르는 법인 신고
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
 
       {err && (
         <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2 mb-4">
@@ -411,6 +514,29 @@ function JoinRequestNotice({
         </div>
       )}
     </div>
+  );
+}
+
+// 같은 도메인 법인의 검증 상태 배지 (신호용). rejected 는 서버에서 제외되어 보통 안 뜸.
+function OrgVerifyBadge({
+  status,
+}: {
+  status: DomainOrg["verificationStatus"];
+}) {
+  const cfg =
+    status === "dart_matched"
+      ? { label: "✓ DART", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+      : status === "verified"
+        ? { label: "✓ 검증", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+        : status === "pending_review"
+          ? { label: "⏳ 검토 대기", cls: "bg-amber-50 text-amber-800 border-amber-200" }
+          : { label: "✕ 거절", cls: "bg-rose-100 text-rose-700 border-rose-200" };
+  return (
+    <span
+      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${cfg.cls}`}
+    >
+      {cfg.label}
+    </span>
   );
 }
 
