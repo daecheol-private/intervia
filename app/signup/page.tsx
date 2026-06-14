@@ -53,7 +53,6 @@ type Stage =
   | { kind: "join"; org: { id: number; name: string }; admins: AdminInfo[] }
   | { kind: "choose" }
   | { kind: "create" }
-  | { kind: "search"; results: OrgSearchResult[]; q: string }
   | { kind: "choose_match"; orgs: MatchedOrgFull[] }
   | { kind: "match_suggest"; orgs: MatchCandidate[] }
   | {
@@ -74,7 +73,6 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [orgName, setOrgName] = useState("");
   const [bizNo, setBizNo] = useState("");
-  const [searchQ, setSearchQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
@@ -124,14 +122,12 @@ export default function SignupPage() {
       return;
     }
     const list = data.matchedOrgs ?? [];
-    if (list.length >= 2) {
+    // 같은 도메인 법인이 1개라도 있으면 자동 합류로 단정하지 않고 picker로 "다시 확인".
+    // 계열사 등으로 한 회사 도메인을 여러 법인이 나눠 쓰는 경우, 단일 매칭을 곧바로
+    // 합류 폼으로 보내면 두 번째 계열사 직원이 엉뚱한 법인에 합류 유도됨 →
+    // 1개든 2개든 동일하게 "본인 회사 선택 / 없으면 새 법인 등록" 으로 분기한다.
+    if (list.length >= 1) {
       setStage({ kind: "choose_match", orgs: list });
-    } else if (data.matchedOrg) {
-      setStage({
-        kind: "join",
-        org: data.matchedOrg,
-        admins: data.admins ?? [],
-      });
     } else {
       setStage({ kind: "choose" });
     }
@@ -277,25 +273,6 @@ export default function SignupPage() {
       return;
     }
     setResendInfo("인증 메일을 재발송했습니다. 메일함(스팸·정크함 포함)을 확인해주세요.");
-  };
-
-  const runSearch = async () => {
-    setErr("");
-    if (searchQ.trim().length < 2) {
-      setErr("2글자 이상 입력하세요.");
-      return;
-    }
-    setBusy(true);
-    const res = await fetch(
-      `/api/orgs/search?q=${encodeURIComponent(searchQ.trim())}`
-    );
-    setBusy(false);
-    if (!res.ok) {
-      setErr(await res.text());
-      return;
-    }
-    const results = (await res.json()) as OrgSearchResult[];
-    setStage({ kind: "search", results, q: searchQ });
   };
 
   return (
@@ -464,17 +441,12 @@ export default function SignupPage() {
           {stage.kind === "choose" && (
             <div className="space-y-3">
               <Banner>
-                매칭되는 법인이 없습니다. 새 법인을 등록하거나 기존 법인을 검색하세요.
+                매칭되는 법인이 없습니다. 아래에서 새 법인을 등록해 주세요.
+                이미 등록된 회사라면 등록 과정에서 자동으로 안내됩니다.
               </Banner>
               <div className="flex gap-2">
                 <button onClick={() => setStage({ kind: "create" })} className={primaryBtn}>
                   새 법인 등록
-                </button>
-                <button
-                  onClick={() => setStage({ kind: "search", results: [], q: "" })}
-                  className={secondaryBtn}
-                >
-                  법인 검색
                 </button>
               </div>
             </div>
@@ -483,7 +455,17 @@ export default function SignupPage() {
           {stage.kind === "choose_match" && (
             <div className="space-y-3">
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
-                <strong>같은 도메인의 법인이 여러 개입니다.</strong> SaaS 메일을 여러 회사가 공유하는 경우일 수 있습니다. 합류할 법인을 선택해 주세요. 본인의 회사가 없으면 아래 "새 법인 등록"으로 진행할 수 있습니다.
+                {stage.orgs.length === 1 ? (
+                  <>
+                    <strong>이 도메인으로 등록된 법인이 있습니다.</strong>{" "}
+                    <code className="font-mono">{getEmailDomain(email) ?? ""}</code>{" "}
+                    소속이면 아래에서 합류 요청을 보내세요. 계열사 등 같은 도메인을 함께 쓰는 다른 법인이라면 "내 회사가 목록에 없어요 — 새 법인 등록"으로 진행하세요.
+                  </>
+                ) : (
+                  <>
+                    <strong>같은 도메인에 여러 법인이 등록되어 있습니다.</strong> 계열사 등으로 한 회사 도메인을 여러 법인이 나눠 쓰는 경우입니다. 본인 회사를 선택해 합류 요청을 보내세요. 목록에 없으면 아래 "새 법인 등록"으로 진행하세요.
+                  </>
+                )}
               </div>
               <ul className="space-y-2">
                 {stage.orgs.map((o) => (
@@ -527,13 +509,7 @@ export default function SignupPage() {
                   onClick={() => setStage({ kind: "create" })}
                   className={secondaryBtn}
                 >
-                  내 회사 없음 — 새 법인 등록
-                </button>
-                <button
-                  onClick={() => setStage({ kind: "search", results: [], q: "" })}
-                  className={secondaryBtn}
-                >
-                  법인 검색
+                  내 회사가 목록에 없어요 — 새 법인 등록
                 </button>
               </div>
             </div>
@@ -606,16 +582,17 @@ export default function SignupPage() {
             <div className="space-y-3">
               {!emailDomainIsPublic && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
-                  <strong>도메인 점유 안내</strong> — 가입을 진행하면{" "}
+                  <strong>도메인 안내</strong> — 가입을 진행하면{" "}
                   <code className="font-mono">
                     {getEmailDomain(email) ?? ""}
                   </code>{" "}
-                  도메인은 본 법인 단독 도메인으로 등록되며, 이후 같은 도메인으로
-                  가입하는 사용자는 자동으로 본 법인에 매핑됩니다. <br />
+                  도메인으로 본 법인이 등록됩니다. 이후 같은 도메인으로 가입하는
+                  분은{" "}
+                  <strong>“이 법인에 합류” 또는 “새 법인 등록”</strong> 중에서
+                  선택하게 되며, 자동으로 본 법인에 합류되지 않습니다. <br />
                   <span className="text-amber-800">
-                    Google Workspace 와 같은 SaaS 메일을 여러 회사가 공유하는
-                    경우라면 가입을 중단하고 운영자에게 문의해 주세요 (사칭·혼선
-                    방지).
+                    계열사 등으로 한 회사 도메인을 여러 법인이 함께 쓰는 경우에도
+                    각 법인이 따로 등록할 수 있습니다.
                   </span>
                 </div>
               )}
@@ -665,45 +642,6 @@ export default function SignupPage() {
                   뒤로
                 </button>
               </div>
-            </div>
-          )}
-
-          {stage.kind === "search" && (
-            <div className="space-y-3">
-              <Field label="법인명 또는 사업자번호">
-                <div className="flex gap-2">
-                  <input
-                    className={inputCls}
-                    value={searchQ}
-                    onChange={(e) => setSearchQ(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && runSearch()}
-                  />
-                  <button onClick={runSearch} disabled={busy} className={secondaryBtn}>
-                    검색
-                  </button>
-                </div>
-              </Field>
-              <div className="space-y-1 max-h-60 overflow-auto">
-                {stage.results.length === 0 && stage.q && (
-                  <p className="text-xs text-slate-500">결과가 없습니다.</p>
-                )}
-                {stage.results.map((o) => (
-                  <button
-                    key={o.id}
-                    onClick={() => enterJoinFromSearch({ id: o.id, name: o.name })}
-                    className="w-full text-left px-3 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50"
-                  >
-                    <div className="font-medium">{o.name}</div>
-                    <div className="text-xs text-slate-500">
-                      {o.bizRegistrationNo || "사업자번호 없음"} ·{" "}
-                      {o.emailDomain || "도메인 없음"}
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => setStage({ kind: "choose" })} className={secondaryBtn}>
-                뒤로
-              </button>
             </div>
           )}
 

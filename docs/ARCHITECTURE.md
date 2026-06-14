@@ -142,8 +142,8 @@ interviewer/
 ### 8. 회원가입 / 합류 흐름
 - **회사(법인) 도메인 이메일만 가입 가능** — gmail/naver/임시메일 등 공용 도메인(`PUBLIC_EMAIL_DOMAINS`, `lib/email-domain.ts`)은 차단. `check-email` 은 공용 도메인에 `{available:false, reason:"public_email"}` 반환, `POST /api/orgs` 도 서버 측 400 차단. **공용메일 선점으로 인한 도메인 매핑 사각지대·법인 사칭을 원천 제거** (결정: 소기업/공용메일 타겟 제외).
 - **가입 시 사업자번호 불요** — 도메인 메일함 통제(이메일 인증)가 곧 소속 증명. 세금계산서·정산에 필요하면 **법인 설정(`/org/settings`)에서 추후 입력** (`PUT /api/orgs/me/biz`, org_admin, 타 법인 중복 번호 차단).
-- `/signup` 페이지 = 상태머신: 이메일 중복확인 → 도메인 매칭(`organizations.email_domain`) / 멀티 매칭 / 검색 / 신규등록 분기.
-- **같은 도메인 1:N 허용** — (드문) 도메인 공유 케이스 대응. 매칭 결과가 2개 이상이면 사용자가 검증상태·담당자 정보를 보고 합류할 법인을 선택. `/api/auth/check-email` 응답의 `matchedOrgs` 배열.
+- `/signup` 페이지 = 상태머신: 이메일 중복확인 → 도메인 매칭(`organizations.email_domain`) → 매칭 있으면 법인 선택(picker) / 없으면 신규등록 분기. (독립 "법인 검색" 단계는 제거됨 2026-06-14 — 중복방지 힌트는 `SimilarOrgsHint` 가 `GET /api/orgs/search` 로 처리.)
+- **같은 도메인 1:N 허용** — 계열사 등 도메인 공유 케이스 대응. 매칭 결과가 **1개 이상이면** 사용자가 검증상태·담당자 정보를 보고 합류할 법인을 선택하거나 "새 법인 등록"을 택함 — **단일 매칭도 자동 합류로 단정하지 않음**(계열사 두 번째 법인의 오합류 방지, 2026-06-14). `/api/auth/check-email` 응답의 `matchedOrgs` 배열로 프런트가 분기 (응답의 `matchedOrg`/`suggestion` 필드는 하위호환 유지).
 - 법인 검증 상태: `dart_matched`(자동, 상장·외감), `verified`(도메인 이메일 인증 기반 **자동 검증** 또는 운영자 수동), `pending_review`(레거시·운영자 생성용 — **신규 가입 경로에선 더 이상 생성 안 됨**), `rejected`(사칭 판정). 검토 대기·거절 상태 법인은 합류 요청 차단.
 - **신규 법인 = 즉시 `verified`** (DART 매칭 시 `dart_matched`) → 같은 도메인 동료가 운영자 검토 없이 바로 합류 요청 가능.
 - 운영자 도구: `/admin/orgs` 에서 사후 도메인 매핑 해제·법인 거절 (감사 로그 + step-up 인증).

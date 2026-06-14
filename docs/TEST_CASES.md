@@ -69,8 +69,8 @@
 ### 1.1 이메일 중복확인 분기 (`POST /api/auth/check-email`)
 - [x] **TC-1.1.1** 공용 도메인(gmail/naver/daum 등) 입력 → `{ available:false, isPublicDomain:true, reason:"public_email" }` + "회사 이메일로만 가입" 안내
 - [x] **TC-1.1.2** 이미 가입된 이메일 → `{ available:false }` (already_registered)
-- [x] **TC-1.1.3** 매칭 법인 0개인 신규 회사 도메인 → "새 법인 등록 / 법인 검색" 분기 노출
-- [x] **TC-1.1.4** 도메인 매칭 법인 1개 → 해당 법인 합류 폼 (담당자 정보 **마스킹** 노출)
+- [x] **TC-1.1.3** 매칭 법인 0개인 신규 회사 도메인 → "새 법인 등록" 분기 노출 (법인 검색 UI 제거됨 2026-06-14, API suggestion 필드는 `create_or_search` 유지)
+- [ ] **TC-1.1.4** 도메인 매칭 법인 1개 → "이 도메인으로 등록된 법인" 확인 화면(picker): 합류 요청 또는 "새 법인 등록" 선택 (담당자 정보 **마스킹** 노출). 계열사 공유 도메인 대응 — 단일 매칭도 자동 합류로 단정하지 않음 (동작 변경 2026-06-14, 재검증 필요)
 - [x] **TC-1.1.5** 도메인 매칭 법인 2개+ → 법인 선택 picker (검증상태 표시)
 - [x] **TC-1.1.6** 응답에 `lastSeenAt`(접속시각) **절대 미노출** (정찰 방지)
 - [x] **TC-1.1.7** 사업자번호는 **마스킹**(`XXX-XX-*****`) 으로만 노출
@@ -110,7 +110,8 @@
   > ✅ 🟢 수정완료(2026-06-09, A-1): `lib/db-errors.ts` `isUniqueViolation`(cause 체인+code+rawCode) 적용 → 중복 이메일 합류 **409** 재검증 OK. (이하 원래 FAIL 기록 보존)
   > 🔴 (수정 전) FAIL: 중복 이메일 합류 시 **500** 반환(기대 409). 루트원인: `app/api/orgs/join-requests/route.ts:123` catch 가 `e.message` 에서 `/UNIQUE/` 검사하는데, Drizzle 래핑으로 최상위 message 는 "Failed query: insert into..." 라 매칭 실패 → `throw e` → 500. "UNIQUE constraint failed" 문구는 `e.cause.message`(LibsqlError, code `SQLITE_CONSTRAINT_UNIQUE`)에만 존재. **수정안**: catch 에서 `e.cause?.message` 까지 보거나 `(e as any).code === 'SQLITE_CONSTRAINT_UNIQUE'` 로 판정. ⚠️ 실사용 UI 는 사전 check-email 로 중복을 먼저 거르지만, API 자체는 500→로그오염·잘못된 상태코드. 동일 `.cause` 미탐색 패턴이 다른 라우트에도 있는지 점검 필요.
 
-### 1.4 법인 검색 (`GET /api/orgs/search?q=`)
+### 1.4 법인 검색 API (`GET /api/orgs/search?q=`) — 중복방지 힌트 백엔드
+> ℹ️ 가입 화면의 독립 "법인 검색" 버튼/단계는 제거됨(2026-06-14). 이 엔드포인트는 신규 법인 등록 시 `SimilarOrgsHint`(유사 법인 안내)가 호출 — 아래 API 동작 테스트는 그대로 유효.
 - [x] **TC-1.4.1** 2자 미만 q → 빈 결과
 - [x] **TC-1.4.2** 회사명/사업자번호 LIKE 검색 동작, 사업자번호 마스킹 노출
   > ✅ q=test-company→org6/7, q=멀티테스트→org8(`123-45-*****`)/9. bizNo 마스킹 확인.
