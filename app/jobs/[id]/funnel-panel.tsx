@@ -62,8 +62,14 @@ export function FunnelPanel({
     n: number;
     /** 서브상태 요약 — "라벨 n" 중 n>0 만 표시 */
     subs: Array<{ label: string; n: number }>;
-    active: string;
-    empty: string;
+    /** 색 점 인디케이터 (값이 있을 때) */
+    dot: string;
+    /** n>0 카드 스타일 (테두리·배경·텍스트) */
+    fill: string;
+    /** 필터 선택 시 강조 ring */
+    ring: string;
+    /** 최종 합격 — solid 강조 셀 */
+    solid?: boolean;
   };
   const pipelineCells: PipelineCell[] = [
     {
@@ -74,8 +80,9 @@ export function FunnelPanel({
         { label: "평가전", n: s("applied") },
         { label: "평가완료", n: s("screened") },
       ],
-      active: "border-slate-400 bg-slate-50 text-slate-700",
-      empty: "border-slate-200 text-slate-300",
+      dot: "bg-slate-400",
+      fill: "border-slate-200 bg-white text-slate-700",
+      ring: "ring-slate-300",
     },
     {
       stage: "bucket_ai",
@@ -85,8 +92,9 @@ export function FunnelPanel({
         { label: "응시대기", n: s("ai_pending") },
         { label: "면접완료", n: s("ai_evaluated") },
       ],
-      active: "border-info bg-info-soft text-info",
-      empty: "border-info/30 text-info/40",
+      dot: "bg-info",
+      fill: "border-info/25 bg-info-soft/50 text-info",
+      ring: "ring-info/40",
     },
     {
       stage: "bucket_round1",
@@ -97,8 +105,9 @@ export function FunnelPanel({
         { label: "일정조율", n: s("round1_scheduling") },
         { label: "면접확정", n: s("round1_waiting") },
       ],
-      active: "border-accent bg-accent-soft text-accent-deep",
-      empty: "border-accent/30 text-accent/40",
+      dot: "bg-accent",
+      fill: "border-accent/30 bg-accent-soft/50 text-accent-deep",
+      ring: "ring-accent/50",
     },
     {
       stage: "bucket_round2",
@@ -108,18 +117,23 @@ export function FunnelPanel({
         { label: "진행·일정", n: s("round1_passed") },
         { label: "최종결정", n: s("round2_passed") },
       ],
-      active: "border-primary bg-primary-soft text-primary-deep",
-      empty: "border-primary/30 text-primary/40",
+      dot: "bg-primary",
+      fill: "border-primary/25 bg-primary-soft/60 text-primary-deep",
+      ring: "ring-primary/40",
     },
     {
       stage: "hired",
       label: "최종 합격",
       n: s("hired"),
       subs: [],
-      active: "border-primary bg-primary text-surface",
-      empty: "border-primary/40 text-primary/50",
+      dot: "bg-white/80",
+      fill: "border-primary bg-primary text-white shadow-[var(--shadow-sm)]",
+      ring: "ring-primary/50",
+      solid: true,
     },
   ];
+  // 값 0인 셀은 색을 빼고 옅게 — 단계별 색조가 빈 칸까지 번지지 않도록 통일.
+  const dimCell = "border-border-default bg-surface-alt/30 text-ink-muted/60";
 
   // 결정 단계 — 불합격/지원취소. 최종 합격은 파이프라인에 포함되어 제외.
   const stageLabelMap: Record<string, string> = {
@@ -247,51 +261,69 @@ export function FunnelPanel({
       </div>
 
       {/* 파이프라인 — 버킷 5박스. 데스크톱은 1줄 꽉 채움(flex-1), 모바일은 가로 스크롤. */}
-      <div className="flex items-stretch gap-0.5 pb-2 overflow-x-auto sm:overflow-visible -mx-1 px-1">
+      <div className="flex items-stretch gap-1 pb-1 overflow-x-auto sm:overflow-visible -mx-1 px-1">
         {pipelineCells.map((cell, i) => {
           const subsLine = cell.subs
             .filter((x) => x.n > 0)
             .map((x) => `${x.label} ${x.n}`)
             .join(" · ");
+          const selected = activeStage === cell.stage;
+          const filled = cell.n > 0;
           return (
             <div
               key={cell.stage}
-              className="flex items-center gap-0.5 shrink-0 sm:shrink sm:flex-1 min-w-[96px] sm:min-w-0"
+              className="flex items-center gap-1 shrink-0 sm:shrink sm:flex-1 min-w-[104px] sm:min-w-0"
             >
               <button
                 type="button"
                 onClick={() =>
-                  onStageSelect?.(
-                    activeStage === cell.stage ? "all" : cell.stage
-                  )
+                  onStageSelect?.(selected ? "all" : cell.stage)
                 }
                 title={
-                  activeStage === cell.stage
+                  selected
                     ? `${cell.label} 필터 해제`
                     : `${cell.label} 단계만 보기`
                 }
-                className={`rounded-md text-center flex-1 min-w-0 cursor-pointer transition hover:shadow-sm hover:brightness-95 ${
-                  cell.n > 0 ? cell.active : cell.empty
+                className={`group relative flex flex-1 min-w-0 flex-col rounded-xl border px-3 py-2.5 text-left cursor-pointer transition-all duration-150 hover:-translate-y-px hover:shadow-[var(--shadow-md)] ${
+                  filled ? cell.fill : dimCell
                 } ${
-                  activeStage === cell.stage
-                    ? "border-4 px-0.5 py-1"
-                    : "border-2 px-1 py-1.5"
+                  selected
+                    ? `ring-2 ring-offset-1 ring-offset-white shadow-[var(--shadow-sm)] ${cell.ring}`
+                    : ""
                 }`}
               >
-                <div className="text-[10px] tracking-wider opacity-80 truncate">
-                  {cell.label}
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                      filled ? cell.dot : "bg-ink-muted/30"
+                    }`}
+                  />
+                  <span className="text-[11px] font-medium opacity-90 truncate">
+                    {cell.label}
+                  </span>
                 </div>
-                <div className="text-base font-bold mt-0.5 tabular-nums">
+                <div className="mt-1.5 text-2xl font-bold leading-none tabular-nums">
                   {cell.n}
                 </div>
-                <div className="text-[9px] opacity-70 truncate h-3">
-                  {subsLine}
+                <div className="mt-1 text-[10px] opacity-70 truncate h-3.5 leading-[14px]">
+                  {cell.solid && filled ? "합격" : subsLine}
                 </div>
               </button>
               {i < pipelineCells.length - 1 && (
-                <span className="text-[10px] shrink-0 text-slate-400 px-0.5">
-                  ▶
-                </span>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="h-4 w-4 shrink-0 text-border-strong"
+                  aria-hidden
+                >
+                  <path
+                    d="M9 6l6 6-6 6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               )}
             </div>
           );
