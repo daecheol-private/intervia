@@ -32,7 +32,7 @@ AI 이력서 평가·AI 면접·일정 조율·질문 생성 — 채용 사이�
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr>
       <td style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic','Segoe UI',sans-serif;font-size:19px;font-weight:bold;color:#ffffff;letter-spacing:-0.3px;">
-        Intervia<span style="color:#e8a87c;">.</span>
+        Intervia
       </td>
       <td align="right" style="font-family:Helvetica,Arial,sans-serif;font-size:10px;letter-spacing:3px;color:#7da394;">
         AI INTERVIEW PLATFORM
