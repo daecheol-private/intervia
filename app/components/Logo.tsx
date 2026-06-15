@@ -1,6 +1,7 @@
 /**
- * Intervia 로고 마크 — 둥근 사각 배지 안에 "IV" 두 글자(붙여서).
- * Forest gradient 배경 + 흰색 텍스트. 헤더·로그인·면접 화면 등 어디서나 동일.
+ * Intervia 로고 마크 — 둥근 사각 배지 안에 "IV." (흰색 IV + 애프리콧 마침표).
+ * 워드마크는 점 없이 'Intervia', 모노그램만 점을 붙인다 (브랜드 규칙).
+ * Forest gradient 배경. 헤더·로그인·면접 화면 등 어디서나 동일.
  *
  * 가변 size — 헤더 32px, 로그인 카드 48px, 면접 채팅 아바타 28~32px.
  */
@@ -22,7 +23,7 @@ export function LogoMark({
         lineHeight: 1,
       }}
     >
-      IV
+      IV<span className="text-accent">.</span>
     </span>
   );
 }

@@ -79,7 +79,7 @@ function AppBar({
     <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-border-default shrink-0">
       <div className="flex items-center gap-1.5">
         <span className="flex items-center justify-center w-4 h-4 rounded bg-primary text-surface text-[6px] font-bold tracking-tighter">
-          IV
+          IV<span className="text-accent">.</span>
         </span>
         <span className="text-[10px] font-semibold text-ink">{title}</span>
       </div>
