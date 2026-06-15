@@ -10,7 +10,7 @@ import { notify, confirmDialog } from "@/app/components/Dialog";
 import Link from "next/link";
 import { compositeScore, formatKstDateTime } from "@/lib/utils";
 import { isEncryptedZipFile } from "@/lib/zip-encrypted-client";
-import { Loader2 } from "lucide-react";
+import { Loader2, ExternalLink } from "lucide-react";
 import {
   STAGE_LABELS,
   STAGE_GROUPS,
@@ -48,6 +48,26 @@ import { fmtSlotRange, groupRound1Schedule } from "./round1-schedule";
 import { ShareButton } from "./share-button";
 import { UnlockPanel } from "./unlock-panel";
 import type { Candidate, Job, Round1ScheduleItem } from "./types";
+
+// 카드 전체가 <Link>라 같은 탭으로 이동한다. 이 버튼은 Link 바깥(형제)에 두고
+// window.open 으로 새 탭을 연다. 행 hover 시에만 나타나 평소엔 점수 영역을 가리지 않음.
+function OpenInNewTabButton({ candidateId }: { candidateId: number }) {
+  return (
+    <button
+      type="button"
+      title="새 탭에서 열기"
+      aria-label="새 탭에서 열기"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(`/candidates/${candidateId}`, "_blank", "noopener,noreferrer");
+      }}
+      className="absolute right-2 top-2 z-10 rounded-md border border-slate-200 bg-white/90 p-1.5 text-slate-400 shadow-sm backdrop-blur transition opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-primary hover:border-primary/40 focus:outline-none"
+    >
+      <ExternalLink className="w-4 h-4" />
+    </button>
+  );
+}
 
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
@@ -1751,7 +1771,7 @@ export default function JobDetailPage() {
               </div>
               <ul className="space-y-3">
                 {favoriteCandidates.map((c) => (
-                  <li key={c.id} className="relative">
+                  <li key={c.id} className="relative group">
                     <div
                       className="absolute left-3 top-4 z-10"
                       onClick={(e) => e.stopPropagation()}
@@ -1763,6 +1783,7 @@ export default function JobDetailPage() {
                         className="rounded border-slate-300"
                       />
                     </div>
+                    <OpenInNewTabButton candidateId={c.id} />
                     <Link
                       href={`/candidates/${c.id}`}
                       className={`card-hover bg-white border-2 border-amber-300/60 rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
@@ -1867,7 +1888,7 @@ export default function JobDetailPage() {
               </div>
               <ul className="space-y-3">
                 {round1Candidates.map((c) => (
-                  <li key={c.id} className="relative">
+                  <li key={c.id} className="relative group">
                     <div
                       className="absolute left-3 top-4 z-10"
                       onClick={(e) => e.stopPropagation()}
@@ -1879,6 +1900,7 @@ export default function JobDetailPage() {
                         className="rounded border-slate-300"
                       />
                     </div>
+                    <OpenInNewTabButton candidateId={c.id} />
                     <Link
                       href={`/candidates/${c.id}`}
                       className={`card-hover bg-card border-2 border-accent/60 rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
@@ -1999,7 +2021,7 @@ export default function JobDetailPage() {
                 </div>
                 <ul className={`space-y-3 ${dimmed ? "opacity-60" : ""}`}>
                   {items.map((c) => (
-                    <li key={c.id} className="relative">
+                    <li key={c.id} className="relative group">
                       <div
                         className="absolute left-3 top-4 z-10"
                         onClick={(e) => e.stopPropagation()}
@@ -2011,6 +2033,7 @@ export default function JobDetailPage() {
                           className="rounded border-slate-300"
                         />
                       </div>
+                      <OpenInNewTabButton candidateId={c.id} />
                       <Link
                         href={`/candidates/${c.id}`}
                         className={`card-hover bg-white border border-slate-200 rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
