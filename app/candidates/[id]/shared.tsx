@@ -46,6 +46,14 @@ export function scoreColor(score: number): string {
   return "text-danger";
 }
 
+/** 점수대별 막대 그래프 배경색 — scoreColor 와 짝 (숫자색 = 막대색). */
+export function scoreBarColor(score: number): string {
+  if (score >= 85) return "bg-primary-deep";
+  if (score >= 70) return "bg-primary";
+  if (score >= 55) return "bg-warning";
+  return "bg-danger";
+}
+
 /** LLM 이 **단어** 로 감싼 토큰을 <strong> 으로 렌더. 마크다운은 bold 만 처리. */
 export function HL({ text, mark = false }: { text: string; mark?: boolean }) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);

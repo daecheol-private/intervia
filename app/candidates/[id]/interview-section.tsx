@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { confirmDialog } from "@/app/components/Dialog";
 import { BulletBlock } from "./screening-report";
-import { HL, recColor, scoreColor, showRec } from "./shared";
+import { HL, recColor, scoreColor, scoreBarColor, showRec } from "./shared";
 import { TRAIT_KEYS, TRAIT_LABELS } from "@/lib/personality";
 import type { InterviewEvaluation, Session } from "./types";
 
@@ -445,15 +445,23 @@ export function InterviewResult({
         {Object.entries(ev.scores ?? {}).map(([k, v]) => (
           <div
             key={k}
-            className="border border-slate-200 rounded-xl p-3 bg-slate-50/50"
+            className="border border-slate-200 rounded-xl p-4 bg-slate-50/50"
           >
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs text-slate-500">{k}</span>
-              <span className={`font-bold tabular-nums ${scoreColor(v.score)}`}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-700">{k}</span>
+              <span
+                className={`text-2xl font-bold tabular-nums leading-none ${scoreColor(v.score)}`}
+              >
                 {v.score}
               </span>
             </div>
-            <div className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+            <div className="mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${scoreBarColor(v.score)}`}
+                style={{ width: `${Math.max(0, Math.min(100, v.score))}%` }}
+              />
+            </div>
+            <div className="text-[13px] text-slate-600 mt-2.5 leading-relaxed">
               <HL text={v.comment} />
             </div>
           </div>
