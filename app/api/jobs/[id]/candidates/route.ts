@@ -395,7 +395,21 @@ export async function POST(
         log.warn("blob_fetch_blocked_ssrf", { host: blobHost });
         return new Response("허용되지 않은 파일 위치입니다.", { status: 502 });
       }
-      const res = await fetch(b.url);
+      let res: Response;
+      try {
+        res = await fetch(b.url);
+      } catch (err) {
+        // fetch 자체가 reject(네트워크/타임아웃)하면 그대로 두면 핸들러가 500 으로 떨어진다.
+        // 명시적 502 로 변환해 클라이언트가 원인을 구분할 수 있게 한다.
+        log.warn("blob_fetch_threw", {
+          url: b.url,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return new Response(
+          "업로드한 파일을 가져올 수 없습니다 (네트워크 오류). 잠시 후 다시 시도해 주세요.",
+          { status: 502 }
+        );
+      }
       if (!res.ok) {
         log.warn("blob_fetch_failed", { url: b.url, status: res.status });
         return new Response(
@@ -403,7 +417,19 @@ export async function POST(
           { status: 502 }
         );
       }
-      const buf = Buffer.from(await res.arrayBuffer());
+      let buf: Buffer;
+      try {
+        buf = Buffer.from(await res.arrayBuffer());
+      } catch (err) {
+        log.warn("blob_read_threw", {
+          url: b.url,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return new Response(
+          "업로드한 파일을 읽는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+          { status: 502 }
+        );
+      }
       rawItems.push({
         name: b.pathname,
         buf,
@@ -546,15 +572,27 @@ export async function POST(
       });
       continue;
     }
-    const r = await processGroup({
-      group: g,
-      jobId,
-      job,
-      me: me!,
-      // ZIP 안에서는 폼 입력값 무시 (다수 응시자). 단건이면 적용.
-      providedName: groups.length === 1 ? formName : "",
-      providedEmail: groups.length === 1 ? formEmail : "",
-    });
+    let r: GroupResult;
+    try {
+      r = await processGroup({
+        group: g,
+        jobId,
+        job,
+        me: me!,
+        // ZIP 안에서는 폼 입력값 무시 (다수 응시자). 단건이면 적용.
+        providedName: groups.length === 1 ? formName : "",
+        providedEmail: groups.length === 1 ? formEmail : "",
+      });
+    } catch (err) {
+      // 한 응시자 처리 실패(DB insert·파일 저장 등)가 업로드 전체를 500 으로 만들지 않도록.
+      // 이미 등록된 앞 응시자는 살리고, 이 응시자만 실패로 기록해 200(부분 성공)으로 반환한다.
+      log.error("process_group_failed", err, { jobId, group: g.candidateName });
+      r = {
+        ok: false,
+        group: g.candidateName,
+        reason: "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      };
+    }
     results.push(r);
     if ("ok" in r && r.ok) {
       logAudit(req, {
