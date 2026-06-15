@@ -133,6 +133,129 @@ AI 이력서 평가·AI 면접·일정 조율·질문 생성 — 채용 사이�
     </table>
   </td></tr>
 
+  <!-- 사람인·잡코리아와 다른 점 (랜딩 WhyNotJobBoard 동기화) -->
+  <tr><td bgcolor="#fbf9f5" style="padding:52px 44px;border-top:1px solid #e3ddd0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td align="center" style="font-family:Helvetica,Arial,sans-serif;font-size:10px;letter-spacing:3px;color:#c98a5b;padding-bottom:14px;">
+      ✦&nbsp;&nbsp;WHY NOT A JOB BOARD
+    </td></tr>
+    <tr><td align="center" style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic','Segoe UI',sans-serif;font-size:25px;line-height:1.35;font-weight:bold;color:#0f1a14;letter-spacing:-0.7px;padding-bottom:14px;">
+      공고를 올리는 곳이 아니라,<br><span style="color:#0d4f3c;">지원자를 만나보는 곳</span>입니다.
+    </td></tr>
+    <tr><td align="center" style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic','Segoe UI',sans-serif;font-size:13px;line-height:1.75;color:#4a5a52;padding-bottom:30px;">
+      구인 사이트는 이력서를 <span style="font-weight:bold;color:#0f1a14;">모아주고</span> 끝납니다.<br>
+      Intervia 는 그 다음 — 한 명 한 명 <span style="font-weight:bold;color:#0f1a14;">면접하고 평가</span>해 드립니다.
+    </td></tr>
+
+    <tr><td>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f0e8" style="border-radius:16px;border:1px solid #e3ddd0;">
+      <tr><td style="padding:20px 22px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:10px;letter-spacing:1px;color:#b4ae9f;font-weight:bold;">구인 사이트가 주는 것</td>
+          <td align="right" style="font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#b4ae9f;">247명</td>
+        </tr>
+        <tr><td colspan="2" style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:17px;font-weight:bold;color:#8a9690;padding-top:3px;padding-bottom:14px;">이력서 더미</td></tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border:1px solid #ece7da;border-radius:9px;margin-bottom:8px;">
+        <tr><td style="padding:11px 13px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td width="32" valign="middle"><div style="width:24px;height:24px;border-radius:99px;background-color:#e3ddd0;font-size:1px;line-height:24px;">&nbsp;</div></td>
+            <td valign="middle"><div style="height:7px;width:60%;background-color:#d8d2c4;border-radius:99px;font-size:1px;line-height:7px;">&nbsp;</div></td>
+          </tr></table>
+        </td></tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border:1px solid #ece7da;border-radius:9px;margin-bottom:8px;">
+        <tr><td style="padding:11px 13px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td width="32" valign="middle"><div style="width:24px;height:24px;border-radius:99px;background-color:#e8e3d8;font-size:1px;line-height:24px;">&nbsp;</div></td>
+            <td valign="middle"><div style="height:7px;width:48%;background-color:#e0dacc;border-radius:99px;font-size:1px;line-height:7px;">&nbsp;</div></td>
+          </tr></table>
+        </td></tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border:1px solid #ece7da;border-radius:9px;">
+        <tr><td style="padding:11px 13px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td width="32" valign="middle"><div style="width:24px;height:24px;border-radius:99px;background-color:#eee9df;font-size:1px;line-height:24px;">&nbsp;</div></td>
+            <td valign="middle"><div style="height:7px;width:54%;background-color:#e6e0d3;border-radius:99px;font-size:1px;line-height:7px;">&nbsp;</div></td>
+          </tr></table>
+        </td></tr>
+        </table>
+        <div style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:11px;font-style:italic;color:#b4ae9f;text-align:center;padding-top:14px;">…이력서는 쌓이는데, 누가 좋은지는 직접 봐야 합니다</div>
+      </td></tr>
+      </table>
+    </td></tr>
+
+    <tr><td align="center" style="padding:14px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+        <td style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:10px;letter-spacing:2px;font-weight:bold;color:#8a9690;">그 다음</td>
+        <td width="9"></td>
+        <td style="font-family:Helvetica,Arial,sans-serif;font-size:17px;font-weight:bold;color:#0d4f3c;">↓</td>
+      </tr></table>
+    </td></tr>
+
+    <tr><td>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border-radius:16px;border:2px solid #cfe0d8;">
+      <tr><td style="padding:22px 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td valign="top" style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
+            <div style="font-size:10px;letter-spacing:1px;color:#0d4f3c;font-weight:bold;">Intervia 가 주는 것</div>
+            <div style="font-size:17px;font-weight:bold;color:#0f1a14;padding-top:3px;">후보 ▦▦▦ <span style="font-weight:normal;font-size:12px;color:#8a9690;">· 백엔드 5년</span></div>
+            <div style="font-size:11px;color:#8a9690;padding-top:2px;">AI 면접 완료 · 20분</div>
+          </td>
+          <td align="right" valign="top">
+            <span style="display:inline-block;font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:15px;font-weight:bold;color:#0d4f3c;background-color:#e3ece8;padding:6px 13px;border-radius:999px;">4.6<span style="font-size:10px;font-weight:normal;color:#7da394;">/5</span></span>
+          </td>
+        </tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="padding-top:18px;">
+        <tr>
+          <td style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:12px;font-weight:bold;color:#0f1a14;padding-bottom:5px;">문제해결</td>
+          <td align="right" style="font-family:Helvetica,Arial,sans-serif;font-size:13px;font-weight:bold;color:#0d4f3c;padding-bottom:5px;">92</td>
+        </tr>
+        <tr><td colspan="2" style="padding-bottom:11px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td width="92%" bgcolor="#0d4f3c" style="height:7px;border-radius:99px 0 0 99px;font-size:1px;line-height:7px;">&nbsp;</td>
+            <td width="8%" bgcolor="#ece7da" style="height:7px;border-radius:0 99px 99px 0;font-size:1px;line-height:7px;">&nbsp;</td>
+          </tr></table>
+        </td></tr>
+        <tr>
+          <td style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:12px;font-weight:bold;color:#0f1a14;padding-bottom:5px;">커뮤니케이션</td>
+          <td align="right" style="font-family:Helvetica,Arial,sans-serif;font-size:13px;font-weight:bold;color:#0d4f3c;padding-bottom:5px;">100</td>
+        </tr>
+        <tr><td colspan="2" style="padding-bottom:11px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td bgcolor="#0d4f3c" style="height:7px;border-radius:99px;font-size:1px;line-height:7px;">&nbsp;</td>
+          </tr></table>
+        </td></tr>
+        <tr>
+          <td style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:12px;font-weight:bold;color:#0f1a14;padding-bottom:5px;">컬처핏</td>
+          <td align="right" style="font-family:Helvetica,Arial,sans-serif;font-size:13px;font-weight:bold;color:#0d4f3c;padding-bottom:5px;">84</td>
+        </tr>
+        <tr><td colspan="2">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td width="84%" bgcolor="#0d4f3c" style="height:7px;border-radius:99px 0 0 99px;font-size:1px;line-height:7px;">&nbsp;</td>
+            <td width="16%" bgcolor="#ece7da" style="height:7px;border-radius:0 99px 99px 0;font-size:1px;line-height:7px;">&nbsp;</td>
+          </tr></table>
+        </td></tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fbf9f5" style="border-left:3px solid #0d4f3c;margin-top:16px;">
+        <tr><td style="padding:11px 14px;font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:11px;line-height:1.6;color:#4a5a52;">
+          <span style="color:#0d4f3c;font-weight:bold;">AI 요약 · </span>결제 시스템 무중단 마이그레이션 경험이 직무와 정확히 부합.
+        </td></tr>
+        </table>
+        <div style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:13px;font-weight:bold;color:#0d4f3c;padding-top:14px;">✓&nbsp; 1차 면접 진행 권장</div>
+      </td></tr>
+      </table>
+    </td></tr>
+
+    <tr><td align="center" style="padding-top:28px;font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic','Segoe UI',sans-serif;font-size:13px;line-height:1.7;color:#8a9690;">
+      사람인 · 잡코리아 · 자체 채용페이지 —<br><span style="font-weight:bold;color:#0f1a14;">어디서 지원자를 받든, 면접은 Intervia 로.</span>
+    </td></tr>
+    </table>
+  </td></tr>
+
   <tr><td bgcolor="#ffffff" style="padding:52px 44px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td style="font-family:Helvetica,Arial,sans-serif;font-size:10px;letter-spacing:3px;color:#c98a5b;padding-bottom:14px;">
