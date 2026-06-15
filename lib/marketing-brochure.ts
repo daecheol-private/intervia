@@ -201,7 +201,7 @@ AI 이력서 평가·AI 면접·일정 조율·질문 생성 — 채용 사이�
         <tr>
           <td valign="top" style="font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;">
             <div style="font-size:10px;letter-spacing:1px;color:#0d4f3c;font-weight:bold;">Intervia 가 주는 것</div>
-            <div style="font-size:17px;font-weight:bold;color:#0f1a14;padding-top:3px;">후보 ▦▦▦ <span style="font-weight:normal;font-size:12px;color:#8a9690;">· 백엔드 5년</span></div>
+            <div style="font-size:17px;font-weight:bold;color:#0f1a14;padding-top:3px;">후보 김OO <span style="font-weight:normal;font-size:12px;color:#8a9690;">· 백엔드 5년</span></div>
             <div style="font-size:11px;color:#8a9690;padding-top:2px;">AI 면접 완료 · 20분</div>
           </td>
           <td align="right" valign="top">
