@@ -146,7 +146,7 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `SMTP_USER` | `resend` (Resend 사용 시 문자 그대로) / Gmail 주소 |
 | `SMTP_PASS` | Resend API 키 (`re_...`) / Gmail App Password |
 | `SMTP_FROM` | `Intervia <noreply@your-domain.com>` (검증된 도메인) |
-| `MAIL_OVERRIDE_TO` | **Preview/Staging 환경에만 등록** (예: `daecheol1983@gmail.com`). 등록 시 지원자(candidate) 메일만 이 주소로 리다이렉트 — HR/면접관 메일은 그대로 실제 발송됨. Production 에는 절대 등록 X. |
+| `MAIL_OVERRIDE_TO` | **Preview/Staging 환경에만 등록** (예: `admin.intervia@gmail.com`). 등록 시 지원자(candidate) 메일만 이 주소로 리다이렉트 — HR/면접관 메일은 그대로 실제 발송됨. Production 에는 절대 등록 X. |
 | `BUSINESS_REGISTRY_API_KEY` | data.go.kr 국세청 사업자등록정보 API **운영키** (가입 페이지 진위확인) |
 | `CRON_SECRET` | 32바이트 hex (`.env.local` 값 재사용 또는 신규 생성) |
 | `INTERNAL_API_SECRET` | 32바이트 hex |

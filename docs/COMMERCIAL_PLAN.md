@@ -42,19 +42,19 @@
   사업자번호 : 추후 등록
   주소      : 서울특별시 강서구 양천로 28길 29 마곡우림필유 101동 110호
   전화      : 010-7496-2696
-  대표 이메일: daecheol1983@gmail.com
+  대표 이메일: admin.intervia@gmail.com
   ```
 - [x] **A-4**: DPO → **대표자 겸직** (2026-05-16 결정)
   - 이름/연락처/이메일 모두 A-3 과 동일
   - 1인 기업이므로 별도 DPO 지정 의무 없음, 대표자가 책임자
-- [x] **A-6**: 이의제기 수신처 → **DPO 이메일 동일** (`daecheol1983@gmail.com`) (2026-05-16 결정. 향후 트래픽 늘면 별도 메일 분리)
+- [x] **A-6**: 이의제기 수신처 → **DPO 이메일 동일** (`admin.intervia@gmail.com`) (2026-05-16 결정. 향후 트래픽 늘면 별도 메일 분리)
 - [x] **DB**: **Turso 유지** (2026-05-16 결정. Phase 4 출시 직전 재평가)
 - [x] **호스팅**: **Vercel Pro** (2026-06-07 전환 완료. 2026-05-16 엔 Hobby+cron-job.org 로 시작했으나 Pro 사용 중으로 변경)
   - cron 5개 전부 `vercel.json` **네이티브 실행** → **cron-job.org 불필요**:
     process-screenings(매분) / interview-reminders·ops-alerts·expire-interviews(매시간) / purge-original(매일 03:30)
   - 상업적 사용 허용 + 함수 timeout 60s (Vertex 응답 여유) + DDoS 보호
 - [x] **A-5**: 후보자 데이터 보유기간 디폴트 → **합·불 결정 시점 즉시 폐기** (2026-05-16 결정)
-- [x] **A-6**: 자동화 의사결정 이의제기 수신처 → **DPO 이메일과 통합** (`daecheol1983@gmail.com`, 1인 기업이라 DPO·이의제기·문의 모두 단일 채널). 2026-05-26 결정. 구현 완료: `lib/site-info.ts` `APPEAL_CONTACT`, `app/interview/[token]/appeal/page.tsx`, `app/api/interview/[token]/appeal/route.ts` 모두 존재. 분리 필요해지는 시점(이의제기 빈도 높아져서 DPO 일반 문의와 섞이면 운영 불편) 까지는 단일 채널 유지.
+- [x] **A-6**: 자동화 의사결정 이의제기 수신처 → **DPO 이메일과 통합** (`admin.intervia@gmail.com`, 1인 기업이라 DPO·이의제기·문의 모두 단일 채널). 2026-05-26 결정. 구현 완료: `lib/site-info.ts` `APPEAL_CONTACT`, `app/interview/[token]/appeal/page.tsx`, `app/api/interview/[token]/appeal/route.ts` 모두 존재. 분리 필요해지는 시점(이의제기 빈도 높아져서 DPO 일반 문의와 섞이면 운영 불편) 까지는 단일 채널 유지.
 - [x] **A-7**: 비밀번호 정책 → **최소 10자 + 영문 대/소/숫자/특수문자 중 3종 이상** (2026-05-16 결정. 2026-05-20 12자 → 10자 완화)
 - [x] **A-8**: 시스템관리자 데이터 접근 → **항상 가능** (2026-05-16 결정. 단, 모든 접근은 감사 로그 기록)
 

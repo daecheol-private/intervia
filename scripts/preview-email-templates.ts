@@ -9,7 +9,7 @@ import { buildPasswordResetEmail } from "../lib/password-reset";
 import { buildVerificationEmail } from "../lib/email-verify";
 
 async function main() {
-  const TO = "daecheol1983@gmail.com";
+  const TO = "admin.intervia@gmail.com";
   const port = Number(process.env.SMTP_PORT);
   const t = nodemailer.createTransport({
     host: process.env.SMTP_HOST,

@@ -5,7 +5,7 @@
  *   - .env.production.local 의 TURSO_DATABASE_URL / TURSO_AUTH_TOKEN 사용
  *
  * member@company-a.test "시스템 관리자" 유령 행이 운영 DB에 남아있는지,
- * 그리고 정상 sysadmin(daecheol1983@gmail.com)이 따로 있는지 확인한다.
+ * 그리고 정상 sysadmin(admin.intervia@gmail.com)이 따로 있는지 확인한다.
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@libsql/client";

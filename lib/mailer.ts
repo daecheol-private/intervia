@@ -129,7 +129,7 @@ export type SendMailParams = {
   }>;
 };
 
-const LOCAL_DEV_FALLBACK = "daecheol1983@gmail.com";
+const LOCAL_DEV_FALLBACK = "admin.intervia@gmail.com";
 
 // env 발신 + 후보자 대상 발신 표시이름용 법인명 캐시 — 대량 발송 시 통마다 SELECT 방지.
 const ORG_NAME_TTL_MS = 300_000;

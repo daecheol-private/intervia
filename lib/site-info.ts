@@ -20,13 +20,13 @@ export const COMPANY_INFO = {
   bizRegistrationNo: "추후 등록 예정",
   address: "사업자 등록 후 기재 예정",
   phone: "", // 미공개 — 등록 후 050/070 등 사업용 번호로 기재
-  email: "daecheol1983@gmail.com",
+  email: "admin.intervia@gmail.com",
 } as const;
 
 export const DPO_INFO = {
   name: "강대철",
   title: "대표 (개인정보보호책임자 겸직)",
-  email: "daecheol1983@gmail.com",
+  email: "admin.intervia@gmail.com",
   phone: "", // 처리방침상 연락처는 이메일로 충분 — 개인 휴대폰 미노출
 } as const;
 

@@ -98,4 +98,4 @@
 
 ---
 
-문의: Intervia 지원팀 (daecheol1983@gmail.com)
+문의: Intervia 지원팀 (admin.intervia@gmail.com)

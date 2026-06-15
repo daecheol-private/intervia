@@ -48,7 +48,7 @@
 - [x] **TC-0.2.1** `LOCAL_DB=1 npm run db:seed-test` (PowerShell: `$env:LOCAL_DB=1; npm run db:seed-test; Remove-Item Env:LOCAL_DB`) → 첫 출력 줄 `DB:` 가 **`file:./data.db`** 인지 확인(아니면 즉시 중단). `test-company-a` / `test-company-b` 2법인 + 4역할 사용자 생성 (비번 `Test1234!aZ` — 2026-06-09 C-2 수정 후)
   > ✅ 첫 줄 `DB: file:./data.db` 확인. org=6(company-a.test)/7(company-b.test), users=sysadmin@test(system_admin)·admin@company-a.test·member@company-a.test·admin@company-b.test. ⚠️ 주의: `.env.production.local`(운영 Turso 크리덴셜) 실재함 → `LOCAL_DB=1` 누락 시 운영 wipe 위험 실존, GOTCHA 경고 유효.
 - [x] **TC-0.2.2** system_admin 계정 로그인 가능 (`SYSTEM_ADMIN_EMAIL` 일치 계정)
-  > ✅ `POST /api/auth/login {sysadmin@test, Test1234!}` → 200 `{id:13,...}`. ⚠️ 단, 반드시 `Origin: http://localhost:3003` 헤더 필요 — 없으면 **403**(proxy.ts CSRF 가드). 참고: 시드 계정은 `SYSTEM_ADMIN_EMAIL`(daecheol1983@gmail.com)과 불일치하나 시드가 role=system_admin 직접 주입해 로그인 가능. → §22 CSRF 검증과 연계.
+  > ✅ `POST /api/auth/login {sysadmin@test, Test1234!}` → 200 `{id:13,...}`. ⚠️ 단, 반드시 `Origin: http://localhost:3003` 헤더 필요 — 없으면 **403**(proxy.ts CSRF 가드). 참고: 시드 계정은 `SYSTEM_ADMIN_EMAIL`(admin.intervia@gmail.com)과 불일치하나 시드가 role=system_admin 직접 주입해 로그인 가능. → §22 CSRF 검증과 연계.
 - [x] **TC-0.2.3** 각 법인 wallet 존재 + 단가표(`token_pricing`) 시드 확인 (`job_post`/`resume_upload`/`interview`)
   > ✅ wallet org6=1000/org7=1000, pricing job_post=10·resume_upload=5·interview=30, 샘플 공고 3건(PIN 1건).
 
@@ -274,7 +274,7 @@
 - [x] **TC-5.1.4** 마지막 system_admin 박탈/비활성화 → 409 차단
   > ✅ "마지막 시스템 관리자는 권한을 박탈할 수 없습니다." (409)
 - [x] **TC-5.1.5** `SYSTEM_ADMIN_EMAIL` 보호 계정 변경/비활성화 → 403 (락아웃 방지)
-  > ✅ daecheol1983@gmail.com(=SYSTEM_ADMIN_EMAIL) 계정 status/role 변경 → 403 보호. (임시계정 삽입/검증/삭제)
+  > ✅ admin.intervia@gmail.com(=SYSTEM_ADMIN_EMAIL) 계정 status/role 변경 → 403 보호. (임시계정 삽입/검증/삭제)
 - [x] **TC-5.1.6** 역할/상태 변경은 step-up 인증 필요 + 감사 로그 기록
   > ✅ step-up 없이 PATCH → 403 `step_up_required`. step-up 후 역할변경 200 + audit_logs `user.role_change` 기록 확인.
 
