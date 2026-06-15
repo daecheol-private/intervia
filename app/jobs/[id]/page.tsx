@@ -2001,17 +2001,6 @@ export default function JobDetailPage() {
                   />
                   <span className={`text-xs font-semibold ${meta.tone}`}>{meta.label}</span>
                   <span className="text-xs text-slate-400">({items.length}명)</span>
-                  {gk === "hr_round1" && (
-                    <SchedulePropose
-                      jobId={Number(jobId)}
-                      selectedIds={selectedInBlock}
-                      round="round2"
-                      onDone={() => {
-                        setSelected(new Set());
-                        void loadCandidates();
-                      }}
-                    />
-                  )}
                   {hasSel && (
                     <span className="text-xs text-primary-deep font-medium">
                       · {selectedInBlock.length}명 선택됨
