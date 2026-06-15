@@ -1310,8 +1310,14 @@ export default function JobDetailPage() {
           <div className="flex gap-2 flex-wrap sm:shrink-0 items-center">
             <ShareButton jobId={Number(jobId)} jobTitle={job.title} />
             {(() => {
+              // 확정 면접 대기 = 1차(stage=round1_waiting) + 2차(round1_passed + round2 확정).
+              // 종결(outcome) 후보는 제외 — API 조회 조건과 일치시킴.
               const waitingCount = candidatesList.filter(
-                (c) => c.stage === "round1_waiting"
+                (c) =>
+                  c.outcome == null &&
+                  (c.stage === "round1_waiting" ||
+                    (c.stage === "round1_passed" &&
+                      c.round2ScheduleStatus === "selected"))
               ).length;
               return (
                 <button
@@ -1319,12 +1325,12 @@ export default function JobDetailPage() {
                   disabled={waitingCount === 0 || scheduleLoading}
                   title={
                     waitingCount === 0
-                      ? "1차 면접 일정이 확정된 대기 후보가 없습니다"
-                      : "확정된 1차 면접 일정을 시간순으로 봅니다"
+                      ? "확정된 면접 일정이 있는 대기 후보가 없습니다"
+                      : "확정된 1·2차 면접 일정을 시간순으로 봅니다"
                   }
                   className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  🗓 1차 면접 일정{waitingCount > 0 ? ` (${waitingCount})` : ""}
+                  🗓 면접 일정{waitingCount > 0 ? ` (${waitingCount})` : ""}
                 </button>
               );
             })()}
@@ -2171,14 +2177,14 @@ export default function JobDetailPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-baseline justify-between gap-2">
-              <h3 className="font-bold text-slate-900">🗓 1차 면접 확정 일정</h3>
+              <h3 className="font-bold text-slate-900">🗓 면접 확정 일정</h3>
               <span className="text-xs text-slate-400">
                 {round1Schedule.length}명 · 시간순
               </span>
             </div>
             {round1Schedule.length === 0 ? (
               <p className="mt-4 text-sm text-slate-500 text-center py-6">
-                확정된 1차 면접 일정이 없습니다.
+                확정된 면접 일정이 없습니다.
               </p>
             ) : (
               <ol className="mt-4 space-y-2 overflow-y-auto">
@@ -2192,6 +2198,15 @@ export default function JobDetailPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span
+                          className={`text-xs px-1.5 py-0.5 rounded font-semibold ${
+                            g.round === "round2"
+                              ? "bg-violet-100 text-violet-700"
+                              : "bg-primary-soft text-primary-deep"
+                          }`}
+                        >
+                          {g.round === "round2" ? "2차" : "1차"}
+                        </span>
                         <span className="text-sm font-semibold text-slate-900 tabular-nums">
                           {fmtSlotRange(g.selectedSlot)}
                         </span>

@@ -74,10 +74,11 @@ export type Candidate = {
   round2SelectedEnd: string | null;
 };
 
-/** 1차 면접 확정 일정 항목 (GET /api/jobs/[id]/round1-schedule). */
+/** 면접 확정 일정 항목 (GET /api/jobs/[id]/round1-schedule). 1차·2차 통합. */
 export type Round1ScheduleItem = {
   candidateId: number;
   name: string;
+  round: "round1" | "round2";
   selectedSlot: { start: string; end: string };
   modeOnline: boolean;
   address: string | null;

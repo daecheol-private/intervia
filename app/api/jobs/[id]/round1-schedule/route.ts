@@ -1,12 +1,15 @@
 /**
- * 1차 면접 확정 일정 목록 — "1차 면접 스케쥴 보기" 팝업용.
+ * 면접 확정 일정 목록 — "면접 일정" 팝업용. (1차 + 2차 통합)
  *
- * stage=round1_waiting (일정 확정 후 면접 대기) + 확정된 schedule(status=selected, round1)을
- * 조인해 후보자별 선택 슬롯·온오프라인·주소를 반환. 시간 빠른 순 정렬.
+ * 확정된 schedule(status=selected)을 후보자와 조인해 선택 슬롯·온오프라인·주소를
+ * round 태그와 함께 반환. 시간 빠른 순 정렬.
+ *   - 1차: stage=round1_waiting (일정 확정 후 면접 대기) + round=round1
+ *   - 2차: stage=round1_passed (2차는 stage 변화 없이 스케줄 row 로만 진행) + round=round2
+ * 종결(outcome != null) 후보는 제외 — 불합격자가 확정 일정에 남는 것 방지.
  */
 import { db } from "@/lib/db";
 import { jobPostings, candidates, interviewSchedules } from "@/lib/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, isNull } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
@@ -42,6 +45,7 @@ export async function GET(
     .select({
       candidateId: candidates.id,
       name: candidates.name,
+      round: interviewSchedules.round,
       selectedSlot: interviewSchedules.selectedSlot,
       modeOnline: interviewSchedules.modeOnline,
       address: interviewSchedules.address,
@@ -53,13 +57,23 @@ export async function GET(
     .where(
       and(
         eq(interviewSchedules.jobId, jobId),
-        eq(interviewSchedules.round, "round1"),
         eq(interviewSchedules.status, "selected"),
-        eq(candidates.stage, "round1_waiting")
+        isNull(candidates.outcome),
+        or(
+          and(
+            eq(interviewSchedules.round, "round1"),
+            eq(candidates.stage, "round1_waiting")
+          ),
+          and(
+            eq(interviewSchedules.round, "round2"),
+            eq(candidates.stage, "round1_passed")
+          )
+        )
       )
     );
 
   // 슬롯 있는 것만 + 후보자 중복 제거(같은 후보 selected 여러 건 방어) + 시간 빠른 순.
+  // (round1_waiting↔round1, round1_passed↔round2 로 후보당 한 round 만 매칭됨)
   const seen = new Set<number>();
   const list = rows
     .filter((r) => {
