@@ -9,6 +9,12 @@ import { MicHelpModal } from "@/app/components/MicHelpModal";
 
 type Message = { role: "user" | "model"; content: string };
 
+// 탭/창 이탈 집계 기준 — 이 시간(ms) 이상 페이지를 실제로 벗어나 있었을 때만 '이탈 1회'로 센다.
+// 모바일 키보드 토글·알림 배너·인앱 브라우저(카카오톡 등) 포커스 변화처럼 답변 도중 흔히
+// 발생하는 짧은 깜빡임을 외부 도구 참조로 오인하지 않기 위함. (이 신호는 단독으로는
+// 'LLM 보조 의심' 판정에 쓰지 않고, 사람 검토자용 참고 정황으로만 쓰인다 — lib/interview-signals.ts)
+const BLUR_MIN_AWAY_MS = 10_000;
+
 type ConsentItem = {
   key: string;
   kind: "consent" | "notice";
@@ -88,6 +94,8 @@ export default function InterviewPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const initRef = useRef(false);
+  // 페이지가 hidden 으로 바뀐 시각 — visible 복귀 시 이탈 지속시간 계산용.
+  const hiddenAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     void fetch(`/api/interview/${token}`)
@@ -132,15 +140,21 @@ export default function InterviewPage() {
 
   // LLM 보조 신호 — 답변 중 탭 전환·창 이탈(다른 앱/창으로 이동) 횟수 집계.
   // 면접 종료 후엔 무의미하므로 ended 면 미부착. turn 단위로 sendMessage 에서 리셋됨.
+  // 짧은 깜빡임(모바일 키보드 토글·알림·인앱 브라우저 포커스 변화)은 오탐이므로,
+  // hidden 지속시간이 BLUR_MIN_AWAY_MS 이상일 때만 '이탈 1회'로 센다.
   useEffect(() => {
     if (ended) return;
-    const onHidden = () => {
+    const onVisibility = () => {
       if (document.visibilityState === "hidden") {
-        turnSignals.current.blurCount += 1;
+        hiddenAtRef.current = Date.now();
+      } else if (hiddenAtRef.current != null) {
+        const awayMs = Date.now() - hiddenAtRef.current;
+        hiddenAtRef.current = null;
+        if (awayMs >= BLUR_MIN_AWAY_MS) turnSignals.current.blurCount += 1;
       }
     };
-    document.addEventListener("visibilitychange", onHidden);
-    return () => document.removeEventListener("visibilitychange", onHidden);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [ended]);
 
   async function sendMessage(text: string) {

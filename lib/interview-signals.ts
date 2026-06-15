@@ -34,14 +34,14 @@ export function computeTranscriptStats(
 
   const totalInputChars = pastedChars + typedChars;
   const pasteRatio = totalInputChars > 0 ? pastedChars / totalInputChars : 0;
-  // 의심 판정 — 셋 중 하나라도 임계 초과면 suspicious.
+  // 의심 판정 — 의도성이 분명한 신호만 단독 트리거로 인정.
   //   · 붙여넣기 비율 60%+ & 200자+ (단순 메모 붙여넣기와 구분)
   //   · 질문 복사 시도 2회+ (질문을 외부로 옮기려 한 정황)
-  //   · 탭/창 이탈 3회+ (답변 중 외부 도구 참조 정황)
+  // 탭/창 이탈(blurEvents)은 정상 사유(알림·자리비움·전화·모바일 키보드 등)가 많아
+  // 단독으로는 의심에 넣지 않는다 — 사람 검토자/평가 LLM 에 '참고 정황'으로만 노출한다.
   const suspicious =
     (pasteRatio >= 0.6 && pastedChars >= 200) ||
-    copyAttempts >= 2 ||
-    blurEvents >= 3;
+    copyAttempts >= 2;
 
   return {
     totalTurns: messages.length,

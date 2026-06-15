@@ -840,11 +840,11 @@ export function buildSummaryPrompt(
 - 붙여넣기 이벤트: ${stats.llmAssistSignal.pasteEvents}회
 - 붙여넣은 글자: ${stats.llmAssistSignal.pastedChars}자 / 타이핑한 글자: ${stats.llmAssistSignal.typedChars}자
 - **붙여넣기 비율: ${(stats.llmAssistSignal.pasteRatio * 100).toFixed(0)}%**
-- 탭 전환·창 이탈: ${stats.llmAssistSignal.blurEvents}회 (답변 중 다른 창/앱으로 이동한 횟수 — 외부 도구 참조 정황 가능)
+- 탭 전환·창 이탈(10초 이상 벗어난 경우만 집계): ${stats.llmAssistSignal.blurEvents}회 — ⚠️ **약한 보조 정황일 뿐, 단독 판단 근거로 쓰지 말 것** (알림·자리비움·전화·모바일 키보드 등 정상 사유 다수). 붙여넣기/복사 신호와 함께일 때만 보조적으로 언급하라.
 - 질문 복사 시도(차단됨): ${stats.llmAssistSignal.copyAttempts}회 (질문을 외부로 복사하려 한 정황 가능)${
         stats.llmAssistSignal.suspicious
-          ? "\n- ⚠️ **외부 LLM 보조 정황이 관측됩니다** (붙여넣기 비율 과다 또는 탭 이탈·복사 시도 반복). 후보자가 ChatGPT/Claude 등 외부 LLM 을 참고했을 가능성이 있습니다. **단정 금지 — 노트북 메모/이력서 발췌 등 정당 사용도 가능**. 이를 면접 리포트의 \"llm_assist_note\" 필드에 \"붙여넣기 X% · 탭이탈 Y회 · 복사시도 Z회 — LLM 보조 가능성 있음, 면접 자리에서 본인 발언 확인 권장\" 식으로 구체 수치와 함께 기록하라."
-          : "\n- 정상 범위 (대부분 직접 타이핑·이탈 적음). llm_assist_note 는 \"특이 신호 없음\" 으로 기록."
+          ? "\n- ⚠️ **외부 LLM 보조 정황이 관측됩니다** (붙여넣기 비율 과다 또는 복사 시도 반복). 후보자가 ChatGPT/Claude 등 외부 LLM 을 참고했을 가능성이 있습니다. **단정 금지 — 노트북 메모/이력서 발췌 등 정당 사용도 가능**. 이를 면접 리포트의 \"llm_assist_note\" 필드에 \"붙여넣기 X% · 복사시도 Z회 — LLM 보조 가능성 있음, 면접 자리에서 본인 발언 확인 권장\" 식으로 구체 수치와 함께 기록하라."
+          : "\n- 정상 범위 (대부분 직접 타이핑·붙여넣기/복사 신호 없음). llm_assist_note 는 \"특이 신호 없음\" 으로 기록."
       }
 `
     : "";
