@@ -363,6 +363,7 @@ export function InterviewResult({
   onShowTranscript,
   onRegenerate,
   onReevaluated,
+  onPromoteToRound1,
   disabled = false,
 }: {
   session: Session;
@@ -370,6 +371,9 @@ export function InterviewResult({
   onShowTranscript: () => void;
   onRegenerate: () => void;
   onReevaluated: () => void;
+  /** ai_evaluated 단계에서만 부모가 내려줌 — 재평가 버튼 옆에서 바로 1차 후보 지정.
+   *  (하단 StagePanel 의 ⭐ 버튼과 동일 동작, 스크롤 없이 평가 영역에서 처리) */
+  onPromoteToRound1?: () => Promise<void> | void;
   disabled?: boolean;
 }) {
   const ev = session.evaluation!;
@@ -377,6 +381,16 @@ export function InterviewResult({
   const [reMsg, setReMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
     null
   );
+  const [promoteBusy, setPromoteBusy] = useState(false);
+  const promote = async () => {
+    if (!onPromoteToRound1) return;
+    setPromoteBusy(true);
+    try {
+      await onPromoteToRound1();
+    } finally {
+      setPromoteBusy(false);
+    }
+  };
   // 성공한 AI 면접도 재평가 허용 — 같은 대화록 재평가, 성공할 때마다 토큰 차감(후차감).
   const reevaluate = async () => {
     if (
@@ -559,15 +573,28 @@ export function InterviewResult({
             재면접 링크 발급
           </button>
         )}
-        <button
-          onClick={reevaluate}
-          disabled={reBusy}
-          className="ml-auto shrink-0 text-xs px-3 py-1.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 inline-flex items-center justify-center gap-1"
-          title="같은 대화록으로 AI 평가를 다시 실행 (성공 시 토큰 차감)"
-        >
-          {reBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-          {reBusy ? "재평가 중..." : "🔄 재평가"}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {onPromoteToRound1 && (
+            <button
+              onClick={() => void promote()}
+              disabled={promoteBusy}
+              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1 transition-colors"
+              title="1차 면접 후보로 지정 — 공고 목록 상단 별도 섹션으로 이동"
+            >
+              {promoteBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {promoteBusy ? "지정 중..." : "⭐ 1차 면접 후보로 지정"}
+            </button>
+          )}
+          <button
+            onClick={reevaluate}
+            disabled={reBusy}
+            className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 inline-flex items-center justify-center gap-1"
+            title="같은 대화록으로 AI 평가를 다시 실행 (성공 시 토큰 차감)"
+          >
+            {reBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {reBusy ? "재평가 중..." : "🔄 재평가"}
+          </button>
+        </div>
       </div>
       {reMsg && (
         <div
