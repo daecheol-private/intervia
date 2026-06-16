@@ -55,12 +55,12 @@
   --shadow-lg: 0 12px 24px -6px rgba(15, 26, 20, 0.1),
     0 4px 8px -2px rgba(15, 26, 20, 0.05);
 
-  /* Radius scale */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
-  --radius-2xl: 28px;
+  /* Radius scale — 각지고 약간씩만 둥글게 (이전: 6/10/14/20/28) */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
 
   /* Tailwind compat (기존 코드의 --background/--foreground 등 유지) */
   --background: var(--surface);
