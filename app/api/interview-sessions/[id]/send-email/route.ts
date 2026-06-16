@@ -9,6 +9,7 @@ import {
   isSmtpAvailable,
   SmtpNotConfiguredError,
 } from "@/lib/mailer";
+import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { formatKstDateTime } from "@/lib/utils";
@@ -155,6 +156,18 @@ export async function POST(
 
   try {
     await sendMail({ to: recipient, ...mail, orgId: candidate.orgId, audience: "candidate" });
+    // 알림톡 병행 (전화번호 있을 때만, 베스트에포트 — 실패해도 이메일 발송 결과 유지).
+    await sendCandidateAlimtalk("interview_invite", {
+      phone: candidate.phone,
+      vars: {
+        orgName: org?.name ?? null,
+        candidateName: candidate.name,
+        jobTitle: job.title,
+        url,
+        expiresAt: expires,
+      },
+      fallbackText: `[${org?.name ?? "채용"}] ${candidate.name}님, ${job.title} AI 면접을 안내드립니다. 링크: ${url}`,
+    });
     await db
       .update(candidates)
       .set({

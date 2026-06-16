@@ -254,6 +254,7 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 | created_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 링크를 발급한 운영자. 면접 완료 토큰 차감 시 ledger `created_by_user_id` 로 전달 — 누가 면접을 결정했는지 추적. (구 세션은 NULL) |
 | personality_responses | TEXT(JSON) NULL | 인성검사(컬처핏 사전 문항) 원응답 `[{itemId, value}]`. NULL = 미실시 (법인 컬처핏 미설정 또는 도입 전 세션) |
 | personality_profile | TEXT(JSON) NULL | 결정적 채점 결과 (`lib/personality.ts` `PersonalityProfile` — Big Five 0~100 + 신뢰 플래그). 합불 점수 합산에 미사용 — 면접 꼬리질문 앵커·리포트 참고용 |
+| reminder24_sent_at / reminder48_sent_at | TEXT NULL | AI 면접 미응답 리마인더 발송 시각 — 링크 발급(created_at) 후 24h/48h 경과 + `pending`/`in_progress` + 미만료일 때 cron 이 후보자에게 1회씩 넛지 후 기록(중복 방지). 48h 가 먼저 due 면 24h 는 skip 처리 |
 
 ## interview_schedules
 
@@ -275,6 +276,7 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 | meeting_link_sent_at | TEXT NULL | 미팅 링크 메일 발송 시각 |
 | meeting_link_sent_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
 | interviewer_reminder_sent_at | TEXT NULL | 면접관 리마인더 발송 시각 — 확정 면접 24시간 전 cron 이 1회 발송 후 기록 (중복 방지) |
+| candidate_reminder_sent_at | TEXT NULL | 후보자 D-1 리마인더 발송 시각 — 면접관 리마인더와 독립 추적. 같은 cron 스캔에서 후보자에게 1회 발송 후 기록 (round1/round2 모두) |
 | selected_slot | JSON NULL | 지원자가 선택한 슬롯 `{start, end}` |
 | counter_slots | JSON NULL | 지원자가 역제시한 슬롯 후보 |
 | candidate_note | TEXT NULL | 지원자 코멘트 (역제시·취소 사유 등) |
@@ -623,6 +625,46 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
 | id / org_id / amount_krw / tokens / status / provider / provider_ref / created_by_user_id / created_at | … | status: pending/paid/failed/cancelled |
+
+## recorded_interviews
+
+대면(오프라인) 면접 녹음 → AI 평가. AI 채팅 면접(`interview_sessions`)과 별개 — 사람이 진행한 면접을 전사·평가. 업로드 + 준실시간 투트랙. 상세: [LIVE_INTERVIEW_PLAN.md](LIVE_INTERVIEW_PLAN.md).
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| org_id | INTEGER NULL FK organizations ON DELETE CASCADE | 테넌트 |
+| job_id | INTEGER NOT NULL FK job_postings ON DELETE CASCADE | |
+| candidate_id | INTEGER NOT NULL FK candidates ON DELETE CASCADE | |
+| round | TEXT NOT NULL DEFAULT 'round1' | round1 / round2 (대면 차수) |
+| mode | TEXT NOT NULL DEFAULT 'upload' | upload(사후 파일) / live(준실시간 청크) |
+| status | TEXT NOT NULL DEFAULT 'processing' | recording / processing / ready / failed / confirmed |
+| created_by_user_id | INTEGER NULL FK users ON DELETE SET NULL | 진행한 면접관(서기) |
+| consent_confirmed_at | TEXT NULL | 면접관이 "지원자 녹취·전사·AI평가 동의 받음" 확인 시각 (PIPA attestation) |
+| consent_confirmed_by_user_id | INTEGER NULL FK users ON DELETE SET NULL | |
+| duration_seconds | INTEGER NOT NULL DEFAULT 0 | 녹음 길이 |
+| report | TEXT(JSON) NULL | `RecordedInterviewReport` — 점수·근거(evidence_seq)·확인필요·추천질문 |
+| report_confirmed_at | TEXT NULL | AI 초안 → 사람 확정 시각 |
+| report_confirmed_by_user_id | INTEGER NULL FK users ON DELETE SET NULL | |
+| error | TEXT NULL | failed 진단 |
+| started_at / completed_at | TEXT NULL | 처리 시작/완료 |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+## interview_transcript_segments
+
+대면 면접 전사 세그먼트(발화 단위). recorded_interview 1건에 다수. 음성 발화 = PII → +N일(`purge-original`)에 세그먼트 폐기, 리포트는 보존. 라이브는 청크가 전사될 때마다 누적 insert(텍스트만 — 오디오 미보관).
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| recorded_interview_id | INTEGER NOT NULL FK recorded_interviews ON DELETE CASCADE | |
+| seq | INTEGER NOT NULL | 정렬 + 리포트 evidence_seq 참조 키 |
+| speaker_label | TEXT NULL | 음향 분리 라벨. 라이브는 `청크번호#화자` 로 고유화 |
+| role | TEXT NULL | candidate / interviewer / unknown — 종료 시 내용 기반 배정 |
+| start_ms / end_ms | INTEGER NULL | 시각(ms) |
+| text | TEXT NOT NULL | 발화 |
+| low_confidence | INTEGER NOT NULL DEFAULT 0 | 저신뢰 전사(boolean) |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
 ## TypeScript 타입
 

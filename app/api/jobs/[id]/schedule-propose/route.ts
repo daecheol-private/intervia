@@ -31,6 +31,7 @@ import {
   buildScheduleProposalEmail,
 } from "@/lib/schedules";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { isJobExpired } from "@/lib/job-lifecycle";
@@ -269,6 +270,17 @@ export async function POST(
 
     try {
       await sendMail({ to: cand.email, ...mail, orgId: job.orgId, audience: "candidate" });
+      // 알림톡 병행 (전화번호 있을 때만, 베스트에포트).
+      await sendCandidateAlimtalk("schedule_propose", {
+        phone: cand.phone,
+        vars: {
+          orgName: org?.name ?? null,
+          candidateName: cand.name,
+          jobTitle: job.title,
+          url,
+        },
+        fallbackText: `[${org?.name ?? "채용"}] ${cand.name}님, ${job.title} 면접 일정을 선택해 주세요: ${url}`,
+      });
       results.push({ candidateId: cand.id, status: "sent" });
     } catch (e) {
       results.push({

@@ -159,6 +159,7 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `OPS_ALERT_EMAIL` | (선택) 운영 알림 수신 메일. 미설정 시 회사 이메일(`site-info` COMPANY_INFO.email)로 발송 |
 | `OPS_QUEUE_BACKLOG` / `OPS_FAILED_LAST_HOUR` / `OPS_STUCK` / `OPS_BALANCE_FLOOR` | (선택) 운영 알림 임계값. 기본 50 / 20 / 5 / (잔액 알림 비활성). `OPS_BALANCE_FLOOR` 설정 시 최저 잔액이 그 값 이하면 알림 |
 | `HEALTH_TOKEN` | (선택) `/api/health` 상세 모드(큐 통계·env 진단) 토큰. 미설정 시 공개 ping 만 |
+| `ALIGO_API_KEY` / `ALIGO_USER_ID` / `ALIGO_SENDER_KEY` / `ALIGO_SENDER` / `ALIGO_TPL_*` | (선택) 카카오 알림톡 병행 발송(알리고). **미설정 시 이메일만** 발송(게이트). 활성화 절차·템플릿 본문: [docs/ALIMTALK.md](docs/ALIMTALK.md). `ALIGO_TEST_MODE=1` 로 무과금 테스트 |
 
 ---
 

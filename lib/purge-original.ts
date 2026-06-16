@@ -1,6 +1,11 @@
 import { db } from "./db";
-import { candidates, candidateAttachments } from "./schema";
-import { and, eq, lt, sql, isNotNull } from "drizzle-orm";
+import {
+  candidates,
+  candidateAttachments,
+  interviewTranscriptSegments,
+  recordedInterviews,
+} from "./schema";
+import { and, eq, inArray, lt, sql, isNotNull } from "drizzle-orm";
 import { deleteFile } from "./storage";
 import { deleteAttachmentsForCandidate } from "./candidate-files";
 
@@ -21,7 +26,11 @@ const DEFAULT_PURGE_DAYS = 30;
  */
 export async function purgeExpiredOriginals(
   daysOverride?: number
-): Promise<{ purgedCount: number; failedFiles: number }> {
+): Promise<{
+  purgedCount: number;
+  failedFiles: number;
+  purgedTranscriptInterviews: number;
+}> {
   const days = daysOverride ?? Number(process.env.PURGE_AFTER_DAYS ?? DEFAULT_PURGE_DAYS);
   const cutoff = sql`datetime('now', ${`-${days} days`})`;
 
@@ -64,5 +73,28 @@ export async function purgeExpiredOriginals(
       .where(eq(candidates.id, t.id));
   }
 
-  return { purgedCount: targets.length, failedFiles };
+  // 대면 면접 전사도 +N일 경과 시 폐기 (음성 발화 = PII). 평가 리포트(recorded_interviews.report)는 보존.
+  // 합격자(outcome='hired')는 입사 절차상 제외 — 이력서 폐기 정책과 동일 기준.
+  const oldRis = await db
+    .select({ id: recordedInterviews.id })
+    .from(recordedInterviews)
+    .innerJoin(candidates, eq(candidates.id, recordedInterviews.candidateId))
+    .where(
+      and(
+        lt(candidates.createdAt, cutoff),
+        sql`(${candidates.outcome} IS NULL OR ${candidates.outcome} != 'hired')`
+      )
+    );
+  const riIds = oldRis.map((r) => r.id);
+  if (riIds.length > 0) {
+    await db
+      .delete(interviewTranscriptSegments)
+      .where(inArray(interviewTranscriptSegments.recordedInterviewId, riIds));
+  }
+
+  return {
+    purgedCount: targets.length,
+    failedFiles,
+    purgedTranscriptInterviews: riIds.length,
+  };
 }

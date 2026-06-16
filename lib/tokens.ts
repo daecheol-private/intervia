@@ -15,24 +15,27 @@ export type FeatureKey =
   | "job_post"
   | "resume_upload"
   | "interview"
-  | "interview_question_gen";
+  | "interview_question_gen"
+  | "offline_interview";
 export type LedgerReason =
   | "charge"
   | "job_post"
   | "resume_upload"
   | "interview"
   | "interview_question_gen"
+  | "offline_interview"
   | "job_extend"
   | "refund"
   | "admin_adjust";
 
 // 100원당 1 토큰 기준 — 정책 변경 시 /admin/pricing 에서 override.
-// 공고 1,000원 / 이력서 200원 / 면접 1,000원 / 면접 문제 생성 500원.
+// 공고 1,000원 / 이력서 200원 / 면접 1,000원 / 면접 문제 생성 500원 / 대면 면접 평가 3,000원.
 const DEFAULT_PRICING: Record<FeatureKey, number> = {
   job_post: 10,
   resume_upload: 2,
   interview: 10,
   interview_question_gen: 5,
+  offline_interview: 30,
 };
 
 // 법인 최초 등록 시 1회 자동 지급 — 무료 체험용 (5만원).

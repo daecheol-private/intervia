@@ -37,6 +37,7 @@ SDK 단일: **`@google/genai`** (vertexai: true). 분기 없음 — `clientFor(t
 ## 이 폴더 빠른 참조
 
 - **상용화 계획·진행 현황**: [docs/COMMERCIAL_PLAN.md](docs/COMMERCIAL_PLAN.md) ← **작업 단위 체크박스 + 사용자 결정 사항**
+- **대면 면접 녹음→AI 평가 리포트 설계**: [docs/LIVE_INTERVIEW_PLAN.md](docs/LIVE_INTERVIEW_PLAN.md) ← 업로드+준실시간 투트랙, 설계 확정·미착수(선행 실측 필요)
 - 아키텍처: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - DB 스키마: [docs/SCHEMA.md](docs/SCHEMA.md)
 - API 엔드포인트: [docs/API.md](docs/API.md)

@@ -806,6 +806,11 @@ export const interviewSessions = sqliteTable("interview_sessions", {
   startedAt: text("started_at"),
   completedAt: text("completed_at"),
   expiresAt: text("expires_at").notNull(),
+  // AI 면접 미응답 리마인더 발송 시각 — 링크 발급(createdAt) 후 24h/48h 경과 + 여전히
+  // pending/in_progress(미완료) + 미만료일 때 cron 이 후보자에게 1회씩 발송하고 기록(중복 방지).
+  // 완료/만료된 세션은 발송하지 않는다. 둘은 독립 추적 (48h 가 먼저 due 면 24h 는 skip 처리).
+  reminder24SentAt: text("reminder24_sent_at"),
+  reminder48SentAt: text("reminder48_sent_at"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
@@ -866,6 +871,9 @@ export const interviewSchedules = sqliteTable("interview_schedules", {
   ),
   // 면접관 리마인더 메일 발송 시각 — 확정 면접 24시간 전 cron 이 1회 발송 후 기록(중복 방지).
   interviewerReminderSentAt: text("interviewer_reminder_sent_at"),
+  // 후보자 D-1(24시간 전) 리마인더 메일 발송 시각 — 면접관 리마인더와 독립 추적.
+  // 같은 cron 스캔에서 후보자에게도 1회 발송 후 기록. round1/round2 둘 다 적용.
+  candidateReminderSentAt: text("candidate_reminder_sent_at"),
   // 지원자가 선택한 슬롯
   selectedSlot: text("selected_slot", { mode: "json" })
     .$type<{ start: string; end: string } | null>(),
@@ -1061,6 +1069,7 @@ export const tokenLedger = sqliteTable("token_ledger", {
       "resume_upload",
       "interview",
       "interview_question_gen",
+      "offline_interview",
       "job_extend",
       "refund",
       "admin_adjust",
@@ -1089,7 +1098,13 @@ export const tokenLedger = sqliteTable("token_ledger", {
 
 export const tokenPricing = sqliteTable("token_pricing", {
   featureKey: text("feature_key", {
-    enum: ["job_post", "resume_upload", "interview", "interview_question_gen"],
+    enum: [
+      "job_post",
+      "resume_upload",
+      "interview",
+      "interview_question_gen",
+      "offline_interview",
+    ],
   }).primaryKey(),
   cost: integer("cost").notNull(),
   updatedByUserId: integer("updated_by_user_id").references(() => users.id, {
@@ -1339,3 +1354,138 @@ export const orgDomainReviews = sqliteTable(
 );
 
 export type OrgDomainReview = typeof orgDomainReviews.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// 대면(오프라인) 면접 녹음 → AI 평가 리포트.
+// 기존 interview_sessions(AI 가 직접 진행하는 채팅 면접)와 별개 — 이건 *사람*이
+// 진행한 대면 면접을 녹음·전사해 AI 가 평가 초안을 만든다 (업로드 + 준실시간 투트랙).
+// 상세 설계: docs/LIVE_INTERVIEW_PLAN.md
+// ---------------------------------------------------------------------------
+
+/**
+ * 대면 면접 AI 평가 리포트. AI 채팅 면접의 InterviewEvaluation 과 유사하되:
+ *  - 부정행위(ai_authorship)·외부 LLM 신호 없음 (대면 즉답이라 무의미).
+ *  - 각 강점/우려/점수에 근거 발언 세그먼트(evidence_seq) 참조 → "근거 발언 → 전사 점프".
+ *  - to_verify: 면접에서 확인 못 한 판단 리스크 (다음 라운드 유무와 무관하게 의사결정에 사용).
+ *  - followup_questions: 다음 라운드가 있을 때만 인계하는 추천 질문.
+ */
+export type RecordedInterviewReport = {
+  overall_score: number;
+  recommendation: "강력추천" | "추천" | "보류" | "비추천";
+  summary: string;
+  scores: Record<
+    string,
+    { score: number; comment: string; evidence_seq?: number[] }
+  >;
+  strengths: Array<{ text: string; evidence_seq?: number[] }>;
+  concerns: Array<{ text: string; evidence_seq?: number[] }>;
+  /** 확인 필요(판단 리스크) — 면접에서 확인 못 한 항목. */
+  to_verify: string[];
+  /** 다음 라운드 인계용 추천 질문 (조건부). */
+  followup_questions: string[];
+  /** 전사에서 굵게 강조할 지원자 핵심 표현 (전사 verbatim — UI 가 그대로 매칭해 볼드). */
+  key_phrases?: string[];
+};
+
+export const recordedInterviews = sqliteTable(
+  "recorded_interviews",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    orgId: integer("org_id").references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => jobPostings.id, { onDelete: "cascade" }),
+    candidateId: integer("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    // 어느 대면 라운드 면접인지 — 기존 1·2차 "결과 입력" 단계와 연결.
+    round: text("round", { enum: ["round1", "round2"] })
+      .notNull()
+      .default("round1"),
+    // 입력 경로: upload(사후 파일 업로드) / live(준실시간 마이크 청크).
+    mode: text("mode", { enum: ["upload", "live"] })
+      .notNull()
+      .default("upload"),
+    // recording=라이브 녹음 중 / processing=전사·평가 중 / ready=리포트 생성됨(사람 확정 대기)
+    // / failed=파이프라인 오류 / confirmed=사람이 확정.
+    status: text("status", {
+      enum: ["recording", "processing", "ready", "failed", "confirmed"],
+    })
+      .notNull()
+      .default("processing"),
+    // 녹음·진행한 면접관(서기). 과금 추적용.
+    createdByUserId: integer("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // 면접관이 "지원자에게 면접 녹취·전사·AI 평가 활용 동의를 받았음"을 확인한 시각.
+    // 대면 면접은 후보자 토큰 동의 화면이 없으므로 면접관 attestation 으로 갈음 (PIPA 동의·입증).
+    consentConfirmedAt: text("consent_confirmed_at"),
+    consentConfirmedByUserId: integer(
+      "consent_confirmed_by_user_id"
+    ).references(() => users.id, { onDelete: "set null" }),
+    durationSeconds: integer("duration_seconds").notNull().default(0),
+    report: text("report", { mode: "json" }).$type<RecordedInterviewReport | null>(),
+    // AI 초안 → 사람 확정 흔적.
+    reportConfirmedAt: text("report_confirmed_at"),
+    reportConfirmedByUserId: integer("report_confirmed_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" }
+    ),
+    // failed 상태 진단용 마지막 오류.
+    error: text("error"),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    candidateIdx: index("idx_recorded_interviews_candidate").on(t.candidateId),
+    jobIdx: index("idx_recorded_interviews_job").on(t.jobId),
+    orgIdx: index("idx_recorded_interviews_org").on(t.orgId),
+  })
+);
+
+export type RecordedInterview = typeof recordedInterviews.$inferSelect;
+
+/**
+ * 대면 면접 전사 세그먼트 — 한 발화 단위. recorded_interviews 1건에 다수.
+ * 라이브 모드는 청크가 전사될 때마다 누적 insert (텍스트만 — 오디오는 보관하지 않음).
+ * seq 가 리포트 evidence_seq 의 참조 키 (근거 발언 → 전사 점프).
+ */
+export const interviewTranscriptSegments = sqliteTable(
+  "interview_transcript_segments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    recordedInterviewId: integer("recorded_interview_id")
+      .notNull()
+      .references(() => recordedInterviews.id, { onDelete: "cascade" }),
+    // 정렬 + 근거 참조 키. (recordedInterviewId, seq) 가 사실상 고유.
+    seq: integer("seq").notNull(),
+    // 음향 다이어리제이션 원본 라벨(예: "화자1"). 역할 배정 전 임시 식별자.
+    speakerLabel: text("speaker_label"),
+    // 내용 기반으로 배정된 역할. null = 미배정(라이브 진행 중).
+    role: text("role", { enum: ["candidate", "interviewer", "unknown"] }),
+    startMs: integer("start_ms"),
+    endMs: integer("end_ms"),
+    text: text("text").notNull(),
+    // 저신뢰 전사 구간(검수 유도).
+    lowConfidence: integer("low_confidence", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    riSeqIdx: index("idx_transcript_segments_ri_seq").on(
+      t.recordedInterviewId,
+      t.seq
+    ),
+  })
+);
+
+export type InterviewTranscriptSegment =
+  typeof interviewTranscriptSegments.$inferSelect;

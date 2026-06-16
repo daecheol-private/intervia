@@ -381,6 +381,73 @@ ${answer}
   return { subject, html, text };
 }
 
+/**
+ * AI 면접 미응답 리마인더 메일 (후보자 대상).
+ * 링크 발급 후 24h/48h 경과 + 미완료 시 cron 이 자동 발송. buildInterviewEmail 의 경량 버전 —
+ * 새 안내가 아니라 "아직 면접을 완료하지 않으셨다"는 넛지이므로 본문을 짧게 유지한다.
+ */
+export function buildInterviewReminderEmail(opts: {
+  candidateName: string;
+  jobTitle: string;
+  url: string;
+  expiresAt: string;
+  orgName?: string | null;
+}): { subject: string; html: string; text: string } {
+  const { candidateName, jobTitle, url, expiresAt, orgName } = opts;
+  const sender = orgName?.trim() || null;
+  const subject = sender
+    ? `[${sender}] AI 면접 미완료 안내 — ${jobTitle}`
+    : `[Intervia 면접 안내] 아직 면접을 완료하지 않으셨어요 — ${jobTitle}`;
+  const senderLine = sender ? `${sender} 채용팀` : "채용 담당자";
+  const text = `안녕하세요 ${candidateName}님,
+
+${senderLine}의 ${jobTitle} 포지션 AI 면접(제공: Intervia)이 아직 완료되지 않았습니다.
+아래 링크로 이어서 진행해 주세요. (이미 완료하셨다면 본 안내는 무시하셔도 됩니다.)
+
+${url}
+
+링크 만료: ${expiresAt}
+
+* 채팅 방식으로 약 10~30분 소요됩니다.
+* 충분한 시간과 집중할 수 있는 환경에서 진행해 주세요.
+
+[안전 안내]
+* 본 면접은 비밀번호·결제·금융정보·주민등록번호·신분증 사본을 절대 요구하지 않습니다.
+* 위 링크는 본인 전용이며, 타인에게 전달하지 마세요.
+
+감사합니다.`;
+
+  const html = wrapEmailCard({
+    innerHtml: `
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(candidateName)}님, 안녕하세요.</h1>
+      <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
+        ${sender ? `<strong style="color:#0f172a;">${escapeHtml(sender)}</strong> 채용팀의 ` : ""}<strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> 포지션 AI 면접이 <strong style="color:#0f172a;">아직 완료되지 않았습니다.</strong><br>
+        아래 버튼으로 이어서 진행해 주세요. 이미 완료하셨다면 본 안내는 무시하셔도 됩니다.
+      </p>
+      <p style="text-align:center;margin:0 0 16px;">
+        <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">면접 이어서 진행하기</a>
+      </p>
+      <p style="font-size:12px;color:#64748b;margin:0 0 20px;text-align:center;">
+        버튼이 동작하지 않으면 아래 링크를 복사해 주세요:<br>
+        <a href="${url}" style="color:${EMAIL_BRAND.primary};word-break:break-all;">${url}</a>
+      </p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:13px;color:#475569;line-height:1.6;">
+        • 채팅 방식으로 약 10~30분 소요됩니다.<br>
+        • <strong>충분한 시간과 집중할 수 있는 환경</strong>에서 진행해 주세요.<br>
+        • 링크 만료: <strong>${expiresAt}</strong>
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;font-size:12px;color:#92400e;line-height:1.6;margin-top:12px;">
+        <div style="font-weight:700;margin-bottom:4px;">🔒 안전 안내</div>
+        • 본 면접은 <strong>비밀번호·결제·금융정보·주민등록번호·신분증 사본</strong>을 절대 요구하지 않습니다.<br>
+        • 위 링크는 <strong>본인 전용</strong>이며 타인에게 전달하지 마세요.
+      </div>
+    `,
+    footer: `본 메일은 ${sender ? `${escapeHtml(sender)}의 채용 절차를 위해 ` : ""}Intervia 시스템에서 자동 발송되었습니다.`,
+  });
+
+  return { subject, html, text };
+}
+
 export function buildInterviewEmail(opts: {
   candidateName: string;
   jobTitle: string;

@@ -13,6 +13,7 @@ import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
 import { buildDecisionEmail } from "@/lib/candidate-stage";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { logAudit } from "@/lib/audit";
 import {
   requireSpendableBalance,
@@ -96,6 +97,18 @@ export async function POST(
 
   try {
     await sendMail({ to: candidate.email, ...mail, orgId: candidate.orgId, audience: "candidate" });
+    // 합격 통보만 알림톡 병행 (불합격은 정중한 긴 문구라 메일 유지). 베스트에포트.
+    if (candidate.outcome === "hired") {
+      await sendCandidateAlimtalk("decision_pass", {
+        phone: candidate.phone,
+        vars: {
+          orgName: org?.name ?? null,
+          candidateName: candidate.name,
+          jobTitle: job?.title ?? "공고",
+        },
+        fallbackText: `[${org?.name ?? "채용"}] ${candidate.name}님, ${job?.title ?? "공고"} 전형에 합격하셨습니다. 다음 절차는 별도 안내드리겠습니다.`,
+      });
+    }
     await db
       .update(candidates)
       .set({ decisionEmailCount: sql`${candidates.decisionEmailCount} + 1` })

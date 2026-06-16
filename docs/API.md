@@ -159,7 +159,7 @@
 |---|---|---|---|
 | GET/POST | `/api/cron/expire-interviews` | 🌐 (CRON_SECRET) 또는 👑 | 만료된 면접 세션 → `expired` 처리. **환불 없음**(면접은 후차감이라 미시작/미평가는 과금된 적 없음 — `lib/expire-sessions.ts` `refundedCount=0`). `pending`(AI 미시작) 만료는 자동 불합격(`ai_link_expired`). Vercel Cron schedule = `0 * * * *` (시간당) |
 | GET/POST | `/api/cron/purge-original` | 🌐 (CRON_SECRET) 또는 👑 | 평가 완료 + N일 경과 후보자의 `resume_text` 와 파일 삭제 (PIPA 가명처리). `?days=N` 으로 오버라이드. Vercel Cron schedule = `30 3 * * *` (매일 03:30). 디폴트 `PURGE_AFTER_DAYS=30` |
-| GET/POST | `/api/cron/interview-reminders` | 🌐 (CRON_SECRET) 또는 👑 | 확정 면접(`status='selected'`) 24시간 전 면접관 전원에게 리마인더 메일 1회 발송 후 `interview_schedules.interviewer_reminder_sent_at` 기록(중복 방지). Vercel Cron schedule = `0 * * * *` (시간당) |
+| GET/POST | `/api/cron/interview-reminders` | 🌐 (CRON_SECRET) 또는 👑 | ① 확정 대면 면접(`status='selected'`) D-1(24h 전): **면접관**(`interviewer_reminder_sent_at`) + **후보자**(`candidate_reminder_sent_at`) 에게 각 1회. round1/round2 모두. ② **AI 면접 미응답**(`pending`/`in_progress` + 미만료): 링크 발급 후 24h/48h 경과 시 후보자에게 넛지(`interview_sessions.reminder24_sent_at`/`reminder48_sent_at`, 48h 우선·24h skip). 응답 `{schedule, ai}`. Vercel Cron schedule = `0 * * * *` (시간당) |
 
 인증: `Authorization: Bearer ${CRON_SECRET}` 헤더 또는 system_admin 로그인. Vercel Cron은 `x-vercel-cron: 1` 헤더로 자동 호출.
 
@@ -189,6 +189,18 @@
 공개 수신거부: `/unsubscribe/[token]` (페이지, 비로그인) — 버튼 클릭(서버 액션) 시 status=unsubscribed. 발송 메일 제목에 `(광고)` 자동 포함.
 
 🔐 = step-up 인증(비밀번호 재입력) 필수.
+
+## 대면 면접 평가 (녹취 업로드 / 준실시간)
+
+녹취 동의 attestation 필수. 평가 성공 시 `offline_interview`(30토큰) 후차감(`chargeRepeatable`). 상세: [LIVE_INTERVIEW_PLAN.md](LIVE_INTERVIEW_PLAN.md).
+
+| 메서드 | 경로 | 권한 | 설명 |
+|---|---|---|---|
+| POST | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | 업로드 모드 — multipart `audio`+`round`+`consentConfirmed`. 전사→역할배정→평가. 잔액 가드·18MB 캡·maxDuration 300. 201 `{id,status}` |
+| GET | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | 후보자의 대면 면접 평가 목록(리포트 + 전사 세그먼트) |
+| PATCH | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | `{recordedInterviewId, action:"confirm"}` — AI 초안 사람 확정 |
+| POST | `/api/candidates/[id]/recorded-interview/live` | 🔒🏢🔑 | 준실시간 — `action`: `start`(consentConfirmed 필수) / `chunk`(audioBase64·baseMs·chunkIndex, 즉시 전사) / `finish`(finalize) |
+| GET | `/api/candidates/[id]/recorded-interview/live?riId=` | 🔒🏢🔑 | 라이브 어시스턴트 — 누적 전사 기반 답변요약/긍정/확인/추천질문 |
 
 ## 응답 코드 컨벤션
 

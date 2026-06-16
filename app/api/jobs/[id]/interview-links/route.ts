@@ -29,6 +29,7 @@ import {
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { sendMail, buildInterviewEmail, isSmtpAvailable } from "@/lib/mailer";
+import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { MAX_INTERVIEW_EMAILS_PER_CANDIDATE, isJobExpired } from "@/lib/job-lifecycle";
@@ -155,6 +156,11 @@ export async function POST(
     html: string;
     text: string;
     stage: Stage;
+    // 알림톡 병행용 (전화번호 있을 때만 발송).
+    phone: string | null;
+    candidateName: string;
+    url: string;
+    expiresLabel: string;
   };
   const tasks: SendTask[] = [];
   // 세션 INSERT 는 모아서 1회 배치 — 후보자당 직렬 INSERT 는 원격 DB 에서 인원수 × RTT.
@@ -237,6 +243,10 @@ export async function POST(
       html: mail.html,
       text: mail.text,
       stage: c.stage,
+      phone: c.phone,
+      candidateName: c.name,
+      url,
+      expiresLabel: formatKstDateTime(expiresAt),
     });
     results.push({ candidateId: c.id, status: "sending" });
   }
@@ -277,6 +287,18 @@ export async function POST(
                   : t.stage,
             })
             .where(eq(candidates.id, t.candidateId));
+          // 알림톡 병행 (전화번호 있을 때만, 베스트에포트).
+          await sendCandidateAlimtalk("interview_invite", {
+            phone: t.phone,
+            vars: {
+              orgName,
+              candidateName: t.candidateName,
+              jobTitle: job.title,
+              url: t.url,
+              expiresAt: t.expiresLabel,
+            },
+            fallbackText: `[${orgName ?? "채용"}] ${t.candidateName}님, ${job.title} AI 면접을 안내드립니다. 링크: ${t.url}`,
+          });
           sent++;
         } catch (e) {
           failed++;
