@@ -1240,7 +1240,7 @@ async function Landing() {
           <div className="text-center mb-12">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface border border-border-default text-[11px] uppercase tracking-widest text-primary font-semibold mb-4">
               <CheckCircle2 className="w-3 h-3" strokeWidth={2.5} />
-              Korea-first
+              한국 채용 특화
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
               한국 채용 시장에 맞춰 설계했습니다
