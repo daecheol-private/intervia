@@ -62,6 +62,28 @@ function scrubContext(ctx: ErrorContext): ErrorContext {
   return scrubValue(ctx, 0) as ErrorContext;
 }
 
+// Drizzle/@libsql 은 실제 SQLite 에러를 `error.cause` 에 감싸므로 최상위 message 에는
+// "Failed query: ..." 만 남는다. cause 체인을 평탄화해 진짜 원인(SQLITE_BUSY / no such
+// table / stream 만료 등 message·code·rawCode)을 Sentry value 에 함께 싣는다.
+// (스크럽은 호출부에서 적용 — 여기선 평문 결합만.)
+function flattenError(error: Error): string {
+  const parts = [error.message];
+  let cur: unknown = (error as { cause?: unknown }).cause;
+  for (let d = 0; cur && d < 5; d++) {
+    const n = cur as {
+      message?: unknown;
+      code?: unknown;
+      rawCode?: unknown;
+      cause?: unknown;
+    };
+    const m = typeof n.message === "string" ? n.message : String(n);
+    const code = n.code ?? n.rawCode;
+    parts.push(`caused by: ${m}${code != null ? ` [${String(code)}]` : ""}`);
+    cur = n.cause;
+  }
+  return parts.join("\n");
+}
+
 function dsnParts(): {
   ingest: string;
   publicKey: string;
@@ -106,7 +128,7 @@ async function sendToSentry(
       values: [
         {
           type: error.name ?? "Error",
-          value: scrubString(error.message),
+          value: scrubString(flattenError(error)),
           stacktrace: error.stack
             ? {
                 frames: error.stack
