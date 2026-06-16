@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import type { CultureFitProfile } from "@/lib/prompts";
+import { sanitizeCompetencies } from "@/lib/competencies";
 
 export const runtime = "nodejs";
 
@@ -41,7 +42,16 @@ export async function PUT(req: Request) {
   if (!me!.orgId) return new Response("No org", { status: 400 });
 
   const body = (await req.json()) as { cultureFitProfile: CultureFitProfile | null };
-  const value = body.cultureFitProfile ? JSON.stringify(body.cultureFitProfile) : null;
+  // coreCompetencies 는 유효 NCS 키만 남기고 정화 (폼·악의적 입력의 잡값 차단)
+  const cleaned = body.cultureFitProfile
+    ? {
+        ...body.cultureFitProfile,
+        coreCompetencies: sanitizeCompetencies(
+          body.cultureFitProfile.coreCompetencies
+        ),
+      }
+    : null;
+  const value = cleaned ? JSON.stringify(cleaned) : null;
 
   await db
     .update(organizations)

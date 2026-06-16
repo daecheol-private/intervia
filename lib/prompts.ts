@@ -9,6 +9,11 @@ import {
   type PersonalityProfile,
   type PersonalityResponse,
 } from "./personality";
+import {
+  sanitizeCompetencies,
+  competencyLabels,
+  type CompetencyKey,
+} from "./competencies";
 
 export type QualItem = {
   enabled: boolean;
@@ -33,6 +38,12 @@ export type CultureFitProfile = {
    * 레거시이며, 평가 경로는 읽기 시점에 공고 값으로 대체해 채운다.
    */
   traitProfile?: TraitProfile | null;
+  /**
+   * 법인이 중시하는 핵심 역량 — NCS 직업기초능력 키 배열 (lib/competencies.ts).
+   * 평가 프롬프트에 표준 역량 어휘로 주입되고, 리포트에 배지로 표시된다.
+   * 합불 점수엔 미반영 — idealTalent 와 동일한 정성 참고 정보.
+   */
+  coreCompetencies?: CompetencyKey[];
 };
 
 export const QUAL_ITEM_LABELS: Record<
@@ -149,6 +160,14 @@ function cultureFitSection(profile?: CultureFitProfile | null): string {
     });
   if (activeItems.length > 0) {
     parts.push(`- 법인 중점 정성 평가 항목:\n${activeItems.join("\n")}`);
+  }
+  const competencies = competencyLabels(
+    sanitizeCompetencies(profile.coreCompetencies)
+  );
+  if (competencies.length > 0) {
+    parts.push(
+      `- 법인이 중시하는 핵심 역량(NCS 직업기초능력): ${competencies.join(", ")}\n  · 면접 발언에서 이 역량들이 드러나는 근거를 우선 확인하라.`
+    );
   }
   if (parts.length === 0) return "";
   return `\n\n## 법인 컬처핏 기준 (법인이 별도 설정한 가치 기준 — 후보자 비공개)\n${parts.join("\n")}`;

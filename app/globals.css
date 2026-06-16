@@ -31,8 +31,8 @@
   --surface-alt: #f1ede4;
   --card: #ffffff;
   --ink: #0f1a14;
-  --ink-soft: #4a5a52;
-  --ink-muted: #8a9690;
+  --ink-soft: #2f3d36; /* 보조 텍스트 — 가독성 위해 진하게 (이전 #4a5a52) */
+  --ink-muted: #5b6862; /* 흐린 텍스트 — 진하게 (이전 #8a9690) */
   --border: #e3ddd0;
   --border-strong: #cfc7b5;
 
@@ -103,6 +103,12 @@
   --color-info-soft: var(--info-soft);
 }
 
+/* 전역 기준 글자 크기 — rem 기반 Tailwind 유틸(text-xs/sm/base…)을 일괄 ~5% 키움.
+   사용자 브라우저 접근성 배율을 존중하도록 %로 지정. (이전: 브라우저 기본 16px) */
+html {
+  font-size: 105%;
+}
+
 body {
   background: var(--surface);
   color: var(--ink);
@@ -110,7 +116,7 @@ body {
     BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui,
     sans-serif;
   font-feature-settings: "ss06", "ss07"; /* Pretendard 한국어 글리프 보정 */
-  letter-spacing: -0.01em;
+  letter-spacing: 0; /* 한글 가독성 — 음수 자간 제거로 글자가 또렷하게 (이전 -0.01em) */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   touch-action: manipulation;
@@ -121,7 +127,7 @@ h1,
 h2,
 h3,
 h4 {
-  letter-spacing: -0.025em;
+  letter-spacing: -0.012em; /* 제목 자간 완화 (이전 -0.025em) */
   color: var(--ink);
   font-weight: 700;
 }

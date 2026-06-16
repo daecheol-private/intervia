@@ -7,7 +7,12 @@ import { formatKstDateTime } from "@/lib/utils";
 import { confirmDialog } from "@/app/components/Dialog";
 import { BulletBlock } from "./screening-report";
 import { HL, recColor, scoreColor, scoreBarColor, showRec } from "./shared";
-import { TRAIT_KEYS, TRAIT_LABELS } from "@/lib/personality";
+import { behaviorStyleOf } from "@/lib/personality";
+import {
+  BigFiveRadar,
+  BehaviorStyleCard,
+  CompetencyBadges,
+} from "./personality-visuals";
 import type { InterviewEvaluation, Session } from "./types";
 
 export function InterviewLinkBox({
@@ -360,6 +365,7 @@ export function InterviewEvaluationRetry({
 export function InterviewResult({
   session,
   jobTraitProfile,
+  orgCoreCompetencies,
   onShowTranscript,
   onRegenerate,
   onReevaluated,
@@ -368,6 +374,7 @@ export function InterviewResult({
 }: {
   session: Session;
   jobTraitProfile?: Record<string, string> | null;
+  orgCoreCompetencies?: string[] | null;
   onShowTranscript: () => void;
   onRegenerate: () => void;
   onReevaluated: () => void;
@@ -494,6 +501,7 @@ export function InterviewResult({
         cultureFit={ev.culture_fit}
         personalityProfile={session.personalityProfile}
         jobTraitProfile={jobTraitProfile}
+        orgCoreCompetencies={orgCoreCompetencies}
       />
 
       {ev.llm_assist_note && (
@@ -619,18 +627,25 @@ function CultureFitBlock({
   cultureFit,
   personalityProfile,
   jobTraitProfile,
+  orgCoreCompetencies,
 }: {
   cultureFit?: InterviewEvaluation["culture_fit"];
   personalityProfile?: Session["personalityProfile"];
   jobTraitProfile?: Record<string, string> | null;
+  orgCoreCompetencies?: string[] | null;
 }) {
-  if (!cultureFit && !personalityProfile) return null;
+  const hasCompetencies = (orgCoreCompetencies?.length ?? 0) > 0;
+  if (!cultureFit && !personalityProfile && !hasCompetencies) return null;
 
   const flags = personalityProfile?.flags;
   const flagNotes: string[] = [];
   if (flags?.straightLining) flagNotes.push("한쪽 선택지만 반복 선택");
   if (flags?.inconsistent) flagNotes.push("재질문에서 선택 다수 뒤집힘");
   if (flags?.rushed) flagNotes.push("비정상적으로 빠른 응답");
+
+  const style = personalityProfile
+    ? behaviorStyleOf(personalityProfile.traits)
+    : null;
 
   const verdictStyle: Record<string, string> = {
     일치: "border-emerald-300 bg-emerald-100 text-emerald-800",
@@ -641,54 +656,52 @@ function CultureFitBlock({
   return (
     <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-violet-700">
+        <div className="text-xs font-bold uppercase tracking-wider text-violet-800">
           컬처핏 · 정성 검증
         </div>
-        <span className="text-[10px] px-1.5 py-0.5 rounded border border-violet-200 bg-white text-violet-600">
+        <span className="text-[11px] font-medium px-2 py-0.5 rounded border border-violet-300 bg-white text-violet-700">
           참고 정보 — 점수 미반영
         </span>
       </div>
 
       {personalityProfile && (
-        <div className="mt-3 space-y-1.5">
-          {TRAIT_KEYS.map((k) => {
-            const t = personalityProfile.traits[k];
-            if (!t) return null;
-            const desired = jobTraitProfile?.[k];
-            return (
-              <div key={k} className="flex items-center gap-2.5">
-                <span className="text-[11px] text-slate-600 w-32 shrink-0 truncate">
-                  {TRAIT_LABELS[k]}
-                </span>
-                <div className="flex-1 h-2 bg-white border border-violet-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-violet-400 rounded-full"
-                    style={{ width: `${t.score}%` }}
-                  />
-                </div>
-                <span className="text-[11px] font-semibold text-slate-700 tabular-nums w-7 text-right">
-                  {t.score}
-                </span>
-                {desired === "high" && (
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${
-                      t.score >= 67
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-amber-200 bg-amber-50 text-amber-700"
-                    }`}
-                    title="공고에서 높음으로 지정한 선호 특성"
-                  >
-                    공고 선호
-                  </span>
-                )}
+        <div className="mt-3">
+          <div className="grid md:grid-cols-2 gap-3">
+            {/* 행동 스타일 4분면 */}
+            {style && <BehaviorStyleCard style={style} />}
+
+            {/* Big Five 레이더 */}
+            <div className="rounded-xl border border-violet-200 bg-white px-4 py-3.5">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-violet-700">
+                성향 분포 · Big Five
               </div>
-            );
-          })}
+              <BigFiveRadar
+                traits={personalityProfile.traits}
+                jobTraitProfile={jobTraitProfile}
+              />
+              <div className="flex items-center justify-center gap-4 text-[11px] font-medium text-slate-600 -mt-1">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-violet-700" />
+                  후보자
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-emerald-700 font-bold">★</span>
+                  공고 선호 특성
+                </span>
+              </div>
+            </div>
+          </div>
           {flagNotes.length > 0 && (
-            <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 mt-1.5">
+            <div className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-2.5 py-1.5 mt-2.5">
               ⚠ 응답 신뢰 신호: {flagNotes.join(" · ")} — 자가응답 해석에 주의
             </div>
           )}
+        </div>
+      )}
+
+      {hasCompetencies && (
+        <div className="mt-3 rounded-xl border border-violet-200 bg-white px-4 py-3.5">
+          <CompetencyBadges keys={orgCoreCompetencies} />
         </div>
       )}
 
@@ -700,19 +713,19 @@ function CultureFitBlock({
               className="bg-white border border-violet-100 rounded-lg px-3 py-2"
             >
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-semibold text-slate-800">
+                <span className="text-sm font-bold text-slate-800">
                   {it.topic}
                 </span>
                 <span
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${verdictStyle[it.verification] ?? verdictStyle["미검증"]}`}
+                  className={`text-[11px] font-bold px-2 py-0.5 rounded border ${verdictStyle[it.verification] ?? verdictStyle["미검증"]}`}
                 >
                   {it.verification}
                 </span>
               </div>
-              <div className="text-[11px] text-slate-500 mt-1">
+              <div className="text-xs text-slate-600 mt-1">
                 자가응답: {it.self_report}
               </div>
-              <div className="text-xs text-slate-700 mt-0.5 leading-relaxed">
+              <div className="text-sm text-slate-700 mt-0.5 leading-relaxed">
                 <HL text={it.evidence} />
               </div>
             </li>
@@ -721,12 +734,12 @@ function CultureFitBlock({
       )}
 
       {cultureFit?.fit_note && (
-        <div className="text-xs text-slate-700 mt-2.5 leading-relaxed">
+        <div className="text-sm text-slate-700 mt-2.5 leading-relaxed">
           <HL text={cultureFit.fit_note} />
         </div>
       )}
 
-      <div className="text-[11px] text-slate-500 mt-2.5">
+      <div className="text-xs text-ink-soft mt-2.5 leading-relaxed">
         ※ 인성검사는 강제선택 자가보고 기반 참고치(본인 내 상대 선호 — 절대
         수준 아님)이며, 면접 발언으로 검증된 항목만 신뢰하세요. 합·불 판단은
         직무 역량 평가를 우선해야 합니다.

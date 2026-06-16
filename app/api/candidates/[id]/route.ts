@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
 import { parseTraitProfile } from "@/lib/personality";
+import { sanitizeCompetencies } from "@/lib/competencies";
 import { deleteFilesForCandidate } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
 
@@ -53,20 +54,38 @@ export async function GET(
             eq(userCandidateFavorites.candidateId, cid)
           )
         ),
-      // 법인명 — 메일 본문에 사용.
+      // 법인명(메일 본문) + 컬처핏 프로필(리포트의 핵심 역량 배지).
       candidate.orgId
         ? db
-            .select({ name: organizations.name })
+            .select({
+              name: organizations.name,
+              cultureFitProfile: organizations.cultureFitProfile,
+            })
             .from(organizations)
             .where(eq(organizations.id, candidate.orgId))
             .then(([org]) => org ?? null)
-        : Promise.resolve<{ name: string } | null>(null),
+        : Promise.resolve<{
+            name: string;
+            cultureFitProfile: string | null;
+          } | null>(null),
     ]);
   const [lastJob] = lastJobRows;
   const [fav] = favRows;
   const companyName = orgInfo?.name ?? null;
   // 면접 리포트의 "후보자 특성 vs 공고 선호" 대조용 — 공고의 선호 특성 프로필
   const jobTraitProfile = parseTraitProfile(job?.traitProfile);
+  // 리포트 "회사가 중시하는 역량" 배지 — 법인 컬처핏 JSON 에서 NCS 역량 키만 추출
+  let orgCoreCompetencies: string[] = [];
+  if (orgInfo?.cultureFitProfile) {
+    try {
+      const cf = JSON.parse(orgInfo.cultureFitProfile) as {
+        coreCompetencies?: unknown;
+      };
+      orgCoreCompetencies = sanitizeCompetencies(cf.coreCompetencies);
+    } catch {
+      /* 손상 JSON — 역량 배지 생략 */
+    }
+  }
 
   // 시스템관리자가 타 법인 데이터 조회한 경우 특별히 감사 로깅 (A-8)
   if (me!.role === "system_admin" && me!.orgId !== candidate.orgId) {
@@ -121,6 +140,7 @@ export async function GET(
     job: jobSafe,
     companyName,
     jobTraitProfile,
+    orgCoreCompetencies,
     sessions,
     schedules,
     screeningPhase,

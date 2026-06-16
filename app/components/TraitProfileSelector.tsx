@@ -31,7 +31,7 @@ export function TraitProfileSelector({
 
   return (
     <div>
-      <p className="text-xs text-slate-500 tabular-nums mb-1">
+      <p className="text-[13px] text-ink-soft tabular-nums mb-1 font-medium">
         선택 {selectedCount}/{MAX_HIGH_TRAITS}
       </p>
       <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
@@ -74,8 +74,8 @@ export function TraitProfileSelector({
                 )}
               </span>
               <span
-                className={`text-sm font-medium ${
-                  selected ? "text-primary-deep" : "text-slate-700"
+                className={`text-[15px] font-semibold ${
+                  selected ? "text-primary-deep" : "text-slate-800"
                 }`}
               >
                 {TRAIT_LABELS[key]}
@@ -84,6 +84,11 @@ export function TraitProfileSelector({
           );
         })}
       </div>
+      <p className="text-xs text-ink-soft mt-2 leading-relaxed">
+        ※ 회사 공통 <strong>역량</strong>(NCS 직업기초능력)은{" "}
+        <strong>법인 설정</strong>에서 관리합니다. 여기서는 이 직무에 맞는{" "}
+        <strong>성향</strong>(어떤 기질인가)을 고릅니다.
+      </p>
     </div>
   );
 }

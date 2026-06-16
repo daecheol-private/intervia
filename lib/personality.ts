@@ -404,6 +404,103 @@ export function traitLevelOf(score: number): TraitLevel {
   return score >= 67 ? "high" : score >= 34 ? "medium" : "low";
 }
 
+/**
+ * 행동 스타일(4분면) — Big Five 점수에서 **파생만** 하는 표시용 라벨. 저장·채점 영향 0.
+ *
+ * 왜 직접 만든 라벨인가: DISC/MBTI 는 등록상표·라이선스라 그 이름을 쓸 수 없다. 대신
+ * DISC 를 아는 면접관이면 바로 읽히는 2축 4분면을 우리 어휘로 코인한다 (IP 안전).
+ *
+ * 두 축:
+ * - 가로(주도성): 외향성 점수 — 낮음=신중/관망, 높음=적극/주도
+ * - 세로(관계지향): 우호성 점수 — 낮음=과업중심, 높음=사람중심
+ * 보조 태그: 나머지 3개 특성(성실성·개방성·정서안정성) 중 가장 높은 1개를 짧은 수식으로 덧붙인다.
+ */
+export type BehaviorStyleKey = "driver" | "connector" | "analyst" | "supporter";
+
+export type BehaviorStyle = {
+  key: BehaviorStyleKey;
+  /** 4분면 라벨 (예: "목표·추진형") */
+  label: string;
+  /** 한 줄 요약 — 리포트 부제 */
+  summary: string;
+  /** 가로축 0~100 (외향성) — 사분면 맵의 점 위치 */
+  assertiveness: number;
+  /** 세로축 0~100 (우호성) — 사분면 맵의 점 위치 */
+  peopleFocus: number;
+  /** 보조 강점 태그 (예: "성실·꼼꼼") — 없으면 null */
+  modifier: string | null;
+};
+
+const BEHAVIOR_STYLE_META: Record<
+  BehaviorStyleKey,
+  { label: string; summary: string }
+> = {
+  driver: {
+    label: "목표·추진형",
+    summary: "결과와 목표를 향해 빠르게 결정하고 주도적으로 밀어붙이는 스타일",
+  },
+  connector: {
+    label: "관계·협력형",
+    summary: "사람들과 활발히 교류하며 분위기를 이끌고 함께 일하는 스타일",
+  },
+  analyst: {
+    label: "분석·신중형",
+    summary: "신중하게 사실과 기준을 따져 정확하게 일을 처리하는 스타일",
+  },
+  supporter: {
+    label: "안정·지원형",
+    summary: "차분하게 팀을 받쳐주며 안정적으로 협력을 이어가는 스타일",
+  },
+};
+
+/** 보조 강점 태그 — 성실성·개방성·정서안정성 중 최고 점수 특성을 짧은 수식으로 */
+const MODIFIER_TAG: Partial<Record<TraitKey, string>> = {
+  conscientiousness: "성실·꼼꼼",
+  openness: "개방·도전",
+  emotionalStability: "안정·회복탄력",
+};
+
+/**
+ * 강제선택 프로필(traits 점수) → 행동 스타일. 점수가 비어있으면(미응답) null.
+ * 경계(50)는 high 쪽으로 포함 — 적극/사람중심으로 본다.
+ */
+export function behaviorStyleOf(
+  traits: Record<TraitKey, { score: number; answered: number }> | null | undefined
+): BehaviorStyle | null {
+  if (!traits) return null;
+  const e = traits.extraversion;
+  const a = traits.agreeableness;
+  if (!e || !a || (e.answered === 0 && a.answered === 0)) return null;
+
+  const assertiveness = e.score;
+  const peopleFocus = a.score;
+  const high = (s: number) => s >= 50;
+
+  let key: BehaviorStyleKey;
+  if (high(assertiveness)) key = high(peopleFocus) ? "connector" : "driver";
+  else key = high(peopleFocus) ? "supporter" : "analyst";
+
+  // 보조 태그: 성실성·개방성·정서안정성 중 최고점 (단, 50 미만이면 두드러진 강점 없음 → null)
+  let modifier: string | null = null;
+  let best = 49;
+  for (const t of ["conscientiousness", "openness", "emotionalStability"] as const) {
+    const s = traits[t]?.score ?? 0;
+    if (s > best) {
+      best = s;
+      modifier = MODIFIER_TAG[t] ?? null;
+    }
+  }
+
+  return {
+    key,
+    label: BEHAVIOR_STYLE_META[key].label,
+    summary: BEHAVIOR_STYLE_META[key].summary,
+    assertiveness,
+    peopleFocus,
+    modifier,
+  };
+}
+
 export const TRAIT_LEVEL_LABELS: Record<TraitLevel, string> = {
   high: "높음",
   medium: "보통",

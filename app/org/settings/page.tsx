@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { CultureFitProfile, QualItem } from "@/lib/prompts";
+import {
+  NCS_COMPETENCY_KEYS,
+  NCS_COMPETENCY_LABELS,
+  type CompetencyKey,
+} from "@/lib/competencies";
 
 /**
  * 법인 설정 — 법인 단위 정책을 org_admin / system_admin 이 관리.
@@ -92,6 +97,7 @@ function defaultProfile(): CultureFitProfile {
         "포부가 직무·회사 방향과 맞고 실현 가능한 계획인지"
       ),
     },
+    coreCompetencies: ["communication", "problemSolving", "interpersonal"],
   };
 }
 
@@ -250,6 +256,21 @@ export default function OrgSettingsPage() {
         [key]: { ...prev.qualitativeItems[key], ...patch },
       },
     }));
+  };
+
+  const toggleCompetency = (key: CompetencyKey) => {
+    setCfProfile((prev) => {
+      const current = prev.coreCompetencies ?? [];
+      const has = current.includes(key);
+      // NCS 표준 순서 유지 — 토글 후에도 일관된 순서로 보이게
+      const nextSet = new Set(current);
+      if (has) nextSet.delete(key);
+      else nextSet.add(key);
+      return {
+        ...prev,
+        coreCompetencies: NCS_COMPETENCY_KEYS.filter((k) => nextSet.has(k)),
+      };
+    });
   };
 
   return (
@@ -474,11 +495,53 @@ export default function OrgSettingsPage() {
               </div>
             </div>
 
-            {/* 인성검사 선호 특성은 공고 단위로 이동 (직무마다 검증 특성이 다름) — 안내만 */}
-            <p className="text-[11px] text-slate-500 mb-5 leading-relaxed">
-              💡 AI 면접 인성검사의 <strong>선호 특성</strong>은 직무마다 달라
-              각 <strong>공고의 등록/수정 화면</strong>에서 설정합니다. 이
-              컬처핏 설정이 저장되어 있어야 인성검사가 출제됩니다.
+            {/* 핵심 역량 (NCS 직업기초능력) — 표준 역량 어휘로 평가·리포트에 반영 */}
+            <div className="space-y-2 mb-5">
+              <p className="text-sm font-semibold text-slate-800">
+                중시하는 핵심 역량{" "}
+                <span className="text-xs font-normal text-slate-500">
+                  (NCS 직업기초능력 · 복수 선택)
+                </span>
+              </p>
+              <p className="text-xs text-ink-soft leading-relaxed">
+                선택한 역량은 AI 면접 평가에 표준 어휘로 반영되고, 면접 리포트에
+                배지로 표시됩니다.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {NCS_COMPETENCY_KEYS.map((key) => {
+                  const meta = NCS_COMPETENCY_LABELS[key];
+                  const selected = (cfProfile.coreCompetencies ?? []).includes(
+                    key
+                  );
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => canEdit && toggleCompetency(key)}
+                      disabled={!canEdit}
+                      title={meta.short}
+                      aria-pressed={selected}
+                      className={`px-3.5 py-2 rounded-full text-[13px] font-semibold border transition-colors disabled:cursor-not-allowed ${
+                        selected
+                          ? "border-violet-400 bg-violet-100 text-violet-800 shadow-sm"
+                          : "border-slate-300 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700"
+                      }`}
+                    >
+                      {selected && <span className="mr-1">✓</span>}
+                      {meta.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 성향(Big Five)은 공고 단위 — 역량(NCS, 위)과 다른 축임을 명확히 안내 */}
+            <p className="text-xs text-ink-soft mb-5 leading-relaxed">
+              💡 위 <strong>역량</strong>(무엇을 잘하나)과 달리, 직무별{" "}
+              <strong>성향</strong>(개방성·성실성 등 어떤 기질인가)은 AI 면접
+              인성검사로 측정하며 직무마다 달라 각{" "}
+              <strong>공고의 등록/수정 화면</strong>에서 설정합니다. 이 컬처핏
+              설정이 저장되어 있어야 인성검사가 출제됩니다.
             </p>
 
             {canEdit && (
