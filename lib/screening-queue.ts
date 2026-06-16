@@ -13,6 +13,7 @@
 import { db } from "./db";
 import { screeningJobs, candidates, tokenWallets } from "./schema";
 import { eq, and, sql, isNull, or, lte, inArray, lt, gt, gte } from "drizzle-orm";
+import { withDbRetry } from "./db-retry";
 
 export const MAX_ATTEMPTS = 3;
 // 백오프: 1차 30s, 2차 2min, 3차 5min
@@ -275,31 +276,34 @@ export async function reconcileBalanceHolds(): Promise<{
   paused: number;
   resumed: number;
 }> {
-  // 소속 법인 잔액 <= 0 → paused. (지갑 없으면 잔액 무제한으로 간주, 건드리지 않음)
-  const pausedRows = await db
-    .update(screeningJobs)
-    .set({ status: "paused", lockedAt: null, lockedBy: null })
-    .where(
-      and(
-        eq(screeningJobs.status, "queued"),
-        sql`(SELECT w.balance FROM candidates c JOIN token_wallets w ON w.org_id = c.org_id WHERE c.id = ${screeningJobs.candidateId}) <= 0`
+  // cleanupStuck 직후 매 틱 실행 — 동일하게 멱등(잔액 기준 상태 전이)이라 transient 재시도.
+  return withDbRetry(async () => {
+    // 소속 법인 잔액 <= 0 → paused. (지갑 없으면 잔액 무제한으로 간주, 건드리지 않음)
+    const pausedRows = await db
+      .update(screeningJobs)
+      .set({ status: "paused", lockedAt: null, lockedBy: null })
+      .where(
+        and(
+          eq(screeningJobs.status, "queued"),
+          sql`(SELECT w.balance FROM candidates c JOIN token_wallets w ON w.org_id = c.org_id WHERE c.id = ${screeningJobs.candidateId}) <= 0`
+        )
       )
-    )
-    .returning({ id: screeningJobs.id });
+      .returning({ id: screeningJobs.id });
 
-  // 잔액 > 0 으로 회복된 법인의 paused → queued (재개).
-  const resumedRows = await db
-    .update(screeningJobs)
-    .set({ status: "queued", notBefore: null })
-    .where(
-      and(
-        eq(screeningJobs.status, "paused"),
-        sql`(SELECT w.balance FROM candidates c JOIN token_wallets w ON w.org_id = c.org_id WHERE c.id = ${screeningJobs.candidateId}) > 0`
+    // 잔액 > 0 으로 회복된 법인의 paused → queued (재개).
+    const resumedRows = await db
+      .update(screeningJobs)
+      .set({ status: "queued", notBefore: null })
+      .where(
+        and(
+          eq(screeningJobs.status, "paused"),
+          sql`(SELECT w.balance FROM candidates c JOIN token_wallets w ON w.org_id = c.org_id WHERE c.id = ${screeningJobs.candidateId}) > 0`
+        )
       )
-    )
-    .returning({ id: screeningJobs.id });
+      .returning({ id: screeningJobs.id });
 
-  return { paused: pausedRows.length, resumed: resumedRows.length };
+    return { paused: pausedRows.length, resumed: resumedRows.length };
+  }, { label: "reconcileBalanceHolds" });
 }
 
 /**
@@ -314,36 +318,43 @@ export async function reconcileBalanceHolds(): Promise<{
  *       비정상 상태 → 복구해도 정상 작업을 건드릴 위험 없음.)
  */
 export async function cleanupStuck(): Promise<number> {
-  const staleAt = new Date(Date.now() - LOCK_STALE_SECONDS * 1000).toISOString();
-  const stuckCond = and(
-    eq(screeningJobs.status, "processing"),
-    or(lt(screeningJobs.lockedAt, staleAt), isNull(screeningJobs.lockedAt))
-  );
-  // H6 — 재시도 상한(MAX_ATTEMPTS)을 이미 넘긴 stuck job 은 queued 로 되돌리면
-  //      claim→죽음→재큐 무한 루프(매 라운드 파싱/LLM 토큰 재소비)에 빠진다.
-  //      기존 cleanupStuck 은 attempts 를 무시하고 무조건 재큐했음 → 상한 초과분은 즉시 final fail.
-  const failed = await db
-    .update(screeningJobs)
-    .set({
-      status: "failed",
-      lockedAt: null,
-      lockedBy: null,
-      lastError: "stuck: 재시도 상한 초과 (worker 반복 비정상 종료)",
-      completedAt: new Date().toISOString(),
-    })
-    .where(and(stuckCond, gte(screeningJobs.attempts, MAX_ATTEMPTS)))
-    .returning({ id: screeningJobs.id });
-  // 상한 이내 stuck 은 정상 복구(queued).
-  const requeued = await db
-    .update(screeningJobs)
-    .set({
-      status: "queued",
-      lockedAt: null,
-      lockedBy: null,
-    })
-    .where(and(stuckCond, lt(screeningJobs.attempts, MAX_ATTEMPTS)))
-    .returning({ id: screeningJobs.id });
-  return failed.length + requeued.length;
+  // 매분 cron 워커의 첫 DB 작업 — Turso 일시적 5xx 가 가장 자주 터지던 지점. 조건부 상태
+  // 전이라 멱등(재실행해도 같은 결과)이므로 withDbRetry 로 짧게 재시도. 그래도 실패하면
+  // 호출부(워커)가 best-effort 로 이번 틱을 건너뛴다(다음 cron 복구).
+  return withDbRetry(async () => {
+    const staleAt = new Date(
+      Date.now() - LOCK_STALE_SECONDS * 1000
+    ).toISOString();
+    const stuckCond = and(
+      eq(screeningJobs.status, "processing"),
+      or(lt(screeningJobs.lockedAt, staleAt), isNull(screeningJobs.lockedAt))
+    );
+    // H6 — 재시도 상한(MAX_ATTEMPTS)을 이미 넘긴 stuck job 은 queued 로 되돌리면
+    //      claim→죽음→재큐 무한 루프(매 라운드 파싱/LLM 토큰 재소비)에 빠진다.
+    //      기존 cleanupStuck 은 attempts 를 무시하고 무조건 재큐했음 → 상한 초과분은 즉시 final fail.
+    const failed = await db
+      .update(screeningJobs)
+      .set({
+        status: "failed",
+        lockedAt: null,
+        lockedBy: null,
+        lastError: "stuck: 재시도 상한 초과 (worker 반복 비정상 종료)",
+        completedAt: new Date().toISOString(),
+      })
+      .where(and(stuckCond, gte(screeningJobs.attempts, MAX_ATTEMPTS)))
+      .returning({ id: screeningJobs.id });
+    // 상한 이내 stuck 은 정상 복구(queued).
+    const requeued = await db
+      .update(screeningJobs)
+      .set({
+        status: "queued",
+        lockedAt: null,
+        lockedBy: null,
+      })
+      .where(and(stuckCond, lt(screeningJobs.attempts, MAX_ATTEMPTS)))
+      .returning({ id: screeningJobs.id });
+    return failed.length + requeued.length;
+  }, { label: "cleanupStuck" });
 }
 
 /** 큐 통계 — UI/모니터링용. */

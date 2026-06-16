@@ -14,6 +14,8 @@ import {
 } from "@/lib/screening";
 import { getCurrentUser } from "@/lib/auth";
 import { captureError } from "@/lib/error-reporter";
+import { isTransientDbError } from "@/lib/db-retry";
+import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
 // 최대 실행 시간 120s. 제약: LOCK_STALE_SECONDS(300) 보다 작아야 정상 워커가
@@ -84,7 +86,18 @@ async function processOne(workerId: string): Promise<
   | { error: "transient" | "permanent"; permanent: boolean }
 > {
   // 전역 동시성 = DEFAULT_CONCURRENCY. atomicClaimNext 가 법인별로 슬롯을 공정 분배.
-  const claim = await atomicClaimNext(workerId, DEFAULT_CONCURRENCY);
+  // claim 은 아래 try 블록 밖이라, Turso 일시적 5xx 가 여기서 터지면 워커 라운드 전체가
+  // 죽고 Sentry 로 샌다. 일시적이면 no_job 으로 처리(자가복구) — 다음 cron/self-chain 재시도.
+  let claim: Awaited<ReturnType<typeof atomicClaimNext>> = null;
+  try {
+    claim = await atomicClaimNext(workerId, DEFAULT_CONCURRENCY);
+  } catch (e) {
+    if (!isTransientDbError(e)) throw e;
+    log.warn("worker.claim_transient_skip", {
+      reason: e instanceof Error ? e.message : String(e),
+    });
+    return "no_job";
+  }
   if (!claim) return "no_job";
   try {
     await runScreeningOnce(claim.candidateId);
@@ -149,9 +162,19 @@ export async function POST(req: Request) {
     chained: false,
   };
 
-  stats.stuck_recovered = await cleanupStuck();
-  // 잔액 0 이하 법인 잡은 paused 로 분리(타 법인 영향 차단), 충전된 법인은 queued 로 재개.
-  await reconcileBalanceHolds();
+  // 유지보수 단계(stuck 복구 + 잔액 reconcile)는 best-effort. 매분 cron 의 첫 DB 작업이라
+  // Turso 일시적 5xx 블립이 여기서 터져 Sentry 를 도배하던 지점 — 함수 내부에서 짧게 재시도하고,
+  // 그래도 일시적 실패면 이번 틱만 건너뛴다(다음 cron 이 복구). 비일시적 에러는 그대로 전파 → Sentry.
+  try {
+    stats.stuck_recovered = await cleanupStuck();
+    // 잔액 0 이하 법인 잡은 paused 로 분리(타 법인 영향 차단), 충전된 법인은 queued 로 재개.
+    await reconcileBalanceHolds();
+  } catch (e) {
+    if (!isTransientDbError(e)) throw e;
+    log.warn("worker.maintenance_transient_skip", {
+      reason: e instanceof Error ? e.message : String(e),
+    });
+  }
 
   // 롤링 워커 풀 — N 개의 워커가 각자 끝나는 즉시 다음 잡을 가져간다.
   // (이전: Promise.all 로 N 개를 띄우고 N 개가 *모두* 끝나야 다음 N 개를 점유 →
