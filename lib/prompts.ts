@@ -109,13 +109,19 @@ function idealProfileSection(p?: string): string {
  * 채용 담당자의 AI 평가 가이드 — 별도 강조 블록으로 노출.
  * 차별 금지 항목(성별·나이·출신지·종교 등) 은 정책상 입력 금지지만,
  * 만에 하나 들어오더라도 LLM 이 무시하도록 명시.
+ *
+ * withFocusMatchVerdict: 이력서 평가(screening)에서만 true. 그 경로만 출력에 focus_match 가
+ * 있고 코드(recomputeScore)가 그 verdict 로 종합 점수를 ±가감하기 때문이다. AI면접·대면면접
+ * 평가는 점수 후처리 게이트가 없으므로 false(기본) — verdict 판정 지시 없이 가이드를 종합
+ * 판단의 참고 정보로만 노출한다(출력에 없는 focus_match 를 LLM 이 환각해 채점이 흔들리지 않게).
  */
-function evaluationFocusSection(f?: string): string {
+function evaluationFocusSection(
+  f?: string,
+  opts?: { withFocusMatchVerdict?: boolean }
+): string {
   if (!f || !f.trim()) return "";
-  return `
-
-## 채용 담당자의 평가 가이드 (HR 코멘트 — 후보자 비공개)
-다음은 본 공고 채용 담당자가 평가 시 중요하게 보라고 직접 명시한 항목이다.
+  const reflectBlock = opts?.withFocusMatchVerdict
+    ? `
 아래 \`focus_match\` 판정으로 종합 점수가 코드에서 **가감(가점/감점)** 된다 — 6축 점수를 덮어쓰는 게 아니라, 6축으로 계산된 점수에 더하거나 빼는 방식이다.
 - **가장 중요 — 가이드의 성격(필수 조건인지, 단순 가점인지)을 먼저 판단하라.**
   · "반드시/필수/없으면 제외" 같은 **강제 조건** 인가, 아니면 "있으면 가점/우대/높은 가점" 같은 **가점 항목** 인가?
@@ -124,9 +130,17 @@ function evaluationFocusSection(f?: string): string {
   · **fail** — 가이드가 명시한 **중요 요구에 명백히 미달**. → 감점. **단, "있으면 가점/우대" 수준의 항목은 해당 경험이 없어도 fail 이 아니다 → neutral 로 판정하라.**
   · **neutral** — 가이드와 무관하거나, **가점 항목인데 해당 경험이 없는 경우** (없다고 깎지 않는다). → 점수 변동 없음.
   · **strong_pass** — 가이드가 강조·우대한 항목에 후보자가 **명확히 부합**. → 가점.
-- **요약: "있으면 가점" 형태의 가이드는 → 부합하면 strong_pass(가점), 없으면 neutral(변동 없음). 없다고 fail 로 깎지 말 것.** fail/fatal_fail 은 가이드가 명백한 필수/제외 조건을 걸었을 때만.
+- **요약: "있으면 가점" 형태의 가이드는 → 부합하면 strong_pass(가점), 없으면 neutral(변동 없음). 없다고 fail 로 깎지 말 것.** fail/fatal_fail 은 가이드가 명백한 필수/제외 조건을 걸었을 때만.`
+    : `
+이 가이드를 평가의 참고 기준으로 반영하되, **직무 적합도(실무 경력·면접 발언)를 우선**하라. 가이드에 명확히 부합하면 강점으로, 가이드가 명시한 **필수 조건에 명백히 미달**하면 우려로 반영한다. 단, "있으면 가점/우대" 수준의 항목은 해당 경험이 없다고 해서 감점하지 말 것.`;
+  return `
+
+## 채용 담당자의 평가 가이드 (HR 코멘트 — 후보자 비공개)
+다음은 본 공고 채용 담당자가 평가 시 중요하게 보라고 직접 명시한 항목이다.${reflectBlock}
 - summary·concerns·strengths 에 이 가이드 관련 평가를 **반드시** 한 줄 이상 명시하라.
-단, 성별·나이·출신지·학교·종교·결혼 여부 등 차별 금지 항목이 포함돼 있다면 그 부분은 무시하고 focus_match 판정에서도 제외하라.
+단, 성별·나이·출신지·학교·종교·결혼 여부 등 차별 금지 항목이 포함돼 있다면 그 부분은 무시하라${
+    opts?.withFocusMatchVerdict ? " (focus_match 판정에서도 제외)" : ""
+  }.
 """
 ${f.trim()}
 """`;
@@ -386,7 +400,7 @@ ${attachments
 - 직급/연차: ${job.level}
 - 근무형태: ${job.employmentType}
 - 주요 업무: ${job.responsibilities}
-- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus)}${educationSection}${cultureFitSection(cultureFit)}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}${evaluationFocusSection(job.evaluationFocus, { withFocusMatchVerdict: true })}${educationSection}${cultureFitSection(cultureFit)}
 
 ## 후보자 이력서 (개인정보 마스킹됨 — [이름]/[전화]/[이메일]/[학교]/[지역] 등)
 ${resume}${attachmentSection}

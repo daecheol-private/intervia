@@ -169,6 +169,7 @@ export async function POST(
           responsibilities: job!.responsibilities,
           requirements: job!.requirements,
           idealProfile: job!.idealProfile,
+          evaluationFocus: job!.evaluationFocus,
           tone: job!.tone,
         },
         candidate!.resumeMaskedText ?? "",
