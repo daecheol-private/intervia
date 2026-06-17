@@ -75,5 +75,11 @@ dev.log
 /scripts/.cookie-*
 /data.db.bak*
 
+# 운영 DB 백업·덤프 (민감 데이터 — 절대 커밋 X)
+backup-prod-*.json
+backup-*.json
+backup-*.sql
+*.turso-dump
+
 # claude code worktrees (embedded repos)
 /.claude/worktrees/
