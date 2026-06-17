@@ -192,13 +192,14 @@
 
 ## 대면 면접 평가 (녹취 업로드 / 준실시간)
 
-녹취 동의 attestation 필수. 평가 성공 시 `offline_interview`(30토큰) 후차감(`chargeRepeatable`). 상세: [LIVE_INTERVIEW_PLAN.md](LIVE_INTERVIEW_PLAN.md).
+녹취 동의 attestation 필수. 평가 성공 시 `offline_interview`(30토큰) 후차감 — **자동 첫 평가는 `chargeFeature`(멱등, 워커 재시도 이중과금 방지), 수동 재평가는 `chargeRepeatable`**. 상세: [LIVE_INTERVIEW_PLAN.md](LIVE_INTERVIEW_PLAN.md).
 
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
-| POST | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | 업로드 모드 — multipart `audio`+`round`+`consentConfirmed`. 전사→역할배정→평가. 잔액 가드·18MB 캡·maxDuration 300. 201 `{id,status}` |
-| GET | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | 후보자의 대면 면접 평가 목록(리포트 + 전사 세그먼트) |
-| PATCH | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | `{recordedInterviewId, action:"confirm"}` — AI 초안 사람 확정 |
+| POST | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | 업로드 모드 — multipart `audio`+`round`+`consentConfirmed`. **오디오 임시저장 + `status='queued'` 적재 후 즉시 202 `{id,status:"queued"}`**. 전사·평가는 백그라운드 워커가 수행(업로드 후 화면 닫아도 됨). 잔액 가드·18MB 캡 |
+| GET | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | 후보자의 대면 면접 평가 목록(리포트 + 전사 세그먼트). 상태(queued/processing) 폴링용 |
+| PATCH | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | `{recordedInterviewId, action:"confirm"\|"reevaluate"}` — confirm: AI 초안 사람 확정 / reevaluate: 같은 전사로 재평가(매번 과금, maxDuration 300) |
+| POST/GET | `/api/internal/process-recorded-interviews` | 🔒 (X-Internal-Secret 또는 X-Vercel-Cron 또는 system_admin) | 업로드 모드 백그라운드 워커 — claim→전사(세그먼트 없을 때만)→오디오 폐기→평가→과금. 한 건씩, 성공 시 self-chain. stuck 복구 포함. 매분 `cron/process-screenings` 가 함께 트리거 |
 | POST | `/api/candidates/[id]/recorded-interview/live` | 🔒🏢🔑 | 준실시간 — `action`: `start`(consentConfirmed 필수) / `chunk`(audioBase64·baseMs·chunkIndex, 즉시 전사) / `finish`(finalize) |
 | GET | `/api/candidates/[id]/recorded-interview/live?riId=` | 🔒🏢🔑 | 라이브 어시스턴트 — 누적 전사 기반 답변요약/긍정/확인/추천질문 |
 

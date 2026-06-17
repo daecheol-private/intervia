@@ -76,7 +76,10 @@ export async function purgeExpiredOriginals(
   // 대면 면접 전사도 +N일 경과 시 폐기 (음성 발화 = PII). 평가 리포트(recorded_interviews.report)는 보존.
   // 합격자(outcome='hired')는 입사 절차상 제외 — 이력서 폐기 정책과 동일 기준.
   const oldRis = await db
-    .select({ id: recordedInterviews.id })
+    .select({
+      id: recordedInterviews.id,
+      audioBlobKey: recordedInterviews.audioBlobKey,
+    })
     .from(recordedInterviews)
     .innerJoin(candidates, eq(candidates.id, recordedInterviews.candidateId))
     .where(
@@ -90,6 +93,16 @@ export async function purgeExpiredOriginals(
     await db
       .delete(interviewTranscriptSegments)
       .where(inArray(interviewTranscriptSegments.recordedInterviewId, riIds));
+    // 안전망 — 처리 중 중단 등으로 남은 임시 오디오가 있으면 함께 폐기(원칙상 전사 직후 삭제됨).
+    for (const r of oldRis) {
+      if (r.audioBlobKey) {
+        await deleteFile(r.audioBlobKey).catch(() => {});
+        await db
+          .update(recordedInterviews)
+          .set({ audioBlobKey: null })
+          .where(eq(recordedInterviews.id, r.id));
+      }
+    }
   }
 
   return {

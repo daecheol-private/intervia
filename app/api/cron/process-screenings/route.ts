@@ -24,6 +24,13 @@ export async function GET(req: Request) {
   if (denied) return denied;
 
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+  // 대면 면접 녹음(업로드 모드) 워커 안전망 — 별도 cron 추가 없이 같은 매분 틱에 끼워
+  // 트리거(fire-and-forget). stuck 복구 + 남은 queued 처리. self-chain 으로 이어짐.
+  void fetch(`${base}/api/internal/process-recorded-interviews`, {
+    method: "POST",
+    headers: { "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "" },
+  }).catch(() => {});
+
   const res = await fetch(`${base}/api/internal/process-screenings`, {
     method: "POST",
     headers: {

@@ -1408,10 +1408,11 @@ export const recordedInterviews = sqliteTable(
     mode: text("mode", { enum: ["upload", "live"] })
       .notNull()
       .default("upload"),
-    // recording=라이브 녹음 중 / processing=전사·평가 중 / ready=리포트 생성됨(사람 확정 대기)
+    // recording=라이브 녹음 중 / queued=업로드 완료·워커 전사·평가 대기(백그라운드)
+    // / processing=워커가 전사·평가 중 / ready=리포트 생성됨(사람 확정 대기)
     // / failed=파이프라인 오류 / confirmed=사람이 확정.
     status: text("status", {
-      enum: ["recording", "processing", "ready", "failed", "confirmed"],
+      enum: ["recording", "queued", "processing", "ready", "failed", "confirmed"],
     })
       .notNull()
       .default("processing"),
@@ -1426,6 +1427,13 @@ export const recordedInterviews = sqliteTable(
       "consent_confirmed_by_user_id"
     ).references(() => users.id, { onDelete: "set null" }),
     durationSeconds: integer("duration_seconds").notNull().default(0),
+    // 업로드 모드 백그라운드 처리용 — 워커가 전사할 때까지만 임시 보관하는 오디오 위치
+    // (로컬 파일명 또는 Blob URL). 전사 직후 deleteFile + null 로 비운다(오디오 미보관 원칙).
+    audioBlobKey: text("audio_blob_key"),
+    // 업로드 시점 원본 MIME — 워커가 Gemini inlineData 에 넘길 때 사용.
+    audioMime: text("audio_mime"),
+    // 백그라운드 워커 재시도 횟수 (전사/평가 실패 백오프·상한용).
+    attempts: integer("attempts").notNull().default(0),
     report: text("report", { mode: "json" }).$type<RecordedInterviewReport | null>(),
     // AI 초안 → 사람 확정 흔적.
     reportConfirmedAt: text("report_confirmed_at"),

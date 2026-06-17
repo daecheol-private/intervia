@@ -69,7 +69,8 @@
 
 ## 8. 열린 결정
 
-- **L-1 화자분리 품질 vs 프라이버시**: (a) *no-file* — 오디오 청크 즉시 폐기 + 라이브 텍스트 스티칭(라벨 품질 약간↓, "녹음 안 남김" 순수) / (b) *keep-until-end* — 오디오를 면접 끝까지 보관 후 한 번에 깨끗이 재diarize → 폐기(품질↑, 오디오 잠깐 존재). **← Phase 0 실측 후 결정.**
+- **L-1 화자분리 품질 vs 프라이버시**: (a) *no-file* — 오디오 청크 즉시 폐기 + 라이브 텍스트 스티칭(라벨 품질 약간↓, "녹음 안 남김" 순수) / (b) *keep-until-end* — 오디오를 면접 끝까지 보관 후 한 번에 깨끗이 재diarize → 폐기(품질↑, 오디오 잠깐 존재).
+  - **결정(2026-06-17, 업로드 모드 한정)**: **(b) keep-until-end 채택** — 업로드 모드를 백그라운드 큐로 전환하면서, 오디오를 워커가 전사할 때까지만 임시 저장(Blob/로컬)하고 **전사 직후 즉시 폐기**한다(`processRecordedInterview` 성공·영구실패·stuck-fail·파기 cron 4중 폐기 경로). "전사 후 미보관" 원칙은 유지되며, 임시 보관 윈도우만 요청 처리 시간 → 워커 처리 시간으로 늘어난다. 동의 문구("전사 후 보관하지 않습니다")는 여전히 정확. 준실시간 모드는 기존대로 청크 즉시 폐기(no-file).
 - **L-2 STT 엔진**: Gemini 오디오 마이크로배치(확정 방향, 저비용·서울 리전) / 전용 스트리밍 STT는 화상 실시간 모드용으로 보류.
 - **L-3 과금 단위·단가**: 시간당 vs 면접 건당.
 - **L-4 화상 실시간 라이브 코파일럿**(원래 스크린샷 그대로): 별도·후순위. 화상 1:1 고객이 생기면 같은 전사·평가 자산으로 추가.
@@ -87,9 +88,13 @@
 - [x] 리포트 UI: `RecordedInterviewPanel`(후보자 상세 마운트) — 업로드 + 결정요약·역량점수·근거→전사 점프·확인필요·화자분리 전사·사람 확정. GET(목록+전사)·PATCH(확정) 라우트. tsc 통과 + dev 런타임 페이지 200·콘솔 에러 0. (2026-06-17) — 화자 라벨 수동 수정은 후속.
 - [ ] 기존 대면 "결과 입력" 단계(`r1_result_due`/`r2_result_due`)와 연결 (현재는 독립 패널)
 
-### Phase 2 — 업로드 모드
-- [x] 오디오 업로드 → 배치 전사 → 공유 파이프라인. `POST /api/candidates/[id]/recorded-interview` (인증·guardCandidate·잔액 가드·18MB 캡·maxDuration 300). tsc 통과. (2026-06-17)
-- [x] 전사/finalize 실패 격리(try/catch — `upload-route-no-try-catch-500` 교훈). 전사 실패 502, 발화 없음 422, finalize 실패 시 status='failed' 반환.
+### Phase 2 — 업로드 모드 (백그라운드 큐로 재설계, 2026-06-17)
+- [x] **업로드/평가 분리 — 백그라운드 큐**. `POST /api/candidates/[id]/recorded-interview` 는 이제 오디오를 임시 저장(`saveFile`→Blob/로컬)하고 `recorded_interviews` 행만 `status='queued'` 로 만든 뒤 **즉시 202 응답**한다(전사·평가는 동기 처리 안 함). 사용자는 업로드 후 화면을 닫거나 새로고침해도 됨 — 상태가 DB 에 영속되기 때문. (이전: 전사+평가를 한 요청에서 동기 처리 → 전사 도중 새로고침 시 행이 없어 "초기화"처럼 보이던 문제 해결.)
+- [x] **워커** `app/api/internal/process-recorded-interviews` (+ `lib/recorded-interview-queue.ts`): claim(queued→processing) → 전사(세그먼트 없을 때만) → 오디오 즉시 폐기 → `finalizeRecordedInterview(charge:"once")`. 큐 = `recorded_interviews` 행 자체(별도 jobs 테이블 없음, `audio_blob_key`/`audio_mime`/`attempts` 컬럼·마이그레이션 0034 additive). LOCK_STALE(360s) > maxDuration(300s) 로 살아있는 실행 중복처리 차단.
+- [x] **트리거·안전망**: 업로드 직후 `triggerRecordedWorker`(fire-and-forget) + 매분 `cron/process-screenings` 가 워커를 함께 깨움(별도 cron 추가 없음) + 성공 시 self-chain. stuck 복구는 `cleanupStuckRecorded`.
+- [x] **과금 멱등성**: 자동 첫 평가는 `chargeFeature`(once, refType=`recorded_interview`) — 워커 자동 재시도 이중과금 방지. 사용자 수동 재평가(PATCH)만 `chargeRepeatable`(`_re{N}`). 첫 회차 키가 동일해 자연스럽게 이어짐.
+- [x] **UI 폴링**: `RecordedInterviewPanel` 이 queued/processing 동안 4초 폴링 → 새로고침/재방문해도 진행상태 그대로, 완료 시 자동 리포트 갱신. tsc 통과 + 큐 SQL 로컬 스모크 + dev 워커 라우트 컴파일(401) 확인. (2026-06-17)
+- [x] 전사/평가 실패 격리(try/catch — `upload-route-no-try-catch-500` 교훈). 영구실패(재업로드 필요) vs 일시실패(재시도) 구분, 상한 `MAX_RECORDED_ATTEMPTS=3`.
 
 ### Phase 3 — 준실시간 모드 (2026-06-17, tsc + dev 런타임 컴파일 검증)
 - [x] 마이크 청크 캡처 — `LiveRecorder`(recorded-interview-live.tsx). MediaRecorder **stop/start 사이클**(timeslice 조각은 첫 조각만 디코딩 가능 → 매 조각 완결 파일) + Wake Lock + beforeunload 이탈 경고. (※ 새로고침 후 진행 중 세션 *복구*는 미구현 — 후속)

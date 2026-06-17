@@ -11,16 +11,14 @@ import {
   insufficientTokensResponse,
   requireSpendableBalance,
 } from "@/lib/wallet-guard";
-import {
-  buildTranscriptionDomainHint,
-  finalizeRecordedInterview,
-  transcribeAudio,
-} from "@/lib/recorded-interview";
+import { finalizeRecordedInterview } from "@/lib/recorded-interview";
+import { triggerRecordedWorker } from "@/lib/recorded-interview-queue";
+import { saveFile } from "@/lib/storage";
 import { logAudit } from "@/lib/audit";
-import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
-// 전사(Gemini 오디오) + 역할 배정 + 평가까지 동기 처리 — LLM 3회라 기본 함수 한도를 넘긴다.
+// PATCH 재평가(finalize: 역할배정+평가 LLM 2회)가 기본 함수 한도를 넘을 수 있어 유지.
+// (업로드 POST 는 저장+enqueue 뿐이라 짧다 — 전사·평가는 백그라운드 워커가 수행.)
 export const maxDuration = 300;
 
 // Gemini Vertex inline 데이터 한도 회피 — 업로드 1건당 오디오 최대 크기.
@@ -28,8 +26,10 @@ export const maxDuration = 300;
 const MAX_AUDIO_BYTES = 18 * 1024 * 1024;
 
 /**
- * 업로드 모드 — 대면 면접 녹음 파일 1개를 받아 전사 → 역할 배정 → 평가 리포트 생성.
- * 오디오는 보관하지 않는다(전사 후 폐기, base64 는 요청 처리 동안만 메모리에).
+ * 업로드 모드 — 대면 면접 녹음 파일 1개를 받아 **큐에 적재만** 하고 즉시 응답한다.
+ * 오디오는 워커가 전사할 때까지만 임시 저장(Blob/로컬)하고 전사 직후 폐기한다.
+ * 실제 전사 → 역할 배정 → 평가 → 리포트는 백그라운드 워커가 수행하므로,
+ * 사용자는 업로드 후 페이지를 닫거나 새로고침해도 된다 (상태는 DB 에 영속).
  */
 export async function POST(
   req: Request,
@@ -46,7 +46,7 @@ export async function POST(
 
   const g = await guardCandidate(me!, cid);
   if (!g.ok) return g.res;
-  const { candidate, job } = g;
+  const { candidate } = g;
 
   // 유료 행위 — 잔액 0 이하면 차단 (후차감은 finalize 성공 시).
   const balanceGuard = await requireSpendableBalance(candidate.orgId, {
@@ -86,31 +86,21 @@ export async function POST(
 
   const round = formData.get("round") === "round2" ? "round2" : "round1";
 
-  // 오디오 → 전사 (오디오는 저장하지 않음).
-  const base64 = Buffer.from(await audio.arrayBuffer()).toString("base64");
-  let segments: Awaited<ReturnType<typeof transcribeAudio>>;
+  // 오디오 임시 저장(Blob/로컬) — 워커가 전사할 때까지만 보관, 전사 직후 폐기.
+  let audioBlobKey: string;
   try {
-    segments = await transcribeAudio(base64, mime, {
-      timeoutMs: 240_000,
-      domainHint: job ? buildTranscriptionDomainHint(job) : undefined,
-    });
-  } catch (e) {
-    log.error("recorded_interview.transcribe_failed", e, { candidateId: cid });
-    return new Response("전사에 실패했습니다. 잠시 후 다시 시도해 주세요.", {
+    audioBlobKey = await saveFile(
+      audio.name || `interview.${mime.split("/")[1] ?? "webm"}`,
+      Buffer.from(await audio.arrayBuffer()),
+      mime
+    );
+  } catch {
+    return new Response("오디오 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.", {
       status: 502,
     });
   }
-  if (segments.length === 0)
-    return new Response(
-      "음성에서 인식된 발화가 없습니다. 녹음 상태를 확인해 주세요.",
-      { status: 422 }
-    );
 
-  const durationSeconds = Math.round(
-    (segments[segments.length - 1]?.endMs ?? 0) / 1000
-  );
-
-  // recorded_interview + 세그먼트 저장.
+  // 큐 적재 — status='queued'. 전사·평가는 백그라운드 워커가 수행.
   const [ri] = await db
     .insert(recordedInterviews)
     .values({
@@ -119,25 +109,15 @@ export async function POST(
       candidateId: cid,
       round,
       mode: "upload",
-      status: "processing",
+      status: "queued",
       createdByUserId: me!.id,
       consentConfirmedAt: sql`CURRENT_TIMESTAMP`,
       consentConfirmedByUserId: me!.id,
-      durationSeconds,
+      durationSeconds: 0,
+      audioBlobKey,
+      audioMime: mime,
     })
     .returning({ id: recordedInterviews.id });
-
-  await db.insert(interviewTranscriptSegments).values(
-    segments.map((s, i) => ({
-      recordedInterviewId: ri.id,
-      seq: i + 1,
-      speakerLabel: s.speakerLabel,
-      startMs: s.startMs,
-      endMs: s.endMs,
-      text: s.text,
-      lowConfidence: s.lowConfidence,
-    }))
-  );
 
   logAudit(req, {
     actor: me!,
@@ -149,18 +129,13 @@ export async function POST(
       kind: "recorded_interview_upload",
       recordedInterviewId: ri.id,
       round,
-      segments: segments.length,
     },
   });
 
-  // 역할 배정 → 평가 → 리포트 저장 → 후차감. 실패 시 내부에서 status='failed' 기록 후 throw.
-  try {
-    await finalizeRecordedInterview(ri.id);
-  } catch {
-    return Response.json({ id: ri.id, status: "failed" }, { status: 200 });
-  }
+  // 워커 즉시 깨우기 (fire-and-forget). 실패해도 매분 cron 안전망이 처리.
+  triggerRecordedWorker(req);
 
-  return Response.json({ id: ri.id, status: "ready" }, { status: 201 });
+  return Response.json({ id: ri.id, status: "queued" }, { status: 202 });
 }
 
 /** 후보자의 대면 면접 평가 목록 (리포트 + 전사 세그먼트 포함). */

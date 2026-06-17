@@ -638,11 +638,14 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 | candidate_id | INTEGER NOT NULL FK candidates ON DELETE CASCADE | |
 | round | TEXT NOT NULL DEFAULT 'round1' | round1 / round2 (대면 차수) |
 | mode | TEXT NOT NULL DEFAULT 'upload' | upload(사후 파일) / live(준실시간 청크) |
-| status | TEXT NOT NULL DEFAULT 'processing' | recording / processing / ready / failed / confirmed |
+| status | TEXT NOT NULL DEFAULT 'processing' | recording / **queued**(업로드 완료·워커 대기) / processing / ready / failed / confirmed |
 | created_by_user_id | INTEGER NULL FK users ON DELETE SET NULL | 진행한 면접관(서기) |
 | consent_confirmed_at | TEXT NULL | 면접관이 "지원자 녹취·전사·AI평가 동의 받음" 확인 시각 (PIPA attestation) |
 | consent_confirmed_by_user_id | INTEGER NULL FK users ON DELETE SET NULL | |
-| duration_seconds | INTEGER NOT NULL DEFAULT 0 | 녹음 길이 |
+| duration_seconds | INTEGER NOT NULL DEFAULT 0 | 녹음 길이 (업로드 모드는 전사 후 워커가 설정) |
+| audio_blob_key | TEXT NULL | **업로드 모드 백그라운드 처리용** — 워커가 전사할 때까지만 임시 보관하는 오디오 위치(Blob URL/로컬 파일명). 전사 직후 `deleteFile`+null (마이그레이션 0034) |
+| audio_mime | TEXT NULL | 업로드 원본 MIME — 워커가 Gemini inlineData 에 사용 (0034) |
+| attempts | INTEGER NOT NULL DEFAULT 0 | 백그라운드 워커 재시도 횟수 (상한 3, stuck 판정용) (0034) |
 | report | TEXT(JSON) NULL | `RecordedInterviewReport` — 점수·근거(evidence_seq)·확인필요·추천질문 |
 | report_confirmed_at | TEXT NULL | AI 초안 → 사람 확정 시각 |
 | report_confirmed_by_user_id | INTEGER NULL FK users ON DELETE SET NULL | |

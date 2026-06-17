@@ -13,7 +13,7 @@ import {
   buildRoleAssignmentPrompt,
 } from "./prompts";
 import type { JobInfo, ScreeningContext } from "./prompts";
-import { chargeRepeatable } from "./tokens";
+import { chargeFeature, chargeRepeatable } from "./tokens";
 import { log } from "./logger";
 
 /**
@@ -265,10 +265,19 @@ export async function evaluateRecordedInterview(args: {
  * 저장된 recorded_interview(전사 세그먼트 완료 상태)를 받아 역할 배정 → 평가 →
  * 리포트 저장 → 후차감까지 수행. 업로드/준실시간 종료 시 공통 호출.
  * 실패 시 status='failed' + error 기록 후 throw (호출자가 응답·로깅).
+ *
+ * charge 모드:
+ *  - "once" (백그라운드 워커의 자동 첫 평가): chargeFeature — (feature,refType,refId) 멱등.
+ *    워커가 전사·평가 실패로 finalize 를 **자동 재시도**해도 이중 과금되지 않는다.
+ *  - "repeatable" (사용자 수동 재평가·라이브 종료, 기본값): chargeRepeatable —
+ *    성공할 때마다 회차별(_re{N})로 매번 과금. 첫 회차 refType 은 "once" 와 동일하므로
+ *    (자동 첫 평가 → 수동 재평가) 흐름에서 키가 자연스럽게 이어진다.
  */
 export async function finalizeRecordedInterview(
-  recordedInterviewId: number
+  recordedInterviewId: number,
+  opts?: { charge?: "once" | "repeatable" }
 ): Promise<void> {
+  const chargeMode = opts?.charge ?? "repeatable";
   const [ri] = await db
     .select()
     .from(recordedInterviews)
@@ -367,16 +376,28 @@ export async function finalizeRecordedInterview(
       .set({ report, status: "ready", completedAt: sql`CURRENT_TIMESTAMP` })
       .where(eq(recordedInterviews.id, recordedInterviewId));
 
-    // 3) 후차감 (성공마다 — 재평가도 매번 과금). orgId 없으면(시스템) skip.
+    // 3) 후차감. orgId 없으면(시스템) skip.
+    //    once = 멱등(워커 자동 재시도 이중과금 방지) / repeatable = 성공마다(수동 재평가).
     if (ri.orgId) {
-      await chargeRepeatable({
-        orgId: ri.orgId,
-        feature: "offline_interview",
-        baseRefType: "recorded_interview",
-        refId: recordedInterviewId,
-        userId: ri.createdByUserId,
-        memo: `대면 면접 평가 (${ri.round})`,
-      });
+      if (chargeMode === "once") {
+        await chargeFeature({
+          orgId: ri.orgId,
+          feature: "offline_interview",
+          refType: "recorded_interview",
+          refId: recordedInterviewId,
+          userId: ri.createdByUserId,
+          memo: `대면 면접 평가 (${ri.round})`,
+        });
+      } else {
+        await chargeRepeatable({
+          orgId: ri.orgId,
+          feature: "offline_interview",
+          baseRefType: "recorded_interview",
+          refId: recordedInterviewId,
+          userId: ri.createdByUserId,
+          memo: `대면 면접 평가 (${ri.round})`,
+        });
+      }
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

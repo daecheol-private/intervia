@@ -48,7 +48,7 @@ type RI = {
   id: number;
   round: "round1" | "round2";
   mode: "upload" | "live";
-  status: "recording" | "processing" | "ready" | "failed" | "confirmed";
+  status: "recording" | "queued" | "processing" | "ready" | "failed" | "confirmed";
   durationSeconds: number;
   report: Report | null;
   error: string | null;
@@ -138,6 +138,20 @@ export function RecordedInterviewPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId]);
 
+  // 백그라운드 처리 중인 건이 있으면 폴링 — 업로드 후 새로고침/재방문해도 진행상태가
+  // 그대로 보이고, 워커가 끝내면 자동으로 리포트로 갱신된다 (사용자가 새로고침할 필요 없음).
+  const hasActive = (interviews ?? []).some(
+    (i) => i.status === "queued" || i.status === "processing"
+  );
+  useEffect(() => {
+    if (!hasActive) return;
+    const t = window.setInterval(() => {
+      void load();
+    }, 4000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasActive]);
+
   const upload = async () => {
     if (!file || uploading) return;
     setUploading(true);
@@ -165,18 +179,10 @@ export function RecordedInterviewPanel({
         });
         return;
       }
-      const body = (await r.json()) as { id: number; status: string };
-      if (body.status === "failed") {
-        notify(
-          "전사·평가 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
-          { title: "처리 실패", tone: "danger" }
-        );
-      } else {
-        notify("대면 면접 평가 리포트가 생성되었습니다.", {
-          title: "완료",
-          tone: "success",
-        });
-      }
+      notify(
+        "업로드 완료. 전사·평가는 백그라운드에서 진행됩니다 — 이 화면을 닫거나 새로고침해도 됩니다.",
+        { title: "업로드 완료", tone: "success" }
+      );
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       await load();
@@ -245,8 +251,10 @@ export function RecordedInterviewPanel({
               </span>
             )}
           </span>
-        ) : latest?.status === "processing" ? (
-          <span className="text-blue-600">⏳ 전사·평가 중</span>
+        ) : latest?.status === "queued" || latest?.status === "processing" ? (
+          <span className="text-blue-600">
+            ⏳ {latest.status === "queued" ? "평가 대기 중" : "전사·평가 중"}
+          </span>
         ) : latest?.status === "failed" ? (
           <span className="text-danger">처리 실패</span>
         ) : interviews && interviews.length === 0 ? (
@@ -316,7 +324,7 @@ export function RecordedInterviewPanel({
                 className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium shadow-sm disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {uploading ? "전사·평가 중..." : "업로드"}
+                {uploading ? "업로드 중..." : "업로드"}
               </button>
               <span className="text-slate-300 px-1" aria-hidden>
                 |
@@ -331,13 +339,13 @@ export function RecordedInterviewPanel({
             </div>
             {uploading ? (
               <p className="text-xs text-slate-500">
-                전사와 평가를 함께 처리합니다. 녹음 길이에 따라 최대 수 분 걸릴 수
-                있어요 — 이 화면을 닫지 마세요.
+                업로드 중입니다... 업로드가 끝나면 전사·평가는 백그라운드에서
+                진행되니, 이 화면을 닫거나 새로고침해도 됩니다.
               </p>
             ) : (
               <p className="text-xs text-slate-400">
-                오디오/영상 파일 (최대 18MB). 더 긴 녹음은 더 낮은 음질로
-                녹음하세요.
+                오디오/영상 파일 (최대 18MB). 업로드 후 전사·평가는 백그라운드에서
+                자동 진행됩니다. 더 긴 녹음은 더 낮은 음질로 녹음하세요.
               </p>
             )}
           </div>
@@ -442,9 +450,14 @@ function RecordedReportCard({
         )}
       </div>
 
-      {ri.status === "processing" || ri.status === "recording" ? (
+      {ri.status === "queued" ||
+      ri.status === "processing" ||
+      ri.status === "recording" ? (
         <div className="px-4 py-6 flex items-center gap-2 text-sm text-primary-deep">
-          <Loader2 className="w-4 h-4 animate-spin" /> 전사·평가 중입니다...
+          <Loader2 className="w-4 h-4 animate-spin" />
+          {ri.status === "queued"
+            ? "평가 대기 중입니다 — 곧 자동으로 시작됩니다."
+            : "전사·평가 중입니다..."}
         </div>
       ) : ri.status === "failed" ? (
         <div className="px-4 py-5 text-sm text-danger">
