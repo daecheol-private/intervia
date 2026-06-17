@@ -303,13 +303,19 @@ function PriceCard({
         <div className="text-xs font-medium text-slate-600">{label}</div>
       </div>
       <div className="mt-2 flex items-baseline gap-1.5">
-        <span className="text-2xl font-bold text-slate-900 tabular-nums">
-          {tokens.toLocaleString()}
-        </span>
-        <span className="text-xs text-slate-500">토큰</span>
-        <span className="text-[11px] text-slate-400 ml-auto">
-          {(tokens * 100).toLocaleString()}원
-        </span>
+        {tokens === 0 ? (
+          <span className="text-2xl font-bold text-slate-900">무료</span>
+        ) : (
+          <>
+            <span className="text-2xl font-bold text-slate-900 tabular-nums">
+              {tokens.toLocaleString()}
+            </span>
+            <span className="text-xs text-slate-500">토큰</span>
+            <span className="text-[11px] text-slate-400 ml-auto">
+              {(tokens * 100).toLocaleString()}원
+            </span>
+          </>
+        )}
       </div>
       <p className="text-[11px] text-slate-500 mt-1.5">{hint}</p>
     </div>

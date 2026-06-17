@@ -21,10 +21,11 @@ import {
   Check,
   Lock,
   ScanSearch,
+  AudioLines,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// 랜딩 "어떻게 동작하나요?" — 6단계 사용 안내 캐러셀.
+// 랜딩 "어떻게 동작하나요?" — 7단계 사용 안내 캐러셀.
 // 처음 접하는 사람을 위해 각 단계의 핵심 화면을 고품질 목업으로 재현하고,
 // 화면 위 번호 핀 ↔ 우측 말풍선 설명을 같은 번호로 묶어 설명서처럼 보여준다.
 // 모든 목업은 같은 높이의 브라우저 프레임에 담겨 슬라이드 간 레이아웃이 흔들리지 않는다.
@@ -242,44 +243,65 @@ const SLIDES: Slide[] = [
     ),
   },
 
-  // 2. 이력서 업로드 → 자동 AI 평가
+  // 2. 이력서 수집(직접 지원 링크 + 직접 업로드) → 자동 AI 평가
   {
     route: "intervia.app/jobs/12",
-    title: "이력서 업로드 → 자동 평가",
+    title: "이력서 수집 → 자동 평가",
     subtitle:
-      "파일·폴더·압축파일을 한 번에 올리면, AI가 알아서 채점하고 등급을 매깁니다.",
+      "공고별 '지원하기' 링크로 받거나 직접 올리면, AI가 알아서 채점하고 등급을 매깁니다.",
     points: [
-      "여러 파일·폴더·압축파일(ZIP)을 한 번에 업로드해요.",
+      "공고마다 전용 '지원하기' 링크가 생겨요. 채용 사이트·회사 홈페이지에 붙여넣으면 지원자가 직접 이력서를 올립니다.",
+      "보유한 이력서는 파일·폴더·압축파일(ZIP)로 한 번에 업로드해요.",
       "이름·연락처는 자동으로 가려져 편향 없이 평가합니다.",
       "AI가 6개 항목으로 채점하고 추천 등급까지 매겨줘요.",
     ],
     mockup: (
       <>
-        <AppBar title="지원자 · 이력서 업로드" />
-        <div className="flex-1 flex flex-col justify-center gap-3 text-left">
-          <div className="relative rounded-xl border-2 border-dashed border-primary/40 bg-primary-soft/25 p-4 text-center">
+        <AppBar title="지원자 · 이력서 수집" />
+        <div className="flex-1 flex flex-col justify-center gap-2.5 text-left">
+          {/* 공개 지원 링크 — 지원자 직접 지원 */}
+          <div className="relative rounded-xl border border-primary/25 bg-primary-soft/40 p-2.5">
             <Pin n={1} className="-top-2.5 -left-2.5" />
-            <span className="mx-auto flex w-9 h-9 rounded-full bg-primary-soft items-center justify-center">
-              <Upload className="w-4 h-4 text-primary" />
-            </span>
-            <div className="mt-1.5 text-[11px] font-medium text-ink">
-              이력서를 여기로 끌어다 놓으세요
-            </div>
-            <div className="mt-0.5 text-[9px] text-ink-soft">
-              파일 · 폴더 · 압축(ZIP) 한 번에 · PDF DOCX HWP
-            </div>
-            <div className="mt-2 flex items-center justify-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary text-surface text-[10px] font-medium">
-                <FolderUp className="w-3 h-3" />
-                폴더 선택
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Link2 className="w-3 h-3 text-primary" />
+              <span className="text-[10px] font-semibold text-primary-deep">
+                공개 지원 링크 — 지원자가 직접 지원
               </span>
-              <span className="text-[9px] text-ink-muted">24개 업로드 완료</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-card border border-border-default">
+              <Lock className="w-2.5 h-2.5 text-ink-muted shrink-0" />
+              <span className="text-[9px] text-ink-soft truncate">
+                intervia.app/apply/ap_x9k2…
+              </span>
+              <span className="ml-auto shrink-0 px-1.5 py-0.5 rounded bg-accent-soft text-accent-deep text-[8px] font-bold whitespace-nowrap">
+                채용사이트·홈페이지에 붙여넣기
+              </span>
             </div>
           </div>
 
-          <div className="relative rounded-xl border border-border-default bg-card p-3 shadow-sm">
+          {/* 또는, 보유 이력서 직접 업로드 (compact) */}
+          <div className="relative rounded-xl border-2 border-dashed border-primary/40 bg-primary-soft/20 px-3 py-2.5 flex items-center gap-2.5">
             <Pin n={2} className="-top-2.5 -left-2.5" />
-            <Pin n={3} className="-top-2.5 -right-2.5" />
+            <span className="flex w-8 h-8 rounded-full bg-primary-soft items-center justify-center shrink-0">
+              <Upload className="w-4 h-4 text-primary" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-medium text-ink">
+                또는, 보유 이력서를 직접 끌어다 놓기
+              </div>
+              <div className="text-[9px] text-ink-soft">
+                파일 · 폴더 · 압축(ZIP) 한 번에 · PDF DOCX HWP
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary text-surface text-[9px] font-medium shrink-0">
+              <FolderUp className="w-3 h-3" />
+              24개 완료
+            </span>
+          </div>
+
+          <div className="relative rounded-xl border border-border-default bg-card p-3 shadow-sm">
+            <Pin n={3} className="-top-2.5 -left-2.5" />
+            <Pin n={4} className="-top-2.5 -right-2.5" />
             <div className="flex items-center gap-3">
               <ScoreDonut value={88} />
               <div className="min-w-0 flex-1">
@@ -526,7 +548,107 @@ const SLIDES: Slide[] = [
     ),
   },
 
-  // 6. 결과 리포트 · 합·불 통보
+  // 6. 대면 면접 녹음/음성 업로드 → AI 평가 (1·2차)
+  {
+    route: "intervia.app/candidates/87",
+    title: "대면 면접 녹음 → AI 평가",
+    subtitle:
+      "1·2차 대면 면접을 녹음 파일로 올리거나 라이브로 받아쓰면, 화자를 분리해 평가 리포트를 만들어 줍니다.",
+    points: [
+      "녹음 파일 업로드 또는 브라우저 라이브 녹음으로 1·2차 대면 면접을 기록해요.",
+      "전사 후 지원자·면접관 발언을 자동으로 분리합니다.",
+      "역량 점수·강점·우려·다음 추천 질문까지 평가 리포트로 정리해요.",
+      "녹음 파일은 전사 후 보관하지 않습니다.",
+    ],
+    mockup: (
+      <>
+        <AppBar
+          title="대면 면접 평가"
+          status={
+            <span className="flex items-center gap-1 text-[9px] text-ink-soft tabular-nums">
+              <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse" />
+              ● REC 18:24
+            </span>
+          }
+        />
+        <div className="flex-1 flex flex-col text-left min-h-0 gap-2.5">
+          {/* 녹음 방식 — 업로드 / 라이브 */}
+          <div className="relative flex items-center gap-1.5">
+            <Pin n={1} className="-top-2.5 -left-2.5" />
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary text-surface text-[9px] font-medium">
+              <AudioLines className="w-3 h-3" />
+              라이브 녹음
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-card border border-border-default text-[9px] text-ink-soft">
+              <Upload className="w-3 h-3" />
+              녹음 업로드
+            </span>
+            <span className="ml-auto text-[9px] text-ink-muted">1차 대면 면접</span>
+          </div>
+
+          {/* 화자 분리 전사 */}
+          <div className="relative flex-1 min-h-0 rounded-xl border border-border-default bg-gradient-to-b from-surface-alt/30 to-card p-3 overflow-hidden space-y-2">
+            <Pin n={2} className="-top-2.5 -right-2.5" />
+            <div className="flex items-start gap-1.5">
+              <span className="shrink-0 mt-px text-[8px] font-semibold px-1.5 py-0.5 rounded bg-surface-alt text-ink-soft border border-border-default">
+                면접관
+              </span>
+              <span className="text-[10px] text-ink leading-relaxed">
+                가장 도전적이었던 프로젝트는 무엇이었나요?
+              </span>
+            </div>
+            <div className="flex items-start gap-1.5">
+              <span className="shrink-0 mt-px text-[8px] font-semibold px-1.5 py-0.5 rounded bg-card text-info border border-info/30">
+                지원자
+              </span>
+              <span className="text-[10px] text-ink leading-relaxed">
+                결제 시스템을 <strong className="font-semibold">무중단으로 마이그레이션</strong>한 경험이 가장 기억에 남습니다.
+              </span>
+            </div>
+            <div className="flex items-start gap-1.5">
+              <span className="shrink-0 mt-px text-[8px] font-semibold px-1.5 py-0.5 rounded bg-surface-alt text-ink-soft border border-border-default">
+                면접관
+              </span>
+              <span className="text-[10px] text-ink leading-relaxed">
+                정합성은 어떻게 보장하셨나요?
+              </span>
+            </div>
+          </div>
+
+          {/* 평가 요약 */}
+          <div className="relative rounded-xl border border-border-default bg-card p-3 shadow-sm">
+            <Pin n={3} className="-top-2.5 -left-2.5" />
+            <div className="flex items-center gap-3">
+              <div className="text-center shrink-0">
+                <span className="text-2xl font-bold text-primary tabular-nums leading-none">
+                  86
+                </span>
+                <span className="text-[8px] text-ink-muted"> / 100</span>
+              </div>
+              <div className="flex-1 min-w-0 space-y-1">
+                <MiniBar label="역량" value={88} />
+                <MiniBar label="소통" value={84} />
+              </div>
+              <span className="shrink-0 self-start px-1.5 py-0.5 rounded bg-accent-soft text-accent-deep text-[8px] font-bold">
+                합격 권장
+              </span>
+            </div>
+          </div>
+
+          {/* 녹음 파일 미보관 */}
+          <div className="relative flex items-center gap-1.5 pl-1">
+            <Pin n={4} className="-top-2.5 -left-2.5" />
+            <Lock className="w-2.5 h-2.5 text-primary shrink-0" />
+            <span className="text-[9px] text-ink-soft">
+              전사 후 녹음 파일은 보관하지 않습니다
+            </span>
+          </div>
+        </div>
+      </>
+    ),
+  },
+
+  // 7. 결과 리포트 · 합·불 통보
   {
     route: "intervia.app/jobs/12/report",
     title: "결과 리포트 · 합·불 통보",
@@ -678,7 +800,7 @@ export function HowItWorksCarousel() {
     <div
       role="group"
       aria-roledescription="carousel"
-      aria-label="제품 사용 안내 6단계"
+      aria-label="제품 사용 안내 7단계"
       onKeyDown={(e) => {
         // 화살표/점 버튼에 포커스가 있을 때 좌우 키로 이동 (이벤트 버블).
         if (e.key === "ArrowRight") {

@@ -29,12 +29,12 @@ export type LedgerReason =
   | "admin_adjust";
 
 // 100원당 1 토큰 기준 — 정책 변경 시 /admin/pricing 에서 override.
-// 공고 1,000원 / 이력서 200원 / 면접 1,000원 / 면접 문제 생성 500원 / 대면 면접 평가 3,000원.
+// 공고 무료 / 이력서 300원 / AI 면접 3,000원 / 대면 면접 평가 3,000원 / 면접 문제 생성 무료.
 const DEFAULT_PRICING: Record<FeatureKey, number> = {
-  job_post: 10,
-  resume_upload: 2,
-  interview: 10,
-  interview_question_gen: 5,
+  job_post: 0,
+  resume_upload: 3,
+  interview: 30,
+  interview_question_gen: 0,
   offline_interview: 30,
 };
 

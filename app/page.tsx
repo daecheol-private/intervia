@@ -1123,7 +1123,8 @@ async function Landing() {
   // 무료 체험으로 가능한 면접/이력서 건수 (체감 단위)
   const freeInterviews = Math.floor(WELCOME_BONUS_TOKENS / pricing.interview);
   const freeResumes = Math.floor(WELCOME_BONUS_TOKENS / pricing.resume_upload);
-  const freeJobs = Math.floor(WELCOME_BONUS_TOKENS / pricing.job_post);
+  // 공고가 무료(0 토큰)면 나눗셈이 Infinity 가 되므로 "무료"로 표기.
+  const freeJobs = pricing.job_post > 0 ? Math.floor(WELCOME_BONUS_TOKENS / pricing.job_post) : null;
   return (
     <main className="flex-1">
       {/* 첫 화면 — Hero + 통계 밴드를 한 뷰포트에 (데스크톱). Hero 가 남는 높이를 채운다. */}
@@ -1359,9 +1360,9 @@ async function Landing() {
               </div>
               <div className="flex-1 grid grid-cols-3 gap-3 text-center">
                 {[
-                  { label: "공고", value: freeJobs },
-                  { label: "이력서 평가", value: freeResumes },
-                  { label: "AI 면접", value: freeInterviews },
+                  { label: "공고", display: freeJobs == null ? "무료" : `${freeJobs}건` },
+                  { label: "이력서 평가", display: `${freeResumes}건` },
+                  { label: "AI 면접", display: `${freeInterviews}건` },
                 ].map((x) => (
                   <div
                     key={x.label}
@@ -1371,7 +1372,7 @@ async function Landing() {
                       {x.label}
                     </div>
                     <div className="mt-1 text-2xl font-bold tabular-nums">
-                      {x.value}건
+                      {x.display}
                     </div>
                   </div>
                 ))}
@@ -1876,15 +1877,24 @@ function PriceCell({
       <div className="text-[11px] uppercase tracking-wider text-ink-soft font-semibold">
         {label}
       </div>
-      <div className="mt-3 flex items-baseline justify-center gap-1.5">
-        <span className="text-3xl font-bold text-primary tabular-nums">
-          {tokens}
-        </span>
-        <span className="text-xs text-ink-soft">토큰</span>
-      </div>
-      <div className="text-[11px] text-ink-soft mt-0.5 tabular-nums">
-        ≈ {krw.toLocaleString()}원
-      </div>
+      {tokens === 0 ? (
+        <>
+          <div className="mt-3 text-3xl font-bold text-primary">무료</div>
+          <div className="text-[11px] text-ink-soft mt-0.5">토큰 차감 없음</div>
+        </>
+      ) : (
+        <>
+          <div className="mt-3 flex items-baseline justify-center gap-1.5">
+            <span className="text-3xl font-bold text-primary tabular-nums">
+              {tokens}
+            </span>
+            <span className="text-xs text-ink-soft">토큰</span>
+          </div>
+          <div className="text-[11px] text-ink-soft mt-0.5 tabular-nums">
+            ≈ {krw.toLocaleString()}원
+          </div>
+        </>
+      )}
       <div className="text-[11px] text-ink-muted mt-3">{hint}</div>
     </div>
   );

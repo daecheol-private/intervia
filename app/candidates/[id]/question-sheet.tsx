@@ -153,30 +153,29 @@ export function InterviewQuestionsPanel({
           )}
 
           <div className="flex items-center gap-2 flex-wrap">
-            {sheet && (
+            {sheet ? (
               <button
                 onClick={() => setOpen(true)}
                 className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium shadow-sm"
               >
                 면접 문제 보기
               </button>
+            ) : (
+              // 생성 전이거나, 오류로 생성에 실패했을 때만 노출.
+              // 성공 생성 후에는 재생성 버튼을 숨긴다 (무료 기능 — 불필요한 재생성 비용 방지).
+              <button
+                onClick={generate}
+                disabled={generating}
+                className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary-deep text-white shadow-sm"
+              >
+                {generating && <Loader2 className="w-4 h-4 animate-spin" />}
+                {generating
+                  ? "생성 중... (최대 1분)"
+                  : err
+                    ? "재생성"
+                    : "면접 문제 생성"}
+              </button>
             )}
-            <button
-              onClick={generate}
-              disabled={generating}
-              className={`px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5 ${
-                sheet
-                  ? "border border-slate-300 text-slate-700 hover:bg-slate-50"
-                  : "bg-primary hover:bg-primary-deep text-white shadow-sm"
-              }`}
-            >
-              {generating && <Loader2 className="w-4 h-4 animate-spin" />}
-              {generating
-                ? "생성 중... (최대 1분)"
-                : sheet
-                  ? "다시 생성"
-                  : "면접 문제 생성"}
-            </button>
           </div>
 
           {err && <p className="text-sm text-danger">{err}</p>}
