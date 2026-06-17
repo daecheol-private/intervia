@@ -92,9 +92,11 @@ export async function POST(req: Request) {
       });
   }
 
-  // 성공 시에만 남은 큐를 즉시 이어 처리(self-chain). 실패-재큐는 cron 에 맡겨 backoff.
+  // 처리할 게 남아 있으면(성공으로 다음 건이 남았든, 일시 실패로 재큐됐든) 이어서 처리한다.
+  // 로컬은 cron 이 없어 self-chain 이 유일한 재시도 구동원 — MAX_RECORDED_ATTEMPTS 상한이
+  // 무한 루프를 막는다(일시 실패는 상한까지 재시도 후 failed 로 큐에서 빠짐).
   const remaining = await getQueuedRecordedCount().catch(() => 0);
-  if (result === "success" && remaining > 0) chainSelf(req);
+  if (remaining > 0) chainSelf(req);
 
   return Response.json({ ok: true, stuckRecovered, processed: 1, result, remaining });
 }

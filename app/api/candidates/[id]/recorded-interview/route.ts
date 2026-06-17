@@ -140,7 +140,7 @@ export async function POST(
 
 /** 후보자의 대면 면접 평가 목록 (리포트 + 전사 세그먼트 포함). */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const me = await getCurrentUser();
@@ -175,6 +175,12 @@ export async function GET(
     if (arr) arr.push(s);
     else byRi.set(s.recordedInterviewId, [s]);
   }
+
+  // 미처리 건이 있으면 워커를 깨운다(fire-and-forget). 로컬은 cron 이 없어, UI 폴링이
+  // 부르는 이 GET 이 사실상 주기 트리거 역할 — 어떤 이유로 멈춰 있던 queued/processing 건이
+  // 자동으로 재개·복구된다(워커는 cleanupStuck → claim 순). 워커는 atomic claim 이라 중복 처리 없음.
+  if (interviews.some((r) => r.status === "queued" || r.status === "processing"))
+    triggerRecordedWorker(req);
 
   return Response.json({
     interviews: interviews.map((r) => ({
