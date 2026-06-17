@@ -132,6 +132,15 @@ ${f.trim()}
 """`;
 }
 
+/**
+ * evaluationFocus(HR 평가 가이드)가 실제로 프롬프트에 반영되는지 (focus_match 채점 게이트용).
+ * 비어 있으면 프롬프트에 가이드 블록이 안 들어가므로, LLM 이 focus_match 를 환각해도
+ * 점수에 반영하지 말아야 한다 (screening.ts recomputeScore). cultureFitSection/hasCultureFit 과 대칭.
+ */
+export function hasEvaluationFocus(f?: string): boolean {
+  return evaluationFocusSection(f) !== "";
+}
+
 /** 컬쳐핏 프로필에 프롬프트에 반영될 내용이 실제로 있는지 (질문지 based_on_culture_fit 플래그용). */
 export function hasCultureFit(profile?: CultureFitProfile | null): boolean {
   return cultureFitSection(profile) !== "";

@@ -10,7 +10,11 @@ import {
 import { eq, and, isNotNull, ne, lt } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { deleteFilesForCandidate } from "./candidate-files";
-import { buildScreeningPrompt, type CultureFitProfile } from "./prompts";
+import {
+  buildScreeningPrompt,
+  hasEvaluationFocus,
+  type CultureFitProfile,
+} from "./prompts";
 import { parseChecklist } from "./job-checklist";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
 import { Type } from "@google/genai";
@@ -588,8 +592,14 @@ function recommendationFor(score: number): ScreeningResult["recommendation"] {
  * 페널티를 최후에 둬 spread 포화(100)·focus 보너스에 가려지지 않게 한다(오버스펙 ≤95/언더 ≤90).
  * → "6축은 낮은데 종합은 높은" 모순을 구조적으로 차단하고 점수 일관성을 보장.
  * breakdown 이 전혀 없으면 LLM score 로 폴백.
+ *
+ * @param hasFocusGuide 공고에 HR 평가 가이드(evaluationFocus)가 실제로 있는지.
+ *   false 면 focus_match 를 점수·리포트 양쪽에서 무시한다(빈 가이드 공고의 LLM 환각 감점 차단).
  */
-function recomputeScore(result: ScreeningResult): {
+export function recomputeScore(
+  result: ScreeningResult,
+  hasFocusGuide: boolean
+): {
   score: number;
   recommendation: ScreeningResult["recommendation"];
 } {
@@ -647,13 +657,21 @@ function recomputeScore(result: ScreeningResult): {
   // HR 평가 가이드(evaluationFocus) 반영 — 6축 점수에 가감(가산점 방식).
   // strong_pass → +가점, fail → -감점, neutral → 변동 없음.
   // fatal_fail("보안 경력 필수인데 전무" 같은 필수/배제 위반)만 결격으로 보고 하드캡 유지.
+  // HR 평가 가이드(evaluationFocus)가 공고에 실제로 있을 때만 focus_match 반영.
+  // 가이드가 비어 있으면 프롬프트에 가이드 블록이 없는데도 LLM 이 focus_match 를
+  // applies=true/fail 로 환각해 부당 감점하는 사례가 있어(빈 가이드 공고), 코드에서 차단한다.
+  // 점수뿐 아니라 저장 리포트의 focus_match 도 중립화해 "점수-리포트 불일치"를 막는다.
   const fm = result.focus_match;
-  if (fm?.applies) {
+  if (hasFocusGuide && fm?.applies) {
     if (fm.verdict === "fatal_fail") score = Math.min(score, FOCUS_FATAL_CAP);
     else if (fm.verdict === "fail")
       score = clampScore(score + FOCUS_FAIL_PENALTY);
     else if (fm.verdict === "strong_pass")
       score = clampScore(score + FOCUS_STRONG_BONUS);
+  } else if (!hasFocusGuide && fm) {
+    fm.applies = false;
+    fm.verdict = "neutral";
+    fm.reason = "공고에 HR 평가 가이드가 없어 미적용";
   }
 
   // 구체성 게이트 — 스킬·역량 형용사 나열 위주(generic) 이력서는 주장일 뿐 검증 불가 → 캡.
@@ -887,7 +905,10 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
 
     // 종합 점수·등급은 LLM 출력을 신뢰하지 않고 6축 + 페널티로 코드가 재계산.
     // (LLM 이 6축은 낮게 줘도 종합은 후하게 주는 인플레/모순을 차단)
-    const recomputed = recomputeScore(result);
+    const recomputed = recomputeScore(
+      result,
+      hasEvaluationFocus(job.evaluationFocus)
+    );
     result.score = recomputed.score;
     result.recommendation = recomputed.recommendation;
 
