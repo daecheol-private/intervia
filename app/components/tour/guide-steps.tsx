@@ -33,7 +33,7 @@ function useTourTargets() {
 }
 
 function availability(step: SetupStep, t: Targets | null) {
-  if (step.tour === "resume-upload")
+  if (step.tour === "apply-link" || step.tour === "resume-upload")
     return {
       ok: !!t && t.firstJobId != null,
       hint: "먼저 공고를 등록하면 안내해 드려요",

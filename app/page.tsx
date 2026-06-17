@@ -79,6 +79,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     expiredAiRows,
     resultDueRows,
     orgCount,
+    setupApply,
   ] = await Promise.all([
     // 인사말 법인명 + 첫 실행 가이드용 컬처핏 설정 여부 — orgId 있는 경우만 조회.
     me.orgId
@@ -304,6 +305,17 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           .from(organizations)
           .then(([r]): number | null => Number(r?.c ?? 0))
       : Promise.resolve<number | null>(null),
+    // -- 첫 실행 가이드: 공개 지원 링크를 발급한 공고가 하나라도 있는지 -------
+    // (지원 링크 단계 완료 판정 — apply_token 이 채워진 공고 = 링크 발급함)
+    db
+      .select({ c: count() })
+      .from(jobPostings)
+      .where(
+        orgFilter
+          ? and(orgFilter, sql`${jobPostings.applyToken} IS NOT NULL`)
+          : sql`${jobPostings.applyToken} IS NOT NULL`
+      )
+      .then(([r]) => Number(r?.c ?? 0) > 0),
   ]);
 
   // 토큰 잔액으로 가능한 액션 수 환산 — KPI 카드 보조 문구
@@ -459,9 +471,10 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const orgName = orgRow?.name ?? null;
   const setup1 = orgRow?.cultureFitProfile != null; // 인재상·컬쳐핏 확인(설정 저장)
   const setup2 = totalJobs > 0; // 공고 등록
+  const setupApplyLink = setupApply === true; // 지원 링크 발급(apply_token 공고 존재)
   const setup3 = totalCand > 0; // 이력서 업로드
   const setup4 = interviewReached > 0; // AI 면접 발송(응시 대기 이상)
-  const setupComplete = setup1 && setup2 && setup3 && setup4;
+  const setupComplete = setup1 && setup2 && setupApplyLink && setup3 && setup4;
   // 본인이 가이드를 숨겼으면 hero/strip 모두 표시 안 함 (플로팅 위젯과 동일 정책 — 개인 단위)
   const guideDismissed = me.setupGuideDismissedAt != null;
   const firstJobId = jobsWithActions[0]?.id ?? null;
@@ -475,7 +488,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </h1>
         <p className="text-sm text-ink-soft mt-1">
           {totalJobs === 0
-            ? "Intervia 에 오신 걸 환영합니다. 아래 4단계로 첫 채용을 시작해 보세요."
+            ? "Intervia 에 오신 걸 환영합니다. 아래 5단계로 첫 채용을 시작해 보세요."
             : "오늘의 채용 현황을 한눈에 확인하세요."}
         </p>
       </header>
@@ -486,6 +499,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           variant="hero"
           step1={setup1}
           step2={setup2}
+          applyLink={setupApplyLink}
           step3={setup3}
           step4={setup4}
           firstJobId={firstJobId}
@@ -498,6 +512,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
               variant="strip"
               step1={setup1}
               step2={setup2}
+              applyLink={setupApplyLink}
               step3={setup3}
               step4={setup4}
               firstJobId={firstJobId}
@@ -694,6 +709,7 @@ function SetupGuide({
   variant,
   step1,
   step2,
+  applyLink,
   step3,
   step4,
   firstJobId,
@@ -701,11 +717,16 @@ function SetupGuide({
   variant: "hero" | "strip";
   step1: boolean;
   step2: boolean;
+  applyLink: boolean;
   step3: boolean;
   step4: boolean;
   firstJobId: number | null;
 }) {
-  const steps = buildSetupSteps({ step1, step2, step3, step4 }, firstJobId);
+  const steps = buildSetupSteps(
+    { step1, step2, applyLink, step3, step4 },
+    firstJobId
+  );
+  const total = steps.length;
   const doneCount = steps.filter((s) => s.done).length;
   const activeStep = steps.find((s) => !s.done) ?? null;
 
@@ -714,7 +735,7 @@ function SetupGuide({
       <div className="mb-6 rounded-xl border border-primary/20 bg-primary-soft/40 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <span className="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md bg-primary text-surface tabular-nums">
-            시작 가이드 {doneCount}/4
+            시작 가이드 {doneCount}/{total}
           </span>
           <span className="text-sm text-ink truncate">
             {activeStep ? (
@@ -737,9 +758,9 @@ function SetupGuide({
       <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-2">
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-soft text-primary-deep text-[11px] font-semibold mb-3">
           <Sparkles className="w-3 h-3" strokeWidth={2.5} />
-          시작 가이드 · {doneCount}/4 완료
+          시작 가이드 · {doneCount}/{total} 완료
         </div>
-        <h2 className="text-xl font-bold text-ink">첫 채용, 4단계면 시작돼요</h2>
+        <h2 className="text-xl font-bold text-ink">첫 채용, {total}단계면 시작돼요</h2>
         <p className="text-sm text-ink-soft mt-1">
           아래 순서대로 진행하면 첫 AI 면접까지 한 번에 경험할 수 있어요.
         </p>
@@ -1140,8 +1161,8 @@ async function Landing() {
               <span className="text-primary">AI 면접관에게 맡기세요.</span>
             </h1>
             <p className="mt-6 text-base sm:text-lg text-ink-soft max-w-xl leading-relaxed">
-              이력서 자동 평가부터 채팅 기반 AI 면접, 면접 일정 조율, 대면 면접 질문지,
-              결과 리포트까지 한 번에. 채용 담당자가 진짜 중요한 결정에 집중하도록 돕습니다.
+              공고 '지원하기' 링크로 모은 이력서 자동 평가부터, 채팅 기반 AI 면접, 면접 일정 조율,
+              대면 면접 질문지와 녹음·음성 평가, 결과 리포트까지 한 번에. 채용 담당자가 진짜 중요한 결정에 집중하도록 돕습니다.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-start gap-3">
               <Link
@@ -1216,7 +1237,7 @@ async function Landing() {
             </p>
           </div>
 
-          {/* Flow — 6단계 캐러셀 (스크린샷 목업 + 말풍선 포인트) */}
+          {/* Flow — 7단계 캐러셀 (스크린샷 목업 + 말풍선 포인트) */}
           <HowItWorksCarousel />
         </div>
       </section>
@@ -1366,7 +1387,7 @@ async function Landing() {
             <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-soft text-center">
               기능별 단가
             </h3>
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               <PriceCell
                 label="공고 등록"
                 tokens={pricing.job_post}
@@ -1386,6 +1407,11 @@ async function Landing() {
                 label="면접 문제 생성"
                 tokens={pricing.interview_question_gen}
                 hint="면접 문제 1건 생성 (1·2차 동일)"
+              />
+              <PriceCell
+                label="대면 면접 평가"
+                tokens={pricing.offline_interview}
+                hint="녹음·음성 1건 전사 + AI 평가 (1·2차)"
               />
             </div>
           </div>

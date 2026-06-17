@@ -10,6 +10,7 @@ type Progress = {
   show: boolean;
   step1: boolean;
   step2: boolean;
+  applyLink: boolean;
   step3: boolean;
   step4: boolean;
   firstJobId: number | null;
@@ -25,7 +26,7 @@ type Pos = { x: number; y: number };
 
 /**
  * 첫 실행 가이드 플로팅 위젯 — 대시보드 밖(공고 상세, 설정 등)에서도
- * 온보딩 진행 단계를 화면 왼쪽 하단에 항상 노출. 4단계 완료 시 사라짐.
+ * 온보딩 진행 단계를 화면 왼쪽 하단에 항상 노출. 모든 단계 완료 시 사라짐.
  * 대시보드("/")는 자체 가이드(hero/strip)가 있어 제외.
  */
 export function SetupGuideWidget() {
@@ -108,11 +109,12 @@ export function SetupGuideWidget() {
   if (hidden || collapsed == null || !progress?.show) return null;
 
   const steps = buildSetupSteps(progress, progress.firstJobId);
+  const total = steps.length;
   const doneCount = steps.filter((s) => s.done).length;
   const active = steps.find((s) => !s.done) ?? null;
 
   // 대시보드는 미완료 시 자체 가이드(hero/strip)가 있어 중복 방지 —
-  // 4단계 완료 후엔 자체 가이드가 사라지므로 플로팅이 이어받는다.
+  // 모든 단계 완료 후엔 자체 가이드가 사라지므로 플로팅이 이어받는다.
   if (pathname === "/" && active != null) return null;
 
   const dismiss = () => {
@@ -191,7 +193,7 @@ export function SetupGuideWidget() {
         className={`fixed ${posClass} z-30 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary text-surface text-xs font-semibold shadow-lg hover:bg-primary-deep transition-colors touch-none select-none cursor-grab active:cursor-grabbing`}
       >
         <Sparkles className="w-3.5 h-3.5" />
-        시작 가이드 {doneCount}/4
+        시작 가이드 {doneCount}/{total}
       </button>
     );
   }
@@ -212,7 +214,7 @@ export function SetupGuideWidget() {
       >
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-deep">
           <Sparkles className="w-3.5 h-3.5" />
-          시작 가이드 · {doneCount}/4 완료
+          시작 가이드 · {doneCount}/{total} 완료
         </span>
         <button
           type="button"
@@ -231,7 +233,7 @@ export function SetupGuideWidget() {
       <footer className="px-4 pb-3 pt-1 border-t border-border-default">
         {active == null && (
           <p className="text-[11px] text-primary-deep font-medium pt-2">
-            🎉 4단계가 모두 완료된 상태예요. 각 단계를 눌러 사용법을 다시 볼 수 있어요.
+            🎉 모든 단계가 완료된 상태예요. 각 단계를 눌러 사용법을 다시 볼 수 있어요.
           </p>
         )}
         {confirmHide ? (

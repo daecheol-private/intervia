@@ -10,6 +10,7 @@ import type { TourScenarioId } from "./tour-scenarios";
 export type SetupStepState = {
   step1: boolean; // 인재상·컬쳐핏 확인(설정 저장)
   step2: boolean; // 공고 등록
+  applyLink: boolean; // 지원 링크 생성(apply_token 발급 공고 존재)
   step3: boolean; // 이력서 업로드
   step4: boolean; // AI 면접 발송(응시 대기 이상)
 };
@@ -25,7 +26,7 @@ export type SetupStep = {
 };
 
 export function buildSetupSteps(
-  { step1, step2, step3, step4 }: SetupStepState,
+  { step1, step2, applyLink, step3, step4 }: SetupStepState,
   firstJobId: number | null
 ): SetupStep[] {
   return [
@@ -51,16 +52,26 @@ export function buildSetupSteps(
     },
     {
       n: 3,
+      done: applyLink,
+      title: "지원 링크 만들기",
+      desc: "공고마다 전용 지원 링크를 만들 수 있어요. 이 링크를 채용 사이트나 회사 홈페이지의 '지원하기'에 넣으면, 지원자가 직접 이력서를 올리고 자동으로 평가됩니다.",
+      tour: "apply-link",
+      cta: firstJobId
+        ? { href: `/jobs/${firstJobId}`, label: "지원 링크 만들기", pcOnly: false }
+        : null,
+    },
+    {
+      n: 4,
       done: step3,
       title: "이력서 올리기",
-      desc: "지원자 이력서 PDF를 올리면 자동 마스킹 후 AI 서류 평가가 진행됩니다.",
+      desc: "지원 링크로 모은 이력서 외에, 보유한 이력서 PDF를 직접 올릴 수도 있어요. 올리면 자동 마스킹 후 AI 서류 평가가 진행됩니다.",
       tour: "resume-upload",
       cta: firstJobId
         ? { href: `/jobs/${firstJobId}`, label: "이력서 올리기", pcOnly: false }
         : null,
     },
     {
-      n: 4,
+      n: 5,
       done: step4,
       title: "AI 면접 보내기",
       desc: "서류를 통과한 지원자에게 링크를 보내면 AI 면접관이 채팅으로 면접을 진행합니다.",

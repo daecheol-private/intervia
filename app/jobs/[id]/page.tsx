@@ -1414,11 +1414,13 @@ export default function JobDetailPage() {
          접힘 상태는 공고별 localStorage 기억 — 업로드가 끝난 공고에서 목록 스크롤 절약 */}
       <div className="hidden sm:block">
       {/* 지원 링크로 직접 받기 — 업로드 섹션 위에. 링크가 발급돼 있으면 업로드 섹션은 접어 둔다. */}
-      <ApplyLinkButton
-        jobId={jobId}
-        disabled={isExpired}
-        onActive={setHasApplyLink}
-      />
+      <div data-tour="apply-link">
+        <ApplyLinkButton
+          jobId={jobId}
+          disabled={isExpired}
+          onActive={setHasApplyLink}
+        />
+      </div>
       {hasApplyLink !== null && (
       <Section
         title="이력서 직접 업로드"

@@ -27,6 +27,7 @@ export type TourStep = {
 export type TourScenarioId =
   | "culture-fit"
   | "job-create"
+  | "apply-link"
   | "resume-upload"
   | "ai-interview"
   // 멤버(면접관) 전용 — 공고 상세(이력서 목록) 페이지 첫 진입 시 자동 노출.
@@ -73,12 +74,39 @@ export const TOUR_SCENARIOS: TourScenario[] = [
     ],
   },
   {
+    id: "apply-link",
+    label: "지원 링크 만들기",
+    emoji: "🔗",
+    needs: "job",
+    needsHint: "먼저 공고를 등록하면 안내해 드려요",
+    steps: [
+      {
+        path: "/jobs/{jobId}",
+        target: '[data-tour="apply-link"]',
+        placement: "bottom",
+        title: "여기서 이 공고의 '지원 링크'를 만들어요",
+        body: "'지원 링크 만들기'를 누르면 이 공고 전용 지원 페이지 주소가 생성돼요. 만든 링크의 '복사'를 눌러서, 사람인·잡코리아·원티드 등 채용 사이트 공고의 지원 방법을 '홈페이지 지원'으로 두고 이 주소를 넣거나, 회사 채용 홈페이지의 '지원하기' 버튼에 연결하세요. 지원자가 그 링크로 들어와 이력서를 올리면 자동으로 개인정보 마스킹·AI 서류평가까지 진행돼요. 담당자가 이력서를 일일이 모아 업로드하지 않아도 됩니다.",
+      },
+    ],
+  },
+  {
     id: "resume-upload",
     label: "이력서 업로드",
     emoji: "📄",
     needs: "job",
     needsHint: "먼저 공고를 등록하면 안내해 드려요",
     steps: [
+      {
+        // 이력서를 모으는 첫 번째 방법으로 '지원 링크로 직접 받기'를 한 번 더 짚어 준다
+        // (3단계 '지원 링크 만들기'와 같은 박스를 가리킴 — 의도된 반복 안내).
+        path: "/jobs/{jobId}",
+        target: '[data-tour="apply-link"]',
+        placement: "bottom",
+        // 아래 동의·업로드 섹션도 미리 펼쳐 둬, 다음 단계로 끊김 없이 이어지게.
+        presets: [{ key: "job-upload:{jobId}", value: "1" }],
+        title: "먼저, '지원 링크로 직접 받기'를 떠올려 보세요",
+        body: "이력서를 모으는 가장 편한 방법이에요. 여기서 만든 지원 링크를 채용 사이트나 회사 홈페이지의 '지원하기'에 걸어 두면, 지원자가 직접 이력서를 올리고 자동으로 개인정보 마스킹·AI 서류평가까지 진행돼요. 담당자가 파일을 일일이 모으지 않아도 됩니다. 직접 받기를 쓰지 않거나, 이미 보유한 이력서가 있다면 아래에서 바로 올려도 돼요.",
+      },
       {
         path: "/jobs/{jobId}",
         target: '[data-tour="consent-gate"]',
