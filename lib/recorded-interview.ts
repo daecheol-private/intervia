@@ -299,31 +299,35 @@ export async function finalizeRecordedInterview(
       .orderBy(asc(interviewTranscriptSegments.seq));
     if (segs.length === 0) throw new Error("전사 세그먼트가 없습니다.");
 
-    // 1) 역할 배정 (내용 기반 라벨→역할) → 세그먼트에 일괄 반영 (행 단위 N UPDATE 회피).
-    const roleMap = await assignSpeakerRoles(segs);
-    const byRole: Record<SpeakerRole, string[]> = {
-      candidate: [],
-      interviewer: [],
-      unknown: [],
-    };
-    for (const [label, role] of Object.entries(roleMap)) byRole[role].push(label);
-    await db.transaction(async (tx) => {
-      for (const role of ["candidate", "interviewer", "unknown"] as const) {
-        if (byRole[role].length === 0) continue;
-        await tx
-          .update(interviewTranscriptSegments)
-          .set({ role })
-          .where(
-            and(
-              eq(
-                interviewTranscriptSegments.recordedInterviewId,
-                recordedInterviewId
-              ),
-              inArray(interviewTranscriptSegments.speakerLabel, byRole[role])
-            )
-          );
-      }
-    });
+    // 1) 역할 배정. 라이브(STT)는 진행 중 점진 정리에서 이미 발화별 역할이 박혀 있으므로
+    //    그대로 사용. 업로드(음향 다이어리제이션)만 라벨→역할 배정 후 일괄 반영(N UPDATE 회피).
+    const roleMap: Record<string, SpeakerRole> = {};
+    if (ri.mode !== "live") {
+      Object.assign(roleMap, await assignSpeakerRoles(segs));
+      const byRole: Record<SpeakerRole, string[]> = {
+        candidate: [],
+        interviewer: [],
+        unknown: [],
+      };
+      for (const [label, role] of Object.entries(roleMap)) byRole[role].push(label);
+      await db.transaction(async (tx) => {
+        for (const role of ["candidate", "interviewer", "unknown"] as const) {
+          if (byRole[role].length === 0) continue;
+          await tx
+            .update(interviewTranscriptSegments)
+            .set({ role })
+            .where(
+              and(
+                eq(
+                  interviewTranscriptSegments.recordedInterviewId,
+                  recordedInterviewId
+                ),
+                inArray(interviewTranscriptSegments.speakerLabel, byRole[role])
+              )
+            );
+        }
+      });
+    }
 
     // 2) 평가 (JD + 이력서 마스킹본 + 서류평가 + 역할 배정 전사).
     const [cand] = await db
@@ -358,9 +362,12 @@ export async function finalizeRecordedInterview(
 
     const segWithRole = segs.map((s) => ({
       seq: s.seq,
-      role: s.speakerLabel
-        ? roleMap[s.speakerLabel] ?? "unknown"
-        : ("unknown" as SpeakerRole),
+      role:
+        ri.mode === "live"
+          ? ((s.role ?? "unknown") as SpeakerRole)
+          : s.speakerLabel
+            ? roleMap[s.speakerLabel] ?? "unknown"
+            : ("unknown" as SpeakerRole),
       text: s.text,
     }));
 
@@ -424,32 +431,38 @@ export type LiveSuggestion = {
   suggestions: string[];
 };
 
-function buildLiveSuggestionPrompt(job: JobInfo, transcript: string): string {
-  return `진행 중인 대면 면접의 실시간 전사다. 너는 면접관을 돕는 어시스턴트다.
-지금까지 내용만 보고, 면접관이 화면을 흘끗 보고 바로 쓸 수 있게 아래를 한국어 JSON 으로 출력하라.
-
-- answer_summary: 지원자 답변의 핵심 요약 2~3문장.
-- positives: 지금까지 드러난 긍정 신호 2~3개 (짧게).
-- to_confirm: 아직 불명확해 확인이 필요한 점 2~3개 (짧게).
-- suggestions: 지금 이어서 물으면 좋을 추가 질문 2~3개 (이 후보 맥락에 맞춰 구체적으로).
+function buildLiveSuggestionPrompt(
+  job: JobInfo,
+  transcript: string,
+  existing: string[]
+): string {
+  // 누적형 — 이미 제안한 질문은 빼고, 정말 중요한 새 질문만 가끔(없으면 빈 배열). 최대 2개.
+  return `진행 중인 대면 면접의 실시간 전사다. 면접관이 다음에 물으면 좋을 **정말 중요한 추가 질문**만 제안하라.
+- 지금까지 답변에서 더 깊이 파볼 가치가 있는 핵심 질문만 (사소하거나 일반적인 건 내지 말 것).
+- **이미 제안한 질문(아래)과 겹치거나 비슷하면 절대 내지 말 것.**
+- 새로 낼 중요한 질문이 없으면 **빈 배열**을 반환하라. **한 번에 최대 2개.**
 
 ## 직무
 - 직무: ${job.position} / 주요 업무: ${job.responsibilities}
 - 자격 요건: ${job.requirements}
 
+## 이미 제안한 질문 (중복·유사 금지)
+${existing.length ? existing.map((q) => `- ${q}`).join("\n") : "(없음)"}
+
 ## 지금까지 전사 (최근 위주)
 ${transcript}
 
 ## 출력 (JSON 만, 마크다운 금지)
-{ "answer_summary": "", "positives": [], "to_confirm": [], "suggestions": [] }`;
+{ "suggestions": [] }`;
 }
 
 export async function suggestLiveQuestions(
   job: JobInfo,
-  transcript: string
+  transcript: string,
+  existing: string[] = []
 ): Promise<LiveSuggestion> {
   const raw = await generateJSON<Partial<LiveSuggestion>>(
-    buildLiveSuggestionPrompt(job, transcript.slice(-12_000)),
+    buildLiveSuggestionPrompt(job, transcript.slice(-12_000), existing),
     { task: "interview", temperature: 0.3 }
   );
   return {
@@ -459,4 +472,54 @@ export async function suggestLiveQuestions(
     to_confirm: toStringArray(raw.to_confirm),
     suggestions: toStringArray(raw.suggestions),
   };
+}
+
+// ── 라이브 STT 점진 정리 ─────────────────────────────────────────────────────
+// 브라우저 STT 원문(화자 구분 없음)을 면접 진행 중 "마이크가 쉴 때" 조금씩 LLM 에 보내
+// 화자별(면접관/지원자)로 나누고 받아쓰기를 가볍게 다듬는다. 즉시 보이는 원문 위에
+// 정리된 화자 구분 전사가 주기적으로 따라붙는 구조 — 종료 시 이미 화자가 박혀 있어 바로 평가.
+
+/**
+ * STT 원문 한 덩어리를 직전 맥락을 참고해 화자별로 나눠 정리. **새 원문만** 정리해 반환.
+ * 텍스트만 다루므로 빠르고 저렴. 오디오는 호출자(브라우저) 밖으로 나가지 않는다.
+ */
+export async function cleanLiveTranscriptChunk(args: {
+  job: { position: string; requirements?: string | null };
+  recentContext: string;
+  rawText: string;
+}): Promise<Array<{ role: SpeakerRole; text: string }>> {
+  const raw = args.rawText.trim();
+  if (!raw) return [];
+  const prompt = `진행 중인 대면 면접의 음성인식 원문 일부다. 화자 구분이 없고 받아쓰기라 거칠다.
+직전까지 정리된 맥락을 참고해 **새 원문만** 면접관/지원자 발화로 나누고, 명백한 받아쓰기
+오류만 가볍게 다듬어라. (의미 보존 — 요약·창작 금지, 새 원문에 없는 말 추가 금지.)
+
+- 질문하거나 면접을 이끄는 쪽 = interviewer / 자기 경험·생각을 답하는 쪽 = candidate.
+- 한 덩어리에 두 화자가 섞였으면 화자가 바뀌는 지점에서 나눈다. 애매하면 직전 맥락의 흐름을 따른다.
+- 직무: ${args.job.position}${args.job.requirements ? ` / 자격요건: ${args.job.requirements}` : ""}
+
+## 직전까지 정리된 맥락 (참고만 — 다시 출력 금지)
+${args.recentContext || "(없음)"}
+
+## 새 원문 (이번에 정리할 부분)
+${raw}
+
+## 출력 (JSON 만, 마크다운 금지)
+{ "segments": [ { "role": "interviewer" | "candidate", "text": "정리된 발화" } ] }`;
+
+  // task="interview"(thinkingBudget 낮음) — 정리는 가벼운 텍스트 작업이라 thinking 높이면
+  // 지연만 커진다(실측: dynamic 9초 → budget128 2.3초, 품질 동일). 정리본이 빨리 따라붙게.
+  const out = await generateJSON<{
+    segments?: Array<{ role?: string; text?: string }>;
+  }>(prompt, { task: "interview", temperature: 0.1 });
+
+  const segs = Array.isArray(out.segments) ? out.segments : [];
+  return segs
+    .map((s) => ({
+      role: (s.role === "candidate" || s.role === "interviewer"
+        ? s.role
+        : "unknown") as SpeakerRole,
+      text: (s.text ?? "").toString().trim(),
+    }))
+    .filter((s) => s.text.length > 0);
 }

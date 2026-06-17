@@ -24,7 +24,6 @@ import {
 } from "./interview-section";
 import { InterviewerNotesPanel } from "./notes-panel";
 import { InterviewQuestionsPanel } from "./question-sheet";
-import { RecordedInterviewPanel } from "./recorded-interview-section";
 import { ScheduleBox } from "./schedule-box";
 import {
   BreakdownBlock,
@@ -882,14 +881,12 @@ export default function CandidateDetailPage() {
         candidateId={candidate.id}
         round="round1"
         scheduleConfirmed={round1Confirmed}
+        canModify={!candidate.outcome}
       />
       <InterviewQuestionsPanel
         candidateId={candidate.id}
         round="round2"
         scheduleConfirmed={round2Confirmed}
-      />
-      <RecordedInterviewPanel
-        candidateId={candidate.id}
         canModify={!candidate.outcome}
       />
       <AttachmentsPanel

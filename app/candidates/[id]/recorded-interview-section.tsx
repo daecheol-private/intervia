@@ -6,7 +6,6 @@ import { formatKstDateTime } from "@/lib/utils";
 import { notify } from "@/app/components/Dialog";
 import {
   HL,
-  Section,
   recColor,
   scoreBarColor,
   scoreColor,
@@ -111,16 +110,19 @@ function roleClass(role: Seg["role"]): string {
     : "bg-slate-100 text-slate-600 border border-slate-200";
 }
 
+// 라운드별 "대면 면접 평가" — 상위 "N차 면접" 섹션 안에 임베드되는 content-only 블록.
+// (자체 Section 없음, 라운드 선택기 없음 — 라운드는 prop 으로 고정.)
 export function RecordedInterviewPanel({
   candidateId,
+  round,
   canModify,
 }: {
   candidateId: number;
+  round: "round1" | "round2";
   canModify: boolean;
 }) {
   const [interviews, setInterviews] = useState<RI[] | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [round, setRound] = useState<"round1" | "round2">("round1");
   const [uploading, setUploading] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
   const [consent, setConsent] = useState(false);
@@ -138,9 +140,12 @@ export function RecordedInterviewPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId]);
 
+  // 이 라운드 건만 표시.
+  const roundInterviews = (interviews ?? []).filter((i) => i.round === round);
+
   // 백그라운드 처리 중인 건이 있으면 폴링 — 업로드 후 새로고침/재방문해도 진행상태가
   // 그대로 보이고, 워커가 끝내면 자동으로 리포트로 갱신된다 (사용자가 새로고침할 필요 없음).
-  const hasActive = (interviews ?? []).some(
+  const hasActive = roundInterviews.some(
     (i) => i.status === "queued" || i.status === "processing"
   );
   useEffect(() => {
@@ -228,151 +233,116 @@ export function RecordedInterviewPanel({
     await load();
   };
 
-  const latest = interviews?.[0] ?? null;
+  const roundLabel = round === "round2" ? "2차" : "1차";
 
   return (
-    <Section
-      title="대면 면접 평가"
-      defaultOpen={false}
-      summary={
-        latest?.report ? (
-          <span className="flex items-center gap-2">
-            <span
-              className={`font-bold tabular-nums ${scoreColor(latest.report.overall_score)}`}
-            >
-              {latest.report.overall_score}
-            </span>
-            <span className="text-slate-400">/100</span>
-            {showRec(latest.report.recommendation) && (
-              <span
-                className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${recColor[latest.report.recommendation]}`}
-              >
-                {latest.report.recommendation}
-              </span>
-            )}
-          </span>
-        ) : latest?.status === "queued" || latest?.status === "processing" ? (
-          <span className="text-blue-600">
-            ⏳ {latest.status === "queued" ? "평가 대기 중" : "전사·평가 중"}
-          </span>
-        ) : latest?.status === "failed" ? (
-          <span className="text-danger">처리 실패</span>
-        ) : interviews && interviews.length === 0 ? (
-          <span className="text-slate-400">녹음 업로드 가능</span>
-        ) : (
-          <span className="text-slate-400">{interviews ? "" : "불러오는 중"}</span>
-        )
-      }
-    >
-      <div className="space-y-5">
-        <p className="text-sm text-slate-600 leading-relaxed">
-          사람이 진행한 <strong>대면 면접 녹음</strong>을 올리면 전사 → 화자 분리 →
-          AI 역량 평가 리포트를 만들어 줍니다. 녹음 파일은 전사 후 보관하지 않습니다.
-        </p>
-
-        {/* 업로드 */}
-        {canModify && liveOpen && (
-          <LiveRecorder
-            candidateId={candidateId}
-            round={round}
-            consentConfirmed={consent}
-            onClose={() => setLiveOpen(false)}
-            onFinished={() => {
-              setLiveOpen(false);
-              void load();
-            }}
-          />
-        )}
-
-        {canModify && !liveOpen && (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-            <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-0.5 accent-primary"
-              />
-              <span>
-                지원자에게 <strong>면접 녹취·전사·AI 평가 활용</strong>에 대한 동의를
-                받았습니다. (녹음 파일은 전사 후 보관하지 않습니다)
-              </span>
-            </label>
-            <div className="flex flex-wrap items-center gap-3">
-              <select
-                value={round}
-                onChange={(e) =>
-                  setRound(e.target.value === "round2" ? "round2" : "round1")
-                }
-                disabled={uploading}
-                className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm disabled:opacity-50"
-              >
-                <option value="round1">1차 대면</option>
-                <option value="round2">2차 대면</option>
-              </select>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*,video/*"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                disabled={uploading}
-                className="text-sm text-slate-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border file:border-slate-300 file:bg-white file:text-slate-700 file:text-sm file:cursor-pointer disabled:opacity-50"
-              />
-              <button
-                onClick={upload}
-                disabled={!file || uploading || !consent}
-                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium shadow-sm disabled:opacity-50 inline-flex items-center gap-1.5"
-              >
-                {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {uploading ? "업로드 중..." : "업로드"}
-              </button>
-              <span className="text-slate-300 px-1" aria-hidden>
-                |
-              </span>
-              <button
-                onClick={() => setLiveOpen(true)}
-                disabled={uploading || !consent}
-                className="px-4 py-2 rounded-lg border border-primary/40 text-primary-deep hover:bg-primary-soft text-sm font-medium disabled:opacity-50"
-              >
-                ● 라이브 녹음
-              </button>
-            </div>
-            {uploading ? (
-              <p className="text-xs text-slate-500">
-                업로드 중입니다... 업로드가 끝나면 전사·평가는 백그라운드에서
-                진행되니, 이 화면을 닫거나 새로고침해도 됩니다.
-              </p>
-            ) : (
-              <p className="text-xs text-slate-400">
-                오디오/영상 파일 (최대 18MB). 업로드 후 전사·평가는 백그라운드에서
-                자동 진행됩니다. 더 긴 녹음은 더 낮은 음질로 녹음하세요.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* 리포트 목록 */}
-        {interviews === null ? (
-          <p className="text-sm text-slate-400">불러오는 중...</p>
-        ) : interviews.length === 0 ? (
-          !canModify && (
-            <p className="text-sm text-slate-400">아직 대면 면접 평가가 없습니다.</p>
-          )
-        ) : (
-          <div className="space-y-4">
-            {interviews.map((ri) => (
-              <RecordedReportCard
-                key={ri.id}
-                ri={ri}
-                canModify={canModify}
-                onConfirm={() => confirmReport(ri.id)}
-                onReevaluate={() => reevalReport(ri.id)}
-              />
-            ))}
-          </div>
-        )}
+    <div className="space-y-4 pt-4 mt-2 border-t border-slate-200">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-slate-700">
+          대면 면접 평가
+        </span>
+        <span className="text-[11px] text-slate-400">
+          {roundLabel} 면접 · 녹음 업로드 또는 라이브
+        </span>
       </div>
-    </Section>
+      <p className="text-sm text-slate-600 leading-relaxed">
+        사람이 진행한 <strong>대면 면접</strong>을 녹음 업로드하거나 라이브로
+        진행하면, 전사 → 화자 분리 → AI 역량 평가 리포트를 만들어 줍니다. 녹음
+        파일은 보관하지 않습니다.
+      </p>
+
+      {canModify && liveOpen && (
+        <LiveRecorder
+          candidateId={candidateId}
+          round={round}
+          consentConfirmed={consent}
+          onClose={() => setLiveOpen(false)}
+          onFinished={() => {
+            setLiveOpen(false);
+            void load();
+          }}
+        />
+      )}
+
+      {canModify && !liveOpen && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              className="mt-0.5 accent-primary"
+            />
+            <span>
+              지원자에게 <strong>면접 녹취·전사·AI 평가 활용</strong>에 대한 동의를
+              받았습니다. (녹음 파일은 전사 후 보관하지 않습니다)
+            </span>
+          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*,video/*"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              disabled={uploading}
+              className="text-sm text-slate-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border file:border-slate-300 file:bg-white file:text-slate-700 file:text-sm file:cursor-pointer disabled:opacity-50"
+            />
+            <button
+              onClick={upload}
+              disabled={!file || uploading || !consent}
+              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium shadow-sm disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {uploading ? "업로드 중..." : "녹음 업로드"}
+            </button>
+            <span className="text-slate-300 px-1" aria-hidden>
+              |
+            </span>
+            <button
+              onClick={() => setLiveOpen(true)}
+              disabled={uploading || !consent}
+              className="px-4 py-2 rounded-lg border border-primary/40 text-primary-deep hover:bg-primary-soft text-sm font-medium disabled:opacity-50"
+            >
+              ● 라이브 녹음
+            </button>
+          </div>
+          {uploading ? (
+            <p className="text-xs text-slate-500">
+              업로드 중입니다... 업로드가 끝나면 전사·평가는 백그라운드에서
+              진행되니, 이 화면을 닫거나 새로고침해도 됩니다.
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400">
+              오디오/영상 파일 (최대 18MB). 라이브 녹음은 브라우저로 즉시 받아쓰며
+              최대 1시간까지 가능합니다.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 리포트 목록 (이 라운드) */}
+      {interviews === null ? (
+        <p className="text-sm text-slate-400">불러오는 중...</p>
+      ) : roundInterviews.length === 0 ? (
+        !canModify && (
+          <p className="text-sm text-slate-400">
+            아직 {roundLabel} 대면 면접 평가가 없습니다.
+          </p>
+        )
+      ) : (
+        <div className="space-y-4">
+          {roundInterviews.map((ri) => (
+            <RecordedReportCard
+              key={ri.id}
+              ri={ri}
+              canModify={canModify}
+              onConfirm={() => confirmReport(ri.id)}
+              onReevaluate={() => reevalReport(ri.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

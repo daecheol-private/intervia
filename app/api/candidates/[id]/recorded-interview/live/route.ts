@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   interviewTranscriptSegments,
@@ -12,10 +12,9 @@ import {
   requireSpendableBalance,
 } from "@/lib/wallet-guard";
 import {
-  buildTranscriptionDomainHint,
+  cleanLiveTranscriptChunk,
   finalizeRecordedInterview,
   suggestLiveQuestions,
-  transcribeAudio,
 } from "@/lib/recorded-interview";
 import type { JobInfo } from "@/lib/prompts";
 import { logAudit } from "@/lib/audit";
@@ -23,9 +22,6 @@ import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
-
-// 청크 1개 base64 한도 (디코딩 후 ~8MB). 준실시간이라 청크는 작다(20초 안팎).
-const MAX_CHUNK_B64 = 12 * 1024 * 1024;
 
 async function loadLiveRi(cid: number, riId: number) {
   const [ri] = await db
@@ -41,10 +37,10 @@ async function loadLiveRi(cid: number, riId: number) {
 }
 
 /**
- * 준실시간 라이브 면접 — action 분기:
+ * 준실시간 라이브 면접 — 브라우저 STT(Web Speech API) 기반. action 분기:
  *  - start  : 라이브 recorded_interview 생성 (status=recording).
- *  - chunk  : 오디오 청크 1개(base64) 전사 → 세그먼트 누적. 라벨은 청크별 고유화.
- *  - finish : finalize (역할 배정 → 평가 → 후차감).
+ *  - clean  : STT 원문 일부를 화자별로 정리 → 세그먼트 누적(역할 포함). 오디오는 받지 않는다.
+ *  - finish : finalize (평가 → 후차감). 라이브는 역할이 이미 박혀 있어 바로 평가.
  */
 export async function POST(
   req: Request,
@@ -68,10 +64,8 @@ export async function POST(
         action?: string;
         round?: string;
         recordedInterviewId?: number;
-        audioBase64?: string;
-        mimeType?: string;
-        baseMs?: number;
-        chunkIndex?: number;
+        rawText?: string;
+        durationSeconds?: number;
         consentConfirmed?: boolean;
       }
     | null;
@@ -128,77 +122,110 @@ export async function POST(
   const ri = await loadLiveRi(cid, riId);
   if (!ri) return new Response("Not found", { status: 404 });
 
-  // ── chunk ──────────────────────────────────────────────
-  if (body.action === "chunk") {
+  // ── clean ──────────────────────────────────────────────
+  // 브라우저 STT 원문 한 덩어리를 받아 화자별로 정리(역할 포함)해 누적. 오디오는 받지 않는다.
+  if (body.action === "clean") {
     if (ri.status !== "recording")
       return new Response("녹음 상태가 아닙니다.", { status: 409 });
-    const audioBase64 =
-      typeof body.audioBase64 === "string" ? body.audioBase64 : "";
-    const mimeType =
-      typeof body.mimeType === "string" ? body.mimeType : "audio/webm";
-    const baseMs = Number(body.baseMs) || 0;
-    const chunkIndex = Number(body.chunkIndex) || 0;
-    if (!audioBase64) return new Response("audioBase64 가 필요합니다.", { status: 400 });
-    if (audioBase64.length > MAX_CHUNK_B64)
-      return new Response("청크가 너무 큽니다.", { status: 413 });
+    const rawText = typeof body.rawText === "string" ? body.rawText : "";
+    if (!rawText.trim()) return Response.json({ added: 0, segments: [] });
+    if (rawText.length > 8000)
+      return new Response("정리할 원문이 너무 깁니다.", { status: 413 });
 
-    let segments: Awaited<ReturnType<typeof transcribeAudio>>;
-    try {
-      segments = await transcribeAudio(audioBase64, mimeType, {
-        baseMs,
-        timeoutMs: 90_000,
-        domainHint: job ? buildTranscriptionDomainHint(job) : undefined,
-      });
-    } catch (e) {
-      log.error("recorded_interview.live_chunk_transcribe_failed", e, {
-        recordedInterviewId: riId,
-        chunkIndex,
-      });
-      return new Response("청크 전사에 실패했습니다.", { status: 502 });
-    }
-    if (segments.length === 0) return Response.json({ added: 0, segments: [] });
-
-    // 이어붙일 seq 시작점 (현재 최대 seq + 1).
-    const [{ m }] = await db
+    // 직전까지 정리된 맥락(최근 8개) — 화자 연속성 위해 LLM 에 함께 전달.
+    const recent = await db
       .select({
-        m: sql<number>`COALESCE(MAX(${interviewTranscriptSegments.seq}), 0)`,
+        role: interviewTranscriptSegments.role,
+        text: interviewTranscriptSegments.text,
       })
       .from(interviewTranscriptSegments)
-      .where(eq(interviewTranscriptSegments.recordedInterviewId, riId));
-    let seq = Number(m) || 0;
-    const rows = segments.map((s) => ({
-      recordedInterviewId: riId,
-      seq: ++seq,
-      // 청크별 화자 라벨은 전역 비일관 → 청크 번호로 고유화. 종료 시 내용 기반 역할 배정이 매핑.
-      speakerLabel: `${chunkIndex}#${s.speakerLabel}`,
-      startMs: s.startMs,
-      endMs: s.endMs,
-      text: s.text,
-      lowConfidence: s.lowConfidence,
-    }));
-    await db.insert(interviewTranscriptSegments).values(rows);
+      .where(eq(interviewTranscriptSegments.recordedInterviewId, riId))
+      .orderBy(desc(interviewTranscriptSegments.seq))
+      .limit(8);
+    const recentContext = recent
+      .reverse()
+      .map((s) => `${s.role ?? "unknown"}: ${s.text}`)
+      .join("\n");
 
-    const lastEnd = segments[segments.length - 1]?.endMs ?? baseMs;
-    const dur = Math.round((lastEnd ?? baseMs) / 1000);
-    if (dur > (ri.durationSeconds ?? 0)) {
-      await db
-        .update(recordedInterviews)
-        .set({ durationSeconds: dur })
-        .where(eq(recordedInterviews.id, riId));
+    let cleaned: Awaited<ReturnType<typeof cleanLiveTranscriptChunk>>;
+    try {
+      cleaned = await cleanLiveTranscriptChunk({
+        job: { position: job?.position ?? "면접", requirements: job?.requirements },
+        recentContext,
+        rawText,
+      });
+    } catch (e) {
+      log.error("recorded_interview.live_clean_failed", e, {
+        recordedInterviewId: riId,
+      });
+      return new Response("정리에 실패했습니다.", { status: 502 });
+    }
+    if (cleaned.length === 0) return Response.json({ added: 0, segments: [] });
+
+    // 같은 역할 연속 발화는 한 턴으로 병합 — 문장마다 자르지 않고 화자가 바뀔 때만 row 분리.
+    const turns: Array<{ role: (typeof cleaned)[number]["role"]; text: string }> =
+      [];
+    for (const c of cleaned) {
+      const last = turns[turns.length - 1];
+      if (last && last.role === c.role) last.text += " " + c.text;
+      else turns.push({ role: c.role, text: c.text });
     }
 
-    return Response.json({
-      added: rows.length,
-      segments: rows.map((r) => ({
-        seq: r.seq,
-        text: r.text,
-        lowConfidence: r.lowConfidence,
-      })),
-    });
+    // 직전 저장 세그먼트와 첫 턴의 화자가 같으면 그 row 에 이어붙인다(배치 경계에서도 병합 유지).
+    const [lastSeg] = await db
+      .select({
+        seq: interviewTranscriptSegments.seq,
+        role: interviewTranscriptSegments.role,
+        text: interviewTranscriptSegments.text,
+      })
+      .from(interviewTranscriptSegments)
+      .where(eq(interviewTranscriptSegments.recordedInterviewId, riId))
+      .orderBy(desc(interviewTranscriptSegments.seq))
+      .limit(1);
+
+    const changed: Array<{ seq: number; role: string; text: string }> = [];
+    let startIdx = 0;
+    if (lastSeg && turns[0] && lastSeg.role === turns[0].role) {
+      const mergedText = `${lastSeg.text} ${turns[0].text}`;
+      await db
+        .update(interviewTranscriptSegments)
+        .set({ text: mergedText })
+        .where(
+          and(
+            eq(interviewTranscriptSegments.recordedInterviewId, riId),
+            eq(interviewTranscriptSegments.seq, lastSeg.seq)
+          )
+        );
+      changed.push({ seq: lastSeg.seq, role: lastSeg.role!, text: mergedText });
+      startIdx = 1;
+    }
+
+    let seq = lastSeg ? lastSeg.seq : 0;
+    const rows = turns.slice(startIdx).map((t) => ({
+      recordedInterviewId: riId,
+      seq: ++seq,
+      speakerLabel: t.role,
+      role: t.role,
+      startMs: null,
+      endMs: null,
+      text: t.text,
+      lowConfidence: false,
+    }));
+    if (rows.length) await db.insert(interviewTranscriptSegments).values(rows);
+    changed.push(...rows.map((r) => ({ seq: r.seq, role: r.role, text: r.text })));
+
+    return Response.json({ added: rows.length, segments: changed });
   }
 
   // ── finish ─────────────────────────────────────────────
   if (body.action === "finish") {
+    const dur = Number(body.durationSeconds);
+    if (Number.isFinite(dur) && dur > 0) {
+      await db
+        .update(recordedInterviews)
+        .set({ durationSeconds: Math.round(dur) })
+        .where(eq(recordedInterviews.id, riId));
+    }
     try {
       await finalizeRecordedInterview(riId);
     } catch {
@@ -228,9 +255,16 @@ export async function GET(
   if (!g.ok) return g.res;
   const { job } = g;
 
-  const riId = Number(new URL(req.url).searchParams.get("riId"));
+  const url = new URL(req.url);
+  const riId = Number(url.searchParams.get("riId"));
   if (!Number.isInteger(riId))
     return new Response("riId 가 필요합니다.", { status: 400 });
+  // 이미 화면에 떠 있는 질문들 — 중복·유사 제안을 피하려고 LLM 에 함께 넘긴다.
+  const have = (url.searchParams.get("have") ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 10);
   const ri = await loadLiveRi(cid, riId);
   if (!ri) return new Response("Not found", { status: 404 });
 
@@ -259,7 +293,7 @@ export async function GET(
     evaluationFocus: job.evaluationFocus,
   };
   try {
-    return Response.json(await suggestLiveQuestions(jobInfo, transcript));
+    return Response.json(await suggestLiveQuestions(jobInfo, transcript, have));
   } catch (e) {
     log.error("recorded_interview.live_suggest_failed", e, {
       recordedInterviewId: riId,

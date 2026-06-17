@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { HL, Section } from "./shared";
+import { RecordedInterviewPanel } from "./recorded-interview-section";
 
 // ── 대면 면접 질문지 (1차 실무 / 2차 임원) ──────────────────────────
 // 해당 라운드 면접 일정 확정 후 면접관 누구나 생성. 이후 팝업으로 열람.
@@ -39,10 +40,12 @@ export function InterviewQuestionsPanel({
   candidateId,
   scheduleConfirmed,
   round = "round1",
+  canModify = true,
 }: {
   candidateId: number;
   scheduleConfirmed: boolean;
   round?: "round1" | "round2";
+  canModify?: boolean;
 }) {
   const [data, setData] = useState<QuestionSheetResp | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -92,7 +95,7 @@ export function InterviewQuestionsPanel({
 
   return (
     <Section
-      title={isExec ? "면접 문제 (2차 · 임원)" : "면접 문제 (1차)"}
+      title={isExec ? "2차 면접 (임원)" : "1차 면접"}
       defaultOpen={false}
       summary={
         sheet ? (
@@ -120,6 +123,9 @@ export function InterviewQuestionsPanel({
 
       {(confirmed || sheet) && (
         <div className="space-y-4">
+          <div className="text-sm font-semibold text-slate-700">
+            면접 문제 생성
+          </div>
           <p className="text-sm text-slate-600">
             {isExec
               ? "이력서 · 서류평가 · AI 면접 평가에 법인 인재상·컬쳐핏 기준(설정 시)을 반영해 2차(임원) 면접용 질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다."
@@ -174,6 +180,13 @@ export function InterviewQuestionsPanel({
           </div>
 
           {err && <p className="text-sm text-danger">{err}</p>}
+
+          {/* 대면 면접 평가 — 같은 라운드(녹음 업로드 / 라이브 + 평가 결과) */}
+          <RecordedInterviewPanel
+            candidateId={candidateId}
+            round={round}
+            canModify={canModify}
+          />
         </div>
       )}
 
