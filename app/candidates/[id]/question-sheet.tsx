@@ -95,7 +95,7 @@ export function InterviewQuestionsPanel({
 
   return (
     <Section
-      title={isExec ? "2차 면접 (임원)" : "1차 면접"}
+      title={isExec ? "2차 면접" : "1차 면접"}
       defaultOpen={false}
       summary={
         sheet ? (
