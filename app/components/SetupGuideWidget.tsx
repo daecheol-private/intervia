@@ -231,7 +231,7 @@ export function SetupGuideWidget() {
       <footer className="px-4 pb-3 pt-1 border-t border-border-default">
         {active == null && (
           <p className="text-[11px] text-primary-deep font-medium pt-2">
-            🎉 4단계를 모두 완료했어요! 이제 가이드를 숨겨도 좋아요.
+            🎉 4단계가 모두 완료된 상태예요. 각 단계를 눌러 사용법을 다시 볼 수 있어요.
           </p>
         )}
         {confirmHide ? (

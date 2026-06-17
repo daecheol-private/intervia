@@ -188,6 +188,10 @@ export async function PATCH(
         );
     }
     update.role = body.role;
+    // member → org_admin 승격이면 시작 가이드 재노출(개인 단위 리셋) — 이미 셋업이
+    // 끝난 법인이라도 새 관리자가 각 단계 '따라하기'로 사용법을 둘러볼 수 있게 dismiss
+    // 를 해제한다. 단계 완료 표시(✓)는 법인 현황 그대로 유지. (transfer-admin 과 동일 정책)
+    if (body.role === "org_admin") update.setupGuideDismissedAt = null;
   }
 
   // status 변경 (멤버 추방/복귀)

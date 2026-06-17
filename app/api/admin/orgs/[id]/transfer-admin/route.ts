@@ -3,7 +3,7 @@
  * 시나리오: org_admin 이 퇴사/연락두절 → 다른 멤버에게 관리 권한 강제 이전.
  *
  * 동작:
- *   - to 사용자: member → org_admin 으로 승격
+ *   - to 사용자: member → org_admin 으로 승격 + 시작 가이드 재노출(개인 단위 리셋)
  *   - from 사용자: org_admin → member 로 강등 (있으면)
  *
  * 가드:
@@ -93,10 +93,12 @@ export async function POST(
     }
   }
 
-  // toUser 승격
+  // toUser 승격 + 시작 가이드 재노출 (개인 단위) — 이미 셋업이 끝난 법인이라도
+  // 새 담당자가 각 단계 '따라하기'로 사용법을 둘러볼 수 있게 dismiss 를 해제한다.
+  // 단계 완료 표시(✓)는 법인 현황 그대로 유지된다.
   await db
     .update(users)
-    .set({ role: "org_admin" })
+    .set({ role: "org_admin", setupGuideDismissedAt: null })
     .where(eq(users.id, to.id));
 
   logAudit(req, {
