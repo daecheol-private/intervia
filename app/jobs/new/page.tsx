@@ -251,6 +251,7 @@ export default function NewJobPage() {
         등록된 정보는 면접관 페르소나 생성에 사용됩니다.
       </p>
 
+      <div data-tour="apply-link-new">
       {applyUrl ? (
         <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-5">
           <p className="text-sm font-semibold text-amber-900">
@@ -293,6 +294,7 @@ export default function NewJobPage() {
           </p>
         </div>
       )}
+      </div>
 
       <div
         data-tour="job-import-url"

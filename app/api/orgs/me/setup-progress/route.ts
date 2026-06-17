@@ -31,8 +31,6 @@ export async function GET() {
       .select({
         total: count(),
         latestId: sql<number | null>`MAX(${jobPostings.id})`,
-        // 지원 링크 발급 공고 수 — apply_token 이 채워진 공고가 하나라도 있으면 완료.
-        applyLinks: sql<number>`SUM(CASE WHEN ${jobPostings.applyToken} IS NOT NULL THEN 1 ELSE 0 END)`,
       })
       .from(jobPostings)
       .where(eq(jobPostings.orgId, orgId))
@@ -49,7 +47,6 @@ export async function GET() {
 
   const step1 = org?.cultureFitProfile != null;
   const step2 = Number(jobAgg?.total ?? 0) > 0;
-  const applyLink = Number(jobAgg?.applyLinks ?? 0) > 0;
   const step3 = Number(candAgg?.total ?? 0) > 0;
   const step4 = Number(candAgg?.interviewReached ?? 0) > 0;
   return Response.json({
@@ -58,7 +55,6 @@ export async function GET() {
     show: org != null && me!.setupGuideDismissedAt == null,
     step1,
     step2,
-    applyLink,
     step3,
     step4,
     firstJobId: jobAgg?.latestId ?? null,

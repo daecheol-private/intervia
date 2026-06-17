@@ -27,7 +27,6 @@ export type TourStep = {
 export type TourScenarioId =
   | "culture-fit"
   | "job-create"
-  | "apply-link"
   | "resume-upload"
   | "ai-interview"
   // 멤버(면접관) 전용 — 공고 상세(이력서 목록) 페이지 첫 진입 시 자동 노출.
@@ -60,32 +59,27 @@ export const TOUR_SCENARIOS: TourScenario[] = [
     ],
   },
   {
+    // 새 공고 등록(/jobs/new) 한 화면에서 2스텝 — ①지원 링크 생성 → ②URL 자동 채우기.
     id: "job-create",
-    label: "공고 등록",
+    label: "공고 만들기",
     emoji: "📋",
     steps: [
       {
+        // 1/2 — 맨 위 '지원링크 생성' 버튼. 공고 저장 전에 링크(토큰)만 먼저 발급하고,
+        // 저장 시 그 공고에 연결된다. 공고가 없어도 가능.
+        path: "/jobs/new",
+        target: '[data-tour="apply-link-new"]',
+        placement: "bottom",
+        title: "① 먼저 '지원 링크'를 만들 수 있어요",
+        body: "'지원링크 생성'을 누르면 공고를 저장하기 전에 지원 페이지 주소가 먼저 발급돼요. 복사해서 사람인·잡코리아 등 채용 사이트나 회사 홈페이지의 '지원하기'에 등록해 두면, 공고를 저장할 때 그 링크가 공고에 연결됩니다. 지원자가 링크로 들어와 이력서를 올리면 자동으로 개인정보 마스킹·AI 서류평가까지 진행돼요. (지원 링크가 필요 없으면 건너뛰어도 됩니다.)",
+      },
+      {
+        // 2/2 — 기존 공고 URL 붙여넣어 자동 채우기.
         path: "/jobs/new",
         target: '[data-tour="job-import-url"]',
         placement: "bottom",
-        title: "공고는 URL 붙여넣기로 끝!",
-        body: "사람인·잡코리아·원티드 등에서 올린 공고의 링크 URL을 복사해 여기에 붙여넣고 '가져오기'를 누르면, 본문(이미지 포함)을 분석해 아래 항목을 자동으로 채워 줘요.",
-      },
-    ],
-  },
-  {
-    id: "apply-link",
-    label: "지원 링크 만들기",
-    emoji: "🔗",
-    needs: "job",
-    needsHint: "먼저 공고를 등록하면 안내해 드려요",
-    steps: [
-      {
-        path: "/jobs/{jobId}",
-        target: '[data-tour="apply-link"]',
-        placement: "bottom",
-        title: "여기서 이 공고의 '지원 링크'를 만들어요",
-        body: "'지원 링크 만들기'를 누르면 이 공고 전용 지원 페이지 주소가 생성돼요. 만든 링크의 '복사'를 눌러서, 사람인·잡코리아·원티드 등 채용 사이트 공고의 지원 방법을 '홈페이지 지원'으로 두고 이 주소를 넣거나, 회사 채용 홈페이지의 '지원하기' 버튼에 연결하세요. 지원자가 그 링크로 들어와 이력서를 올리면 자동으로 개인정보 마스킹·AI 서류평가까지 진행돼요. 담당자가 이력서를 일일이 모아 업로드하지 않아도 됩니다.",
+        title: "② 기존 공고 URL로 자동 채우기",
+        body: "사람인·잡코리아·원티드 등에 이미 올린 공고가 있다면, 그 링크 URL을 복사해 여기에 붙여넣고 '가져오기'를 누르세요. 본문(이미지 포함)을 분석해 아래 직무·자격 항목을 자동으로 채워 줘요. (직접 입력해도 됩니다.)",
       },
     ],
   },
@@ -98,7 +92,7 @@ export const TOUR_SCENARIOS: TourScenario[] = [
     steps: [
       {
         // 이력서를 모으는 첫 번째 방법으로 '지원 링크로 직접 받기'를 한 번 더 짚어 준다
-        // (3단계 '지원 링크 만들기'와 같은 박스를 가리킴 — 의도된 반복 안내).
+        // (공고 상세 /jobs/[id] 의 지원 링크 박스 — 공고 만들기 투어의 지원 링크와 별개 진입점).
         path: "/jobs/{jobId}",
         target: '[data-tour="apply-link"]',
         placement: "bottom",

@@ -33,7 +33,7 @@ function useTourTargets() {
 }
 
 function availability(step: SetupStep, t: Targets | null) {
-  if (step.tour === "apply-link" || step.tour === "resume-upload")
+  if (step.tour === "resume-upload")
     return {
       ok: !!t && t.firstJobId != null,
       hint: "먼저 공고를 등록하면 안내해 드려요",
@@ -79,6 +79,29 @@ export function GuideStepList({
         {steps.map((s) => {
           const isActive = activeN === s.n;
           const av = availability(s, targets);
+          const numberBadge = (
+            <span
+              className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                s.done
+                  ? "bg-primary text-surface"
+                  : isActive
+                    ? "bg-primary-soft text-primary-deep border border-primary/40"
+                    : "bg-surface-alt text-ink-muted border border-border-default"
+              }`}
+            >
+              {s.done ? <Check className="w-3 h-3" strokeWidth={3} /> : s.n}
+            </span>
+          );
+          const titleText = (
+            <span
+              className={`flex-1 text-xs font-medium ${
+                s.done ? "text-ink-soft line-through" : "text-ink"
+              }`}
+            >
+              {s.title}
+            </span>
+          );
+
           return (
             <li key={s.n}>
               <button
@@ -90,24 +113,8 @@ export function GuideStepList({
                 } ${av.ok ? "hover:bg-surface-alt cursor-pointer" : "cursor-not-allowed"}`}
               >
                 <div className="flex items-center gap-2.5">
-                  <span
-                    className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                      s.done
-                        ? "bg-primary text-surface"
-                        : isActive
-                          ? "bg-primary-soft text-primary-deep border border-primary/40"
-                          : "bg-surface-alt text-ink-muted border border-border-default"
-                    }`}
-                  >
-                    {s.done ? <Check className="w-3 h-3" strokeWidth={3} /> : s.n}
-                  </span>
-                  <span
-                    className={`flex-1 text-xs font-medium ${
-                      s.done ? "text-ink-soft line-through" : "text-ink"
-                    }`}
-                  >
-                    {s.title}
-                  </span>
+                  {numberBadge}
+                  {titleText}
                   {av.ok ? (
                     <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold text-primary">
                       <Play className="w-2.5 h-2.5 fill-primary" />
@@ -136,6 +143,34 @@ export function GuideStepList({
       {steps.map((s) => {
         const isActive = activeN === s.n;
         const av = availability(s, targets);
+        const numberBadge = (
+          <span
+            className={`shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${
+              s.done
+                ? "bg-primary text-surface"
+                : isActive
+                  ? "bg-primary-soft text-primary-deep border border-primary/40"
+                  : "bg-surface-alt text-ink-muted border border-border-default"
+            }`}
+          >
+            {s.done ? <Check className="w-4 h-4" strokeWidth={3} /> : s.n}
+          </span>
+        );
+        const titleRow = (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={`text-sm font-semibold ${
+                s.done ? "text-ink-soft line-through" : "text-ink"
+              }`}
+            >
+              {s.title}
+            </span>
+            {s.done && (
+              <span className="text-[11px] text-primary font-medium">완료</span>
+            )}
+          </div>
+        );
+
         return (
           <li key={s.n}>
             <button
@@ -154,32 +189,9 @@ export function GuideStepList({
                   : "cursor-not-allowed"
               }`}
             >
-              <span
-                className={`shrink-0 mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${
-                  s.done
-                    ? "bg-primary text-surface"
-                    : isActive
-                      ? "bg-primary-soft text-primary-deep border border-primary/40"
-                      : "bg-surface-alt text-ink-muted border border-border-default"
-                }`}
-              >
-                {s.done ? <Check className="w-4 h-4" strokeWidth={3} /> : s.n}
-              </span>
+              {numberBadge}
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className={`text-sm font-semibold ${
-                      s.done ? "text-ink-soft line-through" : "text-ink"
-                    }`}
-                  >
-                    {s.title}
-                  </span>
-                  {s.done && (
-                    <span className="text-[11px] text-primary font-medium">
-                      완료
-                    </span>
-                  )}
-                </div>
+                {titleRow}
                 <p className="text-xs text-ink-soft mt-0.5 leading-relaxed">
                   {s.desc}
                 </p>

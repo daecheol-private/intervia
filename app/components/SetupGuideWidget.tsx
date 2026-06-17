@@ -10,7 +10,6 @@ type Progress = {
   show: boolean;
   step1: boolean;
   step2: boolean;
-  applyLink: boolean;
   step3: boolean;
   step4: boolean;
   firstJobId: number | null;

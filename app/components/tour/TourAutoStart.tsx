@@ -6,12 +6,11 @@
  * "완료하지 않은 단계의 페이지에 들어가면 해당 가이드가 자동으로 뜬다."
  *  - /org/settings      → 인재상·컬쳐핏 (step1 미완)
  *  - /jobs/new          → 공고 등록     (step2 미완)
- *  - /jobs/{id}         → 지원 링크(applyLink 미완) → 이력서 업로드(step3 미완)
+ *  - /jobs/{id}         → 이력서 업로드 (step3 미완)
  *  - /candidates/{id}   → AI 면접 보내기 (step4 미완 · 면접 버튼이 있는 후보만)
  *
- * 덕분에 공고를 만들고 상세 페이지로 자동 이동하면, 같은 /jobs/{id} 안에서
- * 먼저 지원 링크(미완) 가이드가, 발급 후 다시 들어오면 이력서 업로드 가이드가 뜬다.
- * (같은 경로에 여러 가이드가 걸리면 미완료인 첫 가이드를 고른다.)
+ * 덕분에 공고를 만들고 상세 페이지로 자동 이동하면, step3(이력서) 미완
+ * 상태이므로 이력서 업로드 가이드가 리프레시 없이 곧바로 뜬다.
  *
  * 완료 판정은 데이터 기준(/api/orgs/me/setup-progress)이고, 법인이 가이드를
  * 통째로 숨겼으면(show=false) 띄우지 않는다. 이미 진행 중인 가이드가 있으면
@@ -27,7 +26,6 @@ type Progress = {
   show: boolean;
   step1: boolean;
   step2: boolean;
-  applyLink: boolean;
   step3: boolean;
   step4: boolean;
   firstJobId: number | null;
@@ -59,16 +57,6 @@ const AUTO_GUIDES: AutoGuide[] = [
     scenario: "job-create",
     match: (p) => (p === "/jobs/new" ? {} : null),
     done: (p) => p.step2,
-  },
-  {
-    // 지원 링크는 이력서 업로드와 같은 /jobs/{id} 페이지에 있다 — 미완료면
-    // 먼저(이력서보다 앞에) 안내. (AUTO_GUIDES 순서 = 미완료 선택 우선순위)
-    scenario: "apply-link",
-    match: (p) => {
-      const m = /^\/jobs\/(\d+)$/.exec(p);
-      return m ? { jobId: m[1] } : null;
-    },
-    done: (p) => p.applyLink,
   },
   {
     scenario: "resume-upload",
@@ -182,38 +170,29 @@ export function TourAutoStart({
 
     // org_admin: 미완료 단계 페이지 진입 시 자동 (데이터 상태 기반).
     if (settledForSession) return;
-    // 같은 경로에 여러 가이드가 걸릴 수 있다(/jobs/{id} = 지원 링크 + 이력서).
-    const matches = AUTO_GUIDES.filter((g) => g.match(pathname));
-    if (matches.length === 0) return;
+    const cfg = AUTO_GUIDES.find((g) => g.match(pathname));
+    if (!cfg) return;
     if (tourStore.get()) return; // 이미 진행 중인 가이드가 있으면 양보
 
+    const params = cfg.match(pathname)!;
     let cancelled = false;
     fetch("/api/orgs/me/setup-progress", { cache: "no-store" })
       .then((r) => (r.ok ? (r.json() as Promise<Progress>) : null))
       .then(async (p) => {
         if (cancelled || !p) return;
-        // 더 이상 띄울 게 없으면(가이드 숨김 or 모든 단계 완료) 세션 동안 생략.
-        if (!p.show || (p.step1 && p.step2 && p.applyLink && p.step3 && p.step4))
+        // 더 이상 띄울 게 없으면(가이드 숨김 or 1~4단계 모두 완료) 세션 동안 생략.
+        if (!p.show || (p.step1 && p.step2 && p.step3 && p.step4))
           settledForSession = true;
         if (!p.show) return; // 법인이 가이드를 통째로 숨김
-        // 미완료인 첫 가이드를 골라 시작 — 같은 경로의 가이드는 AUTO_GUIDES 순서가
-        // 우선순위(지원 링크 → 이력서). 대상 요소가 비동기 렌더면 나타날 때까지
-        // 기다리고, 못 찾으면 다음 후보로 넘어간다('위치 못 찾음' 말풍선 방지).
-        for (const cfg of matches) {
-          if (cfg.done(p)) continue; // 이미 완료한 단계
-          if (cfg.awaitTarget) {
-            const ok = await waitForSelector(
-              cfg.awaitTarget,
-              60,
-              () => cancelled
-            );
-            if (cancelled) return;
-            if (!ok) continue;
-          }
-          if (tourStore.get()) return; // 그 사이 수동 시작됐으면 양보
-          tourStore.start(cfg.scenario, cfg.match(pathname)!);
-          return;
+        if (cfg.done(p)) return; // 이미 완료한 단계
+        // 대상 요소가 비동기로 렌더되는 가이드는, 나타날 때까지 기다린 뒤에만
+        // 시작 (없으면 조용히 건너뜀 — '위치 못 찾음' 말풍선 방지).
+        if (cfg.awaitTarget) {
+          const ok = await waitForSelector(cfg.awaitTarget, 60, () => cancelled);
+          if (!ok || cancelled) return;
         }
+        if (tourStore.get()) return; // 그 사이 수동 시작됐으면 양보
+        tourStore.start(cfg.scenario, params);
       })
       .catch(() => {
         /* 네트워크 오류 시 조용히 무시 — 자동 가이드는 부가 기능 */

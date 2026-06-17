@@ -79,7 +79,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     expiredAiRows,
     resultDueRows,
     orgCount,
-    setupApply,
   ] = await Promise.all([
     // 인사말 법인명 + 첫 실행 가이드용 컬처핏 설정 여부 — orgId 있는 경우만 조회.
     me.orgId
@@ -305,17 +304,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           .from(organizations)
           .then(([r]): number | null => Number(r?.c ?? 0))
       : Promise.resolve<number | null>(null),
-    // -- 첫 실행 가이드: 공개 지원 링크를 발급한 공고가 하나라도 있는지 -------
-    // (지원 링크 단계 완료 판정 — apply_token 이 채워진 공고 = 링크 발급함)
-    db
-      .select({ c: count() })
-      .from(jobPostings)
-      .where(
-        orgFilter
-          ? and(orgFilter, sql`${jobPostings.applyToken} IS NOT NULL`)
-          : sql`${jobPostings.applyToken} IS NOT NULL`
-      )
-      .then(([r]) => Number(r?.c ?? 0) > 0),
   ]);
 
   // 토큰 잔액으로 가능한 액션 수 환산 — KPI 카드 보조 문구
@@ -471,10 +459,9 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const orgName = orgRow?.name ?? null;
   const setup1 = orgRow?.cultureFitProfile != null; // 인재상·컬쳐핏 확인(설정 저장)
   const setup2 = totalJobs > 0; // 공고 등록
-  const setupApplyLink = setupApply === true; // 지원 링크 발급(apply_token 공고 존재)
   const setup3 = totalCand > 0; // 이력서 업로드
   const setup4 = interviewReached > 0; // AI 면접 발송(응시 대기 이상)
-  const setupComplete = setup1 && setup2 && setupApplyLink && setup3 && setup4;
+  const setupComplete = setup1 && setup2 && setup3 && setup4;
   // 본인이 가이드를 숨겼으면 hero/strip 모두 표시 안 함 (플로팅 위젯과 동일 정책 — 개인 단위)
   const guideDismissed = me.setupGuideDismissedAt != null;
   const firstJobId = jobsWithActions[0]?.id ?? null;
@@ -488,7 +475,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </h1>
         <p className="text-sm text-ink-soft mt-1">
           {totalJobs === 0
-            ? "Intervia 에 오신 걸 환영합니다. 아래 5단계로 첫 채용을 시작해 보세요."
+            ? "Intervia 에 오신 걸 환영합니다. 아래 4단계로 첫 채용을 시작해 보세요."
             : "오늘의 채용 현황을 한눈에 확인하세요."}
         </p>
       </header>
@@ -499,7 +486,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           variant="hero"
           step1={setup1}
           step2={setup2}
-          applyLink={setupApplyLink}
           step3={setup3}
           step4={setup4}
           firstJobId={firstJobId}
@@ -512,7 +498,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
               variant="strip"
               step1={setup1}
               step2={setup2}
-              applyLink={setupApplyLink}
               step3={setup3}
               step4={setup4}
               firstJobId={firstJobId}
@@ -709,7 +694,6 @@ function SetupGuide({
   variant,
   step1,
   step2,
-  applyLink,
   step3,
   step4,
   firstJobId,
@@ -717,15 +701,11 @@ function SetupGuide({
   variant: "hero" | "strip";
   step1: boolean;
   step2: boolean;
-  applyLink: boolean;
   step3: boolean;
   step4: boolean;
   firstJobId: number | null;
 }) {
-  const steps = buildSetupSteps(
-    { step1, step2, applyLink, step3, step4 },
-    firstJobId
-  );
+  const steps = buildSetupSteps({ step1, step2, step3, step4 }, firstJobId);
   const total = steps.length;
   const doneCount = steps.filter((s) => s.done).length;
   const activeStep = steps.find((s) => !s.done) ?? null;
