@@ -77,6 +77,8 @@ export function LiveRecorder({
   const [suggestion, setSuggestion] = useState<LiveSuggestion | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [err, setErr] = useState<string | null>(null);
+  const [level, setLevel] = useState(0); // 마이크 입력 레벨 0~1 (실시간 피드백)
+  const [noInput, setNoInput] = useState(false); // 일정 시간 무입력이면 마이크 경고
 
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -91,6 +93,12 @@ export function LiveRecorder({
   const riIdRef = useRef<number | null>(null);
   const mimeRef = useRef("");
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+  // 청크 전송 순차 체인 — 녹음은 끊김 없이 계속하되 전송은 순서대로 직렬화한다.
+  //  ① 녹음 연속(구간 유실 방지)  ② 전송 순서 보존(seq=시간순)  ③ 종료 시 체인 전체 대기(레이스 방지).
+  const sendChainRef = useRef<Promise<void>>(Promise.resolve());
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const levelRafRef = useRef<number | null>(null);
+  const lastSoundRef = useRef(0); // 마지막으로 유의미한 입력이 감지된 시각(performance.now)
 
   // 새 세그먼트가 오면 전사 박스를 맨 아래로.
   useEffect(() => {
@@ -115,6 +123,10 @@ export function LiveRecorder({
     streamRef.current = null;
     void wakeLockRef.current?.release().catch(() => {});
     wakeLockRef.current = null;
+    if (levelRafRef.current) cancelAnimationFrame(levelRafRef.current);
+    levelRafRef.current = null;
+    void audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
     window.removeEventListener("beforeunload", beforeUnload);
   };
 
@@ -177,13 +189,21 @@ export function LiveRecorder({
     rec.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) parts.push(e.data);
     };
-    rec.onstop = async () => {
+    rec.onstop = () => {
       const blob = new Blob(parts, {
         type: rec.mimeType || mimeRef.current || "audio/webm",
       });
-      if (blob.size > 0) await sendChunk(blob, base, idx);
+      // 다음 사이클을 **먼저** 시작 — 전사 대기 동안 녹음이 멈추지 않게 한다(구간 유실 방지).
+      // (이전엔 await sendChunk 후 시작이라 전사 5~10초 동안 마이크 음성이 통째로 버려졌다.)
       if (runningRef.current) startChunkCycle();
-      else void doFinish();
+      // 전송은 순차 체인에 얹어 동시에 진행 — 순서 보존 + sendChunk 는 내부 try/catch 라 reject 없음.
+      if (blob.size > 0) {
+        sendChainRef.current = sendChainRef.current
+          .then(() => sendChunk(blob, base, idx))
+          .catch(() => {});
+      }
+      // 녹음 종료 후의 마지막 onstop 이면, 큐에 쌓인 전송이 모두 끝난 뒤 finalize.
+      if (!runningRef.current) void doFinish();
     };
     rec.start();
     stopTimerRef.current = window.setTimeout(() => {
@@ -206,11 +226,52 @@ export function LiveRecorder({
 
   const start = async () => {
     setErr(null);
+    setLevel(0);
+    setNoInput(false);
     setPhase("starting");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       mimeRef.current = pickMime();
+
+      // 마이크 입력 레벨 미터 — 전사는 ~20초 단위라 지연이 커서, 사용자가 "내 말이 들어가고
+      // 있다"를 즉시 확인할 수단이 없었다(원래 화면엔 아무것도 안 떠 "안 되는 것처럼" 보임).
+      // 레벨 바 + 무입력 경고로 실시간 피드백을 준다.
+      lastSoundRef.current =
+        typeof performance !== "undefined" ? performance.now() : 0;
+      try {
+        const AC =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
+        const ac = new AC();
+        audioCtxRef.current = ac;
+        const srcNode = ac.createMediaStreamSource(stream);
+        const analyser = ac.createAnalyser();
+        analyser.fftSize = 512;
+        srcNode.connect(analyser);
+        const audioBuf = new Uint8Array(analyser.fftSize);
+        let lastPaint = 0;
+        const tick = () => {
+          analyser.getByteTimeDomainData(audioBuf);
+          let sum = 0;
+          for (let i = 0; i < audioBuf.length; i++) {
+            const v = (audioBuf[i] - 128) / 128;
+            sum += v * v;
+          }
+          const rms = Math.sqrt(sum / audioBuf.length);
+          const now = performance.now();
+          if (rms > 0.04) lastSoundRef.current = now; // 유의미한 입력 감지
+          if (now - lastPaint > 66) {
+            lastPaint = now;
+            setLevel(Math.min(1, rms * 3));
+          }
+          levelRafRef.current = requestAnimationFrame(tick);
+        };
+        levelRafRef.current = requestAnimationFrame(tick);
+      } catch {
+        /* 레벨 미터 실패는 비치명적 */
+      }
 
       const r = await fetch(
         `/api/candidates/${candidateId}/recorded-interview/live`,
@@ -245,13 +306,15 @@ export function LiveRecorder({
       sessionStartRef.current = performance.now();
       chunkIdxRef.current = 0;
       doneRef.current = false;
+      sendChainRef.current = Promise.resolve(); // 새 세션 — 전송 체인 초기화
       runningRef.current = true;
       setPhase("recording");
 
-      elapsedTimerRef.current = window.setInterval(
-        () => setElapsed((s) => s + 1),
-        1000
-      );
+      elapsedTimerRef.current = window.setInterval(() => {
+        setElapsed((s) => s + 1);
+        // 4초 넘게 유의미한 입력이 없으면 마이크 경고(연결·음소거·권한 문제 조기 발견).
+        setNoInput(performance.now() - lastSoundRef.current > 4000);
+      }, 1000);
       suggestTimerRef.current = window.setInterval(() => {
         void pollSuggestion();
       }, 30_000);
@@ -279,12 +342,25 @@ export function LiveRecorder({
     if (elapsedTimerRef.current) window.clearInterval(elapsedTimerRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     void wakeLockRef.current?.release().catch(() => {});
+    if (levelRafRef.current) cancelAnimationFrame(levelRafRef.current);
+    levelRafRef.current = null;
+    void audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
     window.removeEventListener("beforeunload", beforeUnload);
 
     if (!riId) {
       setPhase("idle");
       onClose();
       return;
+    }
+    // 체인에 쌓인 모든 청크 전사·저장이 끝날 때까지 대기 — 안 그러면 서버 finalize 가
+    // 청크 세그먼트를 못 보고 "전사 세그먼트가 없습니다"로 실패한다(레이스).
+    // sendChunk 는 서버 200 응답(=세그먼트 커밋 완료) 후에야 resolve 되므로, 체인을 기다리면
+    // 마지막 청크까지 모두 저장된 뒤 종료된다. (sendChunk 는 reject 없음 → 체인 안전)
+    try {
+      await sendChainRef.current;
+    } catch {
+      /* 방어적 — 체인은 reject 되지 않지만 만약을 위해 */
     }
     try {
       const r = await fetch(
@@ -379,6 +455,25 @@ export function LiveRecorder({
               ■ 면접 종료
             </button>
           </div>
+
+          {/* 마이크 입력 레벨 — 전사(약 20초 지연)와 별개로 "소리가 들어가는 중"을 즉시 표시 */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-500 shrink-0">마이크 입력</span>
+            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden max-w-[260px]">
+              <div
+                className={`h-full rounded-full transition-[width] duration-75 ${
+                  noInput ? "bg-warning" : "bg-success"
+                }`}
+                style={{ width: `${Math.round(level * 100)}%` }}
+              />
+            </div>
+          </div>
+          {noInput && (
+            <p className="text-xs text-warning">
+              마이크 입력이 감지되지 않습니다 — 마이크 연결·음소거·브라우저 권한을
+              확인해 주세요. (전사 결과는 약 20초 단위로 아래에 표시됩니다)
+            </p>
+          )}
 
           {err && <p className="text-xs text-warning">{err}</p>}
 
