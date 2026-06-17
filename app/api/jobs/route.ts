@@ -129,11 +129,18 @@ export async function POST(req: Request) {
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);
 
+  // "지원링크 생성"으로 미리 발급한 토큰이 있으면 이 정식 공고에 붙인다(같은 링크 유지).
+  const applyToken =
+    typeof body.applyToken === "string" && /^ap_[A-Za-z0-9_-]{10,60}$/.test(body.applyToken)
+      ? body.applyToken
+      : null;
+
   const now = new Date();
   const [row] = await db
     .insert(jobPostings)
     .values({
       orgId,
+      applyToken,
       title: body.title,
       position: body.position,
       level: body.level,

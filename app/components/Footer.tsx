@@ -5,10 +5,11 @@ import { usePathname } from "next/navigation";
 
 export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   const pathname = usePathname() ?? "";
-  // 후보자 토큰 페이지에서는 면접/일정 UI 가 viewport 를 꽉 채워야 하므로 푸터 숨김.
+  // 후보자 토큰 페이지에서는 면접/일정/지원 UI 가 viewport 를 꽉 채워야 하므로 푸터 숨김.
   if (
     pathname.startsWith("/interview/") ||
-    pathname.startsWith("/schedule/")
+    pathname.startsWith("/schedule/") ||
+    pathname.startsWith("/apply/")
   ) {
     return null;
   }

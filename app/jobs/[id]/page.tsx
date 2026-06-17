@@ -38,6 +38,8 @@ import {
   dimIfClosed,
   stageGroupBorder,
 } from "./badges";
+import ApplyLinkButton from "./ApplyLinkButton";
+import ApplyIntakeBanner from "./ApplyIntakeBanner";
 import { BulkDecisionModal, SchedulePropose } from "./bulk-actions";
 import { CandidateScores, candidateSearchExtras } from "./candidate-scores";
 import { Section } from "@/app/candidates/[id]/shared";
@@ -102,6 +104,8 @@ export default function JobDetailPage() {
   const [dragOver, setDragOver] = useState(false);
   const [locked, setLocked] = useState<{ title: string } | null>(null);
   const [loadError, setLoadError] = useState<"not_found" | "failed" | null>(null);
+  // 지원 링크 발급 여부 — null=확인 중. 발급됐으면 업로드 섹션을 접어 둔다(지원 링크 위주 흐름).
+  const [hasApplyLink, setHasApplyLink] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
   // 만료 결정 모달 — 닫아도 페이지 상단 띠는 유지. 다시 열기 가능.
   const [expiredModalDismissed, setExpiredModalDismissed] = useState(false);
@@ -1304,6 +1308,8 @@ export default function JobDetailPage() {
         ← 대시보드
       </Link>
 
+      <ApplyIntakeBanner jobId={jobId} />
+
       {/* Header */}
       <div data-tour="job-header" className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 mt-3 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
@@ -1407,9 +1413,17 @@ export default function JobDetailPage() {
       {/* 데스크톱: 동의 게이트 + 업로드 영역 (모바일 완전 숨김 — 업로드는 PC 전용)
          접힘 상태는 공고별 localStorage 기억 — 업로드가 끝난 공고에서 목록 스크롤 절약 */}
       <div className="hidden sm:block">
+      {/* 지원 링크로 직접 받기 — 업로드 섹션 위에. 링크가 발급돼 있으면 업로드 섹션은 접어 둔다. */}
+      <ApplyLinkButton
+        jobId={jobId}
+        disabled={isExpired}
+        onActive={setHasApplyLink}
+      />
+      {hasApplyLink !== null && (
       <Section
-        title="이력서 업로드"
+        title="이력서 직접 업로드"
         storageKey={`job-upload:${jobId}`}
+        defaultOpen={!hasApplyLink}
         summary={
           uploading
             ? `업로드 진행 중… ${uploadProgress?.pct ?? 0}%`
@@ -1614,6 +1628,7 @@ export default function JobDetailPage() {
         )}
       </div>
       </Section>
+      )}
       </div>
       {/* /데스크톱 업로드 영역 */}
 

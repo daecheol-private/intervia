@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Sparkles, Link2, Loader2 } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { confirmDialog } from "@/app/components/Dialog";
 import { TraitProfileSelector } from "@/app/components/TraitProfileSelector";
 import {
   DEFAULT_TRAIT_PROFILE,
@@ -17,6 +18,11 @@ import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
 export default function NewJobPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  // "지원링크 생성"은 링크(토큰)만 발급한다 — 공고가 만들어지는 게 아니다.
+  // 저장할 때 '공고 생성'(정식)이든 '임시공고'(드래프트)든 이 토큰이 그 공고에 붙는다.
+  const [applyToken, setApplyToken] = useState<string | null>(null);
+  const [applyUrl, setApplyUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [form, setForm] = useState({
     title: "",
     position: "",
@@ -122,6 +128,45 @@ export default function NewJobPage() {
     setImportInfo(`✓ 자동 채움 완료 — ${bits.join(" · ")}. 내용 확인 후 수정/저장하세요.`);
   };
 
+  // 추측 불가능한 지원 토큰을 클라이언트에서 발급 (서버 apply_token unique 가 최종 보증).
+  const genApplyToken = () => {
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    let bin = "";
+    for (const b of bytes) bin += String.fromCharCode(b);
+    const b64 = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return "ap_" + b64;
+  };
+
+  // "지원링크 생성" — 링크(토큰)만 발급해 보여준다. 공고가 만들어지는 게 아니다.
+  // 저장 시('공고 생성' 또는 '임시공고') 이 토큰이 그 공고에 붙어 링크가 동작한다.
+  const generateApplyLink = async () => {
+    if (applyToken) return; // 이미 발급됨
+    const ok = await confirmDialog(
+      "지원 링크를 생성합니다.\n\n" +
+        "이 링크를 사람인 등 채용사이트의 ‘홈페이지 지원’에 붙여넣으면 지원자가 직접 이력서를 올립니다.\n\n" +
+        "채용사이트에 아직 공고를 올리지 않았다면, 지금은 ‘임시공고’로 저장해 두고 나중에 내용을 채우거나 채용사이트 URL로 불러와 수정·정식 등록할 수 있습니다.\n\n" +
+        "공고 내용으로 AI 평가 지표가 만들어지므로, 상세히 적을수록 평가 품질이 올라갑니다.",
+      { title: "지원링크 생성", confirmText: "지원링크 생성", tone: "info" }
+    );
+    if (!ok) return;
+    const token = genApplyToken();
+    setApplyToken(token);
+    setApplyUrl(`${window.location.origin}/apply/${token}`);
+  };
+
+  const copyLink = async () => {
+    if (!applyUrl) return;
+    try {
+      await navigator.clipboard.writeText(applyUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      alert("복사 실패 — 링크를 직접 선택해 복사해 주세요.");
+    }
+  };
+
+  // "공고 생성" — 정식 공고로 등록(과금·평가). 발급한 지원 링크가 있으면 이 공고에 함께 붙는다.
   const submit = async () => {
     if (!form.title || !form.position || !form.responsibilities || !form.requirements) {
       alert("필수 항목을 입력하세요.");
@@ -148,7 +193,7 @@ export default function NewJobPage() {
     const res = await fetch("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, applyToken }),
     });
     if (!res.ok) {
       const text = await res.text();
@@ -162,6 +207,24 @@ export default function NewJobPage() {
     }
     const job = await res.json();
     router.push(`/jobs/${job.id}`);
+  };
+
+  // "임시공고" — 드래프트로 저장(미과금). 페르소나가 없어 들어온 이력서는 보관만 하고 평가하지 않는다.
+  // 발급한 지원 링크가 있으면 이 공고에 함께 붙는다. 나중에 수정 화면에서 정식 등록 가능.
+  const saveDraft = async () => {
+    setSaving(true);
+    const res = await fetch("/api/jobs/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, applyToken }),
+    });
+    if (!res.ok) {
+      alert("임시저장 실패: " + (await res.text()));
+      setSaving(false);
+      return;
+    }
+    const { id } = await res.json();
+    router.push(`/jobs/${id}`);
   };
 
   return (
@@ -187,6 +250,49 @@ export default function NewJobPage() {
       <p className="text-sm text-slate-500 mb-6">
         등록된 정보는 면접관 페르소나 생성에 사용됩니다.
       </p>
+
+      {applyUrl ? (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-5">
+          <p className="text-sm font-semibold text-amber-900">
+            🔗 지원 링크가 발급되었습니다
+          </p>
+          <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+            이 링크를 사람인·잡코리아 등 공고의 “홈페이지 지원”에 붙여넣으세요. 아직 저장 전이라
+            <b> 저장해야 링크가 동작</b>합니다 — 내용을 채워 <b>“공고 생성”</b>(정식)하거나, 채용사이트에
+            아직 공고가 없으면 <b>“임시공고”</b>로 저장해 두고 나중에 수정·정식 등록하면 됩니다. (어느
+            쪽으로 저장하든 이 링크가 그 공고에 연결됩니다.)
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              readOnly
+              value={applyUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="min-w-0 flex-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs text-slate-700"
+            />
+            <button
+              type="button"
+              onClick={copyLink}
+              className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+            >
+              {copied ? "복사됨 ✓" : "복사"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={generateApplyLink}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            🔗 지원링크 생성
+          </button>
+          <p className="mt-1 text-[11px] text-slate-500">
+            채용사이트에 붙여넣을 지원 링크가 필요할 때. 링크만 먼저 발급되고, 저장 시 그 공고에 연결됩니다.
+          </p>
+        </div>
+      )}
 
       <div
         data-tour="job-import-url"
@@ -399,11 +505,19 @@ export default function NewJobPage() {
           취소
         </button>
         <button
+          onClick={saveDraft}
+          disabled={saving}
+          title="평가지표(페르소나) 없이 임시로 저장 — 들어온 이력서는 보관만 하고 평가하지 않습니다. 나중에 정식 등록할 수 있습니다."
+          className="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium disabled:opacity-50"
+        >
+          {saving ? "저장 중..." : "임시공고"}
+        </button>
+        <button
           onClick={submit}
           disabled={saving}
           className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm"
         >
-          {saving ? "저장 중..." : "공고 등록"}
+          {saving ? "저장 중..." : "공고 생성"}
         </button>
       </div>
       </div>

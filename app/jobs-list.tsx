@@ -19,6 +19,7 @@ type Job = {
   screenedCount: number;
   interviewedCount: number;
   status?: "active" | "closed";
+  isDraft?: boolean;
   publishedAt?: string;
   closesAt?: string;
   closedAt?: string | null;
@@ -32,6 +33,13 @@ function daysLeft(closesAt?: string): number | null {
 }
 
 function DDayBadge({ job }: { job: Job }) {
+  if (job.isDraft) {
+    return (
+      <span className="text-[11px] px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+        임시 · 작성 필요
+      </span>
+    );
+  }
   if (job.status === "closed") {
     return (
       <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-200 text-slate-600">

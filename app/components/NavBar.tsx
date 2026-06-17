@@ -109,11 +109,12 @@ export function NavBar({
   isDev: boolean;
 }) {
   const pathname = usePathname() ?? "";
-  // 외부 후보자 토큰 페이지(/interview/*, /schedule/*) 에서는 네비바 숨김.
+  // 외부 후보자 토큰 페이지(/interview/*, /schedule/*, /apply/*) 에서는 네비바 숨김.
   // 로그인한 HR 이 우연히 같은 브라우저로 방문해도 후보자 입장의 화면을 보장.
   if (
     pathname.startsWith("/interview/") ||
     pathname.startsWith("/schedule/") ||
+    pathname.startsWith("/apply/") ||
     pathname.startsWith("/unsubscribe/")
   ) {
     return null;

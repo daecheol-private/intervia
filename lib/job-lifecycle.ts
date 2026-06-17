@@ -21,9 +21,12 @@ import {
   interviewSchedules as schedules,
   organizations,
   inquiries,
+  notifications,
 } from "./schema";
 import { and, count, eq, lt, sql } from "drizzle-orm";
 import { deleteFile } from "./storage";
+import { deleteCandidateFiles } from "./candidate-files";
+import { createNotification } from "./notifications";
 import { getBalance, getPricing, writeLedgerIdempotent } from "./tokens";
 import { buildDecisionEmail, purgeOnDecision } from "./candidate-stage";
 import { sendMail } from "./mailer";
@@ -39,6 +42,10 @@ export const PII_PURGE_DAYS_AFTER_CLOSE = 14;
  * 이 일수 후에 공고 자체를 자동 삭제 (cascade 로 후보자 포함).
  */
 export const UNRESOLVED_EXPIRED_DELETE_DAYS = 14;
+/** 정식 전환 안 된 임시 공고(isDraft)를 생성 후 이 일수 경과 시 자동 폐기. */
+export const DRAFT_TTL_DAYS = 7;
+/** 임시 공고 폐기 전 생성자에게 리마인드를 보내기 시작하는 경과 일수(폐기 D-2 무렵). */
+export const DRAFT_REMINDER_AFTER_DAYS = 5;
 
 /** 연장 버튼 노출 시점 — 종결 D-14 이내일 때만. */
 export const EXTEND_VISIBLE_WITHIN_DAYS = 14;
@@ -653,16 +660,114 @@ export async function deleteUnresolvedExpiredJobs(): Promise<{
   return { deletedJobs: targets.length };
 }
 
-/** 한 사이클 — close(no-op) → purge pdf → purge pii → 만료 미해결 공고 삭제. */
+/**
+ * 임시 공고(isDraft) 자동 폐기 — 생성 +DRAFT_TTL_DAYS 일 경과해도 정식 전환 안 된 것.
+ *
+ * 지원 링크로 먼저 들어와 hold(파싱·마스킹만) 된 이력서 파일·PII 도 함께 폐기 →
+ * 처리 근거 없이 잔존하는 지원자 PII 를 방지(PIPA). 일반 공고(isDraft=false)는 절대 대상이 아니다.
+ * job_postings 행을 통째 삭제 → cascade 로 candidates / attachments / screening_jobs 정리.
+ */
+export async function purgeAbandonedDrafts(): Promise<{
+  deletedDrafts: number;
+  deletedCandidates: number;
+  purgedFiles: number;
+}> {
+  const cutoff = sql`datetime('now', '-${sql.raw(String(DRAFT_TTL_DAYS))} days')`;
+  const targets = await db
+    .select({ id: jobPostings.id })
+    .from(jobPostings)
+    .where(and(eq(jobPostings.isDraft, true), lt(jobPostings.createdAt, cutoff)));
+
+  let deletedCandidates = 0;
+  let purgedFiles = 0;
+  for (const t of targets) {
+    const cands = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(eq(candidates.jobId, t.id));
+    const ids = cands.map((c) => c.id);
+    if (ids.length > 0) {
+      try {
+        const res = await deleteCandidateFiles(ids);
+        purgedFiles += res.deletedFiles ?? 0;
+      } catch (e) {
+        console.error(`purgeAbandonedDrafts: file delete failed (job=${t.id})`, e);
+      }
+      // hold 후보의 동의 기록(audit_logs)은 식별자만 redact 후 추적성 보존.
+      for (const c of cands) {
+        await redactCandidateAuditPii(c.id, []).catch((e) =>
+          console.error(`purgeAbandonedDrafts: audit redact failed (cid=${c.id})`, e)
+        );
+      }
+      deletedCandidates += ids.length;
+    }
+    await db.delete(jobPostings).where(eq(jobPostings.id, t.id));
+  }
+  return { deletedDrafts: targets.length, deletedCandidates, purgedFiles };
+}
+
+/**
+ * 폐기 임박 임시 공고 리마인드 — 생성 +DRAFT_REMINDER_AFTER_DAYS ~ +DRAFT_TTL_DAYS 사이의
+ * 미정식 임시 공고 생성자에게 인앱 알림 1회 (href 로 중복 방지). 7일 경과분은 purge 가 처리.
+ */
+export async function remindStaleDrafts(): Promise<{ reminded: number }> {
+  const ttlCutoff = sql`datetime('now', '-${sql.raw(String(DRAFT_TTL_DAYS))} days')`;
+  const remindCutoff = sql`datetime('now', '-${sql.raw(String(DRAFT_REMINDER_AFTER_DAYS))} days')`;
+  const targets = await db
+    .select({ id: jobPostings.id, userId: jobPostings.createdByUserId })
+    .from(jobPostings)
+    .where(
+      and(
+        eq(jobPostings.isDraft, true),
+        lt(jobPostings.createdAt, remindCutoff), // 5일 이상 경과
+        sql`${jobPostings.createdAt} >= ${ttlCutoff}` // 아직 7일 미만(곧 폐기될 것)
+      )
+    );
+
+  let reminded = 0;
+  for (const t of targets) {
+    if (!t.userId) continue;
+    const href = `/jobs/${t.id}`;
+    const [dup] = await db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(and(eq(notifications.type, "draft_reminder"), eq(notifications.href, href)))
+      .limit(1);
+    if (dup) continue;
+    await createNotification({
+      userId: t.userId,
+      type: "draft_reminder",
+      title: "임시 공고를 곧 정리합니다 — 공고 내용을 채워 정식 등록해 주세요",
+      href,
+      payload: { jobId: t.id },
+    });
+    reminded++;
+  }
+  return { reminded };
+}
+
+/** 한 사이클 — close(no-op) → purge pdf → purge pii → 만료 미해결 공고 삭제 → 임시 공고 리마인드·폐기. */
 export async function runLifecycleSweep(): Promise<{
   closed: number;
   pdfPurge: Awaited<ReturnType<typeof purgePdfsAfterClose>>;
   piiPurge: Awaited<ReturnType<typeof purgePiiAfterClose>>;
   unresolvedDeleted: Awaited<ReturnType<typeof deleteUnresolvedExpiredJobs>>;
+  draftReminders: Awaited<ReturnType<typeof remindStaleDrafts>>;
+  draftsPurged: Awaited<ReturnType<typeof purgeAbandonedDrafts>>;
 }> {
   const closed = await closeExpiredJobs();
   const pdfPurge = await purgePdfsAfterClose();
   const piiPurge = await purgePiiAfterClose();
   const unresolvedDeleted = await deleteUnresolvedExpiredJobs();
-  return { closed, pdfPurge, piiPurge, unresolvedDeleted };
+  // 리마인드를 먼저(5~7일), 그다음 폐기(7일+) — 폐기 전에 알림이 가도록 순서 보장.
+  const draftReminders = await remindStaleDrafts();
+  const draftsPurged = await purgeAbandonedDrafts();
+  return {
+    closed,
+    pdfPurge,
+    piiPurge,
+    unresolvedDeleted,
+    draftReminders,
+    draftsPurged,
+  };
 }

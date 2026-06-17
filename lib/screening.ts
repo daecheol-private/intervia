@@ -782,8 +782,14 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
 
   // AI 이력서 평가를 끈 공고 — 파싱·PII추출·마스킹(ensureParsed)과 중복제거까지만 수행하고
   // LLM 평가·점수·레포트는 생략한다. 후보자는 점수 없이 면접 단계로 바로 진행 가능.
-  if (job.aiScreeningDisabled) {
-    log.info("screening_skipped_parse_only", { candidateId, jobId: job.id });
+  // 임시 공고(isDraft)도 동일 — 지원 링크로 먼저 들어온 이력서를 파싱·마스킹까지만 해두고(hold),
+  // 공고가 정식 등록(isDraft=false)되면 그때 재평가 요청으로 LLM 평가가 진행된다.
+  if (job.aiScreeningDisabled || job.isDraft) {
+    log.info("screening_skipped_parse_only", {
+      candidateId,
+      jobId: job.id,
+      reason: job.isDraft ? "draft" : "ai_disabled",
+    });
     return;
   }
 

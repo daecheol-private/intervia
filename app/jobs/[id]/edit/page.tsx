@@ -3,12 +3,14 @@
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Sparkles, Link2, Loader2 } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { TraitProfileSelector } from "@/app/components/TraitProfileSelector";
 import {
   DEFAULT_TRAIT_PROFILE,
   parseTraitProfile,
+  traitProfileFromKeys,
   type TraitProfile,
 } from "@/lib/personality";
 import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
@@ -36,7 +38,13 @@ export default function EditJobPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const [form, setForm] = useState<Form | null>(null);
+  const [isDraft, setIsDraft] = useState(false);
   const [saving, setSaving] = useState(false);
+  // 기존 공고 URL 자동 채우기 — 새 공고 등록과 동일 (임시공고 정식 전환 시 사람인 URL 로 내용 채우기 등).
+  const [importUrl, setImportUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importErr, setImportErr] = useState("");
+  const [importInfo, setImportInfo] = useState<string | null>(null);
   // 채용 담당자 이메일 기본값/도메인 검증용 — 로그인 사용자 이메일.
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const myDomain = myEmail ? getEmailDomain(myEmail) : null;
@@ -53,11 +61,13 @@ export default function EditJobPage() {
         /* 비치명적 */
       }
       const j = await fetch(`/api/jobs/${id}`).then((r) => r.json());
+      setIsDraft(!!j.isDraft);
       setForm({
-        title: j.title,
+        title: j.title === "(작성 중인 임시 공고)" ? "" : j.title,
         position: j.position,
-        level: j.level,
-        employmentType: j.employmentType,
+        // 임시공고는 빈 값일 수 있음 → 유효한 기본값으로 보정(빈 select 면 정식 전환이 막힘).
+        level: j.level || "3~5년차 (중급)",
+        employmentType: j.employmentType || "정규직",
         responsibilities: j.responsibilities,
         requirements: j.requirements,
         idealProfile: j.idealProfile ?? "",
@@ -76,8 +86,86 @@ export default function EditJobPage() {
     })();
   }, [id]);
 
-  const submit = async () => {
+  const importFromUrl = async () => {
+    setImportErr("");
+    setImportInfo(null);
+    if (!importUrl.trim()) {
+      setImportErr("URL을 입력하세요.");
+      return;
+    }
+    setImporting(true);
+    const r = await fetch("/api/jobs/import-from-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: importUrl.trim() }),
+    });
+    setImporting(false);
+    if (!r.ok) {
+      setImportErr((await r.text()) || "가져오기 실패");
+      return;
+    }
+    const d = (await r.json()) as {
+      title: string;
+      position: string;
+      level: string;
+      employmentType: string;
+      responsibilities: string;
+      requirements: string;
+      idealProfile: string;
+      preferredTraits: string[];
+      confidence: number;
+      meta: { usedImageFallback: boolean; imageCount: number; siteHint?: string };
+    };
+    const LEVELS = [
+      "신입 (0년)",
+      "1~2년차 (주니어)",
+      "3~5년차 (중급)",
+      "6~9년차 (시니어)",
+      "10년 이상 (리드)",
+    ];
+    const EMPLOYMENT = ["정규직", "계약직", "인턴", "프리랜서"];
+    setForm((f) =>
+      f
+        ? {
+            ...f,
+            title: d.title,
+            position: d.position,
+            level: LEVELS.includes(d.level) ? d.level : f.level,
+            employmentType: EMPLOYMENT.includes(d.employmentType)
+              ? d.employmentType
+              : f.employmentType,
+            responsibilities: d.responsibilities,
+            requirements: d.requirements,
+            idealProfile: d.idealProfile,
+            traitProfile: traitProfileFromKeys(d.preferredTraits ?? []),
+          }
+        : f
+    );
+    const bits = [
+      `${d.meta.siteHint ?? "외부 사이트"}에서 추출`,
+      `신뢰도 ${(d.confidence * 100).toFixed(0)}%`,
+    ];
+    if (d.meta.usedImageFallback) bits.push(`이미지 ${d.meta.imageCount}장 분석`);
+    setImportInfo(`✓ 자동 채움 완료 — ${bits.join(" · ")}. 내용 확인 후 저장하세요.`);
+  };
+
+  // asDraft=true → 임시공고로 저장(드래프트 유지). false → 정식 공고로 저장/등록.
+  // 임시공고를 정식 등록하려면 필수 항목이 모두 채워져야 한다(없으면 계속 임시 상태로 남던 문제 방지).
+  const save = async (asDraft: boolean) => {
     if (!form) return;
+    if (!asDraft) {
+      const missing =
+        !form.title.trim() ||
+        !form.position.trim() ||
+        !form.responsibilities.trim() ||
+        !form.requirements.trim();
+      if (missing) {
+        alert(
+          "정식 공고로 등록하려면 제목·직무·담당 업무·자격 요건을 모두 입력해야 합니다.\n(아직 작성 중이면 ‘임시공고로 저장’을 눌러주세요.)"
+        );
+        return;
+      }
+    }
     if (form.password && !/^\d{4}$/.test(form.password)) {
       alert("비밀번호는 4자리 숫자여야 합니다.");
       return;
@@ -102,6 +190,8 @@ export default function EditJobPage() {
     else if (!form.password) delete payload.password;
     delete payload.hasPassword;
     delete payload.clearPassword;
+    // keepDraft=true 면 필수항목이 다 차도 정식 전환하지 않고 임시 유지(미과금).
+    if (asDraft) payload.keepDraft = true;
 
     const res = await fetch(`/api/jobs/${id}`, {
       method: "PUT",
@@ -142,10 +232,54 @@ export default function EditJobPage() {
 
       {/* 데스크톱: 공고 수정 폼 (모바일 숨김) */}
       <div className="hidden sm:block">
-      <h1 className="text-2xl font-bold mt-3 mb-6">공고 수정</h1>
+      <h1 className="text-2xl font-bold mt-3 mb-4">공고 수정</h1>
+
+      <div className="bg-primary-soft/40 border border-primary/20 rounded-2xl p-4 mb-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <h2 className="text-sm font-semibold text-primary-deep">
+            기존 공고 URL로 자동 채우기
+          </h2>
+        </div>
+        <p className="text-xs text-ink-soft mb-3">
+          사람인·잡코리아·원티드 등 채용 사이트 URL을 붙여넣으면 본문(이미지 포함)을 분석해 아래 필드를 채워줍니다. (기존 내용은 덮어쓰여요.)
+        </p>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted" />
+            <input
+              className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              placeholder="https://www.saramin.co.kr/zf_user/jobs/view?rec_idx=..."
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !importing && importFromUrl()}
+              disabled={importing}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={importFromUrl}
+            disabled={importing || !importUrl.trim()}
+            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium whitespace-nowrap inline-flex items-center gap-1.5"
+          >
+            {importing && <Loader2 className="w-4 h-4 animate-spin" />}
+            {importing ? "분석 중..." : "가져오기"}
+          </button>
+        </div>
+        {importErr && (
+          <div className="mt-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+            {importErr}
+          </div>
+        )}
+        {importInfo && (
+          <div className="mt-2 text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
+            {importInfo}
+          </div>
+        )}
+      </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
-        <Field label="공고 제목">
+        <Field label="공고 제목" required>
           <input
             className={inputCls}
             value={form.title}
@@ -153,7 +287,7 @@ export default function EditJobPage() {
           />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="직무">
+          <Field label="직무" required>
             <input
               className={inputCls}
               value={form.position}
@@ -206,7 +340,7 @@ export default function EditJobPage() {
             </select>
           </Field>
         </div>
-        <Field label="담당 업무">
+        <Field label="담당 업무" required>
           <textarea
             className={inputCls + " h-24 resize-y"}
             value={form.responsibilities}
@@ -215,7 +349,7 @@ export default function EditJobPage() {
             }
           />
         </Field>
-        <Field label="자격 요건">
+        <Field label="자격 요건" required>
           <textarea
             className={inputCls + " h-24 resize-y"}
             value={form.requirements}
@@ -264,7 +398,7 @@ export default function EditJobPage() {
           />
         </Field>
 
-        <Field label="채용 담당자 이메일">
+        <Field label="채용 담당자 이메일" required>
           <input
             className={inputCls}
             type="email"
@@ -343,13 +477,34 @@ export default function EditJobPage() {
         >
           취소
         </button>
-        <button
-          onClick={submit}
-          disabled={saving}
-          className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm"
-        >
-          {saving ? "저장 중..." : "저장"}
-        </button>
+        {isDraft ? (
+          <>
+            <button
+              onClick={() => save(true)}
+              disabled={saving}
+              title="아직 임시공고로 유지 — 들어온 이력서는 보관만 하고 평가하지 않습니다."
+              className="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium disabled:opacity-50"
+            >
+              {saving ? "저장 중..." : "임시공고로 저장"}
+            </button>
+            <button
+              onClick={() => save(false)}
+              disabled={saving}
+              title="정식 공고로 등록 — 평가가 시작되고 과금됩니다."
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm"
+            >
+              {saving ? "저장 중..." : "공고 생성"}
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => save(false)}
+            disabled={saving}
+            className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm"
+          >
+            {saving ? "저장 중..." : "저장"}
+          </button>
+        )}
       </div>
       </div>
     </main>
@@ -359,11 +514,20 @@ export default function EditJobPage() {
 const inputCls =
   "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <label className="block text-sm font-medium text-slate-700 mb-1.5">
         {label}
+        {required && <span className="text-danger ml-1">*</span>}
       </label>
       {children}
     </div>

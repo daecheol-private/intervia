@@ -1,0 +1,1 @@
+ALTER TABLE `job_postings` ADD `is_draft` integer DEFAULT false NOT NULL;

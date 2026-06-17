@@ -9,7 +9,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
 import { deleteCandidateFiles } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
-import { refundFeature } from "@/lib/tokens";
+import { chargeFeature, refundFeature } from "@/lib/tokens";
 import { stripBiasedLines } from "@/lib/job-bias-filter";
 import { parseDbTimestamp } from "@/lib/utils";
 import { traitProfileInputToJson } from "@/lib/personality";
@@ -98,6 +98,24 @@ export async function PUT(
   }
 
   const body = await req.json();
+
+  // 임시 공고(isDraft) 정식 전환 — 필수 항목이 모두 채워지면 isDraft=false 로 바꾸고 job_post 과금.
+  // 일부만 채워 저장하면 임시 상태 유지(미과금). chargeFeature 는 멱등이라 재전환해도 이중과금 없음.
+  const wasDraft = existing.isDraft;
+  const requiredKeys = [
+    "title",
+    "position",
+    "level",
+    "employmentType",
+    "responsibilities",
+    "requirements",
+  ];
+  const hasAllRequired = requiredKeys.every(
+    (k) => typeof body[k] === "string" && body[k].trim().length > 0
+  );
+  // keepDraft=true 면 필수항목이 다 차 있어도 정식 전환하지 않고 임시 상태 유지(과금 X).
+  const finalizing = wasDraft && hasAllRequired && body.keepDraft !== true;
+
   const update: Record<string, unknown> = {
     title: body.title,
     position: body.position,
@@ -147,12 +165,33 @@ export async function PUT(
     update.passwordHash = await hashPassword(body.password);
   }
 
+  if (finalizing) update.isDraft = false;
+
   const [row] = await db
     .update(jobPostings)
     .set(update)
     .where(eq(jobPostings.id, jobId))
     .returning();
   if (!row) return new Response("Not found", { status: 404 });
+
+  // 임시 → 정식 전환 성공 시 job_post 과금 (멱등 — refType=job/refId=jobId).
+  if (finalizing && row.orgId) {
+    await chargeFeature({
+      orgId: row.orgId,
+      feature: "job_post",
+      refType: "job",
+      refId: jobId,
+      userId: me!.id,
+      memo: row.title,
+    });
+    logAudit(req, {
+      actor: me!,
+      action: "job.finalize_draft",
+      resourceType: "job",
+      resourceId: jobId,
+      orgId: row.orgId,
+    });
+  }
 
   if (jdChanged) {
     after(async () => {

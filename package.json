@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.6.0",
-    "@libsql/client": "^0.17.3",
+    "@libsql/client": "^0.17.4",
     "@next/env": "^16.2.6",
     "@vercel/blob": "^2.3.3",
     "bcryptjs": "^3.0.3",

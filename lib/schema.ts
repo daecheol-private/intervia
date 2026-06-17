@@ -223,6 +223,13 @@ export const jobPostings = sqliteTable("job_postings", {
   aiScreeningDisabled: integer("ai_screening_disabled", { mode: "boolean" })
     .notNull()
     .default(false),
+  // 공고별 공개 지원 링크 토큰 — /apply/[token]. 후보자(비로그인)가 사람인 등에서 넘어와 직접 이력서 업로드.
+  // null = 링크 미발급. HR 이 "지원 링크 생성" 시 부여. uniqueIndex 로 충돌 방지(NULL 다수 허용).
+  applyToken: text("apply_token"),
+  // 임시 공고 — "URL 먼저, 공고 내용 나중" 시나리오. 지원 링크만 먼저 발급(사람인 등록용)하고
+  // JD 는 비워둔 상태. true 인 동안: job_post 미과금 + 들어온 이력서는 파싱·마스킹만(LLM 평가 hold).
+  // 공고 내용을 채워 저장하면 false 로 전환되며 그때 job_post 과금 + hold 이력서 평가 가능.
+  isDraft: integer("is_draft", { mode: "boolean" }).notNull().default(false),
   // 공고 라이프사이클 — 기본 2개월. 종결 후 +7일 = PDF 폐기 / +14일 = PII 폐기.
   status: text("status", { enum: ["active", "closed"] })
     .notNull()
@@ -239,6 +246,8 @@ export const jobPostings = sqliteTable("job_postings", {
 }, (t) => ({
   // 대시보드 — 법인별 공고 목록.
   orgIdx: index("idx_job_postings_org").on(t.orgId),
+  // 공개 지원 링크 토큰 역방향 조회 + 충돌 방지 (NULL 은 SQLite 에서 다수 허용).
+  applyTokenIdx: uniqueIndex("idx_job_postings_apply_token").on(t.applyToken),
 }));
 
 /**
@@ -324,6 +333,8 @@ export const candidates = sqliteTable("candidates", {
   uploadedByUserId: integer("uploaded_by_user_id").references(() => users.id, {
     onDelete: "set null",
   }),
+  // 유입 경로 — 'manual'(HR 업로드) / 'apply_link'(공개 지원 링크 자가 업로드).
+  source: text("source").notNull().default("manual"),
   resumeHash: text("resume_hash"),
   // 파싱된 이력서 본문(정규화) SHA-256. resume_hash(파일 바이트)와 달리 "내용 동일"을 잡는다.
   // 바이트가 달라도(재저장·재export) 텍스트가 같으면 같은 값 → 워커가 같은 공고 내 중복 자동 삭제.
@@ -1170,6 +1181,7 @@ export const notifications = sqliteTable("notifications", {
       "announcement",
       "new_inquiry",
       "inquiry_replied",
+      "draft_reminder",
     ],
   }).notNull(),
   title: text("title").notNull(),

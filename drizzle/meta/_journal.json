@@ -246,6 +246,20 @@
       "when": 1781676698315,
       "tag": "0034_magical_union_jack",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1781696104739,
+      "tag": "0035_open_warlock",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1781701392120,
+      "tag": "0036_eminent_shiva",
+      "breakpoints": true
     }
   ]
 }

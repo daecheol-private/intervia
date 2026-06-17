@@ -40,6 +40,7 @@ export default async function JobsListPage({
       interviewDurationMinutes: jobPostings.interviewDurationMinutes,
       createdAt: jobPostings.createdAt,
       passwordHash: jobPostings.passwordHash,
+      isDraft: jobPostings.isDraft,
       candidateCount: count(candidates.id),
       // 서류평가 완료 = screening_score 가 기록된 후보 수
       screenedCount: sql<number>`COALESCE(SUM(CASE WHEN ${candidates.screeningScore} IS NOT NULL THEN 1 ELSE 0 END), 0)`,
@@ -76,12 +77,6 @@ export default async function JobsListPage({
               : `등록된 채용 공고 ${serialized.length}건`}
           </p>
         </div>
-        <Link
-          href="/jobs/new"
-          className="hidden sm:inline-flex items-center gap-2 bg-primary hover:bg-primary-deep text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition-colors"
-        >
-          <span className="text-base leading-none">+</span> 새 공고 등록
-        </Link>
       </div>
 
       <JobsList jobs={serialized} isAdmin={me?.isAdmin ?? false} />
