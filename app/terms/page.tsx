@@ -76,8 +76,9 @@ export default function TermsPage() {
         <ol className="list-decimal list-inside space-y-1 text-sm">
           <li>
             이용자는 본 서비스에 이력서·자기소개서·포트폴리오 등 후보자 정보를
-            업로드하기 전, 해당 후보자로부터 다음 사항에 대한 적법한 동의를
-            취득할 책임을 진다.
+            업로드하기 전, 해당 후보자에게 다음 사항을 적법하게 고지하고, 그중
+            동의가 필요한 사항에 대해서는 후보자로부터 적법한 동의를 취득할
+            책임을 진다.
             <ul className="list-disc list-inside ml-5 mt-1 space-y-0.5 text-slate-700">
               <li>{COMPANY_INFO.name} 에 대한 개인정보 처리위탁 (PIPA §26)</li>
               <li>
