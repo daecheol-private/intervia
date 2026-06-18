@@ -92,6 +92,7 @@ export function proxy(req: NextRequest) {
     pathname.startsWith("/schedule/") ||
     pathname.startsWith("/unsubscribe/") ||
     pathname.startsWith("/api/auth/") ||
+    pathname === "/api/client-error" ||
     pathname === "/api/orgs" ||
     pathname.startsWith("/api/orgs/") ||
     pathname.startsWith("/api/invites/") ||
