@@ -361,8 +361,10 @@ export default function CandidateDetailPage() {
         ← {job.title}
       </Link>
 
-      {/* Header */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 mt-3 shadow-sm">
+      {/* Header — 정보 영역. 아래 액션 바와 시각적으로 한 카드처럼 보이도록
+          아래 모서리는 각지게(rounded-t-2xl) + 아래 테두리는 제거(border-b-0).
+          둘 사이 경계선은 액션 바의 위쪽 테두리가 담당한다. */}
+      <div className="bg-white border border-slate-200 border-b-0 rounded-t-2xl p-6 mt-3 shadow-sm">
         <div className="flex justify-between items-start gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -436,11 +438,12 @@ export default function CandidateDetailPage() {
         </div>
       </div>
 
-      {/* 액션 바 — 스크롤해도 네비 바(h-14) 바로 아래에 고정되어, 하단 평가 내용을
-          보다가 맨 위로 올리지 않고 단계 변경·종결 결정을 할 수 있다. 마스킹 전체보기를
-          펼치면 영역이 길어져 고정이 어색해지므로 그때만 sticky 를 해제한다. */}
-      <div className={showFullResume ? "mt-3" : "sticky top-14 z-30 mt-3"}>
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm px-6 py-3">
+      {/* 액션 바 — 평소엔 위 정보 카드에 바로 붙어 하나의 카드처럼 보이고(위 모서리만
+          각지게 rounded-b-2xl), 스크롤하면 네비 바(h-14) 아래로 떨어져 고정된다.
+          그래서 하단 평가 내용을 보다가 맨 위로 올리지 않고 단계 변경·종결을 처리할 수 있다.
+          마스킹 전체보기를 펼치면 영역이 길어져 고정이 어색해지므로 그때만 sticky 를 해제한다. */}
+      <div className={showFullResume ? "" : "sticky top-14 z-30"}>
+        <div className="bg-white border border-slate-200 rounded-b-2xl shadow-sm px-6 py-3">
           <StagePanel
             candidate={candidate}
             jobTitle={job.title}
