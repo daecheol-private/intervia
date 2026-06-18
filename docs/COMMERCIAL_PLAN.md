@@ -627,6 +627,8 @@
   - **설계 의도**: 단가를 영구 인하하는 대신 "정가(앵커) 노출 + 기간한정 할인"으로 베타 종료 후 인상충격을 최소화. 할인은 *가격이 실제 장벽인* AI 면접에만 집중(이력서 300원은 이미 장벽 아님 → 미할인). 무료 보너스 증액은 hoarding(쟁여두고 베타 후 사용) 때문에 채택 안 함. 헤비 유저가 500토큰 소진 후 1,000원 결제벽에 닿게 해 **지불의향(WTP) 신호** 측정.
   - **단일 소스**: [lib/beta.ts](../lib/beta.ts) — `LIST_PRICING`(정가) / `BETA`(active·endsAtLabel·note) / `BETA_PRICING`(할인가) / `EFFECTIVE_PRICING`(실효가). 실제 차감은 [lib/tokens.ts](../lib/tokens.ts) `DEFAULT_PRICING = EFFECTIVE_PRICING` 로 연결(시점단가 차감이라 베타 종료 후에도 기존 차감분 영향 없음).
   - **표시**: `/`(랜딩)·`/org/tokens` — 정가 취소선(~~3,000원~~) + 베타가(1,000원) + "오픈베타 ~7/31" 배지. `/admin/pricing` — 베타 안내문(단가표는 같은 `getAllPricing` 읽어 실효가 표시).
-  - **종료/연장** (가격 자동복귀 X — 자정 급변 사고 방지): 종료 = `BETA.active=false`(즉시 정가 복귀), 연장 = `endsAtLabel` 수정, 단가 조정 = `BETA_PRICING` 값 변경. 전부 `lib/beta.ts` 한 곳.
-  - **⚠️ 운영 주의**: `token_pricing` DB override 행이 있으면 `getPricing` 에서 그게 코드 기본값보다 우선. 배포 후 `/org/tokens` 에서 AI 면접이 **10토큰(1,000원)** 으로 보이는지 확인(30이면 override 존재 → `/admin/pricing` 에서 10 저장). 평상시 `/admin/pricing` "저장"은 누르지 말 것(override 행 생성 → 베타 종료해도 정가 복귀 안 됨).
-  - 검증: `npx tsc --noEmit` 통과. dev 랜딩 HTML 에서 정가 취소선(`>3,000<`)+베타가(`>1,000<`)·"오픈베타"·"2026년 7월 31일" 렌더 + `getAllPricing` 이 interview=10 반환 확인. DB 변경 없음.
+  - **연장 / 단가 조정**: 연장 = `endsAtLabel` 수정, 단가 조정 = `BETA_PRICING`(코드) 또는 `/admin/pricing`(DB override). 표시(배지·취소선) ON/OFF 는 `BETA.active`.
+  - **⚠️ 운영 적용 경위 + 종료 절차**: 운영 `token_pricing` 에 시드 override(interview=30·offline=30)가 있어 코드 기본값(10)을 덮고 있었음 → 코드 배포만으론 1,000원 미반영. **2026-06-18 `/admin/pricing` 에서 interview·offline 을 10 으로 저장**해 운영 반영(intervia.kr 에서 ~~3,000~~→1,000·취소선 렌더 검증). **결과: 가격이 DB override(10)로 고정**돼, `BETA.active=false` *만*으론 정가 복귀 안 됨.
+    - **베타 종료 = 2단계**: ① `/admin/pricing` 에서 AI 면접·대면 면접 평가를 **30** 으로 저장(가격·취소선 복귀) ② `lib/beta.ts` `BETA.active=false` 재배포(배지 제거).
+    - (1단계 토글로 끝내고 싶으면 운영 `token_pricing` 의 interview·offline override 행을 삭제 → 이후 가격이 `lib/beta.ts` 단일 제어.)
+  - 검증: `npx tsc --noEmit` 통과. 운영 배포(`e6fd5b1`) 후 intervia.kr 에서 "오픈베타"·정가 취소선(`>3,000<`)·베타가(`>1,000<`/`>10<`) 렌더 확인. 코드 DB 변경 없음(운영 단가는 관리자 UI 로 조정).
