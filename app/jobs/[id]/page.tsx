@@ -1,16 +1,22 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { upload } from "@vercel/blob/client";
-import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
 import { JobExpiredDecisionModal } from "@/app/components/JobExpiredDecisionModal";
 import { notify, confirmDialog } from "@/app/components/Dialog";
 import Link from "next/link";
 import { compositeScore, formatKstDateTime } from "@/lib/utils";
 import { isEncryptedZipFile } from "@/lib/zip-encrypted-client";
-import { Loader2, ExternalLink } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   STAGE_LABELS,
   STAGE_GROUPS,
@@ -27,21 +33,12 @@ import {
   type GroupKey,
   type WaiterFilter,
 } from "@/lib/candidate-state";
-import {
-  HL,
-  OutcomeBadge,
-  RecBadge,
-  STAGE_RANK,
-  StageBadge,
-  Tag,
-  WaitBadge,
-  dimIfClosed,
-  stageGroupBorder,
-} from "./badges";
+import { STAGE_RANK, Tag } from "./badges";
+import { CandidateCard } from "./candidate-card";
 import ApplyLinkButton from "./ApplyLinkButton";
 import ApplyIntakeBanner from "./ApplyIntakeBanner";
 import { BulkDecisionModal, SchedulePropose } from "./bulk-actions";
-import { CandidateScores, candidateSearchExtras } from "./candidate-scores";
+import { candidateSearchExtras } from "./candidate-scores";
 import { Section } from "@/app/candidates/[id]/shared";
 import { ApplicantConsentGate } from "./consent-gate";
 import { FunnelPanel } from "./funnel-panel";
@@ -50,41 +47,6 @@ import { fmtSlotRange, groupRound1Schedule } from "./round1-schedule";
 import { ShareButton } from "./share-button";
 import { UnlockPanel } from "./unlock-panel";
 import type { Candidate, Job, Round1ScheduleItem } from "./types";
-
-// 카드 전체가 <Link>라 같은 탭으로 이동한다. 이 버튼은 Link 바깥(형제)에 두고
-// 새 탭을 백그라운드로 연다. 행 hover 시에만 나타나 평소엔 점수 영역을 가리지 않음.
-// window.open 은 항상 새 탭으로 포커스를 옮기므로(전경), 브라우저가 백그라운드 탭을
-// 여는 유일한 경로인 Ctrl/⌘+클릭을 합성해 <a> 에 dispatch 한다 (Chrome/Edge 기준).
-function OpenInNewTabButton({ candidateId }: { candidateId: number }) {
-  return (
-    <button
-      type="button"
-      title="새 탭(백그라운드)에서 열기"
-      aria-label="새 탭(백그라운드)에서 열기"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        const a = document.createElement("a");
-        a.href = `/candidates/${candidateId}`;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.dispatchEvent(
-          new MouseEvent("click", {
-            ctrlKey: !isMac,
-            metaKey: isMac,
-            bubbles: false,
-            cancelable: true,
-            view: window,
-          })
-        );
-      }}
-      className="absolute right-2 top-2 z-10 rounded-md border border-slate-200 bg-white/90 p-1.5 text-slate-400 shadow-sm backdrop-blur transition opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-primary hover:border-primary/40 focus:outline-none"
-    >
-      <ExternalLink className="w-4 h-4" />
-    </button>
-  );
-}
 
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
@@ -200,7 +162,7 @@ export default function JobDetailPage() {
   // 직전 응답 원문 — 내용이 같으면 setState 를 생략해 4초 폴링이 매번 전체 리렌더
   // (후보 수백 명 카드 + 파생 계산) + 펀널 refetch 를 유발하지 않게 한다.
   const lastCandidatesJsonRef = useRef("");
-  const loadCandidates = async () => {
+  const loadCandidates = useCallback(async () => {
     const r = await fetch(`/api/jobs/${jobId}/candidates`);
     if (!r.ok) return;
     const text = await r.text();
@@ -209,7 +171,11 @@ export default function JobDetailPage() {
     setCandidatesList(JSON.parse(text));
     // 후보자 목록이 갱신되면 깔때기도 갱신 (stage 변경·삭제·신규 업로드 모두 커버)
     setFunnelKey((k) => k + 1);
-  };
+  }, [jobId]);
+  // 카드의 즐겨찾기 토글 콜백 — stable 참조라야 CandidateCard memo 가 유지된다.
+  const handleFavoriteToggle = useCallback(() => {
+    void loadCandidates();
+  }, [loadCandidates]);
 
   useEffect(() => {
     void loadJob();
@@ -645,125 +611,154 @@ export default function JobDetailPage() {
     !!job.closesAt &&
     new Date(job.closesAt).getTime() < Date.now();
 
-  // 파생 상태 — lib/candidate-state.ts 단일 진실원천. 그룹·필터·정렬·뱃지 모두 이 값 기준.
-  const stateMap = new Map(
-    candidatesList.map((c) => [c.id, deriveCandidateState(c)] as const)
-  );
-  const stateOf = (c: Candidate) => stateMap.get(c.id) ?? deriveCandidateState(c);
-  const groupOf = (c: Candidate): GroupKey => stateOf(c).group;
-  const GROUP_IDX = new Map(GROUP_ORDER.map((g, i) => [g, i] as const));
+  // 검색은 useDeferredValue 로 지연 — 입력(setSearch)은 즉시 반영되고, 무거운 필터/정렬/그룹핑은
+  // 한 박자 늦게(낮은 우선순위) 계산돼 후보가 많아도 타이핑이 끊기지 않는다.
+  const deferredSearch = useDeferredValue(search);
 
-  // 대기주체별 카운트 — 필터 칩 뱃지용 (탭/검색과 무관하게 전체 기준)
-  const waiterCounts: Record<Exclude<WaiterFilter, "all">, number> = {
-    hr: 0,
-    candidate: 0,
-    interviewer: 0,
-    system: 0,
-    closed: 0,
-  };
-  for (const c of candidatesList) {
-    const s = stateOf(c);
-    if (s.bucket === "closed") waiterCounts.closed++;
-    else if (s.waiter !== "none")
-      waiterCounts[s.waiter as Exclude<WaiterFilter, "all" | "closed">]++;
-  }
+  // 후보 목록 파생값 일괄 계산 — lib/candidate-state.ts 단일 진실원천. 그룹·필터·정렬·뱃지 기준.
+  // candidatesList(폴링 동일 시 참조 유지)·filter·검색어가 안 바뀌면 통째로 캐시되므로,
+  // 선택 토글 같은 다른 리렌더에서 수백 명분 파생계산이 다시 돌지 않는다.
+  const {
+    waiterCounts,
+    filtered,
+    favoriteCandidates,
+    round1Candidates,
+    grouped,
+    visibleIds,
+  } = useMemo(() => {
+    const stateMap = new Map(
+      candidatesList.map((c) => [c.id, deriveCandidateState(c)] as const)
+    );
+    const stateOf = (c: Candidate) =>
+      stateMap.get(c.id) ?? deriveCandidateState(c);
+    const groupOf = (c: Candidate): GroupKey => stateOf(c).group;
+    const GROUP_IDX = new Map(GROUP_ORDER.map((g, i) => [g, i] as const));
 
-  // 단일 필터 판정 — 값 종류별 의미:
-  //   대기주체: 파생 상태의 waiter / 결과: outcome ("최종 합격"은 stage 가 아니라 outcome 기준)
-  //   할일 pseudo: 파생 그룹 / 버킷·세부 단계: 진행 중(outcome null)만 — 펀널 박스 숫자와 일치,
-  //   종결자는 종결 칩·결과 필터로 본다.
-  const matchesFilter = (c: Candidate): boolean => {
-    switch (filter) {
-      case "all":
-        return true;
-      case "hr":
-      case "candidate":
-      case "interviewer":
-      case "system":
-      case "closed":
-        return matchesWaiterFilter(stateOf(c), filter);
-      case "in_progress":
-        return c.outcome == null;
-      case "hired":
-      case "rejected":
-      case "withdrawn":
-        return c.outcome === filter;
-      case "counter_proposed":
-        return stateOf(c).group === "hr_counter";
-      case "ai_link_expired":
-        return stateOf(c).group === "hr_ai_expired";
-      case "result_due":
-        return stateOf(c).group === "hr_result_due";
-      case "resume_action":
-        return stateOf(c).group === "hr_resume_action";
-      default:
-        if (filter.startsWith("bucket_")) {
-          const bucket = filter.slice("bucket_".length);
-          return STAGE_BUCKET[c.stage] === bucket && c.outcome == null;
-        }
-        return c.stage === filter && c.outcome == null;
+    // 대기주체별 카운트 — 필터 칩 뱃지용 (탭/검색과 무관하게 전체 기준)
+    const waiterCounts: Record<Exclude<WaiterFilter, "all">, number> = {
+      hr: 0,
+      candidate: 0,
+      interviewer: 0,
+      system: 0,
+      closed: 0,
+    };
+    for (const c of candidatesList) {
+      const s = stateOf(c);
+      if (s.bucket === "closed") waiterCounts.closed++;
+      else if (s.waiter !== "none")
+        waiterCounts[s.waiter as Exclude<WaiterFilter, "all" | "closed">]++;
     }
-  };
 
-  const q = search.trim().toLowerCase();
-  const filteredRaw = candidatesList.filter((c) => {
-    if (!matchesFilter(c)) return false;
-    if (!q) return true;
-    const hay = [
-      c.name,
-      c.email,
-      c.phone,
-      c.careerSummary,
-      c.screeningReport?.summary,
-      c.screeningReport?.strengths?.join(" "),
-      c.screeningReport?.matched_keywords?.join(" "),
-      c.resumeFilePath,
-      // 전형·태그·결과·점수·상태도 검색 (예: "비추천", "서류평가", "불합격", "평가 실패")
-      candidateSearchExtras(c),
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
-  });
+    // 단일 필터 판정 — 값 종류별 의미:
+    //   대기주체: 파생 상태의 waiter / 결과: outcome ("최종 합격"은 stage 가 아니라 outcome 기준)
+    //   할일 pseudo: 파생 그룹 / 버킷·세부 단계: 진행 중(outcome null)만 — 펀널 박스 숫자와 일치,
+    //   종결자는 종결 칩·결과 필터로 본다.
+    const matchesFilter = (c: Candidate): boolean => {
+      switch (filter) {
+        case "all":
+          return true;
+        case "hr":
+        case "candidate":
+        case "interviewer":
+        case "system":
+        case "closed":
+          return matchesWaiterFilter(stateOf(c), filter);
+        case "in_progress":
+          return c.outcome == null;
+        case "hired":
+        case "rejected":
+        case "withdrawn":
+          return c.outcome === filter;
+        case "counter_proposed":
+          return stateOf(c).group === "hr_counter";
+        case "ai_link_expired":
+          return stateOf(c).group === "hr_ai_expired";
+        case "result_due":
+          return stateOf(c).group === "hr_result_due";
+        case "resume_action":
+          return stateOf(c).group === "hr_resume_action";
+        default:
+          if (filter.startsWith("bucket_")) {
+            const bucket = filter.slice("bucket_".length);
+            return STAGE_BUCKET[c.stage] === bucket && c.outcome == null;
+          }
+          return c.stage === filter && c.outcome == null;
+      }
+    };
 
-  // 그룹 정렬 — 파이프라인 순서 (그룹 정의는 lib/candidate-state.ts).
-  // 1차 면접 후보(round1_candidate)는 별도 핀 섹션이라 그룹에서 제외.
-  const filtered = [...filteredRaw].sort((a, b) => {
-    const ga = GROUP_IDX.get(groupOf(a)) ?? 0;
-    const gb = GROUP_IDX.get(groupOf(b)) ?? 0;
-    if (ga !== gb) return ga - gb;
-    // 같은 그룹 내: HR 그룹은 점수 높은 순, 그 외는 stage 늦은 순.
-    if (isHrGroup(groupOf(a))) {
-      const ca = compositeScore(a.screeningScore, a.latestInterviewScore) ?? -1;
-      const cb = compositeScore(b.screeningScore, b.latestInterviewScore) ?? -1;
-      if (ca !== cb) return cb - ca;
-    } else {
-      const sa = STAGE_RANK[a.stage] ?? 0;
-      const sb = STAGE_RANK[b.stage] ?? 0;
-      if (sa !== sb) return sb - sa;
-    }
-    return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
-  });
+    const q = deferredSearch.trim().toLowerCase();
+    const filteredRaw = candidatesList.filter((c) => {
+      if (!matchesFilter(c)) return false;
+      if (!q) return true;
+      const hay = [
+        c.name,
+        c.email,
+        c.phone,
+        c.careerSummary,
+        c.screeningReport?.summary,
+        c.screeningReport?.strengths?.join(" "),
+        c.screeningReport?.matched_keywords?.join(" "),
+        c.resumeFilePath,
+        // 전형·태그·결과·점수·상태도 검색 (예: "비추천", "서류평가", "불합격", "평가 실패")
+        candidateSearchExtras(c),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
 
-  // 즐겨찾기 핀 섹션 — 모든 그룹 위. 점수 높은 순.
-  const favoriteCandidates = filtered
-    .filter((c) => c.favorited)
-    .sort((a, b) => {
-      const ca = compositeScore(a.screeningScore, a.latestInterviewScore) ?? -1;
-      const cb = compositeScore(b.screeningScore, b.latestInterviewScore) ?? -1;
-      if (ca !== cb) return cb - ca;
+    // 그룹 정렬 — 파이프라인 순서 (그룹 정의는 lib/candidate-state.ts).
+    // 1차 면접 후보(round1_candidate)는 별도 핀 섹션이라 그룹에서 제외.
+    const filtered = [...filteredRaw].sort((a, b) => {
+      const ga = GROUP_IDX.get(groupOf(a)) ?? 0;
+      const gb = GROUP_IDX.get(groupOf(b)) ?? 0;
+      if (ga !== gb) return ga - gb;
+      // 같은 그룹 내: HR 그룹은 점수 높은 순, 그 외는 stage 늦은 순.
+      if (isHrGroup(groupOf(a))) {
+        const ca = compositeScore(a.screeningScore, a.latestInterviewScore) ?? -1;
+        const cb = compositeScore(b.screeningScore, b.latestInterviewScore) ?? -1;
+        if (ca !== cb) return cb - ca;
+      } else {
+        const sa = STAGE_RANK[a.stage] ?? 0;
+        const sb = STAGE_RANK[b.stage] ?? 0;
+        if (sa !== sb) return sb - sa;
+      }
       return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
     });
-  // 1차 면접 후보는 별도 섹션 상단 노출 + border 강조 (즐겨찾기는 제외)
-  const round1Candidates = filtered.filter(
-    (c) => c.stage === "round1_candidate" && !c.favorited
-  );
-  const otherCandidates = filtered.filter(
-    (c) => c.stage !== "round1_candidate" && !c.favorited
-  );
 
-  const visibleIds = filtered.map((c) => c.id);
+    // 즐겨찾기 핀 섹션 — 모든 그룹 위. 점수 높은 순.
+    const favoriteCandidates = filtered
+      .filter((c) => c.favorited)
+      .sort((a, b) => {
+        const ca = compositeScore(a.screeningScore, a.latestInterviewScore) ?? -1;
+        const cb = compositeScore(b.screeningScore, b.latestInterviewScore) ?? -1;
+        if (ca !== cb) return cb - ca;
+        return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+      });
+    // 1차 면접 후보는 별도 섹션 상단 노출 + border 강조 (즐겨찾기는 제외)
+    const round1Candidates = filtered.filter(
+      (c) => c.stage === "round1_candidate" && !c.favorited
+    );
+    const otherCandidates = filtered.filter(
+      (c) => c.stage !== "round1_candidate" && !c.favorited
+    );
+    // 그룹별로 미리 분할 — 렌더에서 GROUP_ORDER 마다 다시 filter 하지 않도록.
+    const grouped = {} as Record<GroupKey, Candidate[]>;
+    for (const c of otherCandidates) {
+      (grouped[groupOf(c)] ??= []).push(c);
+    }
+
+    const visibleIds = filtered.map((c) => c.id);
+    return {
+      waiterCounts,
+      filtered,
+      favoriteCandidates,
+      round1Candidates,
+      grouped,
+      visibleIds,
+    };
+  }, [candidatesList, filter, deferredSearch]);
   const allSelected =
     visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   const toggleAll = () => {
@@ -777,14 +772,14 @@ export default function JobDetailPage() {
       return next;
     });
   };
-  const toggleOne = (id: number) => {
+  const toggleOne = useCallback((id: number) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }, []);
   // 핀 섹션(즐겨찾기·1차 면접 후보) 전용 일괄 선택 토글.
   const toggleSection = (ids: number[]) => {
     const all = ids.length > 0 && ids.every((id) => selected.has(id));
@@ -1809,88 +1804,14 @@ export default function JobDetailPage() {
               </div>
               <ul className="space-y-3">
                 {favoriteCandidates.map((c) => (
-                  <li key={c.id} className="relative group">
-                    <div
-                      className="absolute left-3 top-4 z-10"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(c.id)}
-                        onChange={() => toggleOne(c.id)}
-                        className="rounded border-slate-300"
-                      />
-                    </div>
-                    <OpenInNewTabButton candidateId={c.id} />
-                    <Link
-                      href={`/candidates/${c.id}`}
-                      className={`card-hover bg-white border-2 border-amber-300/60 rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
-                    >
-                      <div className="flex justify-between items-start gap-2 sm:gap-4 w-full">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <CandidateFavoriteStar
-                            candidateId={c.id}
-                            initial={c.favorited}
-                            onToggle={() => void loadCandidates()}
-                          />
-                          <span className="font-semibold text-slate-900">{c.name}</span>
-                          {c.outcome !== "hired" && <StageBadge stage={c.stage} />}
-                          {c.outcome ? (
-                            <OutcomeBadge outcome={c.outcome} />
-                          ) : (
-                            <WaitBadge c={c} />
-                          )}
-                          {c.outcome === "rejected" &&
-                            c.decisionEmailCount === 0 &&
-                            c.email && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/30 font-medium">
-                                📭 통보 미발송
-                              </span>
-                            )}
-                          {c.screeningReport && (
-                            <RecBadge rec={c.screeningReport.recommendation} />
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 mt-1.5">
-                          {c.careerYears != null && (
-                            <span>경력 {c.careerYears}년</span>
-                          )}
-                          {c.age != null && <span>{c.age}세</span>}
-                          {(c.educationLevel ||
-                            c.educationSchool ||
-                            c.educationMajor) && (
-                            <span className="text-slate-600">
-                              {[
-                                c.educationSchool,
-                                c.educationMajor,
-                                c.educationLevel,
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
-                            </span>
-                          )}
-                          {c.phone && <span>{c.phone}</span>}
-                          {c.email && <span>{c.email}</span>}
-                        </div>
-                        {c.careerSummary && (
-                          <p className="text-xs text-slate-600 mt-1">
-                            {c.careerSummary}
-                          </p>
-                        )}
-                        </div>
-                        <CandidateScores c={c} />
-                      </div>
-                      {c.screeningReport?.summary && (
-                        <p className="text-sm text-slate-600 mt-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-                          <HL text={c.screeningReport.summary} />
-                        </p>
-                      )}
-                      <div className="text-[11px] text-slate-400 mt-1">
-                        {formatKstDateTime(c.createdAt)} 업로드
-                      </div>
-                    </Link>
-                  </li>
+                  <CandidateCard
+                    key={c.id}
+                    c={c}
+                    variant="favorite"
+                    selected={selected.has(c.id)}
+                    onToggleSelect={toggleOne}
+                    onFavoriteToggle={handleFavoriteToggle}
+                  />
                 ))}
               </ul>
             </div>
@@ -1926,89 +1847,20 @@ export default function JobDetailPage() {
               </div>
               <ul className="space-y-3">
                 {round1Candidates.map((c) => (
-                  <li key={c.id} className="relative group">
-                    <div
-                      className="absolute left-3 top-4 z-10"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(c.id)}
-                        onChange={() => toggleOne(c.id)}
-                        className="rounded border-slate-300"
-                      />
-                    </div>
-                    <OpenInNewTabButton candidateId={c.id} />
-                    <Link
-                      href={`/candidates/${c.id}`}
-                      className={`card-hover bg-card border-2 border-accent/60 rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
-                    >
-                      <div className="flex justify-between items-start gap-2 sm:gap-4 w-full">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <CandidateFavoriteStar
-                            candidateId={c.id}
-                            initial={c.favorited}
-                            onToggle={() => void loadCandidates()}
-                          />
-                          <span className="font-semibold text-slate-900">
-                            {c.name}
-                          </span>
-                          {c.outcome !== "hired" && <StageBadge stage={c.stage} />}
-                          {c.outcome ? (
-                            <OutcomeBadge outcome={c.outcome} />
-                          ) : (
-                            <WaitBadge c={c} />
-                          )}
-                          {c.screeningReport && (
-                            <RecBadge rec={c.screeningReport.recommendation} />
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 mt-1.5">
-                          {c.careerYears != null && (
-                            <span>경력 {c.careerYears}년</span>
-                          )}
-                          {c.age != null && <span>{c.age}세</span>}
-                          {(c.educationLevel ||
-                            c.educationSchool ||
-                            c.educationMajor) && (
-                            <span className="text-slate-600">
-                              {[
-                                c.educationSchool,
-                                c.educationMajor,
-                                c.educationLevel,
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
-                            </span>
-                          )}
-                          {c.phone && <span>{c.phone}</span>}
-                          {c.email && <span>{c.email}</span>}
-                        </div>
-                        {c.careerSummary && (
-                          <p className="text-xs text-slate-600 mt-1">
-                            {c.careerSummary}
-                          </p>
-                        )}
-                        </div>
-                        <CandidateScores c={c} />
-                      </div>
-                      {c.screeningReport?.summary && (
-                        <p className="text-sm text-slate-600 mt-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-                          <HL text={c.screeningReport.summary} />
-                        </p>
-                      )}
-                      <div className="text-[11px] text-slate-400 mt-1">
-                        {formatKstDateTime(c.createdAt)} 업로드
-                      </div>
-                    </Link>
-                  </li>
+                  <CandidateCard
+                    key={c.id}
+                    c={c}
+                    variant="round1"
+                    selected={selected.has(c.id)}
+                    onToggleSelect={toggleOne}
+                    onFavoriteToggle={handleFavoriteToggle}
+                  />
                 ))}
               </ul>
             </div>
           )}
           {GROUP_ORDER.map((gk) => {
-            const items = otherCandidates.filter((c) => groupOf(c) === gk);
+            const items = grouped[gk] ?? [];
             if (items.length === 0) return null;
             const meta = GROUP_META[gk];
             const dimmed = gk === "closed_hired" || gk === "closed_neg";
@@ -2048,88 +1900,13 @@ export default function JobDetailPage() {
                 </div>
                 <ul className={`space-y-3 ${dimmed ? "opacity-60" : ""}`}>
                   {items.map((c) => (
-                    <li key={c.id} className="relative group">
-                      <div
-                        className="absolute left-3 top-4 z-10"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected.has(c.id)}
-                          onChange={() => toggleOne(c.id)}
-                          className="rounded border-slate-300"
-                        />
-                      </div>
-                      <OpenInNewTabButton candidateId={c.id} />
-                      <Link
-                        href={`/candidates/${c.id}`}
-                        className={`card-hover bg-white border border-slate-200 rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
-                      >
-                        <div className="flex justify-between items-start gap-2 sm:gap-4 w-full">
-                        <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <CandidateFavoriteStar
-                            candidateId={c.id}
-                            initial={c.favorited}
-                            onToggle={() => void loadCandidates()}
-                          />
-                          <span className="font-semibold text-slate-900">{c.name}</span>
-                          {c.outcome !== "hired" && <StageBadge stage={c.stage} />}
-                          {c.outcome ? (
-                            <OutcomeBadge outcome={c.outcome} />
-                          ) : (
-                            <WaitBadge c={c} />
-                          )}
-                          {c.outcome === "rejected" &&
-                            c.decisionEmailCount === 0 &&
-                            c.email && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/30 font-medium">
-                                📭 통보 미발송
-                              </span>
-                            )}
-                          {c.screeningReport && (
-                            <RecBadge rec={c.screeningReport.recommendation} />
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 mt-1.5">
-                          {c.careerYears != null && (
-                            <span>경력 {c.careerYears}년</span>
-                          )}
-                          {c.age != null && <span>{c.age}세</span>}
-                          {(c.educationLevel ||
-                            c.educationSchool ||
-                            c.educationMajor) && (
-                            <span className="text-slate-600">
-                              {[
-                                c.educationSchool,
-                                c.educationMajor,
-                                c.educationLevel,
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
-                            </span>
-                          )}
-                          {c.phone && <span>{c.phone}</span>}
-                          {c.email && <span>{c.email}</span>}
-                        </div>
-                        {c.careerSummary && (
-                          <p className="text-xs text-slate-600 mt-1">
-                            {c.careerSummary}
-                          </p>
-                        )}
-                        </div>
-                        <CandidateScores c={c} />
-                      </div>
-                      {c.screeningReport?.summary && (
-                        <p className="text-sm text-slate-600 mt-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-                          <HL text={c.screeningReport.summary} />
-                        </p>
-                      )}
-                      <div className="text-[11px] text-slate-400 mt-1">
-                        {formatKstDateTime(c.createdAt)} 업로드
-                      </div>
-                      </Link>
-                    </li>
+                    <CandidateCard
+                      key={c.id}
+                      c={c}
+                      selected={selected.has(c.id)}
+                      onToggleSelect={toggleOne}
+                      onFavoriteToggle={handleFavoriteToggle}
+                    />
                   ))}
                 </ul>
               </div>
