@@ -59,6 +59,10 @@ next-env.d.ts
 /test-*.ts
 /test-*.mjs
 
+# 임시 커밋 메시지 파일 (PowerShell 한글 커밋용 — git commit -F)
+/.commit-msg.txt
+.commit-msg.txt
+
 # E2E 테스트용 fixture (자동 재생성: scripts/make-test-resume.mjs)
 /test-fixtures/
 
