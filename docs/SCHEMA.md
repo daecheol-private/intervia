@@ -86,8 +86,8 @@
 | user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | |
 | ip | TEXT NULL | 로그인 시점 IP (x-forwarded-for 우선) |
 | user_agent | TEXT NULL | 500자 잘림 |
-| last_seen_at | TEXT NULL | `getCurrentUser` 가 60초 간격으로 갱신 |
-| expires_at | TEXT NOT NULL | 14일 후 |
+| last_seen_at | TEXT NULL | `getCurrentUser` 가 5분 간격으로 갱신 (이때 expires_at 도 함께 슬라이딩) |
+| expires_at | TEXT NOT NULL | 슬라이딩 24시간 — 발급/활동 시점 +24h (5분 throttle 로 갱신) |
 | step_up_verified_at | TEXT NULL | 민감 액션(권한 변경/토큰 충전/cross-org 후보자 조회·삭제) 직전 step-up 인증 통과 시각. TTL 10분 — 만료 시 재인증 요구 |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 

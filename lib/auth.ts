@@ -5,14 +5,19 @@ import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { cache } from "react";
-import { addDays } from "./utils";
 
 export const SESSION_COOKIE = "session";
-const SESSION_DAYS = 14;
-// last_seen 갱신 빈도 — 매 요청마다 쓰면 DB 부하. 최소 간격(초) 이상 차이 나면 update.
+// 로그인 세션 유효기간 — 슬라이딩 24시간(마지막 활동 기준). 발급 시 now+TTL,
+// 이후 활동할 때마다(아래 throttle 간격) getCurrentUser 가 expiresAt 를 now+TTL 로 민다.
+// 쿠키 maxAge 슬라이딩은 proxy.ts 가 담당(RSC 에서는 쿠키 set 불가) — TTL 동기화 필요.
+const SESSION_TTL_HOURS = 24;
+const SESSION_TTL_MS = SESSION_TTL_HOURS * 60 * 60 * 1000;
+const SESSION_TTL_SEC = SESSION_TTL_HOURS * 60 * 60;
+// last_seen/만료 슬라이딩 갱신 빈도 — 매 요청마다 쓰면 DB 부하. 최소 간격(초) 이상 차이 나면 update.
 // SQLite/Turso 는 단일 writer 라 전 법인 쓰기가 직렬화됨 → 인증된 모든 요청이 세션
 // write 를 유발하면 쓰기 경합의 큰 축이 된다. 5분 간격이면 "현재 디바이스 마지막 활동"
 // 표시 정밀도는 5분 단위로만 떨어지고(허용), 세션 write 는 ~5배 감소.
+// 슬라이딩 만료도 같은 throttle 을 타므로 idle 한도는 24h ~ 24h+5분 사이(허용).
 const LAST_SEEN_UPDATE_INTERVAL_SEC = 300;
 
 // 2026 권장: bcrypt cost 12. 기존 cost=10 으로 만든 해시는 verify 시 자동 호환.
@@ -34,7 +39,7 @@ export async function createSession(
   meta?: { ip?: string | null; userAgent?: string | null }
 ): Promise<string> {
   const token = "s_" + randomBytes(24).toString("hex");
-  const expiresAt = addDays(new Date(), SESSION_DAYS).toISOString();
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   await db.insert(sessions).values({
     token,
     userId,
@@ -56,7 +61,7 @@ export async function setSessionCookie(token: string) {
     sameSite: "lax",
     secure: !isDev,
     path: "/",
-    maxAge: 60 * 60 * 24 * SESSION_DAYS,
+    maxAge: SESSION_TTL_SEC,
   });
 }
 
@@ -118,13 +123,17 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     return null;
   }
 
-  // last_seen 갱신 — 최소 간격 (60초) 이상 차이날 때만. 매 요청 write 부하 회피.
+  // last_seen + 만료 슬라이딩 갱신 — throttle 간격 이상 차이날 때만. 매 요청 write 부하 회피.
+  // expiresAt 를 now+TTL 로 밀어 "활동하는 한 유지, 비활동 시 TTL 후 만료"(슬라이딩) 구현.
   const now = Date.now();
   const lastSeenMs = row.lastSeenAt ? new Date(row.lastSeenAt).getTime() : 0;
   if (now - lastSeenMs > LAST_SEEN_UPDATE_INTERVAL_SEC * 1000) {
     void db
       .update(sessions)
-      .set({ lastSeenAt: new Date(now).toISOString() })
+      .set({
+        lastSeenAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + SESSION_TTL_MS).toISOString(),
+      })
       .where(eq(sessions.token, token))
       .catch(() => {
         /* 비치명적 */

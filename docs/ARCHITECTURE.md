@@ -97,9 +97,9 @@ interviewer/
 - 공고별 4자리 PIN은 **법인 격리 이후의 2차 가드** (같은 법인 내에서도 PIN 모르면 상세 X).
 
 ### 2. 인증
-- bcryptjs + DB 세션 (별도 sessions 테이블, 14일 만료)
+- bcryptjs + DB 세션 (별도 sessions 테이블, 슬라이딩 24시간 만료 — 활동 시 연장, 비활동 24h 시 만료)
 - httpOnly + sameSite=lax 쿠키
-- `proxy.ts`는 쿠키 존재만 체크 (Edge runtime이라 DB 못 씀)
+- `proxy.ts`는 쿠키 존재 체크 + 쿠키 maxAge 슬라이딩 갱신 (Edge runtime이라 DB 못 씀 — DB측 expires_at 슬라이딩은 `getCurrentUser` 담당)
 - 실제 검증은 페이지/API의 `getCurrentUser()`에서 (Node runtime)
 - `/login`, `/signup`, `/interview/*`, `/api/auth/*`, `/api/interview/*`, `/api/uploads/*`는 인증 면제
 

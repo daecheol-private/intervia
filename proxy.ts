@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const SESSION_COOKIE = "session";
+// 슬라이딩 세션 TTL(초) — lib/auth.ts SESSION_TTL_HOURS 와 동기화.
+const SESSION_TTL_SEC = 24 * 60 * 60;
 
 // CSRF 면제 경로 — 외부에서 호출되는 콜백/공개 엔드포인트.
 //   * /api/interview/* : 후보자(비로그인) 면접 진행 — 토큰 자체가 인증
@@ -107,7 +109,19 @@ export function proxy(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  // 슬라이딩 세션: 보호 경로를 통과할 때마다 쿠키 만료를 TTL 만큼 뒤로 민다.
+  // RSC 에서는 쿠키 set 이 불가하므로 미들웨어가 쿠키 수명 연장을 담당하고,
+  // DB 측 expiresAt 슬라이딩은 lib/auth.ts getCurrentUser 가 throttle 로 처리한다.
+  // 실제 세션 유효성(만료/폐기)은 서버의 DB expiresAt 가 판정 — 여기선 쿠키 수명만 연장.
+  const res = NextResponse.next();
+  res.cookies.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV !== "development",
+    path: "/",
+    maxAge: SESSION_TTL_SEC,
+  });
+  return res;
 }
 
 export const config = {

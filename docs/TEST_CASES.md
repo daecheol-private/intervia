@@ -153,7 +153,7 @@
 
 ## 3. 로그인 / 세션 / 잠금
 
-> 설계: bcryptjs + DB 세션(14일). auth_attempts 잠금. next 리다이렉트 상대경로만.
+> 설계: bcryptjs + DB 세션(슬라이딩 24h). auth_attempts 잠금. next 리다이렉트 상대경로만.
 
 ### 3.1 로그인 기본/상태 게이트 (`POST /api/auth/login`)
 - [x] **TC-3.1.1** 정상 로그인 → 세션 쿠키(httpOnly, sameSite=lax) 발급
