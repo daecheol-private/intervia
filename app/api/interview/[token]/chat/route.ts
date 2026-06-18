@@ -18,6 +18,7 @@ import {
   notableResponses,
   parseTraitProfile,
 } from "@/lib/personality";
+import { hasMcqQuestions } from "@/lib/mcq";
 import { hasValidConsent } from "@/lib/consent";
 import { sanitizeUserInput, detectSystemPromptLeak } from "@/lib/prompt-safety";
 import { maskText } from "@/lib/mask";
@@ -93,6 +94,8 @@ export async function POST(
           tone: jobPostings.tone,
           interviewDurationMinutes: jobPostings.interviewDurationMinutes,
           traitProfile: jobPostings.traitProfile,
+          mcqSet: jobPostings.mcqSet,
+          mcqEnabled: jobPostings.mcqEnabled,
         },
         // 회사명 — 공고가 속한 법인 이름. AI 면접관 자기소개에 사용.
         orgName: organizations.name,
@@ -129,6 +132,15 @@ export async function POST(
   if (isFirstTurn && cultureFit && !session.personalityProfile) {
     return Response.json(
       { error: "면접 시작 전 사전 문항 응답이 필요합니다.", code: "personality_required" },
+      { status: 403 }
+    );
+  }
+
+  // 객관식 사전 문항 게이트 — 공고에 확정된 세트가 있으면 응시 완료 후에만 채팅 시작.
+  // 인성검사와 독립(둘 다 있으면 인성→객관식 순서로 클라이언트가 진행). 첫 턴에만 적용(소급 X).
+  if (isFirstTurn && job.mcqEnabled && hasMcqQuestions(job.mcqSet) && !session.mcqResponses) {
+    return Response.json(
+      { error: "면접 시작 전 객관식 문제 풀이가 필요합니다.", code: "mcq_required" },
       { status: 403 }
     );
   }

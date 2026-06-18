@@ -1,0 +1,1 @@
+ALTER TABLE `job_postings` ADD `mcq_enabled` integer DEFAULT false NOT NULL;

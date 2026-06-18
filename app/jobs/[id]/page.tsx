@@ -37,6 +37,7 @@ import { STAGE_RANK, Tag } from "./badges";
 import { CandidateCard } from "./candidate-card";
 import ApplyLinkButton from "./ApplyLinkButton";
 import ApplyIntakeBanner from "./ApplyIntakeBanner";
+import { McqPanel } from "./mcq-panel";
 import { BulkDecisionModal, SchedulePropose } from "./bulk-actions";
 import { candidateSearchExtras } from "./candidate-scores";
 import { Section } from "@/app/candidates/[id]/shared";
@@ -1431,6 +1432,9 @@ export default function JobDetailPage() {
           rightSlot={<InterviewersInline jobId={Number(jobId)} />}
         />
       </div>
+
+      {/* AI 면접 객관식 사전 문항 — 전형 단계 현황 위, 한 줄 바. 선택 기능(토글로 적용 on/off). */}
+      <McqPanel jobId={jobId} disabled={isExpired} isDraft={!!job.isDraft} />
 
       <FunnelPanel
         jobId={jobId}

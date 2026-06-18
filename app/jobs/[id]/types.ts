@@ -14,6 +14,8 @@ export type Job = {
   extensionCount?: number;
   evaluationFocus?: string;
   companyName?: string | null;
+  // 임시 공고 여부 — 객관식 문제 생성은 정식 공고에서만 가능.
+  isDraft?: boolean;
 };
 
 export type Candidate = {

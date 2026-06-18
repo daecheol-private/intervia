@@ -1191,6 +1191,93 @@ ${screeningBlock(screening)}${interviewEvalBlock(interviewEval)}
 }
 
 /**
+ * AI 면접 객관식 사전 문항 **생성** 프롬프트.
+ *
+ * 공고 JD 기반 4지선다 사실형 문제. 같은 공고는 한 번 생성·확정한 세트를 전 후보자에게
+ * 재사용하므로(공정성) 후보자 정보는 넣지 않는다. 난이도는 요구 수준보다 한 단계 낮게 —
+ * 합격선 변별이 아니라 직무 기본기·성의 확인이 목적.
+ *
+ * 출력: { questions: [{ question, options[4], answer(0~3), rationale }] }.
+ * 정답 검증은 별도 호출(buildMcqVerificationPrompt)이 한 번 더 풀어 교차확인한다.
+ */
+export function buildMcqGenerationPrompt(
+  job: {
+    company?: string | null;
+    position: string;
+    level: string;
+    employmentType: string;
+    responsibilities: string;
+    requirements: string;
+    idealProfile?: string;
+  },
+  count: number
+): string {
+  return `너는 ${job.company ?? "한 기업"}의 **${job.position} 직무를 오래 해 온 시니어 실무자**다.
+아래 공고(JD)에 지원한 후보자가 AI 면접 시작 전에 푸는 **4지선다 객관식 사전 문제**를 ${count}개 출제하라.
+
+## 목적·난이도
+- 이 문제는 합격선 변별이 아니라 **직무 기본기와 성의를 확인**하는 용도다. 점수는 합불에 반영되지 않는다.
+- 난이도는 이 공고의 요구 수준(${job.level})보다 **한 단계 낮게**. 해당 직무 종사자라면 큰 부담 없이 풀 수 있는 기본기 수준으로 출제하라.
+
+## 출제 원칙 (반드시 지킬 것)
+- **사실형 문제만.** 정답이 하나로 명확히 떨어지는 문제만 낸다. 의견·선호·"가장 좋은 방법은?"처럼 논쟁 여지가 있는 문제 금지.
+- 각 문제는 보기 4개. **정답은 정확히 1개**, 나머지 3개는 그럴듯하지만 명백히 틀린 오답. 복수정답·"모두 정답"·"정답 없음" 금지.
+- 보기는 서로 명확히 구별되고 길이가 비슷하게. 정답 위치(1~4번)는 문제마다 고르게 분산하라.
+- JD의 **주요 업무·자격 요건**에서 실제로 쓰는 핵심 지식·도구·개념을 다룬다. JD와 무관한 상식 퀴즈 금지.
+- 한국어로 출제. 코드·용어는 원문 유지.
+- 차별 금지(채용절차법 §4의3): 성별·나이·출신지·학교·가족·종교·신체 등과 관련된 문제 금지.
+
+## 직무 정보 (JD)
+- 직무: ${job.position}
+- 직급/연차: ${job.level}
+- 근무형태: ${job.employmentType}
+- 주요 업무: ${job.responsibilities}
+- 자격 요건: ${job.requirements}${idealProfileSection(job.idealProfile)}
+
+## 출력 형식 (아래 JSON 만. 마크다운/설명/코드블록 금지)
+{
+  "questions": [
+    {
+      "question": "문제 본문",
+      "options": ["보기1", "보기2", "보기3", "보기4"],
+      "answer": 0,
+      "rationale": "정답인 이유 1줄 (HR 검토용 — 후보자 비노출)"
+    }
+  ]
+}
+
+- questions 는 정확히 ${count}개.
+- options 는 정확히 4개. answer 는 정답 보기의 0-기반 인덱스(0~3).`;
+}
+
+/**
+ * AI 면접 객관식 **자가검증** 프롬프트 — 생성된 문제를 정답 없이 다시 풀게 해 교차확인한다.
+ *
+ * 생성 시 정답과 모델 재풀이 답이 다르면 그 문항은 정답 오류·복수정답·애매한 보기일 가능성이
+ * 높다 → 라우트가 verified=false 로 표시해 HR 검토 화면에서 강조한다.
+ * 입력에는 정답(answer)을 절대 포함하지 않는다.
+ */
+export function buildMcqVerificationPrompt(
+  questions: Array<{ id: string; question: string; options: string[] }>
+): string {
+  return `아래는 객관식 문제 목록이다. 각 문제를 **직접 풀어** 정답 보기의 번호를 골라라.
+정답이 둘 이상 가능하거나 명확한 정답이 없다고 판단되면 confident=false 로 표시하라.
+
+## 문제
+${JSON.stringify(questions, null, 2)}
+
+## 출력 형식 (아래 JSON 만. 마크다운/설명/코드블록 금지)
+{
+  "answers": [
+    { "id": "문제 id", "chosen": 0, "confident": true }
+  ]
+}
+
+- chosen 은 정답이라고 생각하는 보기의 0-기반 인덱스(0~3).
+- 모든 문제에 대해 답하라.`;
+}
+
+/**
  * 대면 면접 화자 역할 배정 프롬프트 — 음향 분리 라벨(화자1/2…)을 *내용*으로
  * 지원자/면접관에 매핑한다. 라벨의 음향 일관성에 의존하지 않고, 질문하는 쪽=면접관,
  * 경험을 서술하는 쪽=지원자 로 전체 맥락을 읽어 판정. 출력은 라벨→역할 맵(소수 항목).

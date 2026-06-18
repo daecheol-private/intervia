@@ -13,6 +13,7 @@ import {
   parseTraitProfile,
   toPublicItems,
 } from "@/lib/personality";
+import { hasMcqQuestions, toPublicMcq } from "@/lib/mcq";
 
 export const runtime = "nodejs";
 
@@ -87,9 +88,23 @@ export async function GET(
     session.messages.length === 0 &&
     session.status !== "completed";
 
-  // 세션 원본에는 인성검사 응답·프로필이 포함 — 후보자에게 점수류는 비노출
-  const { personalityResponses: _pr, personalityProfile: _pp, ...safeSession } =
-    session;
+  // 객관식 사전 문항 단계 — 공고에 확정된 세트가 있고, 아직 미응시이며, 채팅 미시작 세션만 출제.
+  // (도입 전 시작된 진행 중 세션은 소급 차단하지 않음.) 인성검사와 독립 — 둘 다 있으면 순차 진행.
+  const mcqHasSet = job.mcqEnabled && hasMcqQuestions(job.mcqSet);
+  const mcqRequired =
+    mcqHasSet &&
+    !session.mcqResponses &&
+    session.messages.length === 0 &&
+    session.status !== "completed";
+
+  // 세션 원본에는 인성검사·객관식 응답/점수가 포함 — 후보자에게 점수류는 비노출
+  const {
+    personalityResponses: _pr,
+    personalityProfile: _pp,
+    mcqResponses: _mr,
+    mcqScore: _ms,
+    ...safeSession
+  } = session;
 
   return Response.json({
     session: safeSession,
@@ -115,6 +130,10 @@ export async function GET(
           // 출제 세트는 공고의 선호 특성 프로필 기준 (법인 컬처핏 설정은 출제 여부만 결정)
           items: toPublicItems(buildItemSet(parseTraitProfile(job.traitProfile))),
         }
+      : { required: false },
+    // 객관식 사전 문항 — 정답·검증플래그는 비노출(toPublicMcq). 인성검사 다음 단계로 출제.
+    mcq: mcqRequired
+      ? { required: true, items: toPublicMcq(job.mcqSet ?? []) }
       : { required: false },
   });
 }

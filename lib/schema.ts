@@ -1,6 +1,7 @@
 import { sqliteTable, text, integer, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import type { PersonalityResponse, PersonalityProfile } from "./personality";
+import type { McqQuestion, McqAnswerRecord } from "./mcq";
 
 export const organizations = sqliteTable("organizations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -198,6 +199,20 @@ export const jobPostings = sqliteTable("job_postings", {
   // AI 면접 인성검사 선호 특성 프로필 (TraitProfile JSON). null = 전 특성 medium(기본 세트만 출제).
   // 직무마다 검증할 특성이 달라 법인 설정이 아닌 공고 단위로 관리. high 는 최대 3개 (검증 우선순위).
   traitProfile: text("trait_profile"),
+  // AI 면접 객관식 사전 문항 — 공고 상세에서 "문제 생성" 시 LLM 이 JD 기반 4지선다 사실형
+  // 문항을 생성·자가검증하고, HR 이 검토·불필요 문항 삭제 후 확정한 세트 (McqQuestion[] JSON).
+  // null/빈배열 = 객관식 미사용. 비어있지 않으면 그 공고 AI 면접은 채팅 전 이 문제를 풀게 한다.
+  // 같은 공고 후보자 전원 동일 세트(공정성). 점수는 합불 미반영 — 리포트 참고 정보로만.
+  mcqSet: text("mcq_set", { mode: "json" }).$type<McqQuestion[] | null>(),
+  // 객관식 문항 LLM 생성 진행 시각 (ISO 문자열). null = 미생성/완료. 생성 시작 시 세팅,
+  // 완료/실패 시 클리어. GET 이 (now - 이 값 < 3분)이면 "생성 중"으로 응답 → 클라이언트 폴링.
+  // 3분 경과는 stale(after() 중단 등 실패)로 취급해 재생성 허용.
+  mcqGeneratingAt: text("mcq_generating_at"),
+  // 생성된 객관식 세트를 실제 AI 면접에 적용할지 토글. mcqSet 이 있어도 false 면 면접에 미출제.
+  // 생성 성공 시 true(기본 적용)로 세팅, HR 이 토글로 끌 수 있음(문항은 보존).
+  mcqEnabled: integer("mcq_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
   // AI 평가 중점 사항 — **HR 내부용. 후보자에게 비공개**.
   // 채용 담당자가 AI 평가 가중치를 직접 코멘트 ("보안 경력 최우선" 등).
   // 서류평가/면접 진행/면접 평가 프롬프트에 별도 가이드 블록으로 주입됨.
@@ -821,6 +836,12 @@ export const interviewSessions = sqliteTable("interview_sessions", {
     .$type<PersonalityResponse[] | null>(),
   personalityProfile: text("personality_profile", { mode: "json" })
     .$type<PersonalityProfile | null>(),
+  // AI 면접 객관식 사전 문항 응시 스냅샷(문항·정답·응시자선택) + 결정적 채점 결과.
+  // null = 미실시. mcqScore = 맞힌 문항 수(총 문항 = mcqResponses.length). 응시 당시 문항을
+  // 통째로 보관해 이후 공고 문제를 수정해도 리포트가 정확. 점수는 참고 정보(합불 미반영).
+  mcqResponses: text("mcq_responses", { mode: "json" })
+    .$type<McqAnswerRecord[] | null>(),
+  mcqScore: integer("mcq_score"),
   startedAt: text("started_at"),
   completedAt: text("completed_at"),
   expiresAt: text("expires_at").notNull(),

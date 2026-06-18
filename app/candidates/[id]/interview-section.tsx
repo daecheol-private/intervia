@@ -504,6 +504,14 @@ export function InterviewResult({
         orgCoreCompetencies={orgCoreCompetencies}
       />
 
+      {session.mcqResponses && session.mcqResponses.length > 0 && (
+        <McqResultBlock
+          records={session.mcqResponses}
+          score={session.mcqScore ?? 0}
+          total={session.mcqResponses.length}
+        />
+      )}
+
       {ev.llm_assist_note && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mt-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
@@ -623,6 +631,133 @@ export function InterviewResult({
  * 컬처핏·정성 검증 블록 — 인성검사 특성 프로필(vs 공고 선호) + 자가응답·면접 발언 대조.
  * 무점수 참고 정보 — overall_score 와 무관함을 UI 에 명시.
  */
+/** 객관식 사전 평가 결과 — 참고 정보(합불 미반영). 점수 + 문항별 정오(오답 강조). */
+function McqResultBlock({
+  records,
+  score,
+  total,
+}: {
+  records: Array<{
+    id?: string;
+    question?: string;
+    options?: string[];
+    answer?: number;
+    chosen: number;
+  }>;
+  score: number;
+  total: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+  // 응시 당시 문항 스냅샷이 있는 항목만 상세 표시 (도입 초기 세션은 스냅샷 없음 → 점수만).
+  const detail = records.filter(
+    (r) =>
+      typeof r.question === "string" &&
+      Array.isArray(r.options) &&
+      typeof r.answer === "number"
+  );
+  const wrong = detail.filter((r) => r.chosen !== r.answer).length;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 mt-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+          객관식 사전 평가
+          <span className="ml-2 normal-case tracking-normal font-medium text-slate-400">
+            참고 정보 · 점수 미반영
+          </span>
+        </div>
+        <div className="text-sm font-bold text-slate-800 tabular-nums">
+          {score} / {total} 정답{" "}
+          <span className="text-slate-400 font-medium">({pct}%)</span>
+        </div>
+      </div>
+      <div className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+        직무 기본기 확인용 4지선다(요구 수준보다 낮은 난이도). 합격·불합격 점수에
+        반영되지 않습니다.
+      </div>
+
+      {detail.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="mt-2.5 text-xs font-semibold text-primary-deep hover:underline"
+          >
+            {open ? "문항별 정오 접기 ▲" : `문항별 정오 보기 ▾ (오답 ${wrong}개)`}
+          </button>
+
+          {open && (
+            <ol className="mt-2 space-y-2">
+              {detail.map((r, i) => {
+                const correct = r.chosen === r.answer;
+                return (
+                  <li
+                    key={r.id ?? i}
+                    className={`rounded-lg border px-3 py-2 ${
+                      correct
+                        ? "border-slate-200 bg-white"
+                        : "border-rose-200 bg-rose-50/50"
+                    }`}
+                  >
+                    <p className="text-xs font-semibold text-slate-800 leading-relaxed flex items-start gap-1.5">
+                      <span
+                        className={`shrink-0 font-bold ${
+                          correct ? "text-emerald-600" : "text-rose-600"
+                        }`}
+                      >
+                        {correct ? "○" : "✗"}
+                      </span>
+                      <span>
+                        <span className="text-slate-400 mr-1">{i + 1}.</span>
+                        {r.question}
+                      </span>
+                    </p>
+                    <div className="mt-1.5 space-y-0.5 pl-5">
+                      {r.options!.map((opt, oi) => {
+                        const isCorrect = oi === r.answer;
+                        const isChosen = oi === r.chosen;
+                        return (
+                          <p
+                            key={oi}
+                            className={`text-[11px] leading-relaxed ${
+                              isCorrect
+                                ? "text-emerald-700 font-medium"
+                                : isChosen
+                                  ? "text-rose-700 font-medium"
+                                  : "text-slate-500"
+                            }`}
+                          >
+                            <span className="text-slate-400 mr-1">{oi + 1}.</span>
+                            {opt}
+                            {isCorrect && (
+                              <span className="ml-1.5 text-[10px] font-bold text-emerald-600">
+                                {isChosen ? "정답 (선택)" : "정답"}
+                              </span>
+                            )}
+                            {isChosen && !isCorrect && (
+                              <span className="ml-1.5 text-[10px] font-bold text-rose-600">
+                                응시자 선택
+                              </span>
+                            )}
+                          </p>
+                        );
+                      })}
+                      {r.chosen < 0 && (
+                        <p className="text-[11px] text-slate-400">미응답</p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function CultureFitBlock({
   cultureFit,
   personalityProfile,

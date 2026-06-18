@@ -118,6 +118,17 @@ export type Session = {
   messages: { role: string; content: string }[];
   evaluation: InterviewEvaluation | null;
   personalityProfile?: PersonalityProfileView | null;
+  // 객관식 사전 문항 결과 — mcqScore = 맞힌 수, 총 문항 = mcqResponses.length. 참고용(미반영).
+  // mcqResponses = 응시 스냅샷(문항·정답·선택). 도입 초기 세션은 {chosen}만 있을 수 있어 옵셔널.
+  mcqScore?: number | null;
+  mcqResponses?: Array<{
+    id?: string;
+    question?: string;
+    options?: string[];
+    answer?: number;
+    chosen: number;
+    questionId?: string;
+  }> | null;
   expiresAt: string;
   startedAt: string | null;
   completedAt: string | null;

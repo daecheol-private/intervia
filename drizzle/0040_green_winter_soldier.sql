@@ -1,0 +1,1 @@
+ALTER TABLE `job_postings` ADD `mcq_generating_at` text;

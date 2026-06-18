@@ -274,6 +274,27 @@
       "when": 1781744395330,
       "tag": "0038_noisy_dragon_man",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1781779388136,
+      "tag": "0039_youthful_cardiac",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1781780823498,
+      "tag": "0040_green_winter_soldier",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1781781784196,
+      "tag": "0041_absent_caretaker",
+      "breakpoints": true
     }
   ]
 }
