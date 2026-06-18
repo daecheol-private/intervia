@@ -21,6 +21,7 @@ import { eq, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { STAGE_RANK, STAGE_WAITER, type Stage } from "@/lib/stage-meta";
+import { parseDbTimestamp } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -114,17 +115,20 @@ export async function GET(req: Request) {
   const bucketMs = bucketDays * DAY;
   const bucketCount = Math.ceil(days / bucketDays);
   const seriesVals: number[] = new Array(bucketCount).fill(0);
-  const fmtMD = (ms: number) => {
-    const d = new Date(ms);
-    return `${d.getMonth() + 1}/${d.getDate()}`;
-  };
+  // 라벨은 KST 기준 M/D (서버가 UTC 인 운영 환경에서도 한국 날짜로 표시).
+  const fmtMD = (ms: number) =>
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Seoul",
+      month: "numeric",
+      day: "numeric",
+    }).format(new Date(ms));
 
   for (const c of cands) {
-    const createdMs = new Date(c.createdAt).getTime();
+    const createdMs = parseDbTimestamp(c.createdAt).getTime();
     if (c.outcome) {
       outcomes[c.outcome] = (outcomes[c.outcome] ?? 0) + 1;
       if (c.decidedAt) {
-        const d = (new Date(c.decidedAt).getTime() - createdMs) / DAY;
+        const d = (parseDbTimestamp(c.decidedAt).getTime() - createdMs) / DAY;
         if (d >= 0 && Number.isFinite(d)) {
           leadSum += d;
           leadN++;

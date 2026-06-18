@@ -38,11 +38,13 @@ function fmtChip(start: string, end: string): string {
   const s = new Date(start);
   const e = new Date(end);
   const dateLabel = s.toLocaleDateString("ko-KR", {
+    timeZone: "Asia/Seoul",
     month: "numeric",
     day: "numeric",
     weekday: "short",
   });
   const tFmt: Intl.DateTimeFormatOptions = {
+    timeZone: "Asia/Seoul",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

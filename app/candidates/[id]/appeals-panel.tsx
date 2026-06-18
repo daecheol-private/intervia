@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { notify, confirmDialog } from "@/app/components/Dialog";
+import { formatLocalDateTime } from "@/lib/utils";
 import { Section } from "./shared";
 
 type Appeal = {
@@ -70,7 +71,7 @@ export function AppealsPanel({ candidateId }: { candidateId: number }) {
   };
 
   const fmt = (s: string | null) =>
-    s ? new Date(s).toLocaleString("ko-KR") : "-";
+    s ? formatLocalDateTime(s) : "-";
   const statusColor: Record<Appeal["status"], string> = {
     pending: "bg-warning-soft text-warning",
     reviewed: "bg-info-soft text-info",

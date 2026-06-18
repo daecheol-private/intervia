@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { formatLocalDateTime } from "@/lib/utils";
 
 type SmtpConfig = {
   orgId: number;
@@ -151,7 +152,7 @@ export default function OrgSmtpPage() {
               마지막 헬스체크: {lastChecked.lastCheckStatus === "ok" ? "✓ 정상" : "✗ 실패"}
               {lastChecked.lastCheckError ? ` — ${lastChecked.lastCheckError}` : ""}
               {lastChecked.lastCheckedAt
-                ? ` (${new Date(lastChecked.lastCheckedAt).toLocaleString("ko-KR")})`
+                ? ` (${formatLocalDateTime(lastChecked.lastCheckedAt)})`
                 : ""}
               {lastChecked.lastCheckStatus === "fail" &&
                 lastChecked.lastCheckError && (

@@ -9,6 +9,7 @@ import {
 } from "@/app/password-strength";
 import LogoutButton from "@/app/logout-button";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { formatLocalDateTime } from "@/lib/utils";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -594,8 +595,7 @@ function SessionsPanel() {
     void load();
   };
 
-  const fmt = (s: string | null) =>
-    s ? new Date(s).toLocaleString("ko-KR") : "-";
+  const fmt = (s: string | null) => (s ? formatLocalDateTime(s) : "-");
 
   return (
     <section className="mt-8 bg-white rounded-2xl border border-slate-200 shadow-sm">

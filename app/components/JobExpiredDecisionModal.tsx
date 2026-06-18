@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Calendar, X } from "lucide-react";
+import { formatLocalDate } from "@/lib/utils";
 
 type Blocker = {
   candidateId: number;
@@ -95,7 +96,7 @@ export function JobExpiredDecisionModal({
     onResolved();
   };
 
-  const closesDate = new Date(closesAt).toLocaleDateString("ko-KR");
+  const closesDate = formatLocalDate(closesAt);
   // 만료 +14일 자동 삭제까지 잔여일 (음수면 곧 삭제 대상)
   const autoDeleteAt = new Date(closesAt).getTime() + 14 * 86_400_000;
   const daysUntilAutoDelete = Math.max(
@@ -314,7 +315,7 @@ function ConfirmCloseBody({
                 <span className="text-ink-soft">·</span>
                 <span className="text-ink-soft">{REASON_LABEL[b.reason]}</span>
                 <span className="ml-auto text-[10px] text-ink-muted">
-                  만료 {new Date(b.expiresAt).toLocaleDateString("ko-KR")}
+                  만료 {formatLocalDate(b.expiresAt)}
                 </span>
               </li>
             ))}

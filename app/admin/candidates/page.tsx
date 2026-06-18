@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStepUpFetch } from "@/app/components/StepUpModal";
+import { formatLocalDate } from "@/lib/utils";
 
 type Result = {
   id: number;
@@ -195,7 +196,7 @@ export default function AdminCandidatesPage() {
                   </td>
                   <td className="px-4 py-3 text-xs">{c.stage}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">
-                    {new Date(c.createdAt).toLocaleDateString("ko-KR")}
+                    {formatLocalDate(c.createdAt)}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button

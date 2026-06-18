@@ -15,6 +15,7 @@ import { and, eq, isNull, isNotNull, sql } from "drizzle-orm";
 import { db } from "./db";
 import { orgInvites, jobInterviewers, users } from "./schema";
 import { EMAIL_BRAND, wrapEmailCard } from "./mailer";
+import { formatLocalDate } from "./utils";
 
 export const INVITE_EXPIRY_DAYS = 7;
 export const INVITE_MAX_PER_REQUEST = 20;
@@ -162,7 +163,7 @@ export function buildInviteEmail(opts: {
   expiresAt: string;
 }): { subject: string; html: string; text: string } {
   const { inviterName, orgName, jobTitle, url, expiresAt } = opts;
-  const expDate = new Date(expiresAt).toLocaleDateString("ko-KR");
+  const expDate = formatLocalDate(expiresAt);
   const subject = `[Intervia] ${orgName} 채용 공고 공유 — ${jobTitle}`;
   const text = `${inviterName}님이 ${orgName}의 채용 공고 "${jobTitle}" 를 공유했습니다.
 

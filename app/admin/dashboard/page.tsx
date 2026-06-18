@@ -12,7 +12,7 @@ import {
 } from "@/lib/schema";
 import { and, count, desc, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { formatLocalDateTime } from "@/lib/utils";
+import { formatLocalDate, formatLocalDateTime } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -229,7 +229,7 @@ export default async function AdminDashboardPage() {
                 </span>
                 <span className="text-xs text-slate-400 shrink-0">
                   {s.suspendedAt
-                    ? new Date(s.suspendedAt).toLocaleDateString("ko-KR")
+                    ? formatLocalDate(s.suspendedAt)
                     : ""}
                 </span>
               </li>

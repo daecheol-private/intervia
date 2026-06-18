@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { PasswordStrength } from "@/app/password-strength";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { formatLocalDate } from "@/lib/utils";
 
 type InviteInfo = {
   token: string;
@@ -138,7 +139,7 @@ export default function InvitePage() {
 
         <p className="text-[11px] text-slate-500 mt-4">
           링크 유효기간:{" "}
-          {new Date(info.expiresAt).toLocaleDateString("ko-KR")}
+          {formatLocalDate(info.expiresAt)}
         </p>
 
         <div className="mt-6">

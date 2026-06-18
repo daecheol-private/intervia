@@ -23,10 +23,13 @@ const SCHEDULE_STATUS_COLOR: Record<Schedule["status"], string> = {
 
 function formatSlot(s: { start: string; end: string }): string {
   const start = formatKstDateTime(s.start);
-  const e = new Date(s.end);
-  const eh = e.getHours().toString().padStart(2, "0");
-  const em = e.getMinutes().toString().padStart(2, "0");
-  return `${start} ~ ${eh}:${em}`;
+  const endTime = new Date(s.end).toLocaleTimeString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${start} ~ ${endTime}`;
 }
 
 export function ScheduleBox({

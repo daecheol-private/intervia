@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
 import { Logo } from "@/app/components/Logo";
+import { formatLocalDate } from "@/lib/utils";
 
 type Slot = { start: string; end: string };
 
@@ -317,7 +318,7 @@ export default function SchedulePage() {
 
         <p className="text-[10px] text-slate-400 text-center mt-6">
           링크 유효기간:{" "}
-          {new Date(info.expiresAt).toLocaleDateString("ko-KR")}
+          {formatLocalDate(info.expiresAt)}
         </p>
       </div>
       <p className="text-[11px] text-slate-400 text-center mt-4">

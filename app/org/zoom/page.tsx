@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { formatLocalDateTime } from "@/lib/utils";
 
 type ZoomConfig = {
   orgId: number;
@@ -134,7 +135,7 @@ export default function OrgZoomPage() {
                   ? ` — ${lastChecked.lastCheckError}`
                   : ""}
                 {lastChecked.lastCheckedAt
-                  ? ` (${new Date(lastChecked.lastCheckedAt).toLocaleString("ko-KR")})`
+                  ? ` (${formatLocalDateTime(lastChecked.lastCheckedAt)})`
                   : ""}
               </div>
             )}

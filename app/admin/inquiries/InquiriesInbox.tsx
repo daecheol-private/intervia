@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Modal } from "@/app/components/Modal";
+import { formatLocalDateTime } from "@/lib/utils";
 import {
   CATEGORY_LABEL,
   STATUS_LABEL,
@@ -45,7 +46,7 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "resolved", label: "완료" },
 ];
 
-const fmt = (s: string) => new Date(s).toLocaleString("ko-KR");
+const fmt = (s: string) => formatLocalDateTime(s);
 
 function StatusBadge({ status }: { status: InquiryStatus }) {
   return (

@@ -3,6 +3,7 @@
  */
 import crypto from "node:crypto";
 import { EMAIL_BRAND, wrapEmailCard } from "./mailer";
+import { formatLocalDate } from "./utils";
 
 export const SCHEDULE_EXPIRY_DAYS = 14;
 
@@ -112,7 +113,7 @@ export function buildScheduleProposalEmail(opts: {
   const { candidateName, jobTitle, orgName, url, expiresAt, slots, modeOnline, address } =
     opts;
   const rl = roundLabel(opts.round);
-  const expDate = new Date(expiresAt).toLocaleDateString("ko-KR");
+  const expDate = formatLocalDate(expiresAt);
   const slotLines = slots.map((s) => `· ${formatSlotKst(s)}`).join("\n");
   const subject = `[Intervia] ${jobTitle} ${rl} 면접 일정 안내 — 시간 선택 부탁드립니다`;
   const text = `${candidateName}님,

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Modal } from "@/app/components/Modal";
+import { formatLocalDateTime } from "@/lib/utils";
 import {
   ORG_CATEGORIES,
   CATEGORY_LABEL,
@@ -38,7 +39,7 @@ function StatusBadge({ status }: { status: InquiryStatus }) {
   );
 }
 
-const fmt = (s: string) => new Date(s).toLocaleString("ko-KR");
+const fmt = (s: string) => formatLocalDateTime(s);
 
 export default function SupportPage() {
   const [rows, setRows] = useState<MyInquiry[] | null>(null);

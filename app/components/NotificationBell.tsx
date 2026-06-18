@@ -242,5 +242,5 @@ function formatRelative(iso: string): string {
   if (h < 24) return `${h}시간 전`;
   const days = Math.floor(h / 24);
   if (days < 30) return `${days}일 전`;
-  return d.toLocaleDateString("ko-KR");
+  return d.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { formatLocalDateTime } from "@/lib/utils";
 
 type AppealRow = {
   id: number;
@@ -69,7 +70,7 @@ export default function AdminAppealsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
-  const fmt = (s: string) => new Date(s).toLocaleString("ko-KR");
+  const fmt = (s: string) => formatLocalDateTime(s);
 
   return (
     <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-8">

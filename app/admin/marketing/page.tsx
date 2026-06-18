@@ -34,6 +34,7 @@ function fmtDate(s: string | null): string {
   const d = new Date(s.includes("T") ? s : s.replace(" ", "T") + "Z");
   if (isNaN(d.getTime())) return s;
   return d.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
     month: "short",
     day: "numeric",
     hour: "2-digit",

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { formatLocalDateTime } from "@/lib/utils";
 
 type AuditRow = {
   id: number;
@@ -43,7 +44,7 @@ export default function AuditPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days, actionFilter]);
 
-  const fmt = (s: string) => new Date(s).toLocaleString("ko-KR");
+  const fmt = (s: string) => formatLocalDateTime(s);
   const actionLabel: Record<string, string> = {
     "login.success": "로그인",
     "candidate.view": "후보자 조회",

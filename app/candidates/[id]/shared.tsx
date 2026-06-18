@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatLocalDateTime } from "@/lib/utils";
 
 export const recColor: Record<string, string> = {
   강력추천: "bg-primary text-surface border-primary",
@@ -241,7 +242,7 @@ export function EmailSentBadge({ sentAt }: { sentAt: string | null | undefined }
   return (
     <span
       className={`text-[11px] px-2 py-0.5 rounded-md border ${tone}`}
-      title={new Date(sentAt).toLocaleString("ko-KR")}
+      title={formatLocalDateTime(sentAt)}
     >
       📧 {label}
     </span>

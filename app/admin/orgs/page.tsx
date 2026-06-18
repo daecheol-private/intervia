@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useStepUpFetch } from "@/app/components/StepUpModal";
+import { formatLocalDate } from "@/lib/utils";
 
 type Org = {
   id: number;
@@ -576,7 +577,7 @@ export default function AdminOrgsPage() {
                   {o.balance.toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-xs text-slate-500">
-                  {new Date(o.createdAt).toLocaleDateString("ko-KR")}
+                  {formatLocalDate(o.createdAt)}
                 </td>
                 <td className="px-4 py-3 text-right">
                   {editId === o.id ? (
