@@ -631,7 +631,8 @@ export function InterviewResult({
  * 컬처핏·정성 검증 블록 — 인성검사 특성 프로필(vs 공고 선호) + 자가응답·면접 발언 대조.
  * 무점수 참고 정보 — overall_score 와 무관함을 UI 에 명시.
  */
-/** 객관식 사전 평가 결과 — 참고 정보(합불 미반영). 점수 + 문항별 정오(오답 강조). */
+/** 객관식 사전 평가 결과 — 참고 정보(합불 미반영). 점수 + 문항별 정오(오답 강조).
+ *  AI 면접 특색 기능이라 크게·눈에 띄게 표시하고, 틀린 문항을 펼쳐 확인할 수 있다. */
 function McqResultBlock({
   records,
   score,
@@ -648,6 +649,7 @@ function McqResultBlock({
   total: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [wrongOnly, setWrongOnly] = useState(true);
   const pct = total > 0 ? Math.round((score / total) * 100) : 0;
   // 응시 당시 문항 스냅샷이 있는 항목만 상세 표시 (도입 초기 세션은 스냅샷 없음 → 점수만).
   const detail = records.filter(
@@ -656,95 +658,140 @@ function McqResultBlock({
       Array.isArray(r.options) &&
       typeof r.answer === "number"
   );
-  const wrong = detail.filter((r) => r.chosen !== r.answer).length;
+  // 원래 문항 번호를 유지하면서 오답 필터링 (오답만 보기에서도 "3." 처럼 실제 번호 노출)
+  const items = detail.map((r, i) => ({ r, num: i + 1 }));
+  const wrong = items.filter((x) => x.r.chosen !== x.r.answer).length;
+  const shown = wrongOnly && wrong > 0
+    ? items.filter((x) => x.r.chosen !== x.r.answer)
+    : items;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 mt-3">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-          객관식 사전 평가
-          <span className="ml-2 normal-case tracking-normal font-medium text-slate-400">
-            참고 정보 · 점수 미반영
-          </span>
+    <div className="rounded-2xl border-2 border-primary/30 bg-primary-soft/30 px-5 py-4 mt-3 shadow-sm">
+      {/* 헤더 — 제목 + 큰 점수 */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <span className="text-2xl leading-none" aria-hidden>📝</span>
+          <div>
+            <div className="text-base font-bold text-ink">객관식 사전 평가</div>
+            <div className="text-xs font-medium text-ink-muted mt-0.5">
+              참고 정보 · 합불 점수 미반영
+            </div>
+          </div>
         </div>
-        <div className="text-sm font-bold text-slate-800 tabular-nums">
-          {score} / {total} 정답{" "}
-          <span className="text-slate-400 font-medium">({pct}%)</span>
+        <div className="text-right">
+          <div className="flex items-baseline gap-1.5 justify-end">
+            <span className="text-4xl font-extrabold tabular-nums text-primary-deep leading-none">
+              {score}
+            </span>
+            <span className="text-xl font-semibold text-ink-muted">/ {total}</span>
+          </div>
+          <div className="text-sm font-bold tabular-nums mt-1 text-ink-soft">
+            정답률 {pct}%
+            {wrong > 0 && (
+              <span className="ml-2 text-danger">· 오답 {wrong}개</span>
+            )}
+          </div>
         </div>
       </div>
-      <div className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+      <div className="text-xs text-ink-muted mt-2.5 leading-relaxed">
         직무 기본기 확인용 4지선다(요구 수준보다 낮은 난이도). 합격·불합격 점수에
         반영되지 않습니다.
       </div>
 
-      {detail.length > 0 && (
+      {detail.length > 0 ? (
         <>
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            className="mt-2.5 text-xs font-semibold text-primary-deep hover:underline"
-          >
-            {open ? "문항별 정오 접기 ▲" : `문항별 정오 보기 ▾ (오답 ${wrong}개)`}
-          </button>
+          <div className="flex items-center gap-3 mt-3.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-surface text-sm font-bold hover:bg-primary-deep transition-colors shadow-sm"
+            >
+              {open ? (
+                <>문항별 정오 접기 ▲</>
+              ) : (
+                <>
+                  📋 어떤 문항을 틀렸는지 보기
+                  {wrong > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-surface/25 text-surface text-xs font-extrabold">
+                      오답 {wrong}
+                    </span>
+                  )}
+                  <span aria-hidden>▾</span>
+                </>
+              )}
+            </button>
+            {open && wrong > 0 && (
+              <label className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-soft cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={wrongOnly}
+                  onChange={(e) => setWrongOnly(e.target.checked)}
+                  className="w-4 h-4 accent-rose-500"
+                />
+                오답만 보기
+              </label>
+            )}
+          </div>
 
           {open && (
-            <ol className="mt-2 space-y-2">
-              {detail.map((r, i) => {
+            <ol className="mt-3 space-y-3">
+              {shown.map(({ r, num }) => {
                 const correct = r.chosen === r.answer;
                 return (
                   <li
-                    key={r.id ?? i}
-                    className={`rounded-lg border px-3 py-2 ${
+                    key={r.id ?? num}
+                    className={`rounded-xl border-2 px-4 py-3.5 ${
                       correct
-                        ? "border-slate-200 bg-white"
-                        : "border-rose-200 bg-rose-50/50"
+                        ? "border-emerald-200 bg-emerald-50/40"
+                        : "border-rose-300 bg-rose-50"
                     }`}
                   >
-                    <p className="text-xs font-semibold text-slate-800 leading-relaxed flex items-start gap-1.5">
+                    <p className="text-[15px] font-bold text-ink leading-relaxed flex items-start gap-2.5">
                       <span
-                        className={`shrink-0 font-bold ${
-                          correct ? "text-emerald-600" : "text-rose-600"
+                        className={`shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-sm font-extrabold mt-0.5 ${
+                          correct ? "bg-emerald-500" : "bg-rose-500"
                         }`}
+                        aria-label={correct ? "정답" : "오답"}
                       >
-                        {correct ? "○" : "✗"}
+                        {correct ? "○" : "✕"}
                       </span>
                       <span>
-                        <span className="text-slate-400 mr-1">{i + 1}.</span>
+                        <span className="text-ink-muted mr-1.5">{num}.</span>
                         {r.question}
                       </span>
                     </p>
-                    <div className="mt-1.5 space-y-0.5 pl-5">
+                    <div className="mt-2.5 space-y-1.5 pl-[2.1rem]">
                       {r.options!.map((opt, oi) => {
                         const isCorrect = oi === r.answer;
                         const isChosen = oi === r.chosen;
                         return (
-                          <p
+                          <div
                             key={oi}
-                            className={`text-[11px] leading-relaxed ${
+                            className={`text-sm leading-relaxed flex items-start gap-2 rounded-lg px-2.5 py-1.5 ${
                               isCorrect
-                                ? "text-emerald-700 font-medium"
+                                ? "bg-emerald-100 text-emerald-900 font-semibold"
                                 : isChosen
-                                  ? "text-rose-700 font-medium"
-                                  : "text-slate-500"
+                                  ? "bg-rose-100 text-rose-900 font-semibold"
+                                  : "text-ink-soft"
                             }`}
                           >
-                            <span className="text-slate-400 mr-1">{oi + 1}.</span>
-                            {opt}
+                            <span className="text-ink-muted shrink-0">{oi + 1}.</span>
+                            <span className="flex-1">{opt}</span>
                             {isCorrect && (
-                              <span className="ml-1.5 text-[10px] font-bold text-emerald-600">
-                                {isChosen ? "정답 (선택)" : "정답"}
+                              <span className="shrink-0 text-xs font-bold text-emerald-700 whitespace-nowrap">
+                                {isChosen ? "✓ 정답 (선택함)" : "✓ 정답"}
                               </span>
                             )}
                             {isChosen && !isCorrect && (
-                              <span className="ml-1.5 text-[10px] font-bold text-rose-600">
-                                응시자 선택
+                              <span className="shrink-0 text-xs font-bold text-rose-700 whitespace-nowrap">
+                                ✕ 응시자 선택
                               </span>
                             )}
-                          </p>
+                          </div>
                         );
                       })}
                       {r.chosen < 0 && (
-                        <p className="text-[11px] text-slate-400">미응답</p>
+                        <p className="text-sm text-ink-muted italic">미응답</p>
                       )}
                     </div>
                   </li>
@@ -753,6 +800,10 @@ function McqResultBlock({
             </ol>
           )}
         </>
+      ) : (
+        <div className="mt-3 text-xs text-ink-muted bg-surface rounded-lg px-3 py-2 border border-border-default">
+          이 면접은 문항별 정오 정보가 저장되기 전에 응시되어 점수만 표시됩니다.
+        </div>
       )}
     </div>
   );
