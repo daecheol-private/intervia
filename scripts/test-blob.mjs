@@ -75,4 +75,4 @@ console.log(`   - 토큰 유효성 OK`);
 console.log(`   - 업로드 권한 OK`);
 console.log(`   - public access 가능 OK`);
 console.log(`   - 삭제 권한 OK`);
-console.log(`\nlib/storage.ts 의 useBlob() 가 production 모드에서 이 토큰을 사용함.`);
+console.log(`\nlib/storage.ts 의 shouldUseBlob() 가 production 모드에서 이 토큰을 사용함.`);

@@ -73,7 +73,7 @@ export function downloadDisposition(
   return INLINE_OK.has(ct) ? "inline" : "attachment";
 }
 
-function useBlob(): boolean {
+function shouldUseBlob(): boolean {
   const has = !!process.env.BLOB_READ_WRITE_TOKEN;
   // 안전 가드: dev 에서 Blob 토큰이 실수로 .env.local 에 있으면 로컬 디스크 fallback
   if (
@@ -102,7 +102,7 @@ export async function saveFile(
   const ext = path.extname(originalName) || ".bin";
   const safeBase = `${Date.now()}_${randomBytes(4).toString("hex")}${ext}`;
 
-  if (useBlob()) {
+  if (shouldUseBlob()) {
     const { put } = await import("@vercel/blob");
     const result = await put(safeBase, buffer, {
       access: "public",

@@ -441,7 +441,6 @@ function TwoFactorPanel() {
             <strong>Google Authenticator</strong> 앱을 열고 우하단 <strong>+</strong> 버튼 → <strong>QR 코드 스캔</strong>으로 아래 QR을 찍어주세요. 스캔할 수 없는 환경이면 아래 시크릿을 수동 입력하세요.
           </p>
           <div className="flex flex-col items-center bg-white border border-slate-200 rounded-xl p-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={setup.qr}
               alt="2단계 인증 QR 코드"

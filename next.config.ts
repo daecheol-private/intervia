@@ -16,6 +16,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // 참고: Next 16 의 next build 는 ESLint 를 돌리지 않는다(빌트인 lint 통합 제거됨).
+  // 그래서 react-hooks 가드는 vercel-build 에서 `eslint .` 로 별도 실행한다(package.json).
   experimental: {
     // 로컬 dev 의 FormData 직접 업로드 경로 본문 한도. 코드 측 MAX_FILE_SIZE / MAX_ZIP_SIZE (100MB) 와 맞춤.
     // 운영(Vercel) 은 NEXT_PUBLIC_BLOB_CLIENT_UPLOAD=1 로 Blob 직업로드 + manifest(JSON 작음) 경로라 무관.
