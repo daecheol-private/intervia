@@ -332,17 +332,17 @@ const SLIDES: Slide[] = [
     ),
   },
 
-  // 3. AI 채팅 면접
+  // 3. 3단계 AI 면접 (인성검사 → 직무 역량 → 심층 면접)
   {
     route: "intervia.app/interview/···",
-    title: "AI 채팅 면접",
+    title: "3단계 AI 면접",
     subtitle:
-      "후보자는 메일 속 링크만 누르면, AI 면접관과 1:1 채팅으로 면접을 봅니다.",
+      "후보자는 메일 속 링크만 누르면, 인성검사·직무 역량 평가를 거쳐 AI 면접관과 1:1 심층 면접까지 한 번에 봅니다.",
     points: [
-      "AI 면접관이 답변마다 꼬리질문으로 더 깊이 검증해요.",
-      "후보자는 타이핑 또는 음성으로 편하게 답변합니다.",
-      "10·20·30분 분량을 자동 조절하고, 끝나면 곧바로 자동 평가.",
-      "붙여넣기·탭 이탈·문체를 분석해 외부 AI 보조 신호를 면접관에게 보고해요.",
+      "인성검사 → 직무 역량 → 심층 면접, 3단계로 검증해요. 앞 두 단계는 공고마다 켜고 끌 수 있습니다.",
+      "인성검사는 두 문장 중 더 가까운 쪽 택1, 직무 역량은 4지선다로 — 답변은 이어지는 면접에서 실제 경험으로 확인돼요.",
+      "심층 면접에선 AI 면접관이 답변마다 꼬리질문으로 더 깊이 파고듭니다. 타이핑·음성 모두 가능.",
+      "붙여넣기·탭 이탈·문체로 외부 AI 보조 신호를 잡아내고, 끝나면 곧바로 자동 평가해요.",
     ],
     mockup: (
       <>
@@ -356,27 +356,59 @@ const SLIDES: Slide[] = [
           }
         />
         <div className="flex-1 flex flex-col text-left min-h-0">
-          <div className="relative inline-flex self-start text-[9px] text-ink-soft mb-2">
-            <Pin n={3} className="-top-2.5 -right-2.5" />
+          {/* 단계 프로그레스 — 인성검사 ✓ → 직무 역량 ✓ → 심층 면접 ●(현재). 실제 제품 StepProgress 재현 */}
+          <div className="relative rounded-xl border border-border-default bg-card px-3 py-2 mb-2 shadow-sm">
+            <Pin n={1} className="-top-2.5 -left-2.5" />
+            <div className="flex items-center gap-1">
+              <span className="flex items-center gap-1 min-w-0">
+                <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-surface">
+                  <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                </span>
+                <span className="text-[9px] font-medium text-ink-soft whitespace-nowrap">
+                  인성검사
+                </span>
+              </span>
+              <span className="h-px flex-1 min-w-[6px] bg-primary/50" />
+              <span className="flex items-center gap-1 min-w-0">
+                <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-surface">
+                  <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                </span>
+                <span className="text-[9px] font-medium text-ink-soft whitespace-nowrap">
+                  직무 역량
+                </span>
+              </span>
+              <span className="h-px flex-1 min-w-[6px] bg-primary/50" />
+              <span className="flex items-center gap-1 min-w-0">
+                <span className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-surface text-[8px] font-bold ring-2 ring-primary/25">
+                  3
+                </span>
+                <span className="text-[9px] font-bold text-primary-deep whitespace-nowrap">
+                  심층 면접
+                </span>
+              </span>
+            </div>
+          </div>
+
+          <div className="self-start text-[9px] text-ink-soft mb-2">
             백엔드 개발자 · 3~5년차 · 약 20분
           </div>
           <div className="flex-1 flex flex-col justify-end gap-2 rounded-xl border border-border-default bg-gradient-to-b from-surface-alt/30 to-card p-3 overflow-hidden">
-            <div className="relative self-start max-w-[85%]">
-              <Pin n={1} className="-top-2.5 -right-2.5" />
-              <div className="px-3 py-2 rounded-2xl rounded-bl-sm bg-surface-alt text-[10px] text-ink leading-relaxed">
-                대규모 트래픽을 처리하며 겪은 가장 큰 병목은 무엇이었고, 어떻게
-                해결하셨나요?
-              </div>
+            <div className="self-start max-w-[85%] px-3 py-2 rounded-2xl rounded-bl-sm bg-surface-alt text-[10px] text-ink leading-relaxed">
+              대규모 트래픽을 처리하며 겪은 가장 큰 병목은 무엇이었고, 어떻게
+              해결하셨나요?
             </div>
             <div className="self-end max-w-[85%] px-3 py-2 rounded-2xl rounded-br-sm bg-primary text-surface text-[10px] leading-relaxed">
               DB 커넥션 풀이 병목이었고, 캐시 계층과 읽기 복제본을 도입했습니다.
             </div>
-            <div className="self-start max-w-[85%] px-3 py-2 rounded-2xl rounded-bl-sm bg-surface-alt text-[10px] text-ink leading-relaxed">
-              복제 지연으로 인한 정합성 문제는 어떻게 다루셨나요?
+            <div className="relative self-start max-w-[85%]">
+              <Pin n={2} className="-top-2.5 -right-2.5" />
+              <div className="px-3 py-2 rounded-2xl rounded-bl-sm bg-surface-alt text-[10px] text-ink leading-relaxed">
+                복제 지연으로 인한 정합성 문제는 어떻게 다루셨나요?
+              </div>
             </div>
           </div>
           <div className="relative flex items-center gap-2 mt-2 rounded-xl border border-border-default bg-card px-3 py-2 shadow-sm">
-            <Pin n={2} className="-top-2.5 -left-2.5" />
+            <Pin n={3} className="-top-2.5 -left-2.5" />
             <span className="flex-1 text-[10px] text-ink-muted">
               답변을 입력하거나 마이크 버튼을 누르세요
             </span>
