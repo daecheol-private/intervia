@@ -442,7 +442,7 @@ export function StagePanel({
 
   return (
     <>
-      <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-visible text-sm">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-visible text-sm">
         {candidate.decidedAt && (
           <span className="text-xs text-slate-500 shrink-0 whitespace-nowrap">
             결정 {formatKstDateTime(candidate.decidedAt)}
