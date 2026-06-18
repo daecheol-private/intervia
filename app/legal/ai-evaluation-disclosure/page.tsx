@@ -17,6 +17,11 @@ export const metadata = {
  * 비로그인 + 검색·링크로 누구나 도달 가능한 공개 페이지로 별도 운영.
  *
  * 채용기업은 본 페이지 URL 을 채용공고 footer 에 함께 게재하도록 권고.
+ *
+ * ⚠️ §2 평가 가중치는 법적 고지물 — 실제 채점 코드와 반드시 일치 유지할 것.
+ *   · 서류 6축  = lib/screening.ts `AXIS_WEIGHTS` · lib/prompts.ts raw score 산식
+ *   · 면접 4차원 = lib/prompts.ts buildSummaryPrompt (기술0.35/경험0.30/협업0.15/적합0.20)
+ *   코드 가중치를 바꾸면 이 표도 함께 갱신(불일치 = §37의2 사전공개 부정확).
  */
 export default function AiEvaluationDisclosurePage() {
   return (
@@ -76,7 +81,15 @@ export default function AiEvaluationDisclosurePage() {
       </Section>
 
       <Section n="2" title="평가 차원과 가중치">
-        <table className="w-full text-sm border border-slate-200 mt-2">
+        <p className="text-sm text-slate-700 mb-3">
+          평가 단계(서류 평가 / AI 면접 평가)에 따라 평가 차원과 가중치가
+          다릅니다.
+        </p>
+
+        <h3 className="text-sm font-semibold text-slate-800 mt-4 mb-1">
+          가. 서류 평가 — 6개 차원
+        </h3>
+        <table className="w-full text-sm border border-slate-200">
           <thead className="bg-slate-50">
             <tr>
               <th className="px-3 py-2 text-left w-40">차원</th>
@@ -88,38 +101,95 @@ export default function AiEvaluationDisclosurePage() {
             <tr className="border-t border-slate-200">
               <td className="px-3 py-2 font-medium">기술 적합도</td>
               <td className="px-3 py-2">
-                JD의 hard skill 요구사항과 이력서·면접 답변에 나타난 기술
-                경험의 부합 정도
+                JD 핵심 도메인·기술 요구사항과 이력서에 나타난 기술 경험의 직접
+                부합 정도
               </td>
-              <td className="px-3 py-2 text-right">35~40%</td>
+              <td className="px-3 py-2 text-right">20%</td>
             </tr>
             <tr className="border-t border-slate-200">
-              <td className="px-3 py-2 font-medium">실무 경험</td>
+              <td className="px-3 py-2 font-medium">경험 깊이</td>
               <td className="px-3 py-2">
-                책임 범위·프로젝트 규모·정량적 성과·트레이드오프 인지
+                JD 직무와 매칭되는 실무 경력의 연수 × 책임 범위 × 프로젝트
+                규모·난이도
+              </td>
+              <td className="px-3 py-2 text-right">20%</td>
+            </tr>
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">직무 매칭도</td>
+              <td className="px-3 py-2">
+                JD 주요 업무와 후보자의 과거 수행 업무(실무 경력)의 일치
+              </td>
+              <td className="px-3 py-2 text-right">25%</td>
+            </tr>
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">성과 임팩트</td>
+              <td className="px-3 py-2">
+                정량 지표·책임 범위·외부 인지 등 성과의 구체성과 임팩트
+              </td>
+              <td className="px-3 py-2 text-right">15%</td>
+            </tr>
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">재직 안정성</td>
+              <td className="px-3 py-2">
+                회사별 재직 기간 등 커리어의 안정성
+              </td>
+              <td className="px-3 py-2 text-right">10%</td>
+            </tr>
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">성장·태도</td>
+              <td className="px-3 py-2">학습의 깊이와 커리어 상승 궤적</td>
+              <td className="px-3 py-2 text-right">10%</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 className="text-sm font-semibold text-slate-800 mt-5 mb-1">
+          나. AI 면접 평가 — 4개 차원
+        </h3>
+        <table className="w-full text-sm border border-slate-200">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-3 py-2 text-left w-40">차원</th>
+              <th className="px-3 py-2 text-left">평가 내용</th>
+              <th className="px-3 py-2 text-right w-20">가중치</th>
+            </tr>
+          </thead>
+          <tbody className="text-slate-700">
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">기술역량</td>
+              <td className="px-3 py-2">
+                JD hard skill 에 대한 면접 답변의 깊이·정확성
+              </td>
+              <td className="px-3 py-2 text-right">35%</td>
+            </tr>
+            <tr className="border-t border-slate-200">
+              <td className="px-3 py-2 font-medium">실무경험</td>
+              <td className="px-3 py-2">
+                사례의 구체성, 본인 기여, 정량 성과, 트레이드오프 인지
               </td>
               <td className="px-3 py-2 text-right">30%</td>
             </tr>
             <tr className="border-t border-slate-200">
-              <td className="px-3 py-2 font-medium">직무 매칭 / 협업</td>
+              <td className="px-3 py-2 font-medium">협업·커뮤니케이션</td>
               <td className="px-3 py-2">
-                JD 주요 업무와의 일치 (서류) 또는 커뮤니케이션·경청 (면접)
+                질문 이해·답변 명료성·경청·갈등 해결 사례
               </td>
-              <td className="px-3 py-2 text-right">15~20%</td>
+              <td className="px-3 py-2 text-right">15%</td>
             </tr>
             <tr className="border-t border-slate-200">
-              <td className="px-3 py-2 font-medium">성장·태도 / 직무 적합성</td>
+              <td className="px-3 py-2 font-medium">직무적합성</td>
               <td className="px-3 py-2">
-                선호 인재상 부합, 학습 흔적, 커리어 일관성, 동기
+                직무·회사 이해, 동기, 선호 인재상 부합
               </td>
-              <td className="px-3 py-2 text-right">10~20%</td>
+              <td className="px-3 py-2 text-right">20%</td>
             </tr>
           </tbody>
         </table>
-        <p className="text-xs text-slate-500 mt-2">
-          가중치는 서류·면접 단계에서 약간 다릅니다. 모든 차원은 0~100 점,
-          종합 점수도 0~100 점으로 산출됩니다. 추천 등급: 85+ 강력추천 / 70+
-          추천 / 55+ 보류 / 미만 비추천.
+
+        <p className="text-xs text-slate-500 mt-3">
+          각 표의 가중치 합은 100% 입니다. 모든 차원은 0~100 점, 종합 점수도
+          0~100 점으로 산출됩니다. 추천 등급: 85+ 강력추천 / 70+ 추천 / 55+
+          보류 / 미만 비추천.
         </p>
       </Section>
 

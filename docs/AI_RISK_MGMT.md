@@ -66,7 +66,7 @@
 
 | 조치 | 내용 | 구현 근거 |
 |---|---|---|
-| 평가 기준 사전공개 | 평가 차원·가중치(기술 적합도 35~40% / 실무 경험 30% / 직무 매칭·협업 15~20% / 성장·태도 10~20%), 등급 컷오프(85+ 강력추천 / 70+ 추천 / 55+ 보류 / 미만 비추천), 사용 모델·처리 위치, 마스킹 정책을 **비로그인 공개 페이지**로 상시 게시 | `app/legal/ai-evaluation-disclosure/page.tsx` (`/legal/ai-evaluation-disclosure`) |
+| 평가 기준 사전공개 | 평가 차원·가중치(**서류 6축**: 기술 적합도 20% / 경험 깊이 20% / 직무 매칭도 25% / 성과 임팩트 15% / 재직 안정성 10% / 성장·태도 10%, **AI 면접 4차원**: 기술역량 35% / 실무경험 30% / 협업·커뮤니케이션 15% / 직무적합성 20%), 등급 컷오프(85+ 강력추천 / 70+ 추천 / 55+ 보류 / 미만 비추천), 사용 모델·처리 위치, 마스킹 정책을 **비로그인 공개 페이지**로 상시 게시 | `app/legal/ai-evaluation-disclosure/page.tsx` (`/legal/ai-evaluation-disclosure`) |
 | 평가 결과의 근거 구조화 | 평가 JSON 이 6축 breakdown 각각에 `score` + `reason`(한 줄 근거) + `confidence`(high/medium/low — 근거 충분성) 를 포함. 요건별 충족 매트릭스(requirement_coverage: status/evidence)로 JD 항목 단위 근거 제시. 추측·일반론 출력 금지, 본문 인용 필수 | `lib/prompts.ts` `buildScreeningPrompt` 출력 형식, `lib/screening.ts` `SCREENING_SCHEMA` |
 | 점수 산식 공개·검증 가능 | 종합 점수 = 6축 가중평균(가중치 프롬프트에 명시), 시스템이 산식대로 재계산(§6) — 산출 과정 재현 가능 | `lib/screening.ts` `recomputeScore`, `/legal/ai-evaluation-disclosure` §2 |
 | 학습용 데이터 개요 | 자체 학습 없음(파인튜닝 X). 기반 모델은 Google Gemini — 결제 등급으로 **입력이 모델 학습에 활용되지 않음**을 사전공개 페이지에 명시. 학습데이터 상세는 Google 공개 자료에 의존 | `/legal/ai-evaluation-disclosure` §3 |
@@ -133,3 +133,4 @@
 | 버전 | 일자 | 변경 |
 |---|---|---|
 | 1.0 | 2026-06-10 | 최초 작성 — §34 5개 책무 체계로 기존 구현·SOP 재편 |
+| 1.1 | 2026-06-18 | §3 평가 가중치 서술 정정 — 옛 4축 비율을 실제 채점 코드(서류 6축·AI 면접 4차원) 가중치로 동기화. 공개 사전공개 페이지(`/legal/ai-evaluation-disclosure`) §2 도 서류/면접 2개 표로 분리해 일치시킴 |
