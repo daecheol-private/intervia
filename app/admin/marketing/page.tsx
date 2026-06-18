@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import Link from "next/link";
-import { Mail, Send, Trash2 } from "lucide-react";
+import { Mail, Send, Trash2, FileText, Upload, Eye } from "lucide-react";
 
 type Recipient = {
   id: number;
@@ -11,6 +11,13 @@ type Recipient = {
   lastSentAt: string | null;
   unsubscribedAt: string | null;
   createdAt: string;
+};
+
+type Brochure = {
+  id: number | string; // "default"(기본) 또는 DB id
+  subject: string;
+  createdAt: string | null;
+  builtin: boolean;
 };
 
 function fmtDate(s: string | null): string {
@@ -27,10 +34,17 @@ function fmtDate(s: string | null): string {
 
 export default function AdminMarketingPage() {
   const [rows, setRows] = useState<Recipient[]>([]);
+  const [brochures, setBrochures] = useState<Brochure[]>([]);
+  const [selectedBrochure, setSelectedBrochure] = useState<string>("default");
   const [emails, setEmails] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState("");
+
+  // 브로슈어 추가 폼
+  const [newSubject, setNewSubject] = useState("");
+  const [newHtml, setNewHtml] = useState("");
+  const [newFileName, setNewFileName] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -44,12 +58,28 @@ export default function AdminMarketingPage() {
     }
   }, []);
 
+  const loadBrochures = useCallback(async () => {
+    try {
+      const r = await fetch("/api/admin/marketing/brochures", {
+        cache: "no-store",
+      });
+      if (r.ok) {
+        const d = (await r.json()) as { brochures: Brochure[] };
+        setBrochures(d.brochures);
+      }
+    } catch {
+      /* 무시 — 새로고침으로 복구 */
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadBrochures();
+  }, [load, loadBrochures]);
 
   const activeCount = rows.filter((r) => r.status === "active").length;
   const unsubCount = rows.length - activeCount;
+  const selected = brochures.find((b) => String(b.id) === selectedBrochure);
 
   const add = async () => {
     setErr("");
@@ -83,6 +113,73 @@ export default function AdminMarketingPage() {
     }
   };
 
+  // HTML 파일을 읽어 본문으로 보관 (텍스트라 Blob 불필요 — DB 에 그대로 저장).
+  const onPickFile = (e: ChangeEvent<HTMLInputElement>) => {
+    setErr("");
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setNewFileName(f.name);
+    const reader = new FileReader();
+    reader.onload = () => setNewHtml(String(reader.result ?? ""));
+    reader.onerror = () => setErr("파일을 읽지 못했습니다.");
+    reader.readAsText(f);
+  };
+
+  const addBrochure = async () => {
+    setErr("");
+    setNotice("");
+    if (!newSubject.trim()) {
+      setErr("브로슈어 제목을 입력하세요.");
+      return;
+    }
+    if (!newHtml.trim()) {
+      setErr("본문 HTML 파일을 선택하세요.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/marketing/brochures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: newSubject, html: newHtml }),
+      });
+      if (!r.ok) {
+        setErr(await r.text());
+        return;
+      }
+      const d = (await r.json()) as { id: number };
+      setNotice("브로슈어가 추가되었습니다.");
+      setNewSubject("");
+      setNewHtml("");
+      setNewFileName("");
+      await loadBrochures();
+      setSelectedBrochure(String(d.id)); // 방금 추가한 브로슈어를 발송 대상으로 선택
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeBrochure = async (b: Brochure) => {
+    if (!confirm(`'${b.subject}' 브로슈어를 삭제합니까?`)) return;
+    setErr("");
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/marketing/brochures", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: b.id }),
+      });
+      if (!res.ok) {
+        setErr(await res.text());
+        return;
+      }
+      if (selectedBrochure === String(b.id)) setSelectedBrochure("default");
+      await loadBrochures();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const send = async (ids?: number[]) => {
     setErr("");
     setNotice("");
@@ -93,7 +190,7 @@ export default function AdminMarketingPage() {
     }
     if (
       !confirm(
-        `${count}명에게 브로셔 메일을 발송합니다.\n제목: (광고) Intervia — ...\n\n진행하시겠습니까?`
+        `${count}명에게 "${selected?.subject ?? "브로슈어"}" 메일을 발송합니다.\n제목 앞에 (광고)가 자동으로 붙습니다.\n\n진행하시겠습니까?`
       )
     )
       return;
@@ -102,7 +199,7 @@ export default function AdminMarketingPage() {
       const r = await fetch("/api/admin/marketing/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({ ids, brochureId: selectedBrochure }),
       });
       if (!r.ok) {
         setErr(await r.text());
@@ -162,8 +259,8 @@ export default function AdminMarketingPage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">마케팅 메일</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              수신자를 등록하고 Intervia 소개 브로셔를 발송합니다. 수신거부는
-              메일 하단 링크로 자동 처리됩니다.
+              브로슈어를 등록해 두고, 수신자를 골라 발송합니다. (광고) 표시와
+              수신거부는 자동으로 처리됩니다.
             </p>
           </div>
         </div>
@@ -179,6 +276,93 @@ export default function AdminMarketingPage() {
           {err}
         </div>
       )}
+
+      {/* 브로슈어 관리 */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 sm:p-6 mb-6">
+        <div className="flex items-center gap-2 mb-1">
+          <FileText className="w-4 h-4 text-primary" />
+          <h2 className="text-sm font-semibold text-slate-800">브로슈어</h2>
+        </div>
+        <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
+          제목과 본문(HTML 파일)을 등록해 두면 발송 시 골라 쓸 수 있습니다.
+          (광고) 표시·수신거부 링크는 발송할 때 자동으로 처리되니, 순수
+          디자인 HTML만 올리면 됩니다.
+        </p>
+
+        {/* 추가 폼 */}
+        <div className="space-y-2.5 mb-5">
+          <input
+            type="text"
+            value={newSubject}
+            onChange={(e) => setNewSubject(e.target.value)}
+            placeholder="메일 제목 (예: Intervia — AI 면접 플랫폼 소개)"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <div className="flex items-center gap-2">
+            <label className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-600 shrink-0">
+              <Upload className="w-3.5 h-3.5" />
+              HTML 파일 선택
+              <input
+                type="file"
+                accept=".html,.htm,text/html"
+                onChange={onPickFile}
+                className="hidden"
+              />
+            </label>
+            <span className="text-xs text-slate-400 truncate min-w-0 flex-1">
+              {newFileName || "선택된 파일 없음"}
+            </span>
+            <button
+              onClick={addBrochure}
+              disabled={busy || !newSubject.trim() || !newHtml.trim()}
+              className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium shrink-0"
+            >
+              추가
+            </button>
+          </div>
+        </div>
+
+        {/* 브로슈어 목록 */}
+        <ul className="divide-y divide-slate-100 border-t border-slate-100">
+          {brochures.map((b) => (
+            <li
+              key={String(b.id)}
+              className="flex items-center gap-3 py-2.5 text-sm"
+            >
+              {b.builtin && (
+                <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-500">
+                  기본
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate text-slate-700">
+                {b.subject}
+              </span>
+              <span className="shrink-0 text-[11px] text-slate-400 tabular-nums">
+                {b.builtin ? "내장" : fmtDate(b.createdAt)}
+              </span>
+              <a
+                href={`/api/admin/marketing/brochures/${b.id}/preview`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="미리보기"
+                className="shrink-0 p-1.5 rounded-md text-slate-400 hover:text-primary hover:bg-primary-soft"
+              >
+                <Eye className="w-4 h-4" />
+              </a>
+              {!b.builtin && (
+                <button
+                  onClick={() => removeBrochure(b)}
+                  disabled={busy}
+                  title="삭제"
+                  className="shrink-0 p-1.5 rounded-md text-slate-400 hover:text-danger hover:bg-danger-soft disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {/* 수신자 등록 */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 sm:p-6 mb-6">
@@ -208,20 +392,40 @@ export default function AdminMarketingPage() {
 
       {/* 목록 + 발송 */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <div className="text-sm text-slate-600">
-            수신 가능 <strong className="text-slate-900">{activeCount}</strong>명
-            · 수신거부{" "}
-            <strong className="text-slate-900">{unsubCount}</strong>명
+        <div className="px-5 py-4 border-b border-slate-100 space-y-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500 shrink-0">
+              발송할 브로슈어
+            </label>
+            <select
+              value={selectedBrochure}
+              onChange={(e) => setSelectedBrochure(e.target.value)}
+              className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              {brochures.map((b) => (
+                <option key={String(b.id)} value={String(b.id)}>
+                  {b.builtin ? "[기본] " : ""}
+                  {b.subject}
+                </option>
+              ))}
+            </select>
           </div>
-          <button
-            onClick={() => send()}
-            disabled={busy || activeCount === 0}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium"
-          >
-            <Send className="w-3.5 h-3.5" />
-            {busy ? "처리 중…" : `전체 발송 (${activeCount}명)`}
-          </button>
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-slate-600">
+              수신 가능{" "}
+              <strong className="text-slate-900">{activeCount}</strong>명 ·
+              수신거부{" "}
+              <strong className="text-slate-900">{unsubCount}</strong>명
+            </div>
+            <button
+              onClick={() => send()}
+              disabled={busy || activeCount === 0}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium"
+            >
+              <Send className="w-3.5 h-3.5" />
+              {busy ? "처리 중…" : `전체 발송 (${activeCount}명)`}
+            </button>
+          </div>
         </div>
         {rows.length === 0 ? (
           <p className="text-sm text-slate-400 text-center py-10">
@@ -284,10 +488,11 @@ export default function AdminMarketingPage() {
       </div>
 
       <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
-        · 제목에 <code>(광고)</code>가 자동으로 붙습니다 (정보통신망법). · 본문
-        템플릿은 <code>lib/marketing-brochure.ts</code> 에서 수정합니다 — 발송
-        전 푸터의 회사 정보를 채워주세요. · 수신거부한 주소는 발송 대상에서
-        자동 제외되며, 재발송하지 마세요.
+        · 제목 앞에 <code>(광고)</code>가 자동으로 붙고, 본문에 수신거부 링크가
+        자동 삽입됩니다 (정보통신망법). · 브로슈어 HTML 에{" "}
+        <code>{`{{UNSUBSCRIBE_URL}}`}</code>를 넣으면 그 위치에 수신거부 링크가
+        들어갑니다(없으면 본문 하단에 자동 추가). · 수신거부한 주소는 발송
+        대상에서 자동 제외되며, 재발송하지 마세요.
       </p>
     </main>
   );
