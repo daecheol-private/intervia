@@ -2,6 +2,7 @@ import { db } from "./db";
 import { tokenWallets, tokenLedger, tokenPricing, users } from "./schema";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { isUniqueViolation, isTransientDbError } from "./db-errors";
+import { EFFECTIVE_PRICING } from "./beta";
 
 // 동시 쓰기 트랜잭션이 SQLITE_BUSY 로 즉시 실패할 때 짧게 재시도 (멱등 차감 누락 방지).
 // 멱등 게이트(token_ledger_idem_uq)가 있어 재시도가 이중 차감을 만들지 않는다.
@@ -28,15 +29,9 @@ export type LedgerReason =
   | "refund"
   | "admin_adjust";
 
-// 100원당 1 토큰 기준 — 정책 변경 시 /admin/pricing 에서 override.
-// 공고 무료 / 이력서 300원 / AI 면접 3,000원 / 대면 면접 평가 3,000원 / 면접 문제 생성 무료.
-const DEFAULT_PRICING: Record<FeatureKey, number> = {
-  job_post: 0,
-  resume_upload: 3,
-  interview: 30,
-  interview_question_gen: 0,
-  offline_interview: 30,
-};
+// 실제 차감에 쓰는 코드 기본 단가 — 오픈베타 동안은 할인가(AI 면접·대면 30→10).
+// 정가·할인가·기간은 lib/beta.ts 단일 소스에서 관리. /admin/pricing(DB override)이 있으면 그게 우선.
+const DEFAULT_PRICING: Record<FeatureKey, number> = EFFECTIVE_PRICING;
 
 // 법인 최초 등록 시 1회 자동 지급 — 무료 체험용 (5만원).
 // 기존 법인 합류(invite/join-request)에는 지급 X. 함수는 orgId 기준 멱등.

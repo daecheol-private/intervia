@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { BETA } from "@/lib/beta";
 
 type Pricing = {
   job_post: number;
@@ -95,6 +96,11 @@ export default function PricingPage() {
         <p className="text-xs text-slate-500 mt-2 bg-slate-50 border border-slate-200 rounded px-3 py-2">
           기준: <strong>100원 = 1 토큰</strong>. 충전 보너스: 10만원+ 5% · 30만원+ 10% · 50만원+ 15% · 100만원+ 20%. 신규 가입 시 무료 체험 500 토큰 자동 지급.
         </p>
+        {BETA.active && (
+          <p className="text-xs text-amber-700 mt-2 bg-amber-50 border border-amber-200 rounded px-3 py-2 leading-relaxed">
+            현재 <strong>{BETA.label}</strong> 할인가 적용 중 (정가 대비 AI 면접·대면 면접 평가 30→10 토큰, ~{BETA.endsAtLabel}). 아래 값은 실제 차감되는 단가입니다. 베타 종료·정가 복귀는 코드의 <code className="font-mono">lib/beta.ts</code> 에서 <code className="font-mono">BETA.active=false</code> 로 전환하세요. ⚠️ 여기서 저장하면 DB override 행이 생겨 코드 기본값보다 우선합니다.
+          </p>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">

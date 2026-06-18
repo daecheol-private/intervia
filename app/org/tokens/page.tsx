@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatLocalDateTime } from "@/lib/utils";
 import { CreditCard } from "lucide-react";
+import { BETA, LIST_PRICING } from "@/lib/beta";
 
 type Pricing = {
   job_post: number;
@@ -151,6 +152,31 @@ export default function TokensPage() {
         )}
       </div>
 
+      {/* 오픈베타 특가 배너 */}
+      {BETA.active && (
+        <div className="mb-6 rounded-2xl border border-primary/30 bg-primary-soft/50 px-5 py-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-primary text-white">
+              {BETA.label}
+            </span>
+            <span className="text-sm font-semibold text-slate-900">
+              AI 면접 특가 — {BETA.endsAtLabel}까지
+            </span>
+          </div>
+          <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+            오픈베타 기간 동안 AI 면접·대면 면접 평가를 정가{" "}
+            <span className="line-through text-slate-400">
+              {(LIST_PRICING.interview * 100).toLocaleString()}원
+            </span>{" "}
+            →{" "}
+            <strong className="text-primary-deep">
+              {(data.pricing.interview * 100).toLocaleString()}원
+            </strong>
+            에 이용하실 수 있어요. {BETA.note}
+          </p>
+        </div>
+      )}
+
       {/* 기능별 단가 — 큰 카드 3개 */}
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-slate-900 mb-3">기능별 단가</h2>
@@ -171,6 +197,7 @@ export default function TokensPage() {
             icon="💬"
             label="AI 면접"
             tokens={data.pricing.interview}
+            listTokens={LIST_PRICING.interview}
             hint="면접 링크 1회 발급"
           />
           <PriceCard
@@ -282,14 +309,17 @@ function PriceCard({
   label,
   tokens,
   hint,
+  listTokens,
   accent,
 }: {
   icon: string;
   label: string;
   tokens: number;
   hint: string;
+  listTokens?: number;
   accent?: boolean;
 }) {
+  const discounted = listTokens != null && listTokens > tokens;
   return (
     <div
       className={`rounded-2xl p-4 border ${
@@ -307,6 +337,11 @@ function PriceCard({
           <span className="text-2xl font-bold text-slate-900">무료</span>
         ) : (
           <>
+            {discounted && (
+              <span className="text-sm font-medium text-slate-400 line-through tabular-nums">
+                {listTokens!.toLocaleString()}
+              </span>
+            )}
             <span className="text-2xl font-bold text-slate-900 tabular-nums">
               {tokens.toLocaleString()}
             </span>

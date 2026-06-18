@@ -21,6 +21,7 @@ import {
   WELCOME_BONUS_TOKENS,
   CHARGE_BONUS_TIERS,
 } from "@/lib/tokens";
+import { BETA, LIST_PRICING } from "@/lib/beta";
 import {
   ShieldCheck,
   Building2,
@@ -1321,6 +1322,19 @@ async function Landing() {
               구독료 없음 · 신용카드 등록 없이 무료 체험 ·{" "}
               <strong className="text-ink">100원 = 1 토큰</strong> (VAT 별도)
             </p>
+            {BETA.active && (
+              <div className="mt-5 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-soft border border-primary/30 text-xs sm:text-sm font-medium text-primary-deep">
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary text-surface">
+                  {BETA.label}
+                </span>
+                AI 면접 특가{" "}
+                <span className="line-through opacity-60">
+                  {(LIST_PRICING.interview * 100).toLocaleString()}원
+                </span>{" "}
+                <strong>{(pricing.interview * 100).toLocaleString()}원</strong> ·{" "}
+                {BETA.endsAtLabel}까지
+              </div>
+            )}
           </div>
 
           {/* 무료 체험 카드 — forest 반전 배경 + apricot 강조 */}
@@ -1382,6 +1396,7 @@ async function Landing() {
               <PriceCell
                 label="AI 면접"
                 tokens={pricing.interview}
+                listTokens={LIST_PRICING.interview}
                 hint="후보자 1명 채팅 면접 1회"
               />
               <PriceCell
@@ -1392,6 +1407,7 @@ async function Landing() {
               <PriceCell
                 label="대면 면접 평가"
                 tokens={pricing.offline_interview}
+                listTokens={LIST_PRICING.offline_interview}
                 hint="녹음·음성 1건 전사 + AI 평가 (1·2차)"
               />
             </div>
@@ -1846,14 +1862,23 @@ function PriceCell({
   label,
   tokens,
   hint,
+  listTokens,
 }: {
   label: string;
   tokens: number;
   hint: string;
+  listTokens?: number;
 }) {
   const krw = tokens * TOKEN_KRW;
+  const discounted = listTokens != null && listTokens > tokens;
   return (
-    <div className="rounded-2xl bg-card border border-border-default p-6 text-center">
+    <div
+      className={`rounded-2xl border p-6 text-center ${
+        discounted
+          ? "bg-primary-soft/40 border-primary/30"
+          : "bg-card border-border-default"
+      }`}
+    >
       <div className="text-[11px] uppercase tracking-wider text-ink-soft font-semibold">
         {label}
       </div>
@@ -1865,12 +1890,22 @@ function PriceCell({
       ) : (
         <>
           <div className="mt-3 flex items-baseline justify-center gap-1.5">
+            {discounted && (
+              <span className="text-lg font-semibold text-ink-soft/60 line-through tabular-nums">
+                {listTokens}
+              </span>
+            )}
             <span className="text-3xl font-bold text-primary tabular-nums">
               {tokens}
             </span>
             <span className="text-xs text-ink-soft">토큰</span>
           </div>
           <div className="text-[11px] text-ink-soft mt-0.5 tabular-nums">
+            {discounted && (
+              <span className="line-through opacity-60 mr-1">
+                {(listTokens! * TOKEN_KRW).toLocaleString()}원
+              </span>
+            )}
             ≈ {krw.toLocaleString()}원
           </div>
         </>
