@@ -8,6 +8,7 @@
  * 트리거 측 패턴: 비즈니스 이벤트 직후 1회만 호출.
  */
 import { db } from "./db";
+import { withDbRetry } from "./db-retry";
 import { notifications, users, jobInterviewers, jobPostings } from "./schema";
 import { and, desc, eq, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { sendMail, isSmtpAvailable, wrapEmailCard, escapeHtml } from "./mailer";
@@ -358,19 +359,24 @@ export async function listMyNotifications(
     readAt: notifications.readAt,
     createdAt: notifications.createdAt,
   };
-  const [unread, recentRead] = await Promise.all([
-    db
-      .select(cols)
-      .from(notifications)
-      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)))
-      .orderBy(desc(notifications.createdAt)),
-    db
-      .select(cols)
-      .from(notifications)
-      .where(and(eq(notifications.userId, userId), isNotNull(notifications.readAt)))
-      .orderBy(desc(notifications.createdAt))
-      .limit(5),
-  ]);
+  // Turso 순간 5xx(502 등)는 짧게 재시도 — 둘 다 멱등 SELECT 라 재시도 안전.
+  const [unread, recentRead] = await withDbRetry(
+    () =>
+      Promise.all([
+        db
+          .select(cols)
+          .from(notifications)
+          .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)))
+          .orderBy(desc(notifications.createdAt)),
+        db
+          .select(cols)
+          .from(notifications)
+          .where(and(eq(notifications.userId, userId), isNotNull(notifications.readAt)))
+          .orderBy(desc(notifications.createdAt))
+          .limit(5),
+      ]),
+    { label: "notifications.list" }
+  );
   return [...unread, ...recentRead] as Array<{
     id: number;
     type: NotificationType;
@@ -383,10 +389,14 @@ export async function listMyNotifications(
 
 /** 미읽음 카운트. 헤더 뱃지용. */
 export async function unreadCount(userId: number): Promise<number> {
-  const [r] = await db
-    .select({ c: sql<number>`COUNT(*)` })
-    .from(notifications)
-    .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+  const [r] = await withDbRetry(
+    () =>
+      db
+        .select({ c: sql<number>`COUNT(*)` })
+        .from(notifications)
+        .where(and(eq(notifications.userId, userId), isNull(notifications.readAt))),
+    { label: "notifications.unreadCount" }
+  );
   return Number(r?.c ?? 0);
 }
 
