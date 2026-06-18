@@ -201,21 +201,6 @@ export default function CandidateDetailPage() {
       window.dispatchEvent(new Event("intervia:setup-progress-refresh"));
   };
 
-  // AI면접 평가 영역에서 바로 1차 후보로 지정 — 하단 StagePanel 의 ⭐ 버튼과 동일하게
-  // stage 만 PATCH. round1_candidate 는 부가 행위(메일/일정) 없는 단순 단계 전환이라 plain PATCH 로 충분.
-  const promoteToRound1 = async () => {
-    const r = await fetch(`/api/candidates/${id}/stage`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stage: "round1_candidate" }),
-    });
-    if (!r.ok) {
-      notify(await r.text(), { title: "1차 후보 지정 실패", tone: "danger" });
-      return;
-    }
-    await load();
-  };
-
   const startScreening = async () => {
     setScreening(true);
     setScreenErr("");
@@ -831,9 +816,6 @@ export default function CandidateDetailPage() {
             onShowTranscript={() => setShowTranscript(true)}
             onRegenerate={createLink}
             onReevaluated={load}
-            onPromoteToRound1={
-              candidate.stage === "ai_evaluated" ? promoteToRound1 : undefined
-            }
             disabled={aiStagePassed}
           />
         )}
