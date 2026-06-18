@@ -539,78 +539,6 @@ export default function JobDetailPage() {
     if (res.ok) router.push("/");
   };
 
-  if (locked) {
-    return (
-      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-        <Link
-          href="/"
-          className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
-        >
-          ← 대시보드
-        </Link>
-        <UnlockPanel
-          title={locked.title}
-          jobId={jobId}
-          onUnlocked={() => {
-            void loadJob();
-            void loadCandidates();
-          }}
-        />
-      </main>
-    );
-  }
-
-  if (!job) {
-    if (loadError === "not_found")
-      return (
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
-            <div className="text-slate-700 font-medium">삭제된 공고입니다.</div>
-            <div className="mt-1 text-sm text-slate-500">
-              이 공고는 더 이상 존재하지 않습니다.
-            </div>
-            <button
-              onClick={() => router.push("/")}
-              className="mt-4 px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50"
-            >
-              공고 목록으로
-            </button>
-          </div>
-        </main>
-      );
-    if (loadError === "failed")
-      return (
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-center">
-            <div className="text-rose-700 font-medium">불러오기에 실패했습니다.</div>
-            <div className="mt-1 text-sm text-rose-600">
-              네트워크 상태를 확인하고 다시 시도해 주세요.
-            </div>
-            <button
-              onClick={() => {
-                setLoadError(null);
-                void loadJob();
-              }}
-              className="mt-4 px-4 py-2 rounded-lg border border-rose-300 text-sm text-rose-700 hover:bg-rose-100"
-            >
-              다시 시도
-            </button>
-          </div>
-        </main>
-      );
-    return (
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
-        불러오는 중...
-      </main>
-    );
-  }
-
-  // 공고 만료 — closesAt 지났고 아직 active. HR 액션 UI 잠금.
-  const isExpired =
-    job.status === "active" &&
-    !!job.closesAt &&
-    new Date(job.closesAt).getTime() < Date.now();
-
   // 검색은 useDeferredValue 로 지연 — 입력(setSearch)은 즉시 반영되고, 무거운 필터/정렬/그룹핑은
   // 한 박자 늦게(낮은 우선순위) 계산돼 후보가 많아도 타이핑이 끊기지 않는다.
   const deferredSearch = useDeferredValue(search);
@@ -780,6 +708,82 @@ export default function JobDetailPage() {
       return next;
     });
   }, []);
+
+  // 잠금/로딩/삭제됨 가드 — 반드시 모든 Hook 호출 뒤에 둔다.
+  // (early-return 위에서 useMemo/useCallback 등을 호출하면 job 로드 직후 호출 Hook 수가
+  //  바뀌어 "Rendered more hooks than during the previous render" 로 페이지 전체가 깨진다.)
+  if (locked) {
+    return (
+      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+        <Link
+          href="/"
+          className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
+        >
+          ← 대시보드
+        </Link>
+        <UnlockPanel
+          title={locked.title}
+          jobId={jobId}
+          onUnlocked={() => {
+            void loadJob();
+            void loadCandidates();
+          }}
+        />
+      </main>
+    );
+  }
+
+  if (!job) {
+    if (loadError === "not_found")
+      return (
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
+            <div className="text-slate-700 font-medium">삭제된 공고입니다.</div>
+            <div className="mt-1 text-sm text-slate-500">
+              이 공고는 더 이상 존재하지 않습니다.
+            </div>
+            <button
+              onClick={() => router.push("/")}
+              className="mt-4 px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50"
+            >
+              공고 목록으로
+            </button>
+          </div>
+        </main>
+      );
+    if (loadError === "failed")
+      return (
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-center">
+            <div className="text-rose-700 font-medium">불러오기에 실패했습니다.</div>
+            <div className="mt-1 text-sm text-rose-600">
+              네트워크 상태를 확인하고 다시 시도해 주세요.
+            </div>
+            <button
+              onClick={() => {
+                setLoadError(null);
+                void loadJob();
+              }}
+              className="mt-4 px-4 py-2 rounded-lg border border-rose-300 text-sm text-rose-700 hover:bg-rose-100"
+            >
+              다시 시도
+            </button>
+          </div>
+        </main>
+      );
+    return (
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
+        불러오는 중...
+      </main>
+    );
+  }
+
+  // 공고 만료 — closesAt 지났고 아직 active. HR 액션 UI 잠금.
+  const isExpired =
+    job.status === "active" &&
+    !!job.closesAt &&
+    new Date(job.closesAt).getTime() < Date.now();
+
   // 핀 섹션(즐겨찾기·1차 면접 후보) 전용 일괄 선택 토글.
   const toggleSection = (ids: number[]) => {
     const all = ids.length > 0 && ids.every((id) => selected.has(id));
