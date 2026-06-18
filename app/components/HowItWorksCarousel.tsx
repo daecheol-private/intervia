@@ -252,7 +252,7 @@ const SLIDES: Slide[] = [
     points: [
       "공고마다 전용 '지원하기' 링크가 생겨요. 채용 사이트·회사 홈페이지에 붙여넣으면 지원자가 직접 이력서를 올립니다.",
       "보유한 이력서는 파일·폴더·압축파일(ZIP)로 한 번에 업로드해요.",
-      "이름·연락처는 자동으로 가려져 편향 없이 평가합니다.",
+      "AI가 채점할 때는 이름·연락처 등 개인정보를 마스킹해 전달하므로, 편향 없이 평가합니다.",
       "AI가 6개 항목으로 채점하고 추천 등급까지 매겨줘요.",
     ],
     mockup: (
@@ -310,7 +310,7 @@ const SLIDES: Slide[] = [
                     지원자 A
                   </span>
                   <span className="px-1 py-0.5 rounded bg-surface-alt text-[7px] text-ink-muted">
-                    이름 마스킹
+                    AI 평가 시 마스킹
                   </span>
                   <span className="ml-auto px-1.5 py-0.5 rounded bg-accent-soft text-accent-deep text-[8px] font-bold">
                     강력추천
