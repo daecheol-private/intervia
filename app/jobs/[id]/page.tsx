@@ -792,6 +792,46 @@ export default function JobDetailPage() {
       return next;
     });
   };
+  // bulk-screen 은 한 요청당 ids 500개 상한 — 전체선택 등 500 초과분은 500씩 잘라 순차 전송.
+  // 멱등(이미 큐된 후보는 서버가 skip)이라 중간 청크가 실패해도 재시도하면 나머지가 안전하게 채워진다.
+  const BULK_SCREEN_CHUNK = 500;
+  const postBulkScreenChunked = async (ids: number[]) => {
+    let enqueued = 0;
+    let kicked = 0;
+    let skipped = 0;
+    const reasons: string[] = [];
+    for (let i = 0; i < ids.length; i += BULK_SCREEN_CHUNK) {
+      const chunk = ids.slice(i, i + BULK_SCREEN_CHUNK);
+      const res = await fetch("/api/candidates/bulk-screen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: chunk }),
+      });
+      if (!res.ok) {
+        return {
+          ok: false as const,
+          error: await res.text(),
+          enqueued,
+          kicked,
+          skipped,
+          reasons,
+        };
+      }
+      const data = (await res.json()) as {
+        enqueued?: number;
+        kicked?: number;
+        skipped?: number;
+        details?: { skipped?: { reason: string }[] };
+      };
+      enqueued += data.enqueued ?? 0;
+      kicked += data.kicked ?? 0;
+      skipped += data.skipped ?? 0;
+      if (data.details?.skipped)
+        reasons.push(...data.details.skipped.map((s) => s.reason));
+    }
+    return { ok: true as const, enqueued, kicked, skipped, reasons };
+  };
+
   const bulkScreen = async (targetIds: number[]) => {
     if (targetIds.length === 0) return;
     const targetSet = new Set(targetIds);
@@ -817,27 +857,24 @@ export default function JobDetailPage() {
     )
       return;
     setBulkBusy("screen");
-    const res = await fetch("/api/candidates/bulk-screen", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: targets.map((c) => c.id) }),
-    });
+    const result = await postBulkScreenChunked(targets.map((c) => c.id));
     setBulkBusy(null);
-    if (!res.ok) {
-      notify(await res.text(), { tone: "danger", title: "큐 등록 실패" });
+    if (!result.ok) {
+      const sent = result.enqueued + result.kicked;
+      notify(
+        sent > 0
+          ? `일부 ${sent}건만 등록됨 — 다시 눌러 나머지를 마저 등록하세요.\n${result.error}`
+          : result.error,
+        { tone: "danger", title: "큐 등록 실패" }
+      );
+      void loadCandidates();
       return;
     }
-    const data = (await res.json()) as {
-      enqueued: number;
-      skipped: number;
-      details: { skipped: { reason: string }[] };
-    };
-    const reasons = data.details.skipped.map((s) => s.reason);
-    const reasonSummary = reasons.length
-      ? `\n스킵: ${reasons.join(", ")}`
+    const reasonSummary = result.reasons.length
+      ? `\n스킵: ${result.reasons.join(", ")}`
       : "";
     notify(
-      `큐 등록: ${data.enqueued}건${data.skipped > 0 ? ` (스킵 ${data.skipped}건)` : ""}${reasonSummary}`,
+      `큐 등록: ${result.enqueued}건${result.skipped > 0 ? ` (스킵 ${result.skipped}건)` : ""}${reasonSummary}`,
       { tone: "success", title: "AI 검토 요청 완료" }
     );
     setSelected(new Set());
@@ -871,24 +908,22 @@ export default function JobDetailPage() {
     )
       return;
     setBulkBusy("rescreen");
-    const res = await fetch("/api/candidates/bulk-screen", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: targets.map((c) => c.id) }),
-    });
+    const result = await postBulkScreenChunked(targets.map((c) => c.id));
     setBulkBusy(null);
-    if (!res.ok) {
-      notify(await res.text(), { tone: "danger", title: "재평가 요청 실패" });
+    if (!result.ok) {
+      const sent = result.enqueued + result.kicked;
+      notify(
+        sent > 0
+          ? `일부 ${sent}건만 등록됨 — 다시 눌러 나머지를 마저 등록하세요.\n${result.error}`
+          : result.error,
+        { tone: "danger", title: "재평가 요청 실패" }
+      );
+      void loadCandidates();
       return;
     }
-    const data = (await res.json()) as {
-      enqueued: number;
-      kicked?: number;
-      skipped: number;
-    };
-    const total = data.enqueued + (data.kicked ?? 0);
+    const total = result.enqueued + result.kicked;
     notify(
-      `재평가 등록: ${total}건${data.skipped > 0 ? ` (스킵 ${data.skipped}건)` : ""}`,
+      `재평가 등록: ${total}건${result.skipped > 0 ? ` (스킵 ${result.skipped}건)` : ""}`,
       { tone: "success", title: "재평가 요청 완료" }
     );
     setSelected(new Set());
