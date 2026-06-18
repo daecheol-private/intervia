@@ -343,7 +343,20 @@ Next 16 의 `after(async () => ...)` (from `next/server`) 는 Vercel 이 응답 
 2. **점수 일관성** — screening `temperature: 0` + `screening_cache`(prompt_hash 캐싱). 같은 입력은 LLM 재호출 없이 같은 결과 재사용.
 
 ⚠️ **내용이 진짜로 다르면(다른 버전)** 여전히 별개 후보자 + 다른 점수가 정상. "동일한데 다르다" 면 운영 DB 에서 `resume_content_hash` 가 실제로 같은지 먼저 확인.
-⚠️ recomputeScore 의 spread/캡은 **변별력용 의도된 설계** — 건드리지 말 것. 점수 흔들림은 temp+캐시로 해결, 공식은 그대로.
+⚠️ recomputeScore 의 spread(×1.4)는 **변별력용 의도된 설계** — 함부로 끄지 말 것. 점수 흔들림(동일 입력)은 temp+캐시로 해결. 단, 미스매치 보정은 §0-6 참고(cap 방식).
+
+## 0-6. 6축은 30~50인데 종합 점수가 한 자릿수로 폭락 (2026-06-18)
+
+**증상**: 서류 리포트의 6축 점수는 30~50인데 종합 총점이 4점처럼 폭락. 화면의 감점(오버스펙 −5)만으로는 설명이 안 됨.
+
+**원인**: `recomputeScore` 가 `spread` 로 압축한 점수(예 32→21)에 **additive 감점**(focus fail −12, 직급 −5, confidence −10)을 또 빼서 누적 폭락. spread 압축과 focus 감점은 UI 에 안 보여 "축은 30~50인데 총점 4"가 모순처럼 보였다. 결과적으로 "부적합하지만 실재하는 경력자"와 "백지 이력서"가 둘 다 한 자릿수로 뭉개져 변별 불가.
+
+**해결** (2026-06-18):
+1. **감점을 cap 으로 통일** — focus fail→`FOCUS_FAIL_CAP`(68), 직급 over/under→`LEVEL_OVER_CAP`(95)/`LEVEL_UNDER_CAP`(90), confidence→`LOW_CONF_CAP`(84). cap 은 이미 낮은 점수엔 무영향이라 폭락이 멎고, 고득점만 끌어내린다(=나머지 6개 게이트와 동일 방식). strong_pass 가점(+12)만 additive 유지. 직급 보정은 코드 주석/프롬프트가 줄곧 "오버스펙 ≤95"라 적어온 의도와도 일치.
+2. **`SCREENING_SCORING_VERSION` 캐시 버스트** — `screening_cache` 는 `report`(=recomputeScore 까지 반영된 최종 결과)를 캐싱하는데 키에 채점 버전이 없어, 산식을 고쳐도 옛 점수를 그대로 돌려줬다("패치했는데 그대로"의 진범). 이제 prompt_hash 에 `v{버전}` 포함.
+3. **백필** — 이미 평가된 후보는 `scripts/backfill-screening-scores.ts` 로 저장 리포트에 새 산식을 재적용(LLM 재호출 없음 = 과금 0, 기본 dry-run).
+
+🚨 **`recomputeScore` 의 산식/상수를 바꾸면 반드시 `SCREENING_SCORING_VERSION` +1.** 안 하면 캐시가 옛 점수를 계속 돌려줘 수정이 반영 안 된다 (재평가해도 동일).
 
 ## 1. Gemini 모델 선택 (paid tier, 2026-05-26 통합)
 

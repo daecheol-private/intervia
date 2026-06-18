@@ -12,12 +12,14 @@ export function LevelMatchBadge({
     match.fit === "over"
       ? "오버스펙 — 직급 미스매치"
       : "언더스펙 — 직급 미스매치";
+  // 직급 미스매치는 감점이 아니라 *상한(cap)* — 오버 ≤95 / 언더 ≤90 (lib/screening.ts LEVEL_*_CAP 과 일치).
+  const cap = match.fit === "over" ? 95 : 90;
   return (
     <div className="border border-warning/40 bg-warning-soft/60 rounded-lg px-4 py-3">
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-sm font-semibold text-warning">{label}</span>
         <span className="text-xs text-warning tabular-nums">
-          후보자 {match.years}년 · 점수 보정 {match.penalty}점
+          후보자 {match.years}년 · 최고 {cap}점 제한
         </span>
       </div>
       {match.reason && (

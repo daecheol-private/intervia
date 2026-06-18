@@ -623,8 +623,9 @@
 ### 10.4 점수 일관성 / 캐시
 - [x] **TC-10.4.1** 같은 입력(JD+이력서) 재평가 → `screening_cache` hit, LLM 재호출 없이 동일 점수 *(코드 — screening_cache prompt_hash)*
 - [x] **TC-10.4.2** JD 평가기준 변경 → prompt_hash 달라져 새 평가 *(코드)*
-- [x] **TC-10.4.3** 점수: 6축 가중평균 → spread → 보너스/캡 → 직급/연차 페널티(최후) 순으로 재계산 *(코드)*
+- [x] **TC-10.4.3** 점수: 6축 가중평균 → spread → strong_pass 가점 → cap(confidence·focus·구체성·도메인·약한핵심축·필수요건·직급/연차) 순으로 재계산. 미스매치는 가점(strong_pass) 외 전부 cap — 낮은 점수 폭락 없음 *(코드, §0-6)*
 - [x] **TC-10.4.4** 등급: 85+ 강력추천 / 70+ 추천 / 50~55 보류 / 미만 비추천 *(코드)*
+- [x] **TC-10.4.5** 채점 로직 버전(`SCREENING_SCORING_VERSION`) +1 → prompt_hash 달라져 옛 캐시 무효화, 재평가 시 새 산식 적용 *(코드 — GOTCHAS §0-6)*
 
 ### 10.5 종합 점수
 - [x] **TC-10.5.1** 서류·면접 둘 다 있으면 `screening*0.4 + interview*0.6`, 한쪽만 있으면 그 값 *(코드 — lib/utils compositeScore)*
