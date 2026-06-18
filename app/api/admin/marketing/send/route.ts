@@ -1,11 +1,13 @@
 import { db } from "@/lib/db";
-import { marketingRecipients } from "@/lib/schema";
+import { marketingRecipients, marketingBrochures } from "@/lib/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import {
-  renderBrochureHtml,
-  MARKETING_MAIL_SUBJECT,
+  DEFAULT_BROCHURE,
+  DEFAULT_BROCHURE_ID,
+  withAdLabel,
+  renderMarketingHtml,
 } from "@/lib/marketing-brochure";
 import { SITE_INFO } from "@/lib/site-info";
 import { and, eq, inArray } from "drizzle-orm";
@@ -29,9 +31,34 @@ export async function POST(req: Request) {
     return new Response("시스템 SMTP가 설정되지 않았습니다.", { status: 503 });
 
   const body = (await req.json().catch(() => null)) as
-    | { ids?: number[] }
+    | { ids?: number[]; brochureId?: string | number }
     | null;
   const ids = body?.ids?.filter((n) => Number.isInteger(n));
+
+  // 발송할 브로슈어 결정 — 기본(코드 상수) 또는 사용자가 추가한 것(DB).
+  const brochureId = body?.brochureId ?? DEFAULT_BROCHURE_ID;
+  let subject: string;
+  let rawHtml: string;
+  if (brochureId === DEFAULT_BROCHURE_ID) {
+    subject = DEFAULT_BROCHURE.subject;
+    rawHtml = DEFAULT_BROCHURE.html;
+  } else {
+    const n = Number(brochureId);
+    const [b] = Number.isInteger(n)
+      ? await db
+          .select()
+          .from(marketingBrochures)
+          .where(eq(marketingBrochures.id, n))
+      : [];
+    if (!b)
+      return new Response("선택한 브로슈어를 찾을 수 없습니다.", {
+        status: 404,
+      });
+    subject = b.subject;
+    rawHtml = b.html;
+  }
+  // (광고) 표시 의무 — 발송 직전 자동 보장.
+  const finalSubject = withAdLabel(subject);
 
   const targets = await db
     .select()
@@ -56,8 +83,9 @@ export async function POST(req: Request) {
       // audience=candidate — preview 환경에서 MAIL_OVERRIDE_TO 로 차단 (외부 오발송 방지)
       await sendMail({
         to: r.email,
-        subject: MARKETING_MAIL_SUBJECT,
-        html: renderBrochureHtml(unsubUrl),
+        subject: finalSubject,
+        // 수신거부 링크 보장 — {{UNSUBSCRIBE_URL}} 치환 또는 푸터 자동 삽입.
+        html: renderMarketingHtml(rawHtml, unsubUrl),
         audience: "candidate",
       });
       await db

@@ -4,8 +4,32 @@
 export const MARKETING_MAIL_SUBJECT =
   "(광고) Intervia — 채용 사이클의 80%를 자동화하는 AI 면접 플랫폼";
 
-export function renderBrochureHtml(unsubscribeUrl: string): string {
-  return BROCHURE_HTML.replaceAll("{{UNSUBSCRIBE_URL}}", unsubscribeUrl);
+// 코드 상수 기본 브로슈어의 가상 ID — DB 에 저장하지 않고 목록 맨 위에 노출한다.
+// (DEFAULT_BROCHURE 객체는 BROCHURE_HTML 선언 뒤, 파일 하단에 정의 — TDZ 회피)
+export const DEFAULT_BROCHURE_ID = "default";
+
+/** 정보통신망법 §50 — 광고성 메일 제목에 "(광고)" 표시. 이미 있으면 중복하지 않는다. */
+export function withAdLabel(subject: string): string {
+  const s = subject.trim();
+  return /^\(\s*광고\s*\)/.test(s) ? s : `(광고) ${s}`;
+}
+
+/**
+ * 발송용 본문 렌더 — 수신거부 링크를 보장한다(정보통신망법 §50④).
+ * 본문에 {{UNSUBSCRIBE_URL}} 자리표시자가 있으면 치환하고,
+ * 없으면 본문 하단에 수신거부 푸터를 자동으로 덧붙인다(사용자가 올린 HTML 보호장치).
+ */
+export function renderMarketingHtml(
+  rawHtml: string,
+  unsubscribeUrl: string
+): string {
+  if (rawHtml.includes("{{UNSUBSCRIBE_URL}}")) {
+    return rawHtml.replaceAll("{{UNSUBSCRIBE_URL}}", unsubscribeUrl);
+  }
+  const footer = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#efeae0;"><tr><td align="center" style="padding:22px 12px;font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Malgun Gothic','Segoe UI',sans-serif;font-size:11px;line-height:1.8;color:#8a9690;">본 메일은 채용 담당자분들께 서비스를 소개해 드리기 위해 발송된 광고성 정보입니다.<br>수신을 원치 않으시면 <a href="${unsubscribeUrl}" style="color:#4a5a52;font-weight:bold;">수신거부</a>를 눌러 주세요.</td></tr></table>`;
+  return /<\/body>/i.test(rawHtml)
+    ? rawHtml.replace(/<\/body>/i, `${footer}</body>`)
+    : `${rawHtml}${footer}`;
 }
 
 const BROCHURE_HTML = `<!DOCTYPE html>
@@ -489,3 +513,10 @@ AI 이력서 평가·AI 면접·일정 조율·질문 생성 — 채용 사이�
 </body>
 </html>
 `;
+
+/** 코드 상수 기본 브로슈어. 사용자가 추가한 DB 브로슈어와 함께 목록에 표시된다. */
+export const DEFAULT_BROCHURE = {
+  id: DEFAULT_BROCHURE_ID,
+  subject: MARKETING_MAIL_SUBJECT,
+  html: BROCHURE_HTML,
+} as const;

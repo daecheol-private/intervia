@@ -1332,6 +1332,23 @@ export const marketingRecipients = sqliteTable(
 export type MarketingRecipient = typeof marketingRecipients.$inferSelect;
 
 // ---------------------------------------------------------------------------
+// 마케팅 브로슈어 — system_admin 이 제목+본문(HTML)을 등록해 발송 시 골라 쓴다.
+// 코드 상수 기본 브로슈어(lib/marketing-brochure.ts)는 DB 에 넣지 않고 "default"
+// 가상 항목으로 목록 맨 위에 항상 노출되므로, 이 테이블에는 사용자가 추가한 것만 저장된다.
+export const marketingBrochures = sqliteTable("marketing_brochures", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  // 메일 제목. 발송 시 "(광고)" prefix 와 수신거부 처리는 자동 — 여기엔 순수 제목만.
+  subject: text("subject").notNull(),
+  // 본문 HTML 원본. {{UNSUBSCRIBE_URL}} 자리표시자가 있으면 치환, 없으면 푸터 자동 삽입.
+  html: text("html").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+export type MarketingBrochure = typeof marketingBrochures.$inferSelect;
+
+// ---------------------------------------------------------------------------
 // 같은 이메일 도메인을 공유하는 코테넌트 법인에 대한 org_admin 의 검토 기록.
 // "같은 도메인에 새 법인 등록됨 — 아는 관계사인지 확인" 알림의 조치 상태를 영속화한다.
 //   acknowledged : 아는(관계사) 법인으로 확인 → 더 이상 안내하지 않음
