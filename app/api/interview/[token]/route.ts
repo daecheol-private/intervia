@@ -123,6 +123,14 @@ export async function GET(
     consentRequired: !consented,
     consentVersion: CONSENT_VERSION,
     consentItems: CONSENT_ITEMS,
+    // 면접 전체 단계 구성 — required(미완료 여부)와 무관하게 이 면접에 어떤 단계가
+    // 있는지. 채팅이 시작되면 personalityRequired/mcqRequired 가 false 로 내려가므로,
+    // 면접 단계에서도 프로그레스바가 전체 흐름을 그릴 수 있도록 별도로 전달.
+    // (완료했거나 앞으로 해야 하는 단계 = 이 면접에 구성된 단계)
+    flow: {
+      hasPersonality: personalityRequired || personalityCompleted,
+      hasMcq: mcqRequired || !!session.mcqResponses,
+    },
     personality: personalityRequired
       ? {
           required: true,

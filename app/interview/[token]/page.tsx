@@ -63,7 +63,28 @@ type SessionInfo = {
   consentItems?: ConsentItem[];
   personality?: PersonalityInfo;
   mcq?: McqInfo;
+  /** 면접 전체 단계 구성 — required 와 무관하게 이 면접에 어떤 단계가 있는지 (프로그레스 표시용) */
+  flow?: { hasPersonality: boolean; hasMcq: boolean };
 };
+
+/** 면접 진행 단계 — 동의는 단계에 포함하지 않음(전제). 인성·객관식은 공고 설정에 따라 가변. */
+type StepKey = "personality" | "mcq" | "interview";
+type Step = { key: StepKey; label: string };
+
+/**
+ * 이 면접의 진행 단계 목록을 만든다. flow(서버가 항상 내려줌) 우선,
+ * 없으면 required 플래그로 fallback (채팅 시작 전 화면에서만 정확).
+ */
+function buildSteps(info: SessionInfo): Step[] {
+  const hasPersonality =
+    info.flow?.hasPersonality ?? !!info.personality?.required;
+  const hasMcq = info.flow?.hasMcq ?? !!info.mcq?.required;
+  const steps: Step[] = [];
+  if (hasPersonality) steps.push({ key: "personality", label: "인성검사" });
+  if (hasMcq) steps.push({ key: "mcq", label: "직무 역량" });
+  steps.push({ key: "interview", label: "면접" });
+  return steps;
+}
 
 export default function InterviewPage() {
   const params = useParams<{ token: string }>();
@@ -293,6 +314,9 @@ export default function InterviewPage() {
       <main className="p-6 text-slate-500 text-center mt-20">불러오는 중...</main>
     );
 
+  // 이 면접의 진행 단계(인성/객관식/면접) — 동의 화면·게이트·면접 헤더의 프로그레스 표시에 공유.
+  const steps = buildSteps(info);
+
   // 지원취소된 후보 — 토큰이 살아있어도 재진입 시 동의 화면 대신 안내.
   if (info.withdrawn) {
     return (
@@ -339,6 +363,7 @@ export default function InterviewPage() {
         orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
         items={info.consentItems}
+        steps={steps}
         onAccepted={() => {
           setInfo({ ...info, consentRequired: false });
         }}
@@ -354,6 +379,7 @@ export default function InterviewPage() {
         orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
         items={info.personality.items}
+        steps={steps}
         onDone={() => {
           setInfo({ ...info, personality: { required: false } });
         }}
@@ -369,6 +395,7 @@ export default function InterviewPage() {
         orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
         items={info.mcq.items}
+        steps={steps}
         onDone={() => {
           setInfo({ ...info, mcq: { required: false } });
         }}
@@ -385,17 +412,23 @@ export default function InterviewPage() {
       <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 shadow-sm shrink-0">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex items-center gap-2.5">
-            <LogoMark size={32} className="shrink-0" />
+            <LogoMark size={36} className="shrink-0" />
             <div className="min-w-0">
-            {info.organization?.name && (
-              <p className="text-[11px] sm:text-xs text-slate-400 truncate leading-tight">
-                {info.organization.name}
-              </p>
+            {info.organization?.name ? (
+              <>
+                <h1 className="font-bold text-slate-900 truncate text-lg sm:text-xl leading-tight">
+                  {info.organization.name}
+                </h1>
+                <p className="text-xs sm:text-sm font-medium text-slate-600 truncate leading-tight mt-0.5">
+                  {info.job.title}
+                </p>
+              </>
+            ) : (
+              <h1 className="font-bold text-slate-900 truncate text-base sm:text-lg leading-tight">
+                {info.job.title}
+              </h1>
             )}
-            <h1 className="font-bold text-slate-900 truncate text-sm sm:text-base">
-              {info.job.title}
-            </h1>
-            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">
+            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">
               {info.job.position} · {info.job.level} · {info.job.employmentType}
               {info.job.interviewDurationMinutes
                 ? ` · 약 ${info.job.interviewDurationMinutes}분`
@@ -414,6 +447,12 @@ export default function InterviewPage() {
             </button>
           )}
         </div>
+
+        {!ended && steps.length > 1 && (
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <StepProgress steps={steps} current="interview" />
+          </div>
+        )}
 
         {!ended && (
           <Timer
@@ -709,6 +748,72 @@ function TypingDots() {
   );
 }
 
+/**
+ * 면접 진행 단계 표시 — 인성검사 · 직무 역량 · 면접 순. 동의는 단계에 미포함(전제).
+ * current=null 이면 어느 단계도 강조하지 않음(동의 화면의 "앞으로 진행될 단계" 미리보기).
+ * 단계가 1개(면접만)뿐이면 표시하지 않는다.
+ */
+function StepProgress({
+  steps,
+  current,
+}: {
+  steps: Step[];
+  current: StepKey | null;
+}) {
+  if (steps.length < 2) return null;
+  const currentIdx = current ? steps.findIndex((s) => s.key === current) : -1;
+  return (
+    <ol
+      className="flex items-center gap-1 sm:gap-1.5"
+      aria-label="면접 진행 단계"
+    >
+      {steps.map((s, i) => {
+        const done = currentIdx >= 0 && i < currentIdx;
+        const active = i === currentIdx;
+        return (
+          <li
+            key={s.key}
+            className="flex items-center gap-1 sm:gap-1.5 min-w-0"
+            aria-current={active ? "step" : undefined}
+          >
+            {i > 0 && (
+              <span
+                className={`h-px w-2.5 sm:w-5 shrink-0 ${
+                  done || active ? "bg-primary" : "bg-slate-200"
+                }`}
+                aria-hidden
+              />
+            )}
+            <span
+              className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+                active
+                  ? "bg-primary text-white ring-2 ring-primary/25"
+                  : done
+                    ? "bg-primary text-white"
+                    : "bg-slate-100 text-slate-400"
+              }`}
+              aria-hidden
+            >
+              {done ? "✓" : i + 1}
+            </span>
+            <span
+              className={`text-[11px] sm:text-xs whitespace-nowrap ${
+                active
+                  ? "font-bold text-primary-deep"
+                  : done
+                    ? "font-medium text-slate-600"
+                    : "text-slate-400"
+              }`}
+            >
+              {s.label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /** ms → "m:ss" */
 function fmtTime(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -791,12 +896,14 @@ function PersonalityGate({
   orgName,
   jobTitle,
   items,
+  steps,
   onDone,
 }: {
   token: string;
   orgName: string | null;
   jobTitle: string;
   items: Array<{ id: string; a: string; b: string }>;
+  steps: Step[];
   onDone: () => void;
 }) {
   const [started, setStarted] = useState(false);
@@ -860,13 +967,20 @@ function PersonalityGate({
   if (!started) {
     return (
       <CenteredCard>
+        {orgName && (
+          <p className="text-lg font-bold text-slate-900 leading-tight">
+            {orgName}
+          </p>
+        )}
+        <p className="text-xs text-slate-400 mt-0.5 mb-4">{jobTitle} AI 면접</p>
         <div className="text-3xl mb-3">📝</div>
         <h1 className="text-xl font-bold text-slate-900">면접 전 사전 문항</h1>
-        <p className="text-xs text-slate-400 mt-1.5">
-          {orgName ? `${orgName} · ` : ""}
-          {jobTitle} AI 면접
-        </p>
-        <p className="text-sm text-slate-600 mt-3 leading-relaxed text-left">
+        {steps.length > 1 && (
+          <div className="mt-4 flex justify-center">
+            <StepProgress steps={steps} current="personality" />
+          </div>
+        )}
+        <p className="text-sm text-slate-600 mt-4 leading-relaxed text-left">
           <strong>{jobTitle}</strong> AI 면접을 시작하기 전,{" "}
           <strong>{total}개의 간단한 문항</strong>에 답해 주세요. 각 문항에서{" "}
           <strong>두 문장 중 나에게 더 가까운 쪽</strong>을 고르면 됩니다. 약
@@ -915,19 +1029,30 @@ function PersonalityGate({
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         {/* 브랜드·맥락 헤더 — 어느 회사·공고의 AI 면접인지 + Intervia 로고 (캡처 문의 반영) */}
         <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2.5">
-          <LogoMark size={28} className="shrink-0" />
+          <LogoMark size={32} className="shrink-0" />
           <div className="min-w-0 flex-1">
-            {orgName && (
-              <p className="text-[11px] text-slate-400 truncate leading-tight">
-                {orgName}
+            {orgName ? (
+              <>
+                <p className="text-base font-bold text-slate-900 truncate leading-tight">
+                  {orgName}
+                </p>
+                <p className="text-[11px] text-slate-500 truncate leading-tight">
+                  {jobTitle} <span className="text-slate-400">AI 면접</span>
+                </p>
+              </>
+            ) : (
+              <p className="text-base font-bold text-slate-900 truncate leading-tight">
+                {jobTitle}{" "}
+                <span className="font-normal text-slate-400">AI 면접</span>
               </p>
             )}
-            <p className="text-sm font-bold text-slate-900 truncate leading-tight">
-              {jobTitle}{" "}
-              <span className="font-normal text-slate-400">AI 면접</span>
-            </p>
           </div>
         </div>
+        {steps.length > 1 && (
+          <div className="px-5 pt-3.5">
+            <StepProgress steps={steps} current="personality" />
+          </div>
+        )}
         {/* 진행 헤더 */}
         <div className="px-5 pt-4">
           <div className="flex items-center justify-between mb-2">
@@ -1039,12 +1164,14 @@ function McqGate({
   orgName,
   jobTitle,
   items,
+  steps,
   onDone,
 }: {
   token: string;
   orgName: string | null;
   jobTitle: string;
   items: Array<{ id: string; question: string; options: string[] }>;
+  steps: Step[];
   onDone: () => void;
 }) {
   const [started, setStarted] = useState(false);
@@ -1106,13 +1233,20 @@ function McqGate({
   if (!started) {
     return (
       <CenteredCard>
+        {orgName && (
+          <p className="text-lg font-bold text-slate-900 leading-tight">
+            {orgName}
+          </p>
+        )}
+        <p className="text-xs text-slate-400 mt-0.5 mb-4">{jobTitle} AI 면접</p>
         <div className="text-3xl mb-3">📋</div>
-        <h1 className="text-xl font-bold text-slate-900">면접 전 객관식 문제</h1>
-        <p className="text-xs text-slate-400 mt-1.5">
-          {orgName ? `${orgName} · ` : ""}
-          {jobTitle} AI 면접
-        </p>
-        <p className="text-sm text-slate-600 mt-3 leading-relaxed text-left">
+        <h1 className="text-xl font-bold text-slate-900">면접 전 직무 역량 평가</h1>
+        {steps.length > 1 && (
+          <div className="mt-4 flex justify-center">
+            <StepProgress steps={steps} current="mcq" />
+          </div>
+        )}
+        <p className="text-sm text-slate-600 mt-4 leading-relaxed text-left">
           <strong>{jobTitle}</strong> AI 면접을 시작하기 전,{" "}
           <strong>{total}개의 4지선다 문제</strong>를 풀어 주세요. 직무 기본기를
           확인하는 문제이며, 각 문항에서 <strong>보기 4개 중 하나</strong>를
@@ -1150,24 +1284,35 @@ function McqGate({
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         {/* 브랜드·맥락 헤더 */}
         <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2.5">
-          <LogoMark size={28} className="shrink-0" />
+          <LogoMark size={32} className="shrink-0" />
           <div className="min-w-0 flex-1">
-            {orgName && (
-              <p className="text-[11px] text-slate-400 truncate leading-tight">
-                {orgName}
+            {orgName ? (
+              <>
+                <p className="text-base font-bold text-slate-900 truncate leading-tight">
+                  {orgName}
+                </p>
+                <p className="text-[11px] text-slate-500 truncate leading-tight">
+                  {jobTitle} <span className="text-slate-400">AI 면접</span>
+                </p>
+              </>
+            ) : (
+              <p className="text-base font-bold text-slate-900 truncate leading-tight">
+                {jobTitle}{" "}
+                <span className="font-normal text-slate-400">AI 면접</span>
               </p>
             )}
-            <p className="text-sm font-bold text-slate-900 truncate leading-tight">
-              {jobTitle}{" "}
-              <span className="font-normal text-slate-400">AI 면접</span>
-            </p>
           </div>
         </div>
+        {steps.length > 1 && (
+          <div className="px-5 pt-3.5">
+            <StepProgress steps={steps} current="mcq" />
+          </div>
+        )}
         {/* 진행 헤더 */}
         <div className="px-5 pt-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              객관식 문제
+              직무 역량
             </span>
             <span
               className="text-xs font-semibold text-slate-600 tabular-nums"
@@ -1275,6 +1420,7 @@ function ConsentGate({
   orgName,
   jobTitle,
   items,
+  steps,
   onAccepted,
 }: {
   token: string;
@@ -1282,6 +1428,7 @@ function ConsentGate({
   orgName: string | null;
   jobTitle: string;
   items: ConsentItem[];
+  steps: Step[];
   onAccepted: () => void;
 }) {
   const [checks, setChecks] = useState<Record<string, boolean>>(
@@ -1369,19 +1516,39 @@ function ConsentGate({
           <div className="mb-3">
             <Logo size={32} />
           </div>
-          <div className="text-xs text-slate-500 mb-1">{candidateName} 님</div>
-          {orgName && (
-            <div className="text-[11px] text-slate-400 mb-0.5">{orgName}</div>
+          <div className="text-xs text-slate-500 mb-1.5">{candidateName} 님</div>
+          {orgName ? (
+            <>
+              <div className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">
+                {orgName}
+              </div>
+              <h1 className="text-sm sm:text-base font-semibold text-slate-700 mt-1">
+                {jobTitle} AI 면접 — 개인정보 처리 동의
+              </h1>
+            </>
+          ) : (
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900">
+              {jobTitle} AI 면접 — 개인정보 처리 동의
+            </h1>
           )}
-          <h1 className="text-lg font-bold text-slate-900">
-            {jobTitle} AI 면접 — 개인정보 처리 동의
-          </h1>
           <p className="text-sm text-slate-600 mt-2 leading-relaxed">
             면접을 진행하기 전, 개인정보 보호법(PIPA) 에 따라 아래 항목에
             동의해 주세요. 모든 <strong className="text-danger">필수</strong>{" "}
             항목에 동의해야 면접을 시작할 수 있습니다.
           </p>
         </header>
+
+        {steps.length > 1 && (
+          <div className="px-6 py-4 border-b border-slate-100 bg-white">
+            <p className="text-xs font-semibold text-slate-700 mb-3">
+              동의를 완료하면 아래 순서로 진행됩니다{" "}
+              <span className="font-normal text-slate-400">
+                · 총 {steps.length}단계
+              </span>
+            </p>
+            <StepProgress steps={steps} current={null} />
+          </div>
+        )}
 
         <ul className="divide-y divide-slate-100">
           {consentItems.map((it) => (
