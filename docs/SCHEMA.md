@@ -237,12 +237,12 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
 | id | INTEGER PK auto | |
-| prompt_hash | TEXT NOT NULL UNIQUE | `SHA-256(job_id + "\n" + 평가 프롬프트 전체)`. 공고 평가기준·이력서 내용·첨부가 모두 반영됨 |
+| prompt_hash | TEXT NOT NULL UNIQUE | `SHA-256("v{SCREENING_SCORING_VERSION}" + "\n" + job_id + "\n" + 평가 프롬프트 전체)`. 채점 버전·공고 평가기준·이력서 내용·첨부가 모두 반영됨 |
 | score | INTEGER NOT NULL | 캐시된 종합 점수 (디버깅용) |
 | report | JSON NOT NULL | `recomputeScore` 까지 반영된 최종 `ScreeningResult` |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
-`lib/screening.ts runScreeningOnce` 가 LLM 호출 전 조회 → hit 면 LLM 생략. miss 면 평가 후 저장. 공고 평가기준이 바뀌면 prompt_hash 가 달라져 자동으로 새로 평가. (정리 cron 없음 — 무한 증가하지만 행당 작음)
+`lib/screening.ts runScreeningOnce` 가 LLM 호출 전 조회 → hit 면 LLM 생략. miss 면 평가 후 저장. 공고 평가기준이 바뀌거나 **채점 로직 버전(`SCREENING_SCORING_VERSION`)이 +1 되면** prompt_hash 가 달라져 자동으로 새로 평가 (= 채점 산식을 고치면 옛 캐시가 무효화됨, [GOTCHAS.md](GOTCHAS.md) §0-6). 정리 cron 없음 — 무한 증가하지만 행당 작음.
 
 ## interview_sessions
 

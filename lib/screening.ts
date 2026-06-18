@@ -515,6 +515,12 @@ const SCREENING_SCHEMA = {
   ],
 };
 
+// 채점 로직 버전 — recomputeScore 의 산식/상수를 바꾸면 반드시 +1.
+// screening_cache 키에 포함되어, 로직을 고치면 옛 캐시(=옛 점수)가 자동 무효화(miss)되고 새로 계산된다.
+// ⚠️ 이 값이 없던 시절(v1): 캐시 키가 job+프롬프트뿐이라 recomputeScore 를 고쳐도
+//    이미 평가된 후보는 재평가해도 캐시가 옛 점수를 그대로 돌려줘 수정이 반영되지 않았다.
+const SCREENING_SCORING_VERSION = 2;
+
 // 6축 가중치 — 프롬프트(prompts.ts buildScreeningPrompt)와 반드시 일치.
 const AXIS_WEIGHTS: Record<string, number> = {
   tech_fit: 0.2,
@@ -525,12 +531,13 @@ const AXIS_WEIGHTS: Record<string, number> = {
   growth_attitude: 0.1,
 };
 
-// HR 평가 가이드(evaluationFocus) 점수 반영 — 가산점 방식.
-// 6축 점수를 고정값으로 덮어쓰지 않고 가감하여, 이력서별 점수 편차를 보존한다.
-// (과거: fail→49 cap / strong_pass→70 floor 로 덮어써서 점수가 49·70에 양극화되던 문제 해결)
-const FOCUS_STRONG_BONUS = 12; // strong_pass → 가점
-const FOCUS_FAIL_PENALTY = -12; // fail → 감점
-const FOCUS_FATAL_CAP = 15; // fatal_fail(필수/배제 조건 위반)만 하드캡 유지 — 진짜 결격 사유
+// HR 평가 가이드(evaluationFocus) 점수 반영.
+// strong_pass 만 가점(additive)이고, 나머지 미스매치는 다른 6개 게이트와 동일하게 *상한(cap)* 으로 처리한다.
+// (cap 은 이미 낮은 점수엔 영향이 없어 적합도 낮은 후보를 한 자릿수로 폭락시키지 않는다 — 과거 additive −12 가
+//  spread·직급 보정과 누적되며 "6축 30~50인데 종합 4점"이 나오던 문제 해결. 2026-06-18)
+const FOCUS_STRONG_BONUS = 12; // strong_pass → 가점 (유일한 가산 항목)
+const FOCUS_FAIL_CAP = 68; // fail(HR 핵심 기준 미달, 비치명) → 보류 상한(추천 70 직전). 고득점도 추천까진 못 감.
+const FOCUS_FATAL_CAP = 15; // fatal_fail(필수/배제 조건 위반)만 결격 하드캡 — 진짜 결격 사유
 
 // JD 본문에 명시된 필수/결격 요건 미충족(requirement_gate.verdict=fail) 시 캡.
 // severity 로 강도를 나눈다 (LLM 판정):
@@ -562,9 +569,10 @@ const WEAK_CORE_CAP = 58; // 종합 상한 (추천 70 미만 = 보류 이하)
 // 주장일 뿐 검증 불가 → 종합 캡. 스킬만 나열해도 고득점 나는 문제 차단.
 const GENERIC_EVIDENCE_CAP = 60;
 
-// confidence 디스카운트 — 6축 중 다수가 low(추정·근거 빈약)면 "인상은 좋으나 검증 불가".
+// confidence 디스카운트 — 6축 중 다수가 low(추정·근거 빈약)면 "인상은 좋으나 검증 불가" → 강력추천 상한 차단.
+// (additive 감점이 아니라 cap — 근거 빈약을 이유로 낮은 점수를 더 떨구지 않고, 고득점만 강력추천 직전으로 제한)
 const LOW_CONF_THRESHOLD = 4; // low 축이 이 개수 이상이면
-const LOW_CONF_PENALTY = -10; // 종합 감점
+const LOW_CONF_CAP = 84; // 강력추천(85) 직전 — 검증 불가 시 강력추천만 막고 추천은 허용
 
 // 전문 도메인 게이트 — JD 핵심 전문 도메인(보안/금융/의료 등) 경험 수준별 상한.
 // requirement_gate(명시 필수)와 별개로, "JD 전체가 그 도메인인데 후보의 그 도메인 경험이 부족" 케이스를 잡는다.
@@ -572,6 +580,12 @@ const LOW_CONF_PENALTY = -10; // 종합 감점
 // (다른 축·HR 가이드 보너스가 좋아도 핵심 도메인 직접 경험 없이는 추천 못 감 — 면접에서 확인할 보류).
 const DOMAIN_GAP_CAP = 50; // candidate_level === "none"
 const DOMAIN_ADJACENT_CAP = 68; // candidate_level === "adjacent" (보류 상한, 추천 70 미만)
+
+// 직급/연차 미스매치 상한 — 오버스펙(과한 연차) ≤95, 언더스펙(부족) ≤90.
+// (과거 additive −5/−10 은 이미 낮은 점수를 더 떨궈 폭락에 일조했다. "최고점 제한"이라는 본래 의도만
+//  남기도록 cap 으로 전환 — 코드 주석/프롬프트가 줄곧 "오버스펙이면 ≤95"라 적어온 의도와 일치.)
+const LEVEL_OVER_CAP = 95;
+const LEVEL_UNDER_CAP = 90;
 
 function clampScore(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -587,10 +601,11 @@ function recommendationFor(score: number): ScreeningResult["recommendation"] {
 
 /**
  * 종합 점수를 코드에서 직접 재계산 — LLM 이 뱉은 score 를 신뢰하지 않는다.
- * 순서: 6축 가중평균(누락 축은 가중치 제외 후 정규화) → spread 확대 → 보너스/캡(confidence·
- * focus·구체성·도메인·약한핵심축·필수요건) → **맨 마지막에 직급/연차 페널티** → clamp.
- * 페널티를 최후에 둬 spread 포화(100)·focus 보너스에 가려지지 않게 한다(오버스펙 ≤95/언더 ≤90).
- * → "6축은 낮은데 종합은 높은" 모순을 구조적으로 차단하고 점수 일관성을 보장.
+ * 순서: 6축 가중평균(누락 축은 가중치 제외 후 정규화) → spread 확대 → strong_pass 가점 →
+ *       상한(cap) 적용(confidence·focus·구체성·도메인·약한핵심축·필수요건·직급/연차) → clamp.
+ * 미스매치 보정은 strong_pass 가점 하나만 빼고 모두 *cap* 이다 — cap 은 이미 낮은 점수엔 영향이 없어
+ * "6축 30~50인데 종합 4점" 식 폭락을 막고, 고득점만 끌어내려 "6축은 낮은데 종합은 높은" 모순도 차단한다.
+ * 직급/연차 cap 은 맨 마지막(오버 ≤95/언더 ≤90)에 둬 spread 포화·focus 가점에 가려지지 않게 한다.
  * breakdown 이 전혀 없으면 LLM score 로 폴백.
  *
  * @param hasFocusGuide 공고에 HR 평가 가이드(evaluationFocus)가 실제로 있는지.
@@ -634,29 +649,28 @@ export function recomputeScore(
   // 변별력 보정: 6축 가중평균을 50 기준으로 확대(spread)해 분포를 넓힌다.
   // breakdown 이 없어 LLM score 폴백인 경우엔 확대하지 않는다(원점수 신뢰 불가).
   const raw = totalW > 0 ? clampScore(spreadScore(avg)) : avg;
-  // 직급/연차 페널티는 LLM 이 준 penalty 값이 아니라 fit 으로 코드가 직접 산출한다 —
-  // over=-5 / under=-10 / fit=0. (LLM 이 fit=over 인데 penalty 를 0 으로 비우는 불일치 차단)
-  // 적용은 *맨 마지막*(아래)에서. 여기서 빼면 spread 포화(100)·focus 보너스(+12)에 가려진다.
+  // 직급/연차 미스매치는 LLM 이 준 penalty 가 아니라 fit 으로 코드가 직접 *상한(cap)* 을 정한다 —
+  // over→95 / under→90 / fit→100(무제한). (LLM 이 fit 과 penalty 를 불일치시키는 문제 차단)
+  // 적용은 *맨 마지막*(아래) — spread 포화(100)·focus 가점(+12)에 가려지지 않게.
   const lm = result.level_match;
-  const levelPenalty = lm?.fit === "under" ? -10 : lm?.fit === "over" ? -5 : 0;
-  // 표시 배지(level_match.penalty)와 실제 적용값을 일치시키려 저장 리포트도 정규화.
-  if (lm) lm.penalty = levelPenalty;
+  const levelCap =
+    lm?.fit === "over" ? LEVEL_OVER_CAP : lm?.fit === "under" ? LEVEL_UNDER_CAP : 100;
   let score = raw;
 
-  // confidence 디스카운트 — 다수 축이 low(근거 빈약·추정)면 "인상은 좋으나 검증 불가"로 감점.
+  // confidence 디스카운트 — 다수 축이 low(근거 빈약·추정)면 "검증 불가" → 강력추천 상한으로 cap.
   if (b) {
     let lowConf = 0;
     for (const key of Object.keys(AXIS_WEIGHTS)) {
       if (b[key]?.confidence === "low") lowConf++;
     }
     if (lowConf >= LOW_CONF_THRESHOLD) {
-      score = clampScore(score + LOW_CONF_PENALTY);
+      score = Math.min(score, LOW_CONF_CAP);
     }
   }
 
-  // HR 평가 가이드(evaluationFocus) 반영 — 6축 점수에 가감(가산점 방식).
-  // strong_pass → +가점, fail → -감점, neutral → 변동 없음.
-  // fatal_fail("보안 경력 필수인데 전무" 같은 필수/배제 위반)만 결격으로 보고 하드캡 유지.
+  // HR 평가 가이드(evaluationFocus) 반영 — strong_pass 만 가점, 미스매치는 cap.
+  // strong_pass → +가점 / fail → 보류 상한 cap / fatal_fail → 결격 하드캡 / neutral → 변동 없음.
+  // ("보안 경력 필수인데 전무" 같은 필수·배제 위반이 fatal_fail.)
   // HR 평가 가이드(evaluationFocus)가 공고에 실제로 있을 때만 focus_match 반영.
   // 가이드가 비어 있으면 프롬프트에 가이드 블록이 없는데도 LLM 이 focus_match 를
   // applies=true/fail 로 환각해 부당 감점하는 사례가 있어(빈 가이드 공고), 코드에서 차단한다.
@@ -664,8 +678,7 @@ export function recomputeScore(
   const fm = result.focus_match;
   if (hasFocusGuide && fm?.applies) {
     if (fm.verdict === "fatal_fail") score = Math.min(score, FOCUS_FATAL_CAP);
-    else if (fm.verdict === "fail")
-      score = clampScore(score + FOCUS_FAIL_PENALTY);
+    else if (fm.verdict === "fail") score = Math.min(score, FOCUS_FAIL_CAP);
     else if (fm.verdict === "strong_pass")
       score = clampScore(score + FOCUS_STRONG_BONUS);
   } else if (!hasFocusGuide && fm) {
@@ -712,9 +725,12 @@ export function recomputeScore(
     score = Math.min(score, cap);
   }
 
-  // 직급/연차 페널티는 *맨 마지막*에 최종 점수에서 직접 감점한다 — spread 포화(100)·focus
-  // 보너스(+12)에 가려지지 않게. (오버스펙이면 종합 최대 95, 언더스펙이면 최대 90)
-  score = clampScore(score + levelPenalty);
+  // 직급/연차 미스매치 상한은 *맨 마지막*에 적용 — spread 포화(100)·focus 가점(+12)에 가려지지 않게.
+  // (오버스펙 ≤95 / 언더스펙 ≤90.) cap 이라 이미 낮은 점수는 그대로 — 폭락에 가담하지 않는다.
+  const beforeLevel = score;
+  score = clampScore(Math.min(score, levelCap));
+  // 표시 배지(level_match.penalty)는 *실제로 적용된* 보정폭(≤0). cap 이 안 걸리면 0.
+  if (lm) lm.penalty = score - beforeLevel;
 
   return { score, recommendation: recommendationFor(score) };
 }
@@ -873,7 +889,7 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
   // 동일하면 LLM 재호출 없이 같은 결과를 재사용 → 재평가/중복 시 점수가 흔들리지 않고 토큰도 절약.
   // 공고 평가기준을 바꾸면 프롬프트가 달라져 cache miss → 자동으로 새로 평가.
   const promptHash = createHash("sha256")
-    .update(`${job.id}\n${prompt}`)
+    .update(`v${SCREENING_SCORING_VERSION}\n${job.id}\n${prompt}`)
     .digest("hex");
 
   let result: ScreeningResult;
