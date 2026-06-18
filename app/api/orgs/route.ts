@@ -14,6 +14,7 @@ import {
 } from "@/lib/email-domain";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/site-info";
 import { extractIp } from "@/lib/auth-attempts";
+import { syncMarketingRecipient } from "@/lib/marketing-consent";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
     acceptTerms?: boolean;
     acceptPrivacy?: boolean;
     ageOver14?: boolean;
+    marketingOptIn?: boolean;
   };
 
   const orgName = body.orgName?.trim();
@@ -212,6 +214,13 @@ export async function POST(req: Request) {
       privacyVersion: PRIVACY_VERSION,
       privacyAcceptedIp: extractIp(req),
       privacyAcceptedUa: req.headers.get("user-agent")?.slice(0, 500) ?? null,
+      ...(body.marketingOptIn === true
+        ? {
+            marketingConsentAt: now,
+            marketingConsentIp: extractIp(req),
+            marketingConsentUa: req.headers.get("user-agent")?.slice(0, 500) ?? null,
+          }
+        : {}),
     })
     .returning();
 
@@ -221,6 +230,16 @@ export async function POST(req: Request) {
     .where(eq(organizations.id, org.id));
 
   await db.insert(tokenWallets).values({ orgId: org.id, balance: 0 });
+
+  // 마케팅 수신 동의 시 발송 대상 목록(marketingRecipients)에 등록 — best-effort.
+  // 실패해도 가입 흐름을 막지 않는다(동의 원천은 users.marketingConsentAt 에 이미 기록됨).
+  if (body.marketingOptIn === true) {
+    try {
+      await syncMarketingRecipient(normalizedEmail, true);
+    } catch (e) {
+      console.error("marketing recipient sync failed (org signup)", e);
+    }
+  }
 
   // 신규 가입 무료 체험 토큰 — ledger 통해 지급 (잔액·내역 동기 보장).
   // 단 pending_review(검토 대기) 법인은 보류 — 웰컴토큰 파밍/섀도우 법인 방지.

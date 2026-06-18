@@ -81,6 +81,13 @@ export const users = sqliteTable("users", {
   privacyVersion: text("privacy_version"),
   privacyAcceptedIp: text("privacy_accepted_ip"),
   privacyAcceptedUa: text("privacy_accepted_ua"),
+  // 마케팅(광고성) 메일 수신동의 — 정보통신망법 §50 선택 동의. null = 미동의/철회.
+  // 동의 원천(single source of truth). marketingRecipients(발송 대상)와 양방향 동기화:
+  // 동의 시 active 등록, 개인설정 철회/메일 수신거부 링크 시 unsubscribed + 이 값 null.
+  // IP/UA 도 함께 보존 — "동의 안 받았다" 주장에 대한 기술적 입증(terms 패턴과 동일).
+  marketingConsentAt: text("marketing_consent_at"),
+  marketingConsentIp: text("marketing_consent_ip"),
+  marketingConsentUa: text("marketing_consent_ua"),
   // 2FA (TOTP) — AES-256-GCM 으로 암호화된 base32 시크릿. enabled_at null 이면 미활성.
   totpSecret: text("totp_secret"),
   totpEnabledAt: text("totp_enabled_at"),

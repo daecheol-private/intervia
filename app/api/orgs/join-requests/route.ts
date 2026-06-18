@@ -15,6 +15,7 @@ import { extractIp } from "@/lib/auth-attempts";
 import { notifyOrgAdmins } from "@/lib/notifications";
 import { sendVerificationMail } from "@/lib/email-verify";
 import { isUniqueViolation } from "@/lib/db-errors";
+import { syncMarketingRecipient } from "@/lib/marketing-consent";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
     acceptTerms?: boolean;
     acceptPrivacy?: boolean;
     ageOver14?: boolean;
+    marketingOptIn?: boolean;
   };
   const orgId = Number(body.orgId);
   const email = body.email?.trim();
@@ -119,6 +121,13 @@ export async function POST(req: Request) {
         privacyVersion: PRIVACY_VERSION,
         privacyAcceptedIp: extractIp(req),
         privacyAcceptedUa: req.headers.get("user-agent")?.slice(0, 500) ?? null,
+        ...(body.marketingOptIn === true
+          ? {
+              marketingConsentAt: now,
+              marketingConsentIp: extractIp(req),
+              marketingConsentUa: req.headers.get("user-agent")?.slice(0, 500) ?? null,
+            }
+          : {}),
       })
       .returning();
   } catch (e) {
@@ -139,6 +148,16 @@ export async function POST(req: Request) {
     userId: user.id,
     status: "pending",
   });
+
+  // 마케팅 수신 동의 시 발송 대상 목록(marketingRecipients)에 등록 — best-effort.
+  // 실패해도 합류 요청 흐름을 막지 않는다(동의 원천은 users.marketingConsentAt 에 기록됨).
+  if (body.marketingOptIn === true) {
+    try {
+      await syncMarketingRecipient(normalizedEmail, true);
+    } catch (e) {
+      console.error("marketing recipient sync failed (join request)", e);
+    }
+  }
 
   // 메일함 소유 확인용 인증 메일 — 실제 주인에게 합류 시도를 통지. best-effort.
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;

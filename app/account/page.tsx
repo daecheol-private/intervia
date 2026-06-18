@@ -148,6 +148,7 @@ export default function AccountPage() {
 
       <TwoFactorPanel />
       <SessionsPanel />
+      <MarketingEmailPanel />
 
       <section className="mt-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
@@ -667,6 +668,88 @@ function SessionsPanel() {
           </ul>
         )}
       </div>
+    </section>
+  );
+}
+
+function MarketingEmailPanel() {
+  const [optIn, setOptIn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/account/marketing-consent")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) setOptIn(!!d.optIn);
+      });
+  }, []);
+
+  const toggle = async () => {
+    if (optIn === null || busy) return;
+    const next = !optIn;
+    setBusy(true);
+    setMsg(null);
+    const r = await fetch("/api/account/marketing-consent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ optIn: next }),
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setMsg({ type: "error", text: await r.text() });
+      return;
+    }
+    setOptIn(next);
+    setMsg({
+      type: "success",
+      text: next
+        ? "마케팅 메일 수신에 동의했습니다."
+        : "마케팅 메일 수신을 해지했습니다. 더 이상 광고성 메일을 받지 않습니다.",
+    });
+  };
+
+  if (optIn === null) return null;
+
+  return (
+    <section className="mt-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+        마케팅 메일 수신
+      </h2>
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-slate-600 leading-relaxed">
+          제품 소식·이벤트 등 마케팅(광고성) 메일 수신 여부입니다. 끄면 즉시 수신거부
+          처리됩니다. 면접 일정·합격 통지 등 서비스 운영·계정 관련 안내 메일은 이 설정과
+          무관하게 계속 발송됩니다.
+        </p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={optIn}
+          onClick={toggle}
+          disabled={busy}
+          className={`relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+            optIn ? "bg-primary" : "bg-slate-300"
+          }`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              optIn ? "translate-x-5" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+      </div>
+      {msg && (
+        <div
+          className={`mt-3 text-xs rounded-lg px-3 py-2 ${
+            msg.type === "error"
+              ? "text-danger bg-danger-soft border border-danger/30"
+              : "text-primary-deep bg-primary-soft border border-primary/30"
+          }`}
+        >
+          {msg.text}
+        </div>
+      )}
     </section>
   );
 }

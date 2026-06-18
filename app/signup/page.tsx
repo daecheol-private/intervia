@@ -103,6 +103,8 @@ export default function SignupPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [ageOver14, setAgeOver14] = useState(false);
+  // 마케팅(광고성) 메일 수신 — 선택 동의. 가입 필수 아님.
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
 
   useEffect(() => {
     void fetch("/api/auth/status")
@@ -201,6 +203,7 @@ export default function SignupPage() {
         acceptTerms,
         acceptPrivacy,
         ageOver14,
+        marketingOptIn,
       }),
     });
     setBusy(false);
@@ -359,6 +362,7 @@ export default function SignupPage() {
         acceptTerms,
         acceptPrivacy,
         ageOver14,
+        marketingOptIn,
       }),
     });
     setBusy(false);
@@ -586,9 +590,11 @@ export default function SignupPage() {
                 acceptTerms={acceptTerms}
                 acceptPrivacy={acceptPrivacy}
                 ageOver14={ageOver14}
+                marketingOptIn={marketingOptIn}
                 onTerms={setAcceptTerms}
                 onPrivacy={setAcceptPrivacy}
                 onAge={setAgeOver14}
+                onMarketing={setMarketingOptIn}
               />
               <div className="flex gap-2">
                 <button
@@ -877,9 +883,11 @@ export default function SignupPage() {
                 acceptTerms={acceptTerms}
                 acceptPrivacy={acceptPrivacy}
                 ageOver14={ageOver14}
+                marketingOptIn={marketingOptIn}
                 onTerms={setAcceptTerms}
                 onPrivacy={setAcceptPrivacy}
                 onAge={setAgeOver14}
+                onMarketing={setMarketingOptIn}
               />
               <div className="flex gap-2">
                 <button onClick={() => submitCreate()} disabled={busy} className={primaryBtn}>
@@ -1216,22 +1224,28 @@ function ConsentBox({
   acceptTerms,
   acceptPrivacy,
   ageOver14,
+  marketingOptIn,
   onTerms,
   onPrivacy,
   onAge,
+  onMarketing,
 }: {
   acceptTerms: boolean;
   acceptPrivacy: boolean;
   ageOver14: boolean;
+  marketingOptIn: boolean;
   onTerms: (v: boolean) => void;
   onPrivacy: (v: boolean) => void;
   onAge: (v: boolean) => void;
+  onMarketing: (v: boolean) => void;
 }) {
-  const allChecked = ageOver14 && acceptTerms && acceptPrivacy;
+  // 전체 동의는 표시상 4개 모두 체크일 때만 — 단 마케팅은 선택이므로 가입 가부엔 무관.
+  const allChecked = ageOver14 && acceptTerms && acceptPrivacy && marketingOptIn;
   const toggleAll = (v: boolean) => {
     onAge(v);
     onTerms(v);
     onPrivacy(v);
+    onMarketing(v);
   };
   return (
     <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
@@ -1242,7 +1256,12 @@ function ConsentBox({
           checked={allChecked}
           onChange={(e) => toggleAll(e.target.checked)}
         />
-        <span>전체 동의</span>
+        <span>
+          전체 동의{" "}
+          <span className="text-[11px] font-normal text-slate-400">
+            (선택 항목 포함)
+          </span>
+        </span>
       </label>
       <div className="space-y-1.5">
         <label className="flex items-start gap-2 cursor-pointer">
@@ -1282,6 +1301,21 @@ function ConsentBox({
               개인정보 처리방침
             </Link>
             에 동의합니다. <span className="text-danger">(필수)</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={marketingOptIn}
+            onChange={(e) => onMarketing(e.target.checked)}
+          />
+          <span>
+            마케팅·이벤트 정보 메일 수신에 동의합니다.{" "}
+            <span className="text-slate-400">(선택)</span>
+            <span className="block text-[11px] text-slate-400 mt-0.5">
+              동의하지 않아도 가입할 수 있으며, 가입 후 계정 설정에서 언제든 변경할 수 있습니다.
+            </span>
           </span>
         </label>
       </div>

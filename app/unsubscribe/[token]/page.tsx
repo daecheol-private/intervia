@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { marketingRecipients } from "@/lib/schema";
+import { marketingRecipients, users } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -18,6 +18,10 @@ async function unsubscribeAction(formData: FormData) {
   "use server";
   const token = String(formData.get("token") ?? "");
   if (token) {
+    const [rec] = await db
+      .select({ email: marketingRecipients.email })
+      .from(marketingRecipients)
+      .where(eq(marketingRecipients.unsubscribeToken, token));
     await db
       .update(marketingRecipients)
       .set({ status: "unsubscribed", unsubscribedAt: new Date().toISOString() })
@@ -27,6 +31,14 @@ async function unsubscribeAction(formData: FormData) {
           eq(marketingRecipients.status, "active")
         )
       );
+    // 회원 계정과 동일 email 이면 동의 원천(users.marketingConsentAt)도 비워,
+    // 개인설정 토글이 OFF 로 보이도록 양방향 동기화. (외부 수신자는 매칭 0건 → 무해)
+    if (rec?.email) {
+      await db
+        .update(users)
+        .set({ marketingConsentAt: null })
+        .where(eq(users.email, rec.email));
+    }
   }
   redirect(`/unsubscribe/${token}`);
 }
