@@ -434,17 +434,25 @@ export default function CandidateDetailPage() {
             </button>
           </div>
         </div>
-        <StagePanel
-          candidate={candidate}
-          jobTitle={job.title}
-          companyName={companyName ?? null}
-          onChanged={() => load()}
-          showFullResume={showFullResume}
-          setShowFullResume={setShowFullResume}
-          rescreening={!!data.rescreening}
-          screeningPhase={data.screeningPhase}
-          screeningActive={!!data.screeningActive}
-        />
+      </div>
+
+      {/* 액션 바 — 스크롤해도 네비 바(h-14) 바로 아래에 고정되어, 하단 평가 내용을
+          보다가 맨 위로 올리지 않고 단계 변경·종결 결정을 할 수 있다. 마스킹 전체보기를
+          펼치면 영역이 길어져 고정이 어색해지므로 그때만 sticky 를 해제한다. */}
+      <div className={showFullResume ? "mt-3" : "sticky top-14 z-30 mt-3"}>
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm px-6 py-3">
+          <StagePanel
+            candidate={candidate}
+            jobTitle={job.title}
+            companyName={companyName ?? null}
+            onChanged={() => load()}
+            showFullResume={showFullResume}
+            setShowFullResume={setShowFullResume}
+            rescreening={!!data.rescreening}
+            screeningPhase={data.screeningPhase}
+            screeningActive={!!data.screeningActive}
+          />
+        </div>
       </div>
 
       {/* Composite */}
