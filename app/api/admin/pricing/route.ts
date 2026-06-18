@@ -12,6 +12,7 @@ const ALLOWED = [
   "resume_upload",
   "interview",
   "interview_question_gen",
+  "offline_interview",
 ] as const;
 type Key = (typeof ALLOWED)[number];
 

@@ -8,6 +8,7 @@ type Pricing = {
   resume_upload: number;
   interview: number;
   interview_question_gen: number;
+  offline_interview: number;
 };
 
 const LABELS: { key: keyof Pricing; label: string; desc: string }[] = [
@@ -18,6 +19,11 @@ const LABELS: { key: keyof Pricing; label: string; desc: string }[] = [
     key: "interview_question_gen",
     label: "면접 문제 생성",
     desc: "면접 문제 1건 생성 시 차감 (1·2차 동일 단가)",
+  },
+  {
+    key: "offline_interview",
+    label: "대면 면접 평가",
+    desc: "대면 면접 녹음·음성 1건 AI 평가 시 차감 (1·2차 동일 단가)",
   },
 ];
 
@@ -73,7 +79,8 @@ export default function PricingPage() {
     draft.job_post !== pricing.job_post ||
     draft.resume_upload !== pricing.resume_upload ||
     draft.interview !== pricing.interview ||
-    draft.interview_question_gen !== pricing.interview_question_gen;
+    draft.interview_question_gen !== pricing.interview_question_gen ||
+    draft.offline_interview !== pricing.offline_interview;
 
   return (
     <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
