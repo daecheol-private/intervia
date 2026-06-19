@@ -17,6 +17,14 @@ import { HowItWorksCarousel } from "./components/HowItWorksCarousel";
 import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
 import { GuideStepList, GuideStripCta } from "./components/tour/guide-steps";
 import {
+  buttonClass,
+  Container,
+  SectionHeading,
+  Eyebrow,
+  Card,
+  Reveal,
+} from "./components/ui";
+import {
   getAllPricing,
   WELCOME_BONUS_TOKENS,
   CHARGE_BONUS_TIERS,
@@ -770,13 +778,14 @@ function KpiCard({
   accent: "blue" | "indigo" | "amber" | "emerald" | "rose" | "slate";
   children?: React.ReactNode;
 }) {
+  // v2 절제 — 장식 색(blue/indigo/emerald)은 중립. 진짜 상태(amber=대기, rose=음수)만 색 유지.
   const accentMap: Record<string, string> = {
-    blue: "text-primary border-primary/20",
-    indigo: "text-primary border-primary/15",
-    amber: "text-warning border-warning/30 bg-warning-soft/40",
-    emerald: "text-primary border-primary/15",
-    rose: "text-danger border-danger/30 bg-danger-soft/40",
-    slate: "text-ink-soft border-border-default",
+    blue: "border-border-default",
+    indigo: "border-border-default",
+    amber: "border-warning/30 bg-warning-soft/40",
+    emerald: "border-border-default",
+    rose: "border-danger/30 bg-danger-soft/40",
+    slate: "border-border-default",
   };
   const inner = (
     <div className={`group bg-card border rounded-2xl p-4 shadow-sm h-full transition-all ${accentMap[accent]} ${href ? "hover:shadow-md hover:-translate-y-0.5 hover:border-primary/40" : ""}`}>
@@ -837,6 +846,7 @@ function JobCard({
     : Math.ceil(
         (new Date(job.closesAt).getTime() - Date.now()) / 86_400_000
       );
+  // v2 절제 — 여유(>14일)는 중립. 임박(<=14 경고)·긴급(<=3 위험)만 색.
   const dTone =
     dLeft == null
       ? "bg-surface-alt text-ink-soft"
@@ -844,7 +854,7 @@ function JobCard({
         ? "bg-danger-soft text-danger border border-danger/30"
         : dLeft <= 14
           ? "bg-warning-soft text-warning border border-warning/30"
-          : "bg-primary-soft text-primary-deep border border-primary/25";
+          : "bg-surface-alt text-ink-soft border border-border-default";
 
   const needsInterviewDecision = Number(job.needsInterviewDecision);
   const awaitingInterview = Number(job.awaitingInterview);
@@ -875,7 +885,7 @@ function JobCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               {isLocked && (
-                <span className="text-warning" title="비밀번호 보호">
+                <span className="text-ink-muted" title="비밀번호 보호">
                   🔒
                 </span>
               )}
@@ -917,7 +927,7 @@ function JobCard({
             <span className="text-ink-soft">
               진행 <strong className="tabular-nums">{inProgress}</strong>
               {screeningC > 0 && (
-                <span className="text-warning ml-1">
+                <span className="text-ink-muted ml-1">
                   (평가 중 {screeningC})
                 </span>
               )}
@@ -1046,24 +1056,17 @@ function ActionCount({
   tone: "blue" | "sky" | "indigo";
   actor: "인사담당" | "지원자";
 }) {
-  const toneMap: Record<typeof tone, { active: string; muted: string }> = {
-    blue: {
-      active: "bg-primary-soft border-primary/30 text-primary-deep hover:bg-primary-soft/70",
-      muted: "bg-surface-alt border-border-default text-ink-muted",
-    },
-    sky: {
-      active: "bg-info-soft border-info/30 text-info hover:bg-info-soft/70",
-      muted: "bg-surface-alt border-border-default text-ink-muted",
-    },
-    indigo: {
-      active: "bg-accent-soft border-accent/40 text-accent-deep hover:bg-accent-soft/70",
-      muted: "bg-surface-alt border-border-default text-ink-muted",
-    },
-  };
-  const cls = value > 0 ? toneMap[tone].active : toneMap[tone].muted;
+  // v2 절제 — 단계별 색 구분(blue/sky/indigo) 폐기. 활성=포레스트, 비활성=중립 하나로 통일.
+  // 단계 구분은 색이 아니라 제목·위치로. (tone 인자는 호출부 호환 위해 유지하되 무시)
+  void tone;
+  const active =
+    "bg-primary-soft border-primary/30 text-primary-deep hover:bg-primary-soft/70";
+  const muted = "bg-surface-alt border-border-default text-ink-muted";
+  const cls = value > 0 ? active : muted;
+  // 액터: "인사담당(=내가 할 일)"은 포레스트 포인트, "지원자"는 중립.
   const actorTone =
     actor === "인사담당"
-      ? "bg-danger-soft text-danger"
+      ? "bg-primary-soft text-primary-deep"
       : "bg-surface-alt text-ink-soft";
   const inner = (
     <div
@@ -1118,7 +1121,7 @@ async function Landing() {
         />
         <div
           aria-hidden
-          className="absolute -z-10 right-0 top-32 w-[400px] h-[400px] rounded-full bg-accent/15 blur-3xl"
+          className="absolute -z-10 right-0 top-32 w-[400px] h-[400px] rounded-full bg-primary-soft/35 blur-3xl"
         />
         <div
           aria-hidden
@@ -1130,9 +1133,12 @@ async function Landing() {
           }}
         />
 
-        <div className="w-full max-w-6xl mx-auto px-6 pt-16 pb-12 sm:pt-20 sm:pb-16 grid lg:grid-cols-[1.25fr_1fr] gap-12 lg:gap-12 items-center">
+        <Container
+          width="xl"
+          className="pt-16 pb-12 sm:pt-20 sm:pb-16 grid lg:grid-cols-[1.25fr_1fr] gap-12 lg:gap-12 items-center"
+        >
           {/* Left — copy */}
-          <div>
+          <div className="reveal-load">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-card border border-border-default text-xs text-ink-soft shadow-sm mb-6">
               <Sparkles className="w-3 h-3 text-primary" strokeWidth={2.5} />
               AI 채용 면접 플랫폼 · 한국 채용 실무에 최적화
@@ -1149,14 +1155,21 @@ async function Landing() {
             <div className="mt-10 flex flex-col sm:flex-row items-start gap-3">
               <Link
                 href="/signup"
-                className="group w-full sm:w-auto h-12 px-6 rounded-lg bg-primary hover:bg-primary-deep text-surface font-semibold shadow-md transition-colors inline-flex items-center justify-center gap-1.5 border border-primary"
+                className={buttonClass({
+                  size: "lg",
+                  className: "group w-full sm:w-auto",
+                })}
               >
                 무료로 시작하기
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <Link
                 href="/login"
-                className="w-full sm:w-auto h-12 px-6 rounded-lg bg-card hover:bg-surface-alt text-ink font-semibold border border-border-strong transition-colors inline-flex items-center justify-center"
+                className={buttonClass({
+                  variant: "secondary",
+                  size: "lg",
+                  className: "w-full sm:w-auto",
+                })}
               >
                 로그인
               </Link>
@@ -1167,20 +1180,26 @@ async function Landing() {
           </div>
 
           {/* Right — chat preview */}
-          <div className="lg:pl-8 mt-8 lg:mt-0">
+          <div
+            className="lg:pl-8 mt-8 lg:mt-0 reveal-load"
+            style={{ animationDelay: "120ms" }}
+          >
             <ChatPreview />
           </div>
-        </div>
+        </Container>
       </section>
 
       {/* 통계 밴드 */}
       <section className="bg-ink text-surface">
-        <div className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        <Container
+          width="xl"
+          className="py-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center"
+        >
           <Stat value="75%" label="채용 사이클 단축" sub="평균 2주 → 4일" />
           <Stat value="89%" label="후보자 응답률" sub="채팅 면접 완료 기준" />
           <Stat value="4.6" suffix="/5" label="인사담당자 만족도" sub="AI 평가 결과 설문 기준" />
           <Stat value="10분" label="평균 면접 시간" sub="10·20·30분 선택" />
-        </div>
+        </Container>
         <p className="text-center text-[11px] text-surface/40 pb-6 px-6">
           * 베타 사용자 내부 측정값 · 출시 후 실데이터로 갱신
         </p>
@@ -1202,26 +1221,25 @@ async function Landing() {
         />
         <div
           aria-hidden
-          className="absolute -z-10 right-0 top-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-accent/15 blur-3xl"
+          className="absolute -z-10 right-0 top-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-primary-soft/35 blur-3xl"
         />
 
-        <div className="max-w-6xl mx-auto px-6 py-20 sm:py-24">
-          <div className="text-center mb-14">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-card border border-border-default text-[11px] uppercase tracking-widest text-primary font-semibold mb-4">
-              <Workflow className="w-3 h-3" strokeWidth={2.5} />
-              How it works
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
-              채용 사이클의 80%를 자동화합니다
-            </h2>
-            <p className="mt-3 text-sm text-ink-soft">
-              공고 등록부터 합·불 통보까지, 사람이 매번 할 필요 없는 일을 AI가 처리합니다.
-            </p>
-          </div>
+        <Container width="xl" className="py-20 sm:py-24">
+          <Reveal>
+            <SectionHeading
+              className="mb-14"
+              eyebrow="How it works"
+              eyebrowIcon={Workflow}
+              title="채용 사이클의 80%를 자동화합니다"
+              subtitle="공고 등록부터 합·불 통보까지, 사람이 매번 할 필요 없는 일을 AI가 처리합니다."
+            />
+          </Reveal>
 
           {/* Flow — 7단계 캐러셀 (스크린샷 목업 + 말풍선 포인트) */}
-          <HowItWorksCarousel />
-        </div>
+          <Reveal>
+            <HowItWorksCarousel />
+          </Reveal>
+        </Container>
       </section>
 
       <section className="relative bg-card border-y border-border-default overflow-hidden">
@@ -1239,17 +1257,16 @@ async function Landing() {
             backgroundSize: "48px 48px",
           }}
         />
-        <div className="relative max-w-5xl mx-auto px-6 py-20 sm:py-24">
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface border border-border-default text-[11px] uppercase tracking-widest text-primary font-semibold mb-4">
-              <CheckCircle2 className="w-3 h-3" strokeWidth={2.5} />
-              한국 채용 특화
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
-              한국 채용 시장에 맞춰 설계했습니다
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Container width="lg" className="relative py-20 sm:py-24">
+          <Reveal>
+            <SectionHeading
+              className="mb-12"
+              eyebrow="한국 채용 특화"
+              eyebrowIcon={CheckCircle2}
+              title="한국 채용 시장에 맞춰 설계했습니다"
+            />
+          </Reveal>
+          <Reveal className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Differ
               Icon={ShieldCheck}
               title="PIPA · 채용절차법 준수"
@@ -1308,13 +1325,13 @@ async function Landing() {
                 </div>
               }
             />
-          </div>
-        </div>
+          </Reveal>
+        </Container>
       </section>
 
       <section>
-        <div className="max-w-5xl mx-auto px-6 py-20 sm:py-24">
-          <div className="text-center">
+        <Container width="lg" className="py-20 sm:py-24">
+          <div className="text-center reveal">
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
               쓴 만큼만 내는 토큰 과금
             </h2>
@@ -1338,10 +1355,10 @@ async function Landing() {
           </div>
 
           {/* 무료 체험 카드 — forest 반전 배경 + apricot 강조 */}
-          <div className="mt-10 rounded-2xl bg-primary text-surface p-6 sm:p-10 shadow-lg">
+          <div className="mt-10 rounded-2xl bg-primary text-surface p-6 sm:p-10 shadow-lg reveal">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-10">
               <div className="shrink-0">
-                <div className="text-xs font-semibold uppercase tracking-widest text-accent">
+                <div className="text-xs font-semibold uppercase tracking-widest text-surface/70">
                   법인 첫 등록 시
                 </div>
                 <div className="mt-2 text-4xl sm:text-5xl font-bold tabular-nums">
@@ -1378,7 +1395,7 @@ async function Landing() {
           </div>
 
           {/* 기능별 단가 */}
-          <div className="mt-10">
+          <div className="mt-10 reveal">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-soft text-center">
               기능별 단가
             </h3>
@@ -1414,7 +1431,7 @@ async function Landing() {
           </div>
 
           {/* 충전 보너스 */}
-          <div className="mt-10">
+          <div className="mt-10 reveal">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-soft text-center">
               많이 충전할수록 더 드립니다
             </h3>
@@ -1434,16 +1451,16 @@ async function Landing() {
               진행 중인 평가·면접은 잔액이 부족해도 끝까지 완료됩니다(부족분은 다음 충전 시 자동 정산). 잔액이 0 이하가 되면 충전 전까지 신규 작업이 차단됩니다.
             </p>
           </div>
-        </div>
+        </Container>
       </section>
 
       <section className="bg-ink text-surface">
-        <div className="max-w-3xl mx-auto px-6 py-16 sm:py-24 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-widest text-accent mb-6">
-            <span className="w-1 h-1 rounded-full bg-accent" />
+        <Container width="sm" className="py-16 sm:py-24 text-center reveal">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md border border-white/15 text-[11px] uppercase tracking-widest text-surface/60 mb-6">
+            <span className="w-1 h-1 rounded-full bg-surface/50" />
             Get Started
           </div>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-surface">
             지금 시작해 보세요
           </h2>
           <p className="mt-4 opacity-75 leading-relaxed">
@@ -1452,7 +1469,7 @@ async function Landing() {
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/signup"
-              className="w-full sm:w-auto h-12 px-6 rounded-lg bg-accent hover:bg-accent-deep text-ink font-semibold shadow-md transition-colors inline-flex items-center justify-center border border-accent"
+              className="w-full sm:w-auto h-12 px-6 rounded-lg bg-surface hover:bg-surface-alt text-ink font-semibold shadow-md transition-[color,background-color,box-shadow,transform] active:translate-y-px inline-flex items-center justify-center border border-surface"
             >
               무료로 시작하기
             </Link>
@@ -1463,7 +1480,7 @@ async function Landing() {
               이미 계정이 있어요
             </Link>
           </div>
-        </div>
+        </Container>
       </section>
     </main>
   );
@@ -1484,7 +1501,7 @@ function WhyNotJobBoard() {
       />
       <div
         aria-hidden
-        className="absolute -z-10 right-0 top-10 w-[400px] h-[400px] rounded-full bg-accent/15 blur-3xl"
+        className="absolute -z-10 right-0 top-10 w-[400px] h-[400px] rounded-full bg-primary-soft/35 blur-3xl"
       />
       <div
         aria-hidden
@@ -1495,13 +1512,12 @@ function WhyNotJobBoard() {
         }}
       />
 
-      <div className="max-w-6xl mx-auto px-6 pt-12 pb-20 sm:pt-16 sm:pb-24">
+      <Container width="xl" className="pt-12 pb-20 sm:pt-16 sm:pb-24">
         {/* 헤더 */}
-        <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-14">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-card border border-border-default text-[11px] uppercase tracking-widest text-primary font-semibold mb-5 shadow-sm">
-            <Workflow className="w-3 h-3" strokeWidth={2.5} />
+        <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-14 reveal">
+          <Eyebrow icon={Workflow} className="mb-5">
             사람인·잡코리아와 다른 점
-          </div>
+          </Eyebrow>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-ink leading-[1.15]">
             공고를 올리는 곳이 아니라,
             <br />
@@ -1517,7 +1533,7 @@ function WhyNotJobBoard() {
         </div>
 
         {/* 비교 — 데스크톱 가로(좌 더미 / 마커 / 우 리포트), 모바일 세로 */}
-        <div className="grid lg:grid-cols-[1fr_auto_1fr] items-center gap-6 lg:gap-3">
+        <div className="grid lg:grid-cols-[1fr_auto_1fr] items-center gap-6 lg:gap-3 reveal">
           {/* 왼쪽 — 구인 사이트: 이력서 더미 */}
           <div className="lg:scale-[0.97] lg:opacity-90">
             <PanelLabel
@@ -1616,14 +1632,14 @@ function WhyNotJobBoard() {
 
             {/* 떠 있는 배지 */}
             <div className="absolute -top-3 -right-3 rounded-lg bg-ink text-surface px-2.5 py-1.5 shadow-lg flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-accent" strokeWidth={2.5} />
+              <Sparkles className="w-3 h-3 text-surface" strokeWidth={2.5} />
               <span className="text-[10px] font-semibold">자동 평가 완료</span>
             </div>
           </div>
         </div>
 
         {/* 보완재 한 줄 */}
-        <div className="mt-16 pt-8 border-t border-border-default/60 text-center">
+        <div className="mt-16 pt-8 border-t border-border-default/60 text-center reveal">
           <p className="text-sm sm:text-base text-ink-soft">
             사람인 · 잡코리아 · 자체 채용페이지 —{" "}
             <span className="text-ink font-semibold">
@@ -1631,7 +1647,7 @@ function WhyNotJobBoard() {
             </span>
           </p>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }
@@ -1731,7 +1747,7 @@ function Differ({
   visual?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl bg-surface-alt border border-border-default p-6">
+    <Card tone="alt" hover>
       <div className="flex items-center gap-3 mb-2">
         <div className="w-9 h-9 rounded-lg bg-card border border-border-default flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4 text-primary" strokeWidth={2.25} />
@@ -1744,7 +1760,7 @@ function Differ({
           {visual}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -1848,7 +1864,7 @@ function Stat({
           <span className="text-lg font-medium opacity-50 ml-0.5">{suffix}</span>
         )}
       </div>
-      <div className="mt-1.5 text-xs uppercase tracking-widest text-accent font-semibold">
+      <div className="mt-1.5 text-xs uppercase tracking-widest text-surface/60 font-semibold">
         {label}
       </div>
       {sub && (
@@ -1873,7 +1889,7 @@ function PriceCell({
   const discounted = listTokens != null && listTokens > tokens;
   return (
     <div
-      className={`rounded-2xl border p-6 text-center ${
+      className={`rounded-2xl border p-6 text-center shadow-sm transition-shadow hover:shadow-md ${
         discounted
           ? "bg-primary-soft/40 border-primary/30"
           : "bg-card border-border-default"

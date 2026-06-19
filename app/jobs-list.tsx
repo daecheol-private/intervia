@@ -35,14 +35,14 @@ function daysLeft(closesAt?: string): number | null {
 function DDayBadge({ job }: { job: Job }) {
   if (job.isDraft) {
     return (
-      <span className="text-[11px] px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+      <span className="text-[11px] px-2 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/40">
         임시 · 작성 필요
       </span>
     );
   }
   if (job.status === "closed") {
     return (
-      <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-200 text-slate-600">
+      <span className="text-[11px] px-2 py-0.5 rounded-md bg-surface-alt text-ink-soft">
         종결됨
       </span>
     );
@@ -53,7 +53,7 @@ function DDayBadge({ job }: { job: Job }) {
     d <= 3
       ? "bg-danger-soft text-danger border border-danger/30"
       : d <= 14
-        ? "bg-amber-50 text-amber-700 border border-amber-200"
+        ? "bg-warning-soft text-warning border border-warning/40"
         : "bg-primary-soft text-primary-deep border border-primary/30";
   const label = d <= 0 ? "오늘 만료" : `D-${d}`;
   return (
@@ -81,17 +81,17 @@ export default function JobsList({
 
   if (jobs.length === 0) {
     return (
-      <div className="bg-white border border-dashed border-slate-300 rounded-2xl py-16 text-center">
-        <div className="w-12 h-12 rounded-xl bg-slate-100 mx-auto mb-4 flex items-center justify-center text-2xl">
+      <div className="bg-card border border-dashed border-border-strong rounded-2xl py-16 text-center">
+        <div className="w-12 h-12 rounded-xl bg-surface-alt mx-auto mb-4 flex items-center justify-center text-2xl">
           📋
         </div>
-        <h3 className="font-semibold text-slate-900">등록된 공고가 없습니다</h3>
-        <p className="text-sm text-slate-500 mt-1">
+        <h3 className="font-semibold text-ink">등록된 공고가 없습니다</h3>
+        <p className="text-sm text-ink-muted mt-1">
           첫 공고를 등록하고 AI 면접을 시작해 보세요.
         </p>
         <Link
           href="/jobs/new"
-          className="inline-flex mt-5 bg-primary hover:bg-primary-deep text-white text-sm font-medium px-4 py-2 rounded-lg"
+          className="inline-flex mt-5 bg-primary hover:bg-primary-deep text-surface text-sm font-medium px-4 py-2 rounded-lg"
         >
           새 공고 등록
         </Link>
@@ -107,12 +107,12 @@ export default function JobsList({
             key={j.id}
             href={`/jobs/${j.id}`}
             onClick={(e) => handleClick(j, e)}
-            className="card-hover bg-white border border-slate-200 rounded-xl p-5 block"
+            className="card-hover bg-card border border-border-default rounded-xl p-5 block"
           >
             <div className="flex justify-between items-start gap-3">
-              <h2 className="font-semibold text-slate-900 leading-snug line-clamp-2 flex items-center gap-1.5">
+              <h2 className="font-semibold text-ink leading-snug line-clamp-2 flex items-center gap-1.5">
                 {j.hasPassword && (
-                  <span className="text-amber-600" title="비밀번호 보호됨">
+                  <span className="text-warning" title="비밀번호 보호됨">
                     🔒
                   </span>
                 )}
@@ -120,7 +120,7 @@ export default function JobsList({
               </h2>
               <div className="flex flex-col items-end gap-1">
                 <DDayBadge job={j} />
-                <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                <span className="text-[11px] text-ink-muted whitespace-nowrap">
                   {formatLocalDate(j.createdAt)}
                 </span>
               </div>
@@ -131,7 +131,7 @@ export default function JobsList({
               <Tag>{j.employmentType}</Tag>
               <Tag>{j.interviewDurationMinutes ?? 20}분</Tag>
             </div>
-            <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100">
+            <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-border-default">
               <Stat label="지원자" value={j.candidateCount} />
               <Stat label="평가완료" value={j.screenedCount} />
               <Stat label="면접완료" value={j.interviewedCount} />
@@ -156,7 +156,7 @@ export default function JobsList({
 
 function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
+    <span className="text-[11px] px-2 py-0.5 rounded-md bg-surface-alt text-ink-soft">
       {children}
     </span>
   );
@@ -165,8 +165,8 @@ function Tag({ children }: { children: React.ReactNode }) {
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <div className="text-[11px] text-slate-500">{label}</div>
-      <div className="font-semibold text-slate-900">{value}명</div>
+      <div className="text-[11px] text-ink-muted">{label}</div>
+      <div className="font-semibold text-ink">{value}명</div>
     </div>
   );
 }
@@ -207,17 +207,17 @@ function PinModal({
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+        className="bg-card rounded-2xl p-6 w-full max-w-sm shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center">
           <div className="text-3xl mb-2">🔒</div>
-          <h3 className="font-bold text-slate-900">{job.title}</h3>
-          <p className="text-sm text-slate-500 mt-1">
+          <h3 className="font-bold text-ink">{job.title}</h3>
+          <p className="text-sm text-ink-muted mt-1">
             공고 비밀번호 4자리를 입력하세요.
           </p>
         </div>
@@ -229,7 +229,7 @@ function PinModal({
             value={pin}
             onChange={(v) => setPin(v.replace(/\D/g, "").slice(0, 4))}
             onKeyDown={(e) => e.key === "Enter" && submit()}
-            className="w-full border border-slate-300 rounded-lg px-3 py-3 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full border border-border-strong rounded-lg px-3 py-3 text-center text-2xl font-mono tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="••••"
           />
         </div>
@@ -237,14 +237,14 @@ function PinModal({
         <div className="flex gap-2 mt-5">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 text-sm"
+            className="flex-1 px-4 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-sm"
           >
             취소
           </button>
           <button
             onClick={submit}
             disabled={busy || pin.length !== 4}
-            className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+            className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
           >
             {busy ? "확인 중..." : "확인"}
           </button>

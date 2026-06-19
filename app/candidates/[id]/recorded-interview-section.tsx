@@ -86,7 +86,7 @@ function highlightPhrases(text: string, phrases: string[]): ReactNode {
   }
   return text.split(re).map((part, i) =>
     list.includes(part) ? (
-      <strong key={i} className="font-semibold text-slate-900">
+      <strong key={i} className="font-semibold text-ink">
         {part}
       </strong>
     ) : (
@@ -106,8 +106,8 @@ function roleKo(role: Seg["role"]): string {
 function roleClass(role: Seg["role"]): string {
   // 지원자 답변만 하늘색으로 강조 — 면접관/미상은 무색(중립 회색 배지).
   return role === "candidate"
-    ? "bg-white text-sky-700 border border-sky-300"
-    : "bg-slate-100 text-slate-600 border border-slate-200";
+    ? "bg-card text-info border border-info/40"
+    : "bg-surface-alt text-ink-soft border border-border-default";
 }
 
 // 라운드별 "대면 면접 평가" — 상위 "N차 면접" 섹션 안에 임베드되는 content-only 블록.
@@ -236,16 +236,16 @@ export function RecordedInterviewPanel({
   const roundLabel = round === "round2" ? "2차" : "1차";
 
   return (
-    <div className="space-y-4 pt-4 mt-2 border-t border-slate-200">
+    <div className="space-y-4 pt-4 mt-2 border-t border-border-default">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-slate-700">
+        <span className="text-sm font-semibold text-ink-soft">
           대면 면접 평가
         </span>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-[11px] text-ink-muted">
           {roundLabel} 면접 · 녹음 업로드 또는 라이브
         </span>
       </div>
-      <p className="text-sm text-slate-600 leading-relaxed">
+      <p className="text-sm text-ink-soft leading-relaxed">
         사람이 진행한 <strong>대면 면접</strong>을 녹음 업로드하거나 라이브로
         진행하면, 전사 → 화자 분리 → AI 역량 평가 리포트를 만들어 줍니다. 녹음
         파일은 보관하지 않습니다.
@@ -265,8 +265,8 @@ export function RecordedInterviewPanel({
       )}
 
       {canModify && !liveOpen && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-          <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer select-none">
+        <div className="rounded-xl border border-border-default bg-surface-alt p-4 space-y-3">
+          <label className="flex items-start gap-2 text-xs text-ink-soft cursor-pointer select-none">
             <input
               type="checkbox"
               checked={consent}
@@ -285,17 +285,17 @@ export function RecordedInterviewPanel({
               accept="audio/*,video/*"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               disabled={uploading}
-              className="text-sm text-slate-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border file:border-slate-300 file:bg-white file:text-slate-700 file:text-sm file:cursor-pointer disabled:opacity-50"
+              className="text-sm text-ink-soft file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border file:border-border-strong file:bg-card file:text-ink-soft file:text-sm file:cursor-pointer disabled:opacity-50"
             />
             <button
               onClick={upload}
               disabled={!file || uploading || !consent}
-              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium shadow-sm disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
               {uploading ? "업로드 중..." : "녹음 업로드"}
             </button>
-            <span className="text-slate-300 px-1" aria-hidden>
+            <span className="text-ink-muted px-1" aria-hidden>
               |
             </span>
             <button
@@ -307,12 +307,12 @@ export function RecordedInterviewPanel({
             </button>
           </div>
           {uploading ? (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-muted">
               업로드 중입니다... 업로드가 끝나면 전사·평가는 백그라운드에서
               진행되니, 이 화면을 닫거나 새로고침해도 됩니다.
             </p>
           ) : (
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ink-muted">
               오디오/영상 파일 (최대 18MB). 라이브 녹음은 브라우저로 즉시 받아쓰며
               최대 1시간까지 가능합니다.
             </p>
@@ -322,10 +322,10 @@ export function RecordedInterviewPanel({
 
       {/* 리포트 목록 (이 라운드) */}
       {interviews === null ? (
-        <p className="text-sm text-slate-400">불러오는 중...</p>
+        <p className="text-sm text-ink-muted">불러오는 중...</p>
       ) : roundInterviews.length === 0 ? (
         !canModify && (
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-ink-muted">
             아직 {roundLabel} 대면 면접 평가가 없습니다.
           </p>
         )
@@ -401,17 +401,17 @@ function RecordedReportCard({
   const report = ri.report;
 
   return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden">
+    <div className="rounded-xl border border-border-default overflow-hidden">
       {/* 헤더 */}
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-surface-alt border-b border-border-default">
         <div className="flex items-center gap-2 text-xs">
           <span className="px-2 py-0.5 rounded-md bg-primary-soft text-primary-deep border border-primary/30 font-medium">
             {roundNo} 대면
           </span>
-          <span className="text-slate-500">
+          <span className="text-ink-muted">
             {ri.mode === "live" ? "준실시간" : "업로드"} · {fmtDuration(ri.durationSeconds)}
           </span>
-          <span className="text-slate-400">{formatKstDateTime(ri.createdAt)}</span>
+          <span className="text-ink-muted">{formatKstDateTime(ri.createdAt)}</span>
         </div>
         {ri.status === "confirmed" && (
           <span className="text-[11px] px-2 py-0.5 rounded-md bg-success-soft text-success border border-success/30">
@@ -433,11 +433,11 @@ function RecordedReportCard({
         <div className="px-4 py-5 text-sm text-danger">
           처리에 실패했습니다.
           {ri.error && (
-            <span className="block text-xs text-slate-500 mt-1">사유: {ri.error}</span>
+            <span className="block text-xs text-ink-muted mt-1">사유: {ri.error}</span>
           )}
         </div>
       ) : !report ? (
-        <div className="px-4 py-5 text-sm text-slate-400">리포트 데이터 없음</div>
+        <div className="px-4 py-5 text-sm text-ink-muted">리포트 데이터 없음</div>
       ) : (
         <div className="px-4 py-4 space-y-5 text-sm">
           {/* ① 결정 요약 */}
@@ -447,7 +447,7 @@ function RecordedReportCard({
             >
               {report.overall_score}
             </div>
-            <span className="text-sm text-slate-400 font-medium">/ 100</span>
+            <span className="text-sm text-ink-muted font-medium">/ 100</span>
             {showRec(report.recommendation) && (
               <span
                 className={`ml-auto text-xs font-semibold px-2.5 py-1 rounded-md border ${recColor[report.recommendation]}`}
@@ -457,7 +457,7 @@ function RecordedReportCard({
             )}
           </div>
           {report.summary && (
-            <blockquote className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-slate-800 leading-relaxed">
+            <blockquote className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-ink leading-relaxed">
               <HL text={report.summary} />
             </blockquote>
           )}
@@ -467,21 +467,21 @@ function RecordedReportCard({
             {Object.entries(report.scores).map(([dim, v]) => (
               <div key={dim}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-slate-800">{dim}</span>
+                  <span className="font-medium text-ink">{dim}</span>
                   <span
                     className={`text-xs font-bold tabular-nums ${scoreColor(v.score)}`}
                   >
                     {v.score}
                   </span>
                 </div>
-                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden my-1.5">
+                <div className="h-1.5 bg-surface-alt rounded-full overflow-hidden my-1.5">
                   <div
                     className={`h-full rounded-full ${scoreBarColor(v.score)}`}
                     style={{ width: `${Math.max(0, Math.min(100, v.score))}%` }}
                   />
                 </div>
                 {v.comment && (
-                  <p className="text-xs text-slate-600 leading-relaxed">
+                  <p className="text-xs text-ink-soft leading-relaxed">
                     <HL text={v.comment} />
                     <EvidenceChips seqs={v.evidence_seq} onJump={jumpTo} />
                   </p>
@@ -498,7 +498,7 @@ function RecordedReportCard({
               </div>
               <ul className="space-y-1.5">
                 {report.strengths.map((s, i) => (
-                  <li key={i} className="text-slate-700 leading-relaxed">
+                  <li key={i} className="text-ink-soft leading-relaxed">
                     <span className="text-success mr-1">+</span>
                     <HL text={s.text} />
                     <EvidenceChips seqs={s.evidence_seq} onJump={jumpTo} />
@@ -514,7 +514,7 @@ function RecordedReportCard({
               </div>
               <ul className="space-y-1.5">
                 {report.concerns.map((c, i) => (
-                  <li key={i} className="text-slate-700 leading-relaxed">
+                  <li key={i} className="text-ink-soft leading-relaxed">
                     <span className="text-warning mr-1">!</span>
                     <HL text={c.text} />
                     <EvidenceChips seqs={c.evidence_seq} onJump={jumpTo} />
@@ -526,11 +526,11 @@ function RecordedReportCard({
 
           {/* ③ 확인 필요 (판단 리스크) */}
           {report.to_verify.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <div className="text-xs font-semibold text-amber-800 uppercase tracking-wider mb-1.5">
+            <div className="rounded-lg border border-warning/40 bg-warning-soft px-4 py-3">
+              <div className="text-xs font-semibold text-warning uppercase tracking-wider mb-1.5">
                 확인 필요 (판단 시 유의)
               </div>
-              <ul className="space-y-1 list-disc pl-4 text-amber-900">
+              <ul className="space-y-1 list-disc pl-4 text-warning">
                 {report.to_verify.map((t, i) => (
                   <li key={i}>{t}</li>
                 ))}
@@ -539,10 +539,10 @@ function RecordedReportCard({
           )}
           {report.followup_questions.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
                 다음 면접 추천 질문
               </div>
-              <ul className="space-y-1 list-disc pl-4 text-slate-700">
+              <ul className="space-y-1 list-disc pl-4 text-ink-soft">
                 {report.followup_questions.map((q, i) => (
                   <li key={i}>{q}</li>
                 ))}
@@ -552,17 +552,17 @@ function RecordedReportCard({
 
           {/* ④ 화자 분리 전사 */}
           {ri.segments.length > 0 && (
-            <div className="rounded-lg border border-slate-200 overflow-hidden">
+            <div className="rounded-lg border border-border-default overflow-hidden">
               <button
                 type="button"
                 onClick={() => setTranscriptOpen((o) => !o)}
                 aria-expanded={transcriptOpen}
-                className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200 hover:bg-slate-100 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 bg-surface-alt border-b border-border-default hover:bg-surface-alt transition-colors"
               >
-                <span className="text-xs font-semibold text-slate-600">
+                <span className="text-xs font-semibold text-ink-soft">
                   화자 분리 전사 · {ri.segments.length}개 발언
                 </span>
-                <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <span className="flex items-center gap-1.5 text-[11px] text-ink-muted">
                   {transcriptOpen ? "접기" : "펼치기"}
                   <span
                     className={`transition-transform ${transcriptOpen ? "rotate-90" : ""}`}
@@ -573,16 +573,16 @@ function RecordedReportCard({
                 </span>
               </button>
               {transcriptOpen && (
-                <div className="max-h-[26rem] overflow-y-auto divide-y divide-slate-200">
+                <div className="max-h-[26rem] overflow-y-auto divide-y divide-border-default">
                   {ri.segments.map((s) => {
                     const isCand = s.role === "candidate";
                     // 지원자 답변만 하늘색, 면접관/미상은 무색.
                     const rowTone =
                       flash === s.seq
-                        ? "bg-amber-100"
+                        ? "bg-warning-soft"
                         : isCand
-                          ? "bg-sky-100"
-                          : "bg-white";
+                          ? "bg-info-soft"
+                          : "bg-card";
                     return (
                       <div
                         key={s.seq}
@@ -596,11 +596,11 @@ function RecordedReportCard({
                             {roleKo(s.role)}
                           </span>
                           {fmtMs(s.startMs) && (
-                            <span className="text-[10px] text-slate-400 tabular-nums">
+                            <span className="text-[10px] text-ink-muted tabular-nums">
                               {fmtMs(s.startMs)}
                             </span>
                           )}
-                          <span className="text-[10px] text-slate-300">
+                          <span className="text-[10px] text-ink-muted">
                             #{s.seq}
                           </span>
                           {s.lowConfidence && (
@@ -612,7 +612,7 @@ function RecordedReportCard({
                             </span>
                           )}
                         </div>
-                        <p className="text-xs leading-relaxed text-slate-800">
+                        <p className="text-xs leading-relaxed text-ink">
                           {highlightPhrases(s.text, report?.key_phrases ?? [])}
                         </p>
                       </div>
@@ -624,8 +624,8 @@ function RecordedReportCard({
           )}
 
           {/* ⑤ AI 생성 라벨 + 확정 */}
-          <div className="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
-            <span className="text-[11px] text-slate-400">
+          <div className="flex items-center justify-between gap-3 pt-1 border-t border-border-default">
+            <span className="text-[11px] text-ink-muted">
               🤖 AI 생성 평가 — 최종 판단은 면접관이 합니다.
             </span>
             {ri.status === "confirmed" ? (
@@ -647,7 +647,7 @@ function RecordedReportCard({
                       }
                     }}
                     disabled={reevaluating || confirming}
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+                    className="px-3 py-1.5 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
                     title="같은 녹취로 평가만 다시 (과금됨)"
                   >
                     {reevaluating && (

@@ -195,24 +195,24 @@ export function SlotCalendarPicker({
         <button
           type="button"
           onClick={() => gotoMonth(-1)}
-          className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-sm"
+          className="px-2 py-1 rounded hover:bg-surface-alt text-ink-soft text-sm"
         >
           ‹
         </button>
-        <span className="text-sm font-semibold text-slate-900">
+        <span className="text-sm font-semibold text-ink">
           {view.getFullYear()}년 {view.getMonth() + 1}월
         </span>
         <button
           type="button"
           onClick={() => gotoMonth(1)}
-          className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-sm"
+          className="px-2 py-1 rounded hover:bg-surface-alt text-ink-soft text-sm"
         >
           ›
         </button>
       </div>
 
       {/* 요일 헤더 */}
-      <div className="grid grid-cols-7 gap-1 text-[10px] text-slate-500 text-center">
+      <div className="grid grid-cols-7 gap-1 text-[10px] text-ink-muted text-center">
         {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
           <div
             key={d}
@@ -271,9 +271,9 @@ export function SlotCalendarPicker({
 
       {/* 시간 선택 영역 — 같은 날 여러 시간 동시 선택 가능 (1시간 고정) */}
       {selectedDay ? (
-        <div className="border-t border-slate-200 pt-3 space-y-2">
+        <div className="border-t border-border-default pt-3 space-y-2">
           <div className="flex items-baseline justify-between">
-            <span className="text-xs font-medium text-slate-700">
+            <span className="text-xs font-medium text-ink-soft">
               {selectedDay.toLocaleDateString("ko-KR", {
                 month: "long",
                 day: "numeric",
@@ -282,7 +282,7 @@ export function SlotCalendarPicker({
               시간 선택 ({durLabel})
             </span>
             {!single && (
-              <span className="text-[10px] text-slate-500">
+              <span className="text-[10px] text-ink-muted">
                 {selectedTimes.size > 0
                   ? `${selectedTimes.size}개 선택됨`
                   : "여러 개 선택 가능"}
@@ -323,7 +323,7 @@ export function SlotCalendarPicker({
               type="button"
               onClick={addSelectedTimes}
               disabled={selectedTimes.size === 0 || value.length >= MAX_SLOTS}
-              className="w-full px-3 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-40"
+              className="w-full px-3 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-40"
             >
               + 선택한 시간 추가{" "}
               {selectedTimes.size > 0 && (
@@ -335,15 +335,15 @@ export function SlotCalendarPicker({
           )}
         </div>
       ) : (
-        <div className="text-xs text-slate-400 text-center py-3 bg-slate-50 rounded-lg">
+        <div className="text-xs text-ink-muted text-center py-3 bg-surface-alt rounded-lg">
           캘린더에서 날짜를 클릭하세요.
         </div>
       )}
 
       {/* 추가된 슬롯 칩 */}
       {value.length > 0 && (
-        <div className="border-t border-slate-200 pt-3">
-          <div className="text-xs font-medium text-slate-700 mb-2">
+        <div className="border-t border-border-default pt-3">
+          <div className="text-xs font-medium text-ink-soft mb-2">
             {single
               ? "선택한 면접 시간"
               : `제안할 면접 시간 (${value.length}/${MAX_SLOTS})`}

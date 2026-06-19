@@ -96,7 +96,7 @@ export function CandidateScores({ c }: { c: Candidate }) {
             {shortenError(c.lastError)}
           </span>
         )}
-        <span className="text-[10px] text-slate-400">
+        <span className="text-[10px] text-ink-muted">
           체크 후 재평가로 다시 시도
         </span>
       </div>
@@ -139,13 +139,13 @@ function ScoreBlock({
   const isBlue = accent === "blue";
   return (
     <div className="flex flex-col items-center">
-      <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+      <span className="text-[10px] text-ink-muted uppercase tracking-wider">
         {label}
       </span>
       {score != null ? (
         <span
           className={`text-base sm:text-xl font-bold leading-tight ${
-            isBlue ? "text-primary" : "text-slate-900"
+            isBlue ? "text-primary" : "text-ink"
           }`}
         >
           {score}
@@ -157,7 +157,7 @@ function ScoreBlock({
           {placeholder.text}
         </span>
       ) : (
-        <span className="text-slate-300 text-xl font-bold leading-tight">-</span>
+        <span className="text-ink-muted text-xl font-bold leading-tight">-</span>
       )}
     </div>
   );

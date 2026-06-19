@@ -55,21 +55,21 @@ export function StepUpModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onCancel}
     >
       <form
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl"
+        className="bg-card rounded-2xl max-w-md w-full p-6 shadow-2xl"
       >
-        <div className="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <div className="text-lg font-bold text-ink flex items-center gap-2">
           <span aria-hidden>🔐</span> 본인 확인
         </div>
-        <div className="mt-2 text-sm text-slate-700 leading-relaxed">
+        <div className="mt-2 text-sm text-ink-soft leading-relaxed">
           {reason}
           <br />
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-ink-muted">
             계정 비밀번호를 다시 입력해 본인임을 확인해 주세요. 한 번 인증하면
             10분간 유효합니다.
           </span>
@@ -80,7 +80,6 @@ export function StepUpModal({
             value={pw}
             onChange={setPw}
             placeholder="비밀번호"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
         {err && (
@@ -92,14 +91,14 @@ export function StepUpModal({
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-2 text-sm text-slate-600 hover:text-slate-900"
+            className="px-3 py-2 text-sm text-ink-soft hover:text-ink"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={busy || !pw}
-            className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary-deep text-white rounded-lg disabled:opacity-50"
+            className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary-deep text-surface rounded-lg disabled:opacity-50"
           >
             {busy ? "확인 중..." : "확인"}
           </button>

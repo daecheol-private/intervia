@@ -201,17 +201,17 @@ export function ScheduleProposeModal({
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
       onClick={close}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-card rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 — 고정 */}
-        <div className="px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
-          <h3 className="font-bold text-slate-900">{roundLbl} 면접 스케쥴 제시</h3>
-          <p className="text-xs text-slate-500 mt-1">
+        <div className="px-6 pt-6 pb-4 border-b border-border-default shrink-0">
+          <h3 className="font-bold text-ink">{roundLbl} 면접 스케쥴 제시</h3>
+          <p className="text-xs text-ink-muted mt-1">
             {mode === "direct"
               ? `전화 등으로 협의된 시간을 선택한 ${candidateIds.length}명의 확정 일정으로 바로 등록합니다.`
               : `선택한 ${candidateIds.length}명에게 메일로 시간 선택 링크를 발송합니다.`}
@@ -223,7 +223,7 @@ export function ScheduleProposeModal({
           {!results ? (
             <div className="space-y-4 text-sm">
               <div>
-                <label className="text-xs font-medium text-slate-700 mb-1 block">
+                <label className="text-xs font-medium text-ink-soft mb-1 block">
                   입력 방식
                 </label>
                 <div className="flex gap-2">
@@ -233,7 +233,7 @@ export function ScheduleProposeModal({
                     className={`flex-1 px-3 py-2 rounded-lg border text-left ${
                       mode === "propose"
                         ? "bg-primary-soft border-primary/40 text-primary-deep"
-                        : "bg-white border-slate-200 text-slate-500"
+                        : "bg-card border-border-default text-ink-muted"
                     }`}
                   >
                     <span className="block text-sm font-medium">📅 시간 제안</span>
@@ -247,7 +247,7 @@ export function ScheduleProposeModal({
                     className={`flex-1 px-3 py-2 rounded-lg border text-left ${
                       mode === "direct"
                         ? "bg-primary-soft border-primary/40 text-primary-deep"
-                        : "bg-white border-slate-200 text-slate-500"
+                        : "bg-card border-border-default text-ink-muted"
                     }`}
                   >
                     <span className="block text-sm font-medium">📝 직접 확정</span>
@@ -260,7 +260,7 @@ export function ScheduleProposeModal({
 
               {mode === "propose" ? (
                 <div>
-                  <label className="text-xs font-medium text-slate-700 mb-2 block">
+                  <label className="text-xs font-medium text-ink-soft mb-2 block">
                     면접 가능 시간 (1~10개)
                   </label>
                   <SlotCalendarPicker value={slots} onChange={setSlots} />
@@ -268,15 +268,15 @@ export function ScheduleProposeModal({
               ) : (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-medium text-slate-700">
+                    <label className="text-xs font-medium text-ink-soft">
                       면접 일시
                     </label>
                     <label className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500">소요 시간</span>
+                      <span className="text-xs text-ink-muted">소요 시간</span>
                       <select
                         value={durationMin}
                         onChange={(e) => changeDuration(Number(e.target.value))}
-                        className="border border-slate-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="border border-border-strong rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
                       >
                         <option value={30}>30분</option>
                         <option value={60}>1시간</option>
@@ -295,7 +295,7 @@ export function ScheduleProposeModal({
               )}
 
               <div>
-                <label className="text-xs font-medium text-slate-700 mb-1 block">
+                <label className="text-xs font-medium text-ink-soft mb-1 block">
                   면접 방식
                 </label>
                 <div className="flex gap-2">
@@ -305,7 +305,7 @@ export function ScheduleProposeModal({
                     className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
                       modeOnline
                         ? "bg-primary-soft border-primary/40 text-primary-deep"
-                        : "bg-white border-slate-200 text-slate-500"
+                        : "bg-card border-border-default text-ink-muted"
                     }`}
                   >
                     💻 온라인
@@ -316,7 +316,7 @@ export function ScheduleProposeModal({
                     className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
                       !modeOnline
                         ? "bg-primary-soft border-primary/40 text-primary-deep"
-                        : "bg-white border-slate-200 text-slate-500"
+                        : "bg-card border-border-default text-ink-muted"
                     }`}
                   >
                     🏢 오프라인
@@ -326,22 +326,22 @@ export function ScheduleProposeModal({
 
               {!modeOnline && (
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-slate-700 block">
+                  <label className="text-xs font-medium text-ink-soft block">
                     회사 주소
                   </label>
                   <input
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="예: 서울시 강남구 테헤란로 123"
-                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2"
+                    className="w-full text-sm border border-border-strong rounded-lg px-3 py-2"
                   />
                   <input
                     value={addressDetail}
                     onChange={(e) => setAddressDetail(e.target.value)}
                     placeholder="상세 (호수·층 등, 선택)"
-                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2"
+                    className="w-full text-sm border border-border-strong rounded-lg px-3 py-2"
                   />
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-ink-muted">
                     법인 설정에 주소가 없으면 자동 저장됩니다.
                   </p>
                 </div>
@@ -355,9 +355,9 @@ export function ScheduleProposeModal({
                     onChange={(e) => setNotify(e.target.checked)}
                     className="mt-0.5"
                   />
-                  <span className="text-xs text-slate-600 leading-relaxed">
+                  <span className="text-xs text-ink-soft leading-relaxed">
                     후보자에게 확정 안내 메일 발송
-                    <span className="block text-[11px] text-slate-400">
+                    <span className="block text-[11px] text-ink-muted">
                       미체크 시 메일 없이 등록만 합니다 (면접관 공유용). 공고
                       면접관에게는 인앱 알림이 전달됩니다.
                     </span>
@@ -393,7 +393,7 @@ export function ScheduleProposeModal({
         </div>
 
         {/* 푸터 — 고정 */}
-        <div className="px-6 py-4 border-t border-slate-100 shrink-0">
+        <div className="px-6 py-4 border-t border-border-default shrink-0">
           {!results ? (
             <>
               {err && (
@@ -429,7 +429,7 @@ export function ScheduleProposeModal({
                 close();
                 onDone();
               }}
-              className="w-full px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
+              className="w-full px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium"
             >
               닫기
             </button>

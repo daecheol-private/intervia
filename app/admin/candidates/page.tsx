@@ -120,16 +120,16 @@ export default function AdminCandidatesPage() {
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {stepUpModal}
       <div className="mb-6">
-        <Link href="/admin/dashboard" className="text-xs text-slate-500 hover:underline">
+        <Link href="/admin/dashboard" className="text-xs text-ink-muted hover:underline">
           ← 운영 대시보드
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">
+        <h1 className="text-2xl font-bold text-ink mt-2">
           후보자 검색 (cross-org)
         </h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <p className="text-sm text-ink-muted mt-1">
           PIPA 권리요청 (열람·삭제) 대응. 모든 법인의 후보자를 이름/이메일/전화번호로 검색.
         </p>
-        <div className="mt-3 text-[11px] text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+        <div className="mt-3 text-[11px] text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
           ⚠️ 이 페이지에서의 모든 조회·삭제는 감사 로그에 "타법인접근"으로 기록됩니다.
         </div>
       </div>
@@ -142,7 +142,7 @@ export default function AdminCandidatesPage() {
         }}
       >
         <input
-          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="flex-1 border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
           placeholder="이름 · 이메일 · 전화번호 (2글자+) — 자동 검색"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -151,7 +151,7 @@ export default function AdminCandidatesPage() {
         <button
           type="submit"
           disabled={busy}
-          className="px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep disabled:opacity-50"
+          className="px-3 py-2 text-sm bg-primary text-surface rounded-lg hover:bg-primary-deep disabled:opacity-50"
         >
           검색
         </button>
@@ -164,13 +164,13 @@ export default function AdminCandidatesPage() {
       )}
 
       {rows.length === 0 ? (
-        <div className="text-sm text-slate-400 text-center py-12 bg-white border border-dashed border-slate-300 rounded-2xl">
+        <div className="text-sm text-ink-muted text-center py-12 bg-card border border-dashed border-border-strong rounded-2xl">
           {q ? "결과 없음" : "검색어를 입력하세요."}
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
+        <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-600 text-xs">
+            <thead className="bg-surface-alt text-ink-soft text-xs">
               <tr>
                 <th className="text-left px-4 py-3 font-medium">이름</th>
                 <th className="text-left px-4 py-3 font-medium">이메일</th>
@@ -182,27 +182,27 @@ export default function AdminCandidatesPage() {
                 <th className="text-right px-4 py-3 font-medium">작업</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border-default">
               {rows.map((c) => (
                 <tr key={c.id}>
                   <td className="px-4 py-3 font-medium">{c.name}</td>
-                  <td className="px-4 py-3 text-slate-600">{c.email ?? "-"}</td>
-                  <td className="px-4 py-3 text-slate-600">{c.phone ?? "-"}</td>
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="px-4 py-3 text-ink-soft">{c.email ?? "-"}</td>
+                  <td className="px-4 py-3 text-ink-soft">{c.phone ?? "-"}</td>
+                  <td className="px-4 py-3 text-ink-soft">
                     {c.orgName ?? `org#${c.orgId}`}
                   </td>
-                  <td className="px-4 py-3 text-slate-600 truncate max-w-[200px]">
+                  <td className="px-4 py-3 text-ink-soft truncate max-w-[200px]">
                     {c.jobTitle ?? "-"}
                   </td>
                   <td className="px-4 py-3 text-xs">{c.stage}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500">
+                  <td className="px-4 py-3 text-xs text-ink-muted">
                     {formatLocalDate(c.createdAt)}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => remove(c)}
                       disabled={busy}
-                      className="px-2.5 py-1 text-xs bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 rounded disabled:opacity-50"
+                      className="px-2.5 py-1 text-xs bg-card border border-danger/40 hover:bg-danger-soft text-danger rounded disabled:opacity-50"
                     >
                       PIPA 삭제
                     </button>

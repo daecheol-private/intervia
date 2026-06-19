@@ -44,21 +44,21 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60]"
+      className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60]"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className={`bg-white rounded-2xl w-full ${maxWidth} shadow-2xl max-h-[90vh] flex flex-col overflow-hidden`}
+        className={`bg-card rounded-2xl w-full ${maxWidth} shadow-2xl max-h-[90vh] flex flex-col overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
-          <h3 className="font-bold text-slate-900 text-base">{title}</h3>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-default shrink-0">
+          <h3 className="font-bold text-ink text-base">{title}</h3>
           <button
             onClick={onClose}
             aria-label="닫기"
-            className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center text-lg leading-none"
+            className="w-8 h-8 rounded-lg text-ink-muted hover:text-ink-soft hover:bg-surface-alt flex items-center justify-center text-lg leading-none"
           >
             ✕
           </button>

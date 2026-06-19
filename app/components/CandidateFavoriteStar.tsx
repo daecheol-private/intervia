@@ -41,7 +41,7 @@ export function CandidateFavoriteStar({
       onClick={toggle}
       disabled={busy}
       className={`${cls} leading-none transition-transform hover:scale-110 disabled:opacity-50 ${
-        favorited ? "text-amber-400" : "text-slate-300 hover:text-amber-300"
+        favorited ? "text-amber-400" : "text-border-strong hover:text-amber-300"
       }`}
       title={favorited ? "즐겨찾기 해제" : "즐겨찾기"}
       aria-label={favorited ? "즐겨찾기 해제" : "즐겨찾기"}

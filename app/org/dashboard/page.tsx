@@ -54,10 +54,10 @@ type Dashboard = {
 
 const WAITER_TONE: Record<string, string> = {
   hr: "bg-primary-soft border-primary/30 text-primary-deep",
-  candidate: "bg-amber-50 border-amber-200 text-amber-700",
-  interviewer: "bg-violet-50 border-violet-200 text-violet-700",
-  system: "bg-sky-50 border-sky-200 text-sky-700",
-  none: "bg-slate-50 border-slate-200 text-slate-500",
+  candidate: "bg-surface-alt border-border-default text-ink-soft",
+  interviewer: "bg-surface-alt border-border-default text-ink-soft",
+  system: "bg-surface-alt border-border-default text-ink-soft",
+  none: "bg-surface-alt border-border-default text-ink-muted",
 };
 
 const REC_COLOR: Record<string, string> = {
@@ -117,7 +117,7 @@ export default function OrgDashboardPage() {
         <select
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
         >
           <option value={7}>최근 7일</option>
           <option value={30}>최근 30일</option>
@@ -167,7 +167,7 @@ export default function OrgDashboardPage() {
 
           {/* 전사 퍼널 + 신규 지원 추이 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <section className="bg-card border border-border-default rounded-2xl p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-ink mb-4">
                 전사 채용 퍼널
               </h2>
@@ -190,7 +190,7 @@ export default function OrgDashboardPage() {
                       <span className="w-20 shrink-0 text-ink-soft">
                         {f.label}
                       </span>
-                      <div className="flex-1 bg-slate-100 rounded h-5 relative overflow-hidden">
+                      <div className="flex-1 bg-surface-alt rounded h-5 relative overflow-hidden">
                         <div
                           className="absolute inset-y-0 left-0 rounded"
                           style={{
@@ -201,12 +201,12 @@ export default function OrgDashboardPage() {
                         />
                         <span className="absolute inset-0 flex items-center px-2 text-[10px] text-ink font-semibold tabular-nums">
                           {f.count}
-                          <span className="text-slate-400 font-normal ml-1">
+                          <span className="text-ink-muted font-normal ml-1">
                             ({Math.round((f.count / funnelBase) * 100)}%)
                           </span>
                         </span>
                       </div>
-                      <span className="w-12 shrink-0 text-right text-[10px] tabular-nums text-slate-500">
+                      <span className="w-12 shrink-0 text-right text-[10px] tabular-nums text-ink-muted">
                         {conv != null ? `↳${conv}%` : "—"}
                       </span>
                     </div>
@@ -215,7 +215,7 @@ export default function OrgDashboardPage() {
               </div>
             </section>
 
-            <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <section className="bg-card border border-border-default rounded-2xl p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-ink mb-4">
                 신규 지원 추이{" "}
                 <span className="text-xs font-normal text-ink-muted">
@@ -233,7 +233,7 @@ export default function OrgDashboardPage() {
           </div>
 
           {/* 액션 필요 — 단계별 대기 */}
-          <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <section className="bg-card border border-border-default rounded-2xl p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-ink mb-1">
               지금 처리할 일
             </h2>
@@ -286,7 +286,7 @@ export default function OrgDashboardPage() {
           </section>
 
           {/* 공고별 현황 비교 */}
-          <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <section className="bg-card border border-border-default rounded-2xl p-5 shadow-sm">
             <h2 className="text-sm font-semibold text-ink mb-4">
               공고별 현황 비교
             </h2>
@@ -297,7 +297,7 @@ export default function OrgDashboardPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
-                  <thead className="text-ink-muted border-b border-slate-200">
+                  <thead className="text-ink-muted border-b border-border-default">
                     <tr>
                       <th className="text-left font-medium py-2 pr-2">공고</th>
                       <th className="text-left font-medium py-2 px-2 w-40">
@@ -314,9 +314,9 @@ export default function OrgDashboardPage() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-border-default">
                     {data.jobs.map((j) => (
-                      <tr key={j.id} className="hover:bg-slate-50">
+                      <tr key={j.id} className="hover:bg-surface-alt">
                         <td className="py-2 pr-2 max-w-[180px]">
                           <Link
                             href={`/jobs/${j.id}/report`}
@@ -329,14 +329,14 @@ export default function OrgDashboardPage() {
                             className={`text-[10px] ${
                               j.status === "active"
                                 ? "text-primary"
-                                : "text-slate-400"
+                                : "text-ink-muted"
                             }`}
                           >
                             {j.status === "active" ? "진행 중" : "종결"}
                           </span>
                         </td>
                         <td className="py-2 px-2">
-                          <div className="flex h-4 rounded overflow-hidden bg-slate-100">
+                          <div className="flex h-4 rounded overflow-hidden bg-surface-alt">
                             <Seg n={j.hired} total={j.total} color={C.primary} />
                             <Seg
                               n={j.inProgress}
@@ -358,7 +358,7 @@ export default function OrgDashboardPage() {
                         <td className="py-2 px-2 text-right tabular-nums font-medium text-ink">
                           {j.total}
                         </td>
-                        <td className="py-2 px-2 text-right tabular-nums text-info">
+                        <td className="py-2 px-2 text-right tabular-nums text-ink-soft">
                           {j.inProgress}
                         </td>
                         <td className="py-2 px-2 text-right tabular-nums text-primary-deep">
@@ -388,7 +388,7 @@ export default function OrgDashboardPage() {
 
           {/* 분포: 결정 / 점수 / 추천등급 */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <section className="bg-card border border-border-default rounded-2xl p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-ink mb-4">결정 분포</h2>
               {outcomeTotal > 0 ? (
                 <Donut
@@ -408,7 +408,7 @@ export default function OrgDashboardPage() {
               )}
             </section>
 
-            <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <section className="bg-card border border-border-default rounded-2xl p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-ink mb-4">
                 서류 점수 분포
               </h2>
@@ -427,7 +427,7 @@ export default function OrgDashboardPage() {
               )}
             </section>
 
-            <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <section className="bg-card border border-border-default rounded-2xl p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-ink mb-4">
                 서류 추천등급
               </h2>
@@ -468,11 +468,11 @@ function Stat({
   tone?: "default" | "primary" | "success" | "danger" | "muted";
 }) {
   const toneCls: Record<string, string> = {
-    default: "bg-white border-slate-200 text-ink",
+    default: "bg-card border-border-default text-ink",
     primary: "bg-primary-soft border-primary/30 text-primary-deep",
-    success: "bg-emerald-50 border-emerald-200 text-emerald-700",
+    success: "bg-success-soft border-success/30 text-success",
     danger: "bg-danger-soft border-danger/30 text-danger",
-    muted: "bg-slate-50 border-slate-200 text-slate-500",
+    muted: "bg-surface-alt border-border-default text-ink-muted",
   };
   return (
     <div className={`border rounded-2xl p-4 shadow-sm ${toneCls[tone]}`}>

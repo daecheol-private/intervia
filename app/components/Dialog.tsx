@@ -103,19 +103,19 @@ const TONE_META: Record<
     icon: "ℹ️",
     ring: "border-primary/20",
     chip: "bg-primary-soft text-primary-deep",
-    confirmBtn: "bg-primary hover:bg-primary-deep text-white",
+    confirmBtn: "bg-primary hover:bg-primary-deep text-surface",
   },
   success: {
     icon: "✅",
     ring: "border-primary/20",
     chip: "bg-primary-soft text-primary-deep",
-    confirmBtn: "bg-primary hover:bg-primary-deep text-white",
+    confirmBtn: "bg-primary hover:bg-primary-deep text-surface",
   },
   warn: {
     icon: "⚠️",
-    ring: "border-amber-300/50",
-    chip: "bg-amber-100 text-amber-700",
-    confirmBtn: "bg-primary hover:bg-primary-deep text-white",
+    ring: "border-warning/40",
+    chip: "bg-warning-soft text-warning",
+    confirmBtn: "bg-primary hover:bg-primary-deep text-surface",
   },
   danger: {
     icon: "🗑️",
@@ -161,13 +161,13 @@ export function DialogHost() {
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60]"
+      className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-[60]"
       onClick={() => close(false)}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className={`bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border ${meta.ring} max-h-[80vh] flex flex-col`}
+        className={`bg-card rounded-2xl p-6 w-full max-w-sm shadow-2xl border ${meta.ring} max-h-[80vh] flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2.5">
@@ -177,16 +177,16 @@ export function DialogHost() {
           >
             {meta.icon}
           </span>
-          <h3 className="font-bold text-slate-900">{d.title}</h3>
+          <h3 className="font-bold text-ink">{d.title}</h3>
         </div>
-        <p className="mt-3 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed overflow-y-auto">
+        <p className="mt-3 text-sm text-ink-soft whitespace-pre-wrap leading-relaxed overflow-y-auto">
           {d.message}
         </p>
         <div className="mt-5 flex gap-2 justify-end shrink-0">
           {d.kind === "confirm" && (
             <button
               onClick={() => close(false)}
-              className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+              className="px-4 py-2 rounded-lg border border-border-strong text-ink-soft text-sm hover:bg-surface-alt"
             >
               {d.cancelText}
             </button>
@@ -197,7 +197,7 @@ export function DialogHost() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               d.kind === "confirm"
                 ? meta.confirmBtn
-                : "bg-primary hover:bg-primary-deep text-white"
+                : "bg-primary hover:bg-primary-deep text-surface"
             }`}
           >
             {d.kind === "confirm" ? d.confirmText : "확인"}

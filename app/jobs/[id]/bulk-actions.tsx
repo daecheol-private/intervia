@@ -23,7 +23,7 @@ export function SchedulePropose({
       <button
         onClick={() => setOpen(true)}
         disabled={disabled}
-        className="ml-auto text-xs px-3 py-1.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="ml-auto text-xs px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         title={disabled ? "후보자를 체크하세요" : label}
       >
         📅 {label} ({selectedIds.length})
@@ -116,7 +116,7 @@ export function BulkDecisionModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4"
       onClick={busy ? undefined : onCancel}
     >
       <div
@@ -129,7 +129,7 @@ export function BulkDecisionModal({
           일괄 처리합니다.
         </p>
 
-        <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+        <div className="mt-3 text-xs text-warning bg-warning-soft border border-warning/30 rounded-lg px-3 py-2 leading-relaxed">
           {isReject
             ? "⚠️ 종결 결정입니다. 이력서 원본·첨부 파일은 즉시 폐기되고, 공고 종결 +14일 후 후보자 정보 전체가 자동 삭제됩니다."
             : "⚠️ 종결 결정입니다. 최종합격으로 처리되며, 이력서·첨부 파일은 입사 절차를 위해 보존됩니다."}

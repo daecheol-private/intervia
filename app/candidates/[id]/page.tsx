@@ -232,14 +232,14 @@ export default function CandidateDetailPage() {
     if (loadError === "not_found")
       return (
         <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
-            <div className="text-slate-700 font-medium">삭제된 후보자입니다.</div>
-            <div className="mt-1 text-sm text-slate-500">
+          <div className="rounded-lg border border-border-default bg-card p-6 text-center">
+            <div className="text-ink-soft font-medium">삭제된 후보자입니다.</div>
+            <div className="mt-1 text-sm text-ink-muted">
               이 후보자는 더 이상 존재하지 않습니다.
             </div>
             <button
               onClick={() => router.back()}
-              className="mt-4 px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50"
+              className="mt-4 px-4 py-2 rounded-lg border border-border-strong text-sm hover:bg-surface-alt"
             >
               뒤로 가기
             </button>
@@ -249,9 +249,9 @@ export default function CandidateDetailPage() {
     if (loadError === "failed")
       return (
         <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-center">
-            <div className="text-rose-700 font-medium">불러오기에 실패했습니다.</div>
-            <div className="mt-1 text-sm text-rose-600">
+          <div className="rounded-lg border border-danger/40 bg-danger-soft p-6 text-center">
+            <div className="text-danger font-medium">불러오기에 실패했습니다.</div>
+            <div className="mt-1 text-sm text-danger">
               네트워크 상태를 확인하고 다시 시도해 주세요.
             </div>
             <button
@@ -259,7 +259,7 @@ export default function CandidateDetailPage() {
                 setLoadError(null);
                 void load();
               }}
-              className="mt-4 px-4 py-2 rounded-lg border border-rose-300 text-sm text-rose-700 hover:bg-rose-100"
+              className="mt-4 px-4 py-2 rounded-lg border border-danger/40 text-sm text-danger hover:bg-danger-soft"
             >
               다시 시도
             </button>
@@ -267,7 +267,7 @@ export default function CandidateDetailPage() {
         </main>
       );
     return (
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
         불러오는 중...
       </main>
     );
@@ -341,7 +341,7 @@ export default function CandidateDetailPage() {
     <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link
         href={`/jobs/${job.id}`}
-        className="text-sm text-slate-500 hover:text-slate-900"
+        className="text-sm text-ink-muted hover:text-ink"
       >
         ← {job.title}
       </Link>
@@ -349,11 +349,11 @@ export default function CandidateDetailPage() {
       {/* Header — 정보 영역. 아래 액션 바와 시각적으로 한 카드처럼 보이도록
           아래 모서리는 각지게(rounded-t-2xl) + 아래 테두리는 제거(border-b-0).
           둘 사이 경계선은 액션 바의 위쪽 테두리가 담당한다. */}
-      <div className="bg-white border border-slate-200 border-b-0 rounded-t-2xl p-6 mt-3 shadow-sm">
+      <div className="bg-card border border-border-default border-b-0 rounded-t-2xl p-6 mt-3 shadow-sm">
         <div className="flex justify-between items-start gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold text-slate-900">
+              <h1 className="text-2xl font-bold text-ink">
                 {displayCandidateName(candidate.name)}
               </h1>
               {candidate.outcome !== "hired" && <StageBadge stage={candidate.stage} />}
@@ -396,11 +396,11 @@ export default function CandidateDetailPage() {
               />
             </div>
             {candidate.careerSummary && (
-              <div className="mt-3 text-sm text-slate-600 border-l-2 border-slate-200 pl-3">
+              <div className="mt-3 text-sm text-ink-soft border-l-2 border-border-default pl-3">
                 {candidate.careerSummary}
               </div>
             )}
-            <div className="text-xs text-slate-400 mt-4">
+            <div className="text-xs text-ink-muted mt-4">
               {formatKstDateTime(candidate.createdAt)} 업로드
             </div>
           </div>
@@ -428,7 +428,7 @@ export default function CandidateDetailPage() {
           그래서 하단 평가 내용을 보다가 맨 위로 올리지 않고 단계 변경·종결을 처리할 수 있다.
           마스킹 전체보기를 펼치면 영역이 길어져 고정이 어색해지므로 그때만 sticky 를 해제한다. */}
       <div className={showFullResume ? "" : "sticky top-14 z-30"}>
-        <div className="bg-white border border-slate-200 rounded-b-2xl shadow-sm px-6 py-3">
+        <div className="bg-card border border-border-default rounded-b-2xl shadow-sm px-6 py-3">
           <StagePanel
             candidate={candidate}
             jobTitle={job.title}
@@ -453,7 +453,7 @@ export default function CandidateDetailPage() {
               <span className={`font-bold tabular-nums ${scoreColor(composite)}`}>
                 {composite}
               </span>
-              <span className="text-slate-400">/100</span>
+              <span className="text-ink-muted">/100</span>
               {rec && showRec(rec) && (
                 <span
                   className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${recColor[rec]}`}
@@ -461,23 +461,23 @@ export default function CandidateDetailPage() {
                   {rec}
                 </span>
               )}
-              <span className="text-slate-400">
+              <span className="text-ink-muted">
                 · 서류 {candidate.screeningScore ?? "-"} / 면접 {interviewScore ?? "-"}
               </span>
             </span>
           ) : (
-            <span className="text-slate-400">평가 미완료</span>
+            <span className="text-ink-muted">평가 미완료</span>
           )
         }
       >
         <div className="flex items-center gap-6 flex-wrap">
           <div>
-            <div className="text-xs text-slate-500">종합</div>
+            <div className="text-xs text-ink-muted">종합</div>
             <div className="flex items-baseline gap-2 mt-0.5">
-              <span className="text-4xl font-bold text-slate-900">
+              <span className="text-4xl font-bold text-ink">
                 {composite != null ? composite : "-"}
               </span>
-              <span className="text-sm text-slate-400">/ 100</span>
+              <span className="text-sm text-ink-muted">/ 100</span>
             </div>
             {rec && showRec(rec) && (
               <span
@@ -504,7 +504,7 @@ export default function CandidateDetailPage() {
               <span className={`font-bold tabular-nums ${scoreColor(candidate.screeningScore)}`}>
                 {candidate.screeningScore}
               </span>
-              <span className="text-slate-400">/100</span>
+              <span className="text-ink-muted">/100</span>
               {candidate.screeningReport?.recommendation &&
                 showRec(candidate.screeningReport.recommendation) && (
                   <span
@@ -514,26 +514,26 @@ export default function CandidateDetailPage() {
                   </span>
                 )}
               {candidate.screeningReport?.summary && (
-                <span className="text-slate-500 truncate">
+                <span className="text-ink-muted truncate">
                   · {candidate.screeningReport.summary}
                 </span>
               )}
             </span>
           ) : screeningPhase === "in_queue" ? (
-            <span className="text-blue-600">⏳ 평가 진행 중</span>
+            <span className="text-primary">⏳ 평가 진행 중</span>
           ) : screeningPhase === "failed" ? (
             <span className="text-danger">평가 실패</span>
           ) : screeningPhase === "skipped" ? (
-            <span className="text-slate-500">AI 평가 안 함 · 동의 미확보</span>
+            <span className="text-ink-muted">AI 평가 안 함 · 동의 미확보</span>
           ) : (
-            <span className="text-slate-400">평가 전</span>
+            <span className="text-ink-muted">평가 전</span>
           )
         }
       >
         {screeningPhase === "skipped" ? (
           <div className="space-y-4">
-            <div className="text-sm bg-slate-50 border border-slate-200 text-slate-700 rounded-lg p-3 leading-relaxed">
-              <strong className="text-slate-800">
+            <div className="text-sm bg-surface-alt border border-border-default text-ink-soft rounded-lg p-3 leading-relaxed">
+              <strong className="text-ink">
                 이력서 AI 평가 없이 진행 중입니다.
               </strong>{" "}
               지원자 동의(AI 평가 고지)를 받지 못해, 이 공고는 서류를 AI 로 평가하지
@@ -551,7 +551,7 @@ export default function CandidateDetailPage() {
             <button
               onClick={startScreening}
               disabled={screening}
-              className="px-5 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+              className="px-5 py-2 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
             >
               {screening && <Loader2 className="w-4 h-4 animate-spin" />}
               {screening ? "요청 중..." : "AI 검토 요청"}
@@ -559,23 +559,23 @@ export default function CandidateDetailPage() {
           </div>
         ) : screeningPhase === "not_started" ? (
           <div className="space-y-4">
-            <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3">
+            <div className="text-sm bg-warning-soft border border-warning/40 text-warning rounded-lg p-3">
               <strong>AI 평가가 시작되지 않았습니다.</strong> 보통 업로드 직후 자동으로 시작됩니다.
               잔액이 부족하거나 마스킹 텍스트가 없으면 여기 멈춥니다.
               아래 마스킹을 확인 후 "AI 검토 요청"으로 수동 시작할 수 있습니다.
             </div>
 
             <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">
                 마스킹된 텍스트 (LLM 입력)
               </div>
-              <pre className="p-3 border rounded-lg text-xs whitespace-pre-wrap max-h-[60vh] overflow-y-auto font-mono bg-slate-50 border-slate-200 text-slate-700">
+              <pre className="p-3 border rounded-lg text-xs whitespace-pre-wrap max-h-[60vh] overflow-y-auto font-mono bg-surface-alt border-border-default text-ink-soft">
                 {candidate.resumeMaskedText ?? ""}
               </pre>
-              <div className="text-xs text-slate-400 mt-1">
+              <div className="text-xs text-ink-muted mt-1">
                 마스킹 {(candidate.resumeMaskedText ?? "").length.toLocaleString()}자
                 {!candidate.resumeMaskedText && (
-                  <span className="ml-2 text-amber-600">
+                  <span className="ml-2 text-warning">
                     ⚠️ 마스킹 데이터 없음 (재업로드 필요)
                   </span>
                 )}
@@ -590,7 +590,7 @@ export default function CandidateDetailPage() {
             <button
               onClick={startScreening}
               disabled={screening}
-              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm inline-flex items-center justify-center gap-1.5"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 shadow-sm inline-flex items-center justify-center gap-1.5"
             >
               {screening && <Loader2 className="w-4 h-4 animate-spin" />}
               {screening ? "요청 중..." : "AI 검토 요청"}
@@ -603,7 +603,7 @@ export default function CandidateDetailPage() {
           </div>
         ) : screeningPhase === "failed" ? (
           /OCR을 활성화/.test(data.screeningError ?? "") ? (
-            <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 space-y-1">
+            <div className="text-sm bg-warning-soft border border-warning/40 text-warning rounded-lg p-3 space-y-1">
               <div>
                 <strong>스캔(이미지) PDF로 보여 텍스트를 추출하지 못했습니다.</strong>
               </div>
@@ -616,7 +616,7 @@ export default function CandidateDetailPage() {
             <div className="text-sm text-danger">
               서류 평가 실패. 아래 🔄 재평가 버튼으로 다시 시도하거나 이력서를 재업로드하세요.
               {data.screeningError && (
-                <span className="block text-xs text-slate-500 mt-1">
+                <span className="block text-xs text-ink-muted mt-1">
                   사유: {data.screeningError}
                 </span>
               )}
@@ -632,7 +632,7 @@ export default function CandidateDetailPage() {
               >
                 {candidate.screeningReport.score}
               </div>
-              <span className="text-base text-slate-400 font-medium">/ 100</span>
+              <span className="text-base text-ink-muted font-medium">/ 100</span>
               {showRec(candidate.screeningReport.recommendation) && (
                 <span
                   className={`ml-auto text-xs font-semibold px-2.5 py-1 rounded-md border ${recColor[candidate.screeningReport.recommendation]}`}
@@ -641,7 +641,7 @@ export default function CandidateDetailPage() {
                 </span>
               )}
             </div>
-            <blockquote className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-slate-800 leading-relaxed">
+            <blockquote className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-ink leading-relaxed">
               <HL text={candidate.screeningReport.summary} />
             </blockquote>
             {candidate.screeningReport.requirement_gate && (
@@ -688,14 +688,14 @@ export default function CandidateDetailPage() {
                 />
               )}
             <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">
                 매칭 키워드
               </div>
               <div className="flex gap-1.5 flex-wrap">
                 {candidate.screeningReport.matched_keywords.map((k) => (
                   <span
                     key={k}
-                    className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md"
+                    className="text-xs px-2 py-0.5 bg-surface-alt text-ink-soft rounded-md"
                   >
                     {k}
                   </span>
@@ -704,7 +704,7 @@ export default function CandidateDetailPage() {
             </div>
           </div>
         ) : (
-          <div className="text-sm text-slate-500">평가 데이터 없음</div>
+          <div className="text-sm text-ink-muted">평가 데이터 없음</div>
         )}
       </Section>
 
@@ -714,7 +714,7 @@ export default function CandidateDetailPage() {
         defaultOpen={false}
         summary={(() => {
           const latest = sessions[0];
-          if (!latest) return <span className="text-slate-400">세션 없음</span>;
+          if (!latest) return <span className="text-ink-muted">세션 없음</span>;
           if (latest.status === "completed") {
             const score = latest.evaluation?.overall_score;
             const rec = latest.evaluation?.recommendation;
@@ -725,10 +725,10 @@ export default function CandidateDetailPage() {
                     <span className={`font-bold tabular-nums ${scoreColor(score)}`}>
                       {score}
                     </span>
-                    <span className="text-slate-400">/100</span>
+                    <span className="text-ink-muted">/100</span>
                   </>
                 ) : (
-                  <span className="text-slate-500">완료</span>
+                  <span className="text-ink-muted">완료</span>
                 )}
                 {rec && showRec(rec) && (
                   <span
@@ -738,7 +738,7 @@ export default function CandidateDetailPage() {
                   </span>
                 )}
                 {latest.evaluation?.summary && (
-                  <span className="text-slate-500 truncate">
+                  <span className="text-ink-muted truncate">
                     · {latest.evaluation.summary}
                   </span>
                 )}
@@ -746,11 +746,11 @@ export default function CandidateDetailPage() {
             );
           }
           if (latest.status === "in_progress")
-            return <span className="text-blue-600">🟢 면접 진행 중</span>;
+            return <span className="text-primary">🟢 면접 진행 중</span>;
           if (latest.status === "pending")
-            return <span className="text-amber-600">⏳ 후보자 응답 대기</span>;
+            return <span className="text-warning">⏳ 후보자 응답 대기</span>;
           if (latest.status === "expired")
-            return <span className="text-slate-400">만료</span>;
+            return <span className="text-ink-muted">만료</span>;
           return null;
         })()}
       >
@@ -758,20 +758,20 @@ export default function CandidateDetailPage() {
           <div className="text-center py-8">
             <div className="text-3xl mb-3">💬</div>
             {aiStagePassed ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-ink-muted">
                 AI 면접 전형이 종료되었습니다. 이미 다음 전형으로 진행된
                 후보자에게는 AI 면접 링크를 생성할 수 없습니다.
               </p>
             ) : candidate.screeningReport || screeningPhase === "skipped" ? (
               <>
-                <p className="text-sm text-slate-600 mb-4">
+                <p className="text-sm text-ink-soft mb-4">
                   아직 면접이 진행되지 않았습니다.
                 </p>
                 <button
                   data-tour="ai-interview-btn"
                   onClick={createLink}
                   disabled={creating}
-                  className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm inline-flex items-center justify-center gap-1.5"
+                  className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 shadow-sm inline-flex items-center justify-center gap-1.5"
                 >
                   {creating && <Loader2 className="w-4 h-4 animate-spin" />}
                   {creating ? "처리 중..." : "AI면접 요청"}
@@ -779,10 +779,10 @@ export default function CandidateDetailPage() {
               </>
             ) : (
               <>
-                <p className="text-sm text-slate-600 mb-2">
+                <p className="text-sm text-ink-soft mb-2">
                   AI 서류평가가 완료되어야 면접 링크를 생성할 수 있습니다.
                 </p>
-                <p className="text-xs text-slate-500 mb-4">
+                <p className="text-xs text-ink-muted mb-4">
                   {screeningPhase === "in_queue"
                     ? "현재 서류평가가 진행 중입니다. 잠시만 기다려 주세요."
                     : screeningPhase === "failed"
@@ -791,7 +791,7 @@ export default function CandidateDetailPage() {
                 </p>
                 <button
                   disabled
-                  className="px-5 py-2 rounded-lg bg-slate-200 text-slate-400 text-sm font-medium cursor-not-allowed"
+                  className="px-5 py-2 rounded-lg bg-surface-alt text-ink-muted text-sm font-medium cursor-not-allowed"
                   title="AI 서류평가 후 활성화됩니다"
                 >
                   AI면접 요청
@@ -846,17 +846,17 @@ export default function CandidateDetailPage() {
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-primary-soft text-primary-deep border border-primary/30">
                   확정
                 </span>
-                <span className="text-slate-700">
+                <span className="text-ink-soft">
                   {formatKstDateTime(activeSchedule.selectedSlot.start)}
                 </span>
-                <span className="text-slate-400">
+                <span className="text-ink-muted">
                   · {activeSchedule.modeOnline ? "온라인" : "오프라인"}
                 </span>
               </span>
             ) : activeSchedule.status === "counter_proposed" ? (
-              <span className="text-amber-600">🔄 후보자 대안 일정 제안</span>
+              <span className="text-warning">🔄 후보자 대안 일정 제안</span>
             ) : (
-              <span className="text-amber-600">⏳ 후보자 응답 대기</span>
+              <span className="text-warning">⏳ 후보자 응답 대기</span>
             )
           }
         >

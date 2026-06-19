@@ -15,11 +15,11 @@ const STAGE_LABEL = STAGE_LABELS_SHARED as Record<string, string>;
 const STAGE_COLOR: Record<string, string> = {
   applied: "bg-surface-alt text-ink-soft",
   screened: "bg-primary-soft text-primary-deep",
-  ai_pending: "bg-info-soft text-info",
-  ai_evaluated: "bg-info-soft text-info",
-  round1_candidate: "bg-accent-soft text-accent-deep",
-  round1_scheduling: "bg-accent-soft text-accent-deep",
-  round1_waiting: "bg-accent-soft text-accent-deep",
+  ai_pending: "bg-surface-alt text-ink-soft",
+  ai_evaluated: "bg-surface-alt text-ink-soft",
+  round1_candidate: "bg-primary-soft text-primary",
+  round1_scheduling: "bg-primary-soft text-primary",
+  round1_waiting: "bg-primary-soft text-primary",
   round1_passed: "bg-primary-soft text-primary-deep",
   round2_passed: "bg-primary-soft text-primary",
   hired: "bg-primary text-surface",
@@ -86,7 +86,7 @@ function ProgressiveStageButtons({
   const opts = STAGE_TRANSITIONS_MAP[currentStage] ?? [];
   if (opts.length === 0) {
     return (
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-ink-muted">
         다음 단계가 없습니다. 종결 결정으로 마무리해 주세요.
       </p>
     );
@@ -110,7 +110,7 @@ function ProgressiveStageButtons({
           </button>
         );
       })}
-      <p className="text-[11px] text-slate-400 pt-1">
+      <p className="text-[11px] text-ink-muted pt-1">
         반려·합격·취소 등 종결은 우측 "종결 결정"을 사용해 주세요.
       </p>
     </div>
@@ -121,7 +121,7 @@ export function StageBadge({ stage }: { stage: string }) {
   return (
     <span
       className={`text-xs px-2 py-0.5 rounded-md font-medium ${
-        STAGE_COLOR[stage] ?? "bg-slate-100 text-slate-600"
+        STAGE_COLOR[stage] ?? "bg-surface-alt text-ink-soft"
       }`}
     >
       {STAGE_LABEL[stage] ?? stage}
@@ -444,7 +444,7 @@ export function StagePanel({
     <>
       <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-visible text-sm">
         {candidate.decidedAt && (
-          <span className="text-xs text-slate-500 shrink-0 whitespace-nowrap">
+          <span className="text-xs text-ink-muted shrink-0 whitespace-nowrap">
             결정 {formatKstDateTime(candidate.decidedAt)}
           </span>
         )}
@@ -453,7 +453,7 @@ export function StagePanel({
             href={`/api/uploads/candidate/${candidate.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1"
+            className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-border-strong hover:bg-surface-alt text-ink-soft inline-flex items-center gap-1"
           >
             📎 이력서
           </a>
@@ -461,7 +461,7 @@ export function StagePanel({
         {candidate.resumeMaskedText && (
           <button
             onClick={() => setShowFullResume(!showFullResume)}
-            className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600"
+            className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-border-strong hover:bg-surface-alt text-ink-soft"
           >
             {showFullResume ? "마스킹 접기" : "마스킹 보기"}
           </button>
@@ -470,7 +470,7 @@ export function StagePanel({
             워커가 실제 처리중일 때만 버튼 숨기고 진행 표시. (not_started 는 위 평가 영역의 "AI 검토 요청" 사용) */}
         {screeningPhase !== "not_started" &&
           (screeningActive || rescreening ? (
-            <span className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 rounded-md border border-blue-200 bg-blue-50 text-blue-600 inline-flex items-center gap-1.5">
+            <span className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 rounded-md border border-border-default bg-surface-alt text-ink-soft inline-flex items-center gap-1.5">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               평가 진행 중...
             </span>
@@ -479,14 +479,14 @@ export function StagePanel({
               onClick={() => void rescreen()}
               disabled={rescreenBusy}
               title="공고/평가 가이드 수정 후, 오류 복구, 또는 결과 재확인 시 다시 평가합니다"
-              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 inline-flex items-center justify-center gap-1"
+              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-border-strong text-primary hover:bg-surface-alt disabled:opacity-50 inline-flex items-center justify-center gap-1"
             >
               {rescreenBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {rescreenBusy ? "요청 중..." : "🔄 재평가"}
             </button>
           ))}
         {!candidate.resumeFilePath && !candidate.resumeMaskedText && (
-          <span className="text-xs text-slate-500 italic shrink-0 whitespace-nowrap">
+          <span className="text-xs text-ink-muted italic shrink-0 whitespace-nowrap">
             🔒 보존기간 경과로 이력서 원본 폐기됨
           </span>
         )}
@@ -496,7 +496,7 @@ export function StagePanel({
               <button
                 onClick={() => void move("round1_candidate")}
                 disabled={busy}
-                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-50 transition-colors"
+                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 transition-colors"
                 title="1차 면접 후보로 지정 — 공고 목록 상단 별도 섹션으로 이동"
               >
                 ⭐ 1차 면접 후보로 지정
@@ -507,7 +507,7 @@ export function StagePanel({
               <button
                 onClick={() => setOpen("schedule")}
                 disabled={busy}
-                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-50 transition-colors"
+                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 transition-colors"
                 title="1차 면접 시간을 제안하거나, 전화 등으로 협의된 시간을 직접 확정합니다"
               >
                 📅 1차 일정 제시
@@ -517,7 +517,7 @@ export function StagePanel({
               <button
                 onClick={() => setOpen("schedule2")}
                 disabled={busy}
-                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-accent-deep hover:bg-accent text-surface font-medium disabled:opacity-50 transition-colors"
+                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 transition-colors"
                 title="2차 면접 시간을 제안하거나, 전화 등으로 협의된 시간을 직접 확정합니다"
               >
                 📅 2차 일정 제시
@@ -648,13 +648,13 @@ export function StagePanel({
 
             {reasonsAvail.length > 1 && (
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
+                <label className="block text-xs font-medium text-ink-soft mb-1">
                   사유
                 </label>
                 <select
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
                 >
                   {reasonsAvail.map((r) => (
                     <option key={r} value={r}>
@@ -666,7 +666,7 @@ export function StagePanel({
             )}
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
+              <label className="block text-xs font-medium text-ink-soft mb-1">
                 내부 메모 (선택 — 후보자에게 노출 X)
               </label>
               <textarea
@@ -675,7 +675,7 @@ export function StagePanel({
                 rows={3}
                 maxLength={5000}
                 placeholder="결정 사유를 기록해 두세요."
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm"
               />
             </div>
 
@@ -690,7 +690,7 @@ export function StagePanel({
                   결과 통보 메일을 {candidate.email} 로 발송
                 </label>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                  <label className="block text-xs font-medium text-ink-soft mb-1">
                     발송 본문 미리보기 (수정하면 수정본이 발송됨 — 위 체크 안 하면 발송 X)
                   </label>
                   <textarea
@@ -700,7 +700,7 @@ export function StagePanel({
                       setMessageEdited(true);
                     }}
                     rows={8}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm leading-relaxed"
+                    className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm leading-relaxed"
                   />
                   {messageEdited && (
                     <button
@@ -711,7 +711,7 @@ export function StagePanel({
                         );
                         setMessageEdited(false);
                       }}
-                      className="mt-1 text-[11px] text-slate-500 hover:text-slate-700 underline"
+                      className="mt-1 text-[11px] text-ink-muted hover:text-ink-soft underline"
                     >
                       기본 템플릿으로 되돌리기
                     </button>
@@ -720,7 +720,7 @@ export function StagePanel({
               </div>
             )}
 
-            <div className="text-[11px] text-slate-500 leading-relaxed bg-amber-50 border border-amber-200 rounded-lg p-2">
+            <div className="text-[11px] text-ink-muted leading-relaxed bg-warning-soft border border-warning/40 rounded-lg p-2">
               ⚠️ 종결 결정 시 이력서 본문·파일이 즉시 폐기됩니다.
               공고 종결 +14일이 지나면 후보자 정보 전체(점수·평가 포함)가 자동
               삭제됩니다 (PIPA 보유기간 정책).
@@ -730,7 +730,7 @@ export function StagePanel({
               <button
                 onClick={decide}
                 disabled={busy}
-                className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
               >
                 {busy
                   ? "처리 중..."
@@ -738,7 +738,7 @@ export function StagePanel({
               </button>
               <button
                 onClick={() => setOpen(null)}
-                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+                className="px-4 py-2 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm"
               >
                 취소
               </button>
@@ -750,13 +750,13 @@ export function StagePanel({
       {open === "notify" && candidate.outcome && candidate.outcome !== "withdrawn" && (
         <Modal onClose={() => setOpen(null)} title="결정 통보 메일 발송">
           <div className="space-y-3">
-            <div className="text-sm text-slate-700">
+            <div className="text-sm text-ink-soft">
               <strong>{candidate.email}</strong> 로 결과 통보 메일을 발송합니다.
               <br />
               결정: <strong>{candidate.outcome === "hired" ? "최종합격" : "불합격"}</strong>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
+              <label className="block text-xs font-medium text-ink-soft mb-1">
                 발송 본문 미리보기 (수정하면 수정본이 발송됨)
               </label>
               <textarea
@@ -766,7 +766,7 @@ export function StagePanel({
                   setMessageEdited(true);
                 }}
                 rows={8}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm leading-relaxed"
+                className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm leading-relaxed"
               />
               {messageEdited &&
                 (candidate.outcome === "hired" ||
@@ -784,7 +784,7 @@ export function StagePanel({
                       );
                       setMessageEdited(false);
                     }}
-                    className="mt-1 text-[11px] text-slate-500 hover:text-slate-700 underline"
+                    className="mt-1 text-[11px] text-ink-muted hover:text-ink-soft underline"
                   >
                     기본 템플릿으로 되돌리기
                   </button>
@@ -794,14 +794,14 @@ export function StagePanel({
               <button
                 onClick={sendDecisionMail}
                 disabled={busy}
-                className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
               >
                 {busy && <Loader2 className="w-4 h-4 animate-spin" />}
                 {busy ? "발송 중..." : "발송"}
               </button>
               <button
                 onClick={() => setOpen(null)}
-                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+                className="px-4 py-2 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm"
               >
                 취소
               </button>
@@ -811,8 +811,8 @@ export function StagePanel({
       )}
 
       {showFullResume && candidate.resumeMaskedText && (
-        <div className="mt-4 pt-4 border-t border-slate-100">
-          <pre className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs whitespace-pre-wrap font-mono text-slate-700 max-h-[50vh] overflow-y-auto">
+        <div className="mt-4 pt-4 border-t border-border-default">
+          <pre className="p-3 bg-surface-alt border border-border-default rounded-lg text-xs whitespace-pre-wrap font-mono text-ink-soft max-h-[50vh] overflow-y-auto">
             {candidate.resumeMaskedText}
           </pre>
         </div>

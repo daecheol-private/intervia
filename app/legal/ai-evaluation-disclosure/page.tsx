@@ -26,18 +26,18 @@ export const metadata = {
 export default function AiEvaluationDisclosurePage() {
   return (
     <main className="max-w-3xl mx-auto w-full px-6 py-10">
-      <Link href="/" className="text-xs text-slate-500 hover:underline">
+      <Link href="/" className="text-xs text-ink-muted hover:underline">
         ← 홈
       </Link>
-      <h1 className="text-2xl font-bold text-slate-900 mt-3">
+      <h1 className="text-2xl font-bold text-ink mt-3">
         AI 평가 사전공개
       </h1>
-      <p className="text-xs text-slate-500 mt-1">
+      <p className="text-xs text-ink-muted mt-1">
         개인정보 보호법 §37의2 (자동화된 결정에 대한 정보주체의 권리) 4항에
         따른 사전공개. 누구나 로그인 없이 확인할 수 있습니다.
       </p>
 
-      <p className="text-sm text-slate-700 leading-relaxed mt-6">
+      <p className="text-sm text-ink-soft leading-relaxed mt-6">
         본 문서는 <strong>{SITE_INFO.serviceName}</strong>(제공:{" "}
         {COMPANY_INFO.name})의 AI 채용 평가 시스템이 어떤 기준과 절차로
         동작하는지를 정보주체(지원자)가 사전에 확인할 수 있도록 공개하는
@@ -81,24 +81,24 @@ export default function AiEvaluationDisclosurePage() {
       </Section>
 
       <Section n="2" title="평가 차원과 가중치">
-        <p className="text-sm text-slate-700 mb-3">
+        <p className="text-sm text-ink-soft mb-3">
           평가 단계(서류 평가 / AI 면접 평가)에 따라 평가 차원과 가중치가
           다릅니다.
         </p>
 
-        <h3 className="text-sm font-semibold text-slate-800 mt-4 mb-1">
+        <h3 className="text-sm font-semibold text-ink-soft mt-4 mb-1">
           가. 서류 평가 — 6개 차원
         </h3>
-        <table className="w-full text-sm border border-slate-200">
-          <thead className="bg-slate-50">
+        <table className="w-full text-sm border border-border-default">
+          <thead className="bg-surface-alt">
             <tr>
               <th className="px-3 py-2 text-left w-40">차원</th>
               <th className="px-3 py-2 text-left">평가 내용</th>
               <th className="px-3 py-2 text-right w-20">가중치</th>
             </tr>
           </thead>
-          <tbody className="text-slate-700">
-            <tr className="border-t border-slate-200">
+          <tbody className="text-ink-soft">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">기술 적합도</td>
               <td className="px-3 py-2">
                 JD 핵심 도메인·기술 요구사항과 이력서에 나타난 기술 경험의 직접
@@ -106,7 +106,7 @@ export default function AiEvaluationDisclosurePage() {
               </td>
               <td className="px-3 py-2 text-right">20%</td>
             </tr>
-            <tr className="border-t border-slate-200">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">경험 깊이</td>
               <td className="px-3 py-2">
                 JD 직무와 매칭되는 실무 경력의 연수 × 책임 범위 × 프로젝트
@@ -114,28 +114,28 @@ export default function AiEvaluationDisclosurePage() {
               </td>
               <td className="px-3 py-2 text-right">20%</td>
             </tr>
-            <tr className="border-t border-slate-200">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">직무 매칭도</td>
               <td className="px-3 py-2">
                 JD 주요 업무와 후보자의 과거 수행 업무(실무 경력)의 일치
               </td>
               <td className="px-3 py-2 text-right">25%</td>
             </tr>
-            <tr className="border-t border-slate-200">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">성과 임팩트</td>
               <td className="px-3 py-2">
                 정량 지표·책임 범위·외부 인지 등 성과의 구체성과 임팩트
               </td>
               <td className="px-3 py-2 text-right">15%</td>
             </tr>
-            <tr className="border-t border-slate-200">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">재직 안정성</td>
               <td className="px-3 py-2">
                 회사별 재직 기간 등 커리어의 안정성
               </td>
               <td className="px-3 py-2 text-right">10%</td>
             </tr>
-            <tr className="border-t border-slate-200">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">성장·태도</td>
               <td className="px-3 py-2">학습의 깊이와 커리어 상승 궤적</td>
               <td className="px-3 py-2 text-right">10%</td>
@@ -143,40 +143,40 @@ export default function AiEvaluationDisclosurePage() {
           </tbody>
         </table>
 
-        <h3 className="text-sm font-semibold text-slate-800 mt-5 mb-1">
+        <h3 className="text-sm font-semibold text-ink-soft mt-5 mb-1">
           나. AI 면접 평가 — 4개 차원
         </h3>
-        <table className="w-full text-sm border border-slate-200">
-          <thead className="bg-slate-50">
+        <table className="w-full text-sm border border-border-default">
+          <thead className="bg-surface-alt">
             <tr>
               <th className="px-3 py-2 text-left w-40">차원</th>
               <th className="px-3 py-2 text-left">평가 내용</th>
               <th className="px-3 py-2 text-right w-20">가중치</th>
             </tr>
           </thead>
-          <tbody className="text-slate-700">
-            <tr className="border-t border-slate-200">
+          <tbody className="text-ink-soft">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">기술역량</td>
               <td className="px-3 py-2">
                 JD hard skill 에 대한 면접 답변의 깊이·정확성
               </td>
               <td className="px-3 py-2 text-right">35%</td>
             </tr>
-            <tr className="border-t border-slate-200">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">실무경험</td>
               <td className="px-3 py-2">
                 사례의 구체성, 본인 기여, 정량 성과, 트레이드오프 인지
               </td>
               <td className="px-3 py-2 text-right">30%</td>
             </tr>
-            <tr className="border-t border-slate-200">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">협업·커뮤니케이션</td>
               <td className="px-3 py-2">
                 질문 이해·답변 명료성·경청·갈등 해결 사례
               </td>
               <td className="px-3 py-2 text-right">15%</td>
             </tr>
-            <tr className="border-t border-slate-200">
+            <tr className="border-t border-border-default">
               <td className="px-3 py-2 font-medium">직무적합성</td>
               <td className="px-3 py-2">
                 직무·회사 이해, 동기, 선호 인재상 부합
@@ -186,7 +186,7 @@ export default function AiEvaluationDisclosurePage() {
           </tbody>
         </table>
 
-        <p className="text-xs text-slate-500 mt-3">
+        <p className="text-xs text-ink-muted mt-3">
           각 표의 가중치 합은 100% 입니다. 모든 차원은 0~100 점, 종합 점수도
           0~100 점으로 산출됩니다. 추천 등급: 85+ 강력추천 / 70+ 추천 / 55+
           보류 / 미만 비추천.
@@ -218,7 +218,7 @@ export default function AiEvaluationDisclosurePage() {
       </Section>
 
       <Section n="4" title="인적 검토 절차">
-        <p className="text-sm text-slate-700 mb-2">
+        <p className="text-sm text-ink-soft mb-2">
           AI 평가는 <strong>최종 합·불 결정을 자동으로 내리지 않습니다</strong>.
           모든 채용 결정에는 사람의 실질적 검토가 개입합니다.
         </p>
@@ -241,7 +241,7 @@ export default function AiEvaluationDisclosurePage() {
       </Section>
 
       <Section n="5" title="정보주체의 권리">
-        <p className="text-sm text-slate-700 mb-2">
+        <p className="text-sm text-ink-soft mb-2">
           개인정보 보호법 §37의2 에 따라 지원자는 AI 평가에 대해 다음 권리를
           가집니다.
         </p>
@@ -265,7 +265,7 @@ export default function AiEvaluationDisclosurePage() {
             수 있습니다).
           </li>
         </ul>
-        <p className="text-xs text-slate-600 mt-3 rounded-md bg-slate-50 border border-slate-200 p-3">
+        <p className="text-xs text-ink-soft mt-3 rounded-md bg-surface-alt border border-border-default p-3">
           <strong>이의제기·설명 요청 채널</strong>:{" "}
           <a
             href={`mailto:${APPEAL_CONTACT.email}`}
@@ -280,12 +280,12 @@ export default function AiEvaluationDisclosurePage() {
       </Section>
 
       <Section n="6" title="평가에서 절대 사용하지 않는 정보 (차별 금지)">
-        <p className="text-sm text-slate-700 mb-2">
+        <p className="text-sm text-ink-soft mb-2">
           채용절차의 공정화에 관한 법률 §4의3, 남녀고용평등법, 연령차별금지법,
           장애인차별금지법, 국가인권위원회법에 따라, 다음 정보는 평가의
           근거·인용·언급에서 모두 제외됩니다.
         </p>
-        <ul className="list-disc list-inside space-y-0.5 text-sm text-slate-700">
+        <ul className="list-disc list-inside space-y-0.5 text-sm text-ink-soft">
           <li>성별, 나이, 혼인 여부</li>
           <li>출신 지역, 본적, 출생지</li>
           <li>출신 학교명, 학교 서열, 출신 학과의 특정 정보</li>
@@ -294,7 +294,7 @@ export default function AiEvaluationDisclosurePage() {
           <li>신체 조건 (키·체중·외모·장애 여부)</li>
           <li>건강 상태 (직무 수행에 직접 필요한 경우 제외)</li>
         </ul>
-        <p className="text-xs text-slate-500 mt-2">
+        <p className="text-xs text-ink-muted mt-2">
           위 항목 중 직접 식별자와 라벨로 표기된 항목은 LLM 호출 전 자동
           마스킹되며, 마스킹을 통과한 표현이 있더라도 AI 평가 프롬프트의
           명시적인 평가 금지 지시가 적용됩니다 (이중 방어). 그럼에도 평가
@@ -315,15 +315,15 @@ export default function AiEvaluationDisclosurePage() {
       </Section>
 
       <Section n="8" title="처리위탁 / 국외이전">
-        <p className="text-sm text-slate-700 mb-2">
+        <p className="text-sm text-ink-soft mb-2">
           AI 평가는 다음 수탁자를 거쳐 수행됩니다. 자세한 처리 항목·보유기간은{" "}
           <Link href="/privacy" className="text-primary hover:underline">
             개인정보 처리방침
           </Link>{" "}
           §5 참고.
         </p>
-        <table className="w-full text-xs border border-slate-200 mt-2">
-          <thead className="bg-slate-50">
+        <table className="w-full text-xs border border-border-default mt-2">
+          <thead className="bg-surface-alt">
             <tr>
               <th className="px-3 py-2 text-left">수탁자</th>
               <th className="px-3 py-2 text-left">목적</th>
@@ -331,14 +331,14 @@ export default function AiEvaluationDisclosurePage() {
               <th className="px-3 py-2 text-left">연락처</th>
             </tr>
           </thead>
-          <tbody className="text-slate-700">
+          <tbody className="text-ink-soft">
             {PROCESSORS.filter((p) =>
               ["Google", "Vercel Inc", "Turso", "Vercel Blob"].some((k) =>
                 p.name.includes(k)
               )
             ).map((p) => (
-              <tr key={p.name} className="border-t border-slate-200">
-                <td className="px-3 py-2 font-medium text-slate-900">
+              <tr key={p.name} className="border-t border-border-default">
+                <td className="px-3 py-2 font-medium text-ink">
                   {p.name}
                 </td>
                 <td className="px-3 py-2">{p.purpose}</td>
@@ -351,7 +351,7 @@ export default function AiEvaluationDisclosurePage() {
       </Section>
 
       <Section n="9" title="고영향 인공지능에 관한 책무">
-        <p className="text-sm text-slate-700">
+        <p className="text-sm text-ink-soft">
           본 서비스의 AI 평가 시스템은 「인공지능 발전과 신뢰 기반 조성 등에
           관한 기본법」상 채용 분야의 <strong>고영향 인공지능</strong>에
           해당하며, 회사는 같은 법 제34조에 따른 위험관리방안 수립·운영,
@@ -362,19 +362,19 @@ export default function AiEvaluationDisclosurePage() {
       </Section>
 
       <Section n="10" title="채용기업에 대한 권고 사항">
-        <p className="text-sm text-slate-700">
+        <p className="text-sm text-ink-soft">
           본 서비스를 도입하는 채용기업은 채용 공고 본문 또는 지원 페이지
           하단에 본 페이지 URL 을 함께 게재할 것을 권고합니다. 사전공개는
           개인정보 보호법 §37의2 4항의 필수 의무이며, 지원자가 본 정보에
           &quot;쉽게 접근할 수 있는 상태&quot; 가 입증 가능해야 합니다.
         </p>
-        <p className="text-xs text-slate-500 mt-2">
+        <p className="text-xs text-ink-muted mt-2">
           본 페이지 URL: {SITE_INFO.baseUrl}/legal/ai-evaluation-disclosure
         </p>
       </Section>
 
-      <hr className="my-8 border-slate-200" />
-      <div className="text-xs text-slate-500 space-y-1">
+      <hr className="my-8 border-border-default" />
+      <div className="text-xs text-ink-muted space-y-1">
         <div>
           <strong>{COMPANY_INFO.name}</strong> · 대표 {COMPANY_INFO.representative}
         </div>
@@ -414,10 +414,10 @@ function Section({
 }) {
   return (
     <section className="mt-8">
-      <h2 className="text-base font-semibold text-slate-900">
+      <h2 className="text-base font-semibold text-ink">
         제{n}조 · {title}
       </h2>
-      <div className="text-sm text-slate-700 leading-relaxed mt-2 space-y-2">
+      <div className="text-sm text-ink-soft leading-relaxed mt-2 space-y-2">
         {children}
       </div>
     </section>

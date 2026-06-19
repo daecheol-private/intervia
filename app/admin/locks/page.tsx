@@ -49,10 +49,10 @@ export default function AdminLocksPage() {
   };
 
   return (
-    <main className="flex-1 p-6 bg-slate-50">
+    <main className="flex-1 p-6 bg-surface-alt">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-xl font-bold text-slate-900 mb-1">계정 잠금 관리</h1>
-        <p className="text-sm text-slate-500 mb-4">
+        <h1 className="text-xl font-bold text-ink mb-1">계정 잠금 관리</h1>
+        <p className="text-sm text-ink-muted mb-4">
           로그인 5회 이상 실패한 이메일 또는 IP. 운영자 확인 후 강제 해제 가능.
         </p>
 
@@ -62,14 +62,14 @@ export default function AdminLocksPage() {
           </div>
         )}
 
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
+        <div className="bg-card border border-border-default rounded-2xl overflow-x-auto">
           {loading ? (
-            <div className="p-6 text-sm text-slate-400">불러오는 중...</div>
+            <div className="p-6 text-sm text-ink-muted">불러오는 중...</div>
           ) : rows.length === 0 ? (
-            <div className="p-6 text-sm text-slate-400">현재 잠긴 계정/IP가 없습니다.</div>
+            <div className="p-6 text-sm text-ink-muted">현재 잠긴 계정/IP가 없습니다.</div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs text-slate-500">
+              <thead className="bg-surface-alt text-left text-xs text-ink-muted">
                 <tr>
                   <th className="px-4 py-2">구분</th>
                   <th className="px-4 py-2">식별자</th>
@@ -82,14 +82,14 @@ export default function AdminLocksPage() {
                 {rows.map((r) => {
                   const key = r.kind + ":" + r.identifier;
                   return (
-                    <tr key={key} className="border-t border-slate-100">
+                    <tr key={key} className="border-t border-border-default">
                       <td className="px-4 py-2">
                         <span
                           className={
                             "text-xs px-2 py-0.5 rounded-full " +
                             (r.kind === "email"
-                              ? "bg-amber-50 text-amber-700 border border-amber-200"
-                              : "bg-rose-50 text-rose-700 border border-rose-200")
+                              ? "bg-warning-soft text-warning border border-warning/30"
+                              : "bg-danger-soft text-danger border border-danger/30")
                           }
                         >
                           {r.kind === "email" ? "이메일" : "IP"}
@@ -97,12 +97,12 @@ export default function AdminLocksPage() {
                       </td>
                       <td className="px-4 py-2 font-mono text-xs">{r.identifier}</td>
                       <td className="px-4 py-2">{r.failCount}</td>
-                      <td className="px-4 py-2 text-xs text-slate-500">{r.oldestAt} UTC</td>
+                      <td className="px-4 py-2 text-xs text-ink-muted">{r.oldestAt} UTC</td>
                       <td className="px-4 py-2 text-right">
                         <button
                           onClick={() => unlock(r)}
                           disabled={busy === key}
-                          className="text-xs bg-primary hover:bg-primary-deep disabled:opacity-50 text-white px-3 py-1 rounded"
+                          className="text-xs bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface px-3 py-1 rounded"
                         >
                           {busy === key ? "처리 중..." : "잠금 해제"}
                         </button>

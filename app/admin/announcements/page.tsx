@@ -75,7 +75,7 @@ export default function AdminAnnouncementsPage() {
   return (
     <main className="max-w-2xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/admin/dashboard" className="text-xs text-slate-500 hover:underline">
+        <Link href="/admin/dashboard" className="text-xs text-ink-muted hover:underline">
           ← 운영 대시보드
         </Link>
         <div className="flex items-center gap-2.5 mt-2">
@@ -83,8 +83,8 @@ export default function AdminAnnouncementsPage() {
             <Megaphone className="w-5 h-5" />
           </span>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">공지 발송</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <h1 className="text-2xl font-bold text-ink">공지 발송</h1>
+            <p className="text-sm text-ink-muted mt-0.5">
               전체 활성 사용자에게 알림을 보냅니다. 알림 벨과 알림 목록에 표시됩니다.
             </p>
           </div>
@@ -92,7 +92,7 @@ export default function AdminAnnouncementsPage() {
       </div>
 
       {sentCount !== null && (
-        <div className="mb-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2.5">
+        <div className="mb-4 text-sm text-success bg-success-soft border border-success/30 rounded-lg px-3.5 py-2.5">
           공지를 <strong>{sentCount}명</strong>에게 발송했습니다.
         </div>
       )}
@@ -102,9 +102,9 @@ export default function AdminAnnouncementsPage() {
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 sm:p-6 space-y-5">
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm p-5 sm:p-6 space-y-5">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+          <label className="block text-sm font-medium text-ink-soft mb-1.5">
             공지 내용 <span className="text-danger">*</span>
           </label>
           <textarea
@@ -113,24 +113,24 @@ export default function AdminAnnouncementsPage() {
             maxLength={200}
             rows={3}
             placeholder="예) 6/10(화) 02:00~03:00 시스템 점검이 예정되어 있습니다."
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
-          <div className="text-[11px] text-slate-400 mt-1 text-right">
+          <div className="text-[11px] text-ink-muted mt-1 text-right">
             {title.length}/200
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            연결 링크 <span className="text-slate-400 font-normal">(선택)</span>
+          <label className="block text-sm font-medium text-ink-soft mb-1.5">
+            연결 링크 <span className="text-ink-muted font-normal">(선택)</span>
           </label>
           <input
             value={href}
             onChange={(e) => setHref(e.target.value)}
             placeholder="/org/tokens (미입력 시 알림 목록으로 이동)"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
-          <p className="text-[11px] text-slate-400 mt-1">
+          <p className="text-[11px] text-ink-muted mt-1">
             클릭 시 이동할 내부 경로. 보안상 <code>/</code> 로 시작하는 경로만 가능합니다.
           </p>
         </div>
@@ -138,28 +138,28 @@ export default function AdminAnnouncementsPage() {
         {/* 미리보기 — 알림 벨에 보일 모습 */}
         {title.trim() && (
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted mb-1.5">
               미리보기
             </div>
-            <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-lg border border-slate-200 bg-slate-50">
-              <span className="shrink-0 mt-0.5 w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center">
+            <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-lg border border-border-default bg-surface-alt">
+              <span className="shrink-0 mt-0.5 w-7 h-7 rounded-full bg-primary text-surface flex items-center justify-center">
                 <Megaphone className="w-3.5 h-3.5" />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm leading-snug text-slate-900 font-medium break-words whitespace-pre-line">
+                <div className="text-sm leading-snug text-ink font-medium break-words whitespace-pre-line">
                   {title.trim()}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">방금 전</div>
+                <div className="text-[11px] text-ink-muted mt-0.5">방금 전</div>
               </div>
             </div>
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-          <span className="text-xs text-slate-500 inline-flex items-center gap-1.5">
+        <div className="flex items-center justify-between pt-1 border-t border-border-default">
+          <span className="text-xs text-ink-muted inline-flex items-center gap-1.5">
             <Bell className="w-3.5 h-3.5" />
             예상 수신자{" "}
-            <strong className="text-slate-700">
+            <strong className="text-ink-soft">
               {activeUsers === null ? "…" : `${activeUsers}명`}
             </strong>{" "}
             (활성 사용자 전원)
@@ -167,14 +167,14 @@ export default function AdminAnnouncementsPage() {
           <button
             onClick={send}
             disabled={sending || title.trim().length < 2}
-            className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium"
+            className="px-4 py-2 text-sm bg-primary text-surface rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium"
           >
             {sending ? "발송 중…" : "공지 발송"}
           </button>
         </div>
       </div>
 
-      <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
+      <p className="text-[11px] text-ink-muted mt-3 leading-relaxed">
         · 발송 시점의 활성 사용자에게만 전달됩니다(이후 가입자는 받지 않음). · 발송 후 회수
         기능은 없습니다 — 내용을 확인하고 보내세요. · 읽은 공지는 30일 후 자동 정리됩니다.
       </p>

@@ -12,14 +12,14 @@ export default function ZoomGuidePage() {
       <div className="mb-6">
         <Link
           href="/org/zoom"
-          className="text-xs text-slate-500 hover:underline"
+          className="text-xs text-ink-muted hover:underline"
         >
           ← 줌 연동 설정
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">
+        <h1 className="text-2xl font-bold text-ink mt-2">
           줌(Zoom) 연동 가이드
         </h1>
-        <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+        <p className="text-sm text-ink-muted mt-1 leading-relaxed">
           회사 줌 계정을 한 번만 연결해 두면, 온라인 면접 시간이 확정될 때 줌
           회의 링크가 자동으로 만들어져 후보자·면접관에게 메일로 발송됩니다.
           설정은 처음 한 번, 약 10분이면 됩니다. 코딩은 필요 없습니다.
@@ -92,7 +92,7 @@ export default function ZoomGuidePage() {
         </Section>
 
         <Section title="2단계 · Intervia에 연결 정보 입력하기">
-          <ol className="list-decimal list-inside text-sm text-slate-700 space-y-1.5 leading-relaxed">
+          <ol className="list-decimal list-inside text-sm text-ink-soft space-y-1.5 leading-relaxed">
             <li>
               <Link href="/org/zoom" className="text-primary underline">
                 줌 연동 설정
@@ -108,7 +108,7 @@ export default function ZoomGuidePage() {
         </Section>
 
         <Section title="사용 방법">
-          <p className="text-sm text-slate-700 leading-relaxed">
+          <p className="text-sm text-ink-soft leading-relaxed">
             면접 일정을 <strong>온라인</strong>으로 잡고 시간이 확정되면, 줌
             회의가 자동으로 만들어지고 그 링크가 후보자·면접관에게 메일로
             발송됩니다. 담당자가 따로 줌 링크를 만들 필요가 없습니다.
@@ -118,12 +118,12 @@ export default function ZoomGuidePage() {
         <Section title="문제가 생겼을 때">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-200">
+              <tr className="text-left text-ink-muted border-b border-border-default">
                 <th className="py-2 pr-3 font-medium">이런 증상이면</th>
                 <th className="py-2 font-medium">이렇게 하세요</th>
               </tr>
             </thead>
-            <tbody className="text-slate-700">
+            <tbody className="text-ink-soft">
               <Trouble
                 symptom="연결 테스트가 실패해요"
                 fix="값 3개 중 하나를 잘못 복사한 경우입니다. 앞뒤 빈칸 없이 다시 붙여넣어 보세요."
@@ -156,8 +156,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
-      <h2 className="text-base font-bold text-slate-900 mb-3">{title}</h2>
+    <section className="bg-card border border-border-default rounded-2xl p-5 sm:p-6 shadow-sm">
+      <h2 className="text-base font-bold text-ink mb-3">{title}</h2>
       {children}
     </section>
   );
@@ -173,11 +173,11 @@ function Step({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex gap-3 py-2.5 border-t border-slate-100 first:border-t-0 first:pt-0">
+    <div className="flex gap-3 py-2.5 border-t border-border-default first:border-t-0 first:pt-0">
       <div className="text-primary font-bold text-sm shrink-0 w-5">{n}</div>
       <div className="min-w-0">
-        <div className="text-sm font-semibold text-slate-800">{title}</div>
-        <div className="text-sm text-slate-600 leading-relaxed mt-0.5">
+        <div className="text-sm font-semibold text-ink">{title}</div>
+        <div className="text-sm text-ink-soft leading-relaxed mt-0.5">
           {children}
         </div>
       </div>
@@ -195,7 +195,7 @@ function Callout({ children }: { children: React.ReactNode }) {
 
 function Warn({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-1.5 text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+    <div className="mt-1.5 text-[12px] text-warning bg-warning-soft border border-warning/30 rounded-md px-2.5 py-1.5">
       ⚠️ {children}
     </div>
   );
@@ -203,7 +203,7 @@ function Warn({ children }: { children: React.ReactNode }) {
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 text-[12px] font-medium text-slate-700">
+    <span className="inline-block px-1.5 py-0.5 rounded bg-surface-alt border border-border-strong text-[12px] font-medium text-ink-soft">
       {children}
     </span>
   );
@@ -211,7 +211,7 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 function Trouble({ symptom, fix }: { symptom: string; fix: string }) {
   return (
-    <tr className="border-b border-slate-100 align-top">
+    <tr className="border-b border-border-default align-top">
       <td className="py-2 pr-3 font-medium">{symptom}</td>
       <td className="py-2">{fix}</td>
     </tr>

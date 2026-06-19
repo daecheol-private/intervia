@@ -208,7 +208,7 @@ export default function EditJobPage() {
 
   if (!form)
     return (
-      <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
+      <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
         불러오는 중...
       </main>
     );
@@ -217,7 +217,7 @@ export default function EditJobPage() {
     <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link
         href={`/jobs/${id}`}
-        className="text-sm text-slate-500 hover:text-slate-900"
+        className="text-sm text-ink-muted hover:text-ink"
       >
         ← 공고 상세
       </Link>
@@ -248,7 +248,7 @@ export default function EditJobPage() {
           <div className="relative flex-1">
             <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted" />
             <input
-              className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full border border-border-strong rounded-lg pl-9 pr-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               placeholder="https://www.saramin.co.kr/zf_user/jobs/view?rec_idx=..."
               value={importUrl}
               onChange={(e) => setImportUrl(e.target.value)}
@@ -260,14 +260,14 @@ export default function EditJobPage() {
             type="button"
             onClick={importFromUrl}
             disabled={importing || !importUrl.trim()}
-            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium whitespace-nowrap inline-flex items-center gap-1.5"
+            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium whitespace-nowrap inline-flex items-center gap-1.5"
           >
             {importing && <Loader2 className="w-4 h-4 animate-spin" />}
             {importing ? "분석 중..." : "가져오기"}
           </button>
         </div>
         {importErr && (
-          <div className="mt-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          <div className="mt-2 text-xs text-danger bg-danger-soft border border-danger/40 rounded-lg px-3 py-2">
             {importErr}
           </div>
         )}
@@ -278,7 +278,7 @@ export default function EditJobPage() {
         )}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-5 shadow-sm">
+      <div className="bg-card border border-border-default rounded-2xl p-6 space-y-5 shadow-sm">
         <Field label="공고 제목" required>
           <input
             className={inputCls}
@@ -383,8 +383,8 @@ export default function EditJobPage() {
           </p>
         </Field>
         <Field label="AI 면접 인성검사 — 선호 특성">
-          <p className="text-[11px] text-slate-500 mb-1.5 leading-relaxed">
-            <strong className="text-slate-600">
+          <p className="text-[11px] text-ink-muted mb-1.5 leading-relaxed">
+            <strong className="text-ink-soft">
               합불 점수에 반영되지 않는 참고용
             </strong>
             입니다 — 후보자가 면접 시작 전 응답하는 강제선택형 사전 문항이며,
@@ -408,7 +408,7 @@ export default function EditJobPage() {
               setForm({ ...form, recruitingContactEmail: e.target.value })
             }
           />
-          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+          <p className="text-[11px] text-ink-muted mt-1 leading-relaxed">
             지원자가 AI 평가 거부·이의제기 시 연락할 곳으로, 공고 안내문에
             공개됩니다.
             {myDomain && (
@@ -423,16 +423,16 @@ export default function EditJobPage() {
 
         <Field label="공고 비밀번호">
           <div className="space-y-2">
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-ink-muted">
               현재 상태:{" "}
               {form.hasPassword ? (
                 <span className="text-primary-deep font-medium">🔒 잠겨 있음</span>
               ) : (
-                <span className="text-slate-500">잠금 없음</span>
+                <span className="text-ink-muted">잠금 없음</span>
               )}
             </div>
             <PasswordInput
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono tracking-widest placeholder:font-sans placeholder:tracking-normal disabled:bg-slate-100 disabled:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm font-mono tracking-widest placeholder:font-sans placeholder:tracking-normal disabled:bg-surface-alt disabled:text-ink-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               placeholder={
                 form.hasPassword
                   ? "새 비밀번호 (변경 시에만 입력)"
@@ -451,7 +451,7 @@ export default function EditJobPage() {
               }
             />
             {form.hasPassword && (
-              <label className="flex items-center gap-2 text-xs text-slate-600">
+              <label className="flex items-center gap-2 text-xs text-ink-soft">
                 <input
                   type="checkbox"
                   checked={form.clearPassword}
@@ -473,7 +473,7 @@ export default function EditJobPage() {
       <div className="flex gap-2 mt-6 justify-end">
         <button
           onClick={() => router.back()}
-          className="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 text-sm"
+          className="px-4 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-sm"
         >
           취소
         </button>
@@ -483,7 +483,7 @@ export default function EditJobPage() {
               onClick={() => save(true)}
               disabled={saving}
               title="아직 임시공고로 유지 — 들어온 이력서는 보관만 하고 평가하지 않습니다."
-              className="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border border-border-strong bg-card hover:bg-surface-alt text-ink-soft text-sm font-medium disabled:opacity-50"
             >
               {saving ? "저장 중..." : "임시공고로 저장"}
             </button>
@@ -491,7 +491,7 @@ export default function EditJobPage() {
               onClick={() => save(false)}
               disabled={saving}
               title="정식 공고로 등록 — 평가가 시작되고 과금됩니다."
-              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm"
+              className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 shadow-sm"
             >
               {saving ? "저장 중..." : "공고 생성"}
             </button>
@@ -500,7 +500,7 @@ export default function EditJobPage() {
           <button
             onClick={() => save(false)}
             disabled={saving}
-            className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 shadow-sm"
+            className="px-5 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 shadow-sm"
           >
             {saving ? "저장 중..." : "저장"}
           </button>
@@ -512,7 +512,7 @@ export default function EditJobPage() {
 }
 
 const inputCls =
-  "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+  "w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 function Field({
   label,
@@ -525,7 +525,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+      <label className="block text-sm font-medium text-ink-soft mb-1.5">
         {label}
         {required && <span className="text-danger ml-1">*</span>}
       </label>

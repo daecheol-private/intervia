@@ -173,8 +173,8 @@ export function InterviewerNotesPanel({
   };
 
   const noteSummary = (() => {
-    if (list == null) return <span className="text-slate-400">불러오는 중...</span>;
-    if (list.length === 0) return <span className="text-slate-400">작성된 메모 없음</span>;
+    if (list == null) return <span className="text-ink-muted">불러오는 중...</span>;
+    if (list.length === 0) return <span className="text-ink-muted">작성된 메모 없음</span>;
     const avgs = list.map(avg).filter((v): v is number => v != null);
     const overallAvg =
       avgs.length > 0
@@ -185,18 +185,18 @@ export function InterviewerNotesPanel({
     const r2 = list.filter((n) => n.round === "round2").length;
     return (
       <span className="flex items-center gap-2">
-        <span className="text-slate-700">{list.length}건</span>
+        <span className="text-ink-soft">{list.length}건</span>
         {r2 > 0 && (
-          <span className="text-slate-400">· 1차 {r1} · 2차 {r2}</span>
+          <span className="text-ink-muted">· 1차 {r1} · 2차 {r2}</span>
         )}
-        <span className="text-slate-400">· {authors.size}명 작성</span>
+        <span className="text-ink-muted">· {authors.size}명 작성</span>
         {overallAvg != null && (
           <>
-            <span className="text-slate-400">· 평균</span>
+            <span className="text-ink-muted">· 평균</span>
             <span className={`font-bold tabular-nums ${scoreColor(overallAvg)}`}>
               {overallAvg}
             </span>
-            <span className="text-slate-400">/100</span>
+            <span className="text-ink-muted">/100</span>
           </>
         )}
       </span>
@@ -206,14 +206,14 @@ export function InterviewerNotesPanel({
   return (
     <Section title="면접관 메모 / 스코어카드" summary={noteSummary} collapsible={false}>
       <div className="flex justify-between items-center mb-3">
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-ink-muted">
           같은 법인 멤버 누구나 자기 메모를 작성할 수 있습니다. 본인 메모만
           수정·삭제 가능.
         </div>
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="text-xs px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-white font-medium shrink-0"
+            className="text-xs px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium shrink-0"
           >
             + 메모 작성
           </button>
@@ -223,8 +223,8 @@ export function InterviewerNotesPanel({
       {showForm && (
         <div className="bg-primary-soft border border-primary/30 rounded-xl p-4 mb-4 space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">면접 차수</span>
-            <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-xs">
+            <span className="text-xs text-ink-muted">면접 차수</span>
+            <div className="inline-flex rounded-lg border border-border-strong overflow-hidden text-xs">
               {(["round1", "round2"] as const).map((r) => (
                 <button
                   key={r}
@@ -232,8 +232,8 @@ export function InterviewerNotesPanel({
                   onClick={() => setRound(r)}
                   className={`px-3 py-1.5 font-medium ${
                     round === r
-                      ? "bg-primary text-white"
-                      : "bg-white text-slate-600 hover:bg-slate-50"
+                      ? "bg-primary text-surface"
+                      : "bg-card text-ink-soft hover:bg-surface-alt"
                   }`}
                 >
                   {r === "round1" ? "1차" : "2차"}
@@ -260,7 +260,7 @@ export function InterviewerNotesPanel({
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             placeholder="자유 메모 (5000자 이내)"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm"
           />
           {err && (
             <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
@@ -271,13 +271,13 @@ export function InterviewerNotesPanel({
             <button
               onClick={submit}
               disabled={busy}
-              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
             >
               {busy ? "저장 중..." : "저장"}
             </button>
             <button
               onClick={() => setShowForm(false)}
-              className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+              className="px-4 py-2 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm"
             >
               취소
             </button>
@@ -286,9 +286,9 @@ export function InterviewerNotesPanel({
       )}
 
       {!list ? (
-        <div className="text-sm text-slate-500">불러오는 중...</div>
+        <div className="text-sm text-ink-muted">불러오는 중...</div>
       ) : list.length === 0 ? (
-        <div className="text-sm text-slate-400 text-center py-6">
+        <div className="text-sm text-ink-muted text-center py-6">
           작성된 메모가 없습니다.
         </div>
       ) : (
@@ -299,33 +299,33 @@ export function InterviewerNotesPanel({
             return (
               <li
                 key={n.id}
-                className="bg-white border border-slate-200 rounded-xl p-4"
+                className="bg-card border border-border-default rounded-xl p-4"
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   {n.round && (
                     <span
                       className={`text-[11px] px-1.5 py-0.5 rounded font-semibold ${
                         n.round === "round2"
-                          ? "bg-indigo-100 text-indigo-700"
-                          : "bg-violet-100 text-violet-700"
+                          ? "bg-surface-alt text-ink-soft"
+                          : "bg-surface-alt text-ink-soft"
                       }`}
                     >
                       {n.round === "round2" ? "2차" : "1차"}
                     </span>
                   )}
-                  <span className="text-sm font-semibold text-slate-900">
+                  <span className="text-sm font-semibold text-ink">
                     {n.authorName ?? `User #${n.authorUserId}`}
                   </span>
                   {a != null && (
-                    <span className="text-xs px-2 py-0.5 rounded-md bg-accent-soft text-accent-deep font-medium">
+                    <span className="text-xs px-2 py-0.5 rounded-md bg-primary-soft text-primary-deep font-medium">
                       평균 {a}
                     </span>
                   )}
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-ink-muted">
                     {formatKstDateTime(n.createdAt)}
                   </span>
                   {n.updatedAt !== n.createdAt && (
-                    <span className="text-[11px] text-slate-400">(수정됨)</span>
+                    <span className="text-[11px] text-ink-muted">(수정됨)</span>
                   )}
                   {isMine && editingId !== n.id && (
                     <div className="ml-auto flex items-center gap-2">
@@ -365,7 +365,7 @@ export function InterviewerNotesPanel({
                       onChange={(e) => setENote(e.target.value)}
                       rows={3}
                       placeholder="자유 메모 (5000자 이내)"
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm"
                     />
                     {eErr && (
                       <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
@@ -376,13 +376,13 @@ export function InterviewerNotesPanel({
                       <button
                         onClick={() => saveEdit(n.id)}
                         disabled={busy}
-                        className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+                        className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
                       >
                         {busy ? "저장 중..." : "저장"}
                       </button>
                       <button
                         onClick={() => setEditingId(null)}
-                        className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+                        className="px-4 py-2 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm"
                       >
                         취소
                       </button>
@@ -399,7 +399,7 @@ export function InterviewerNotesPanel({
                       </div>
                     )}
                     {n.note && (
-                      <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                      <p className="mt-2 text-sm text-ink-soft whitespace-pre-wrap leading-relaxed">
                         {n.note}
                       </p>
                     )}
@@ -425,7 +425,7 @@ function ScoreInput({
 }) {
   return (
     <div>
-      <label className="block text-[11px] text-slate-600 mb-1">{label}</label>
+      <label className="block text-[11px] text-ink-soft mb-1">{label}</label>
       <input
         type="number"
         min={0}
@@ -443,7 +443,7 @@ function ScoreInput({
           onChange(String(Math.max(0, Math.min(100, n))));
         }}
         placeholder="0~100"
-        className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+        className="w-full border border-border-strong rounded-lg px-2 py-1.5 text-sm"
       />
     </div>
   );
@@ -457,9 +457,9 @@ function ScoreCell({
   value: number | null | undefined;
 }) {
   return (
-    <div className="bg-slate-50 rounded-md py-1.5">
-      <div className="text-[10px] text-slate-500">{label}</div>
-      <div className="text-sm font-semibold text-slate-900">
+    <div className="bg-surface-alt rounded-md py-1.5">
+      <div className="text-[10px] text-ink-muted">{label}</div>
+      <div className="text-sm font-semibold text-ink">
         {typeof value === "number" ? value : "-"}
       </div>
     </div>

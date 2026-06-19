@@ -11,11 +11,11 @@ export const runtime = "nodejs";
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-start px-4 py-6">
+    <div className="min-h-screen bg-surface-alt flex flex-col items-center justify-start px-4 py-6">
       <div className="w-full max-w-xl">{children}</div>
       {/* Intervia 는 회사 노출을 가리지 않도록 폼 하단에 로고만 작게 */}
-      <div className="mt-4 mb-2 flex items-center justify-center gap-1.5 text-slate-400">
-        <span className="inline-flex h-5 items-center rounded-md bg-slate-900 px-1 text-[10px] font-bold text-white">
+      <div className="mt-4 mb-2 flex items-center justify-center gap-1.5 text-ink-muted">
+        <span className="inline-flex h-5 items-center rounded-md bg-ink px-1 text-[10px] font-bold text-surface">
           IV.
         </span>
         <span className="text-xs">Intervia 로 진행되는 채용 지원</span>
@@ -27,9 +27,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 function Notice({ title, message }: { title: string; message: string }) {
   return (
     <Shell>
-      <div className="rounded-2xl bg-white shadow-sm border border-slate-200 p-8 text-center">
-        <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
-        <p className="mt-3 text-sm text-slate-600 leading-relaxed">{message}</p>
+      <div className="rounded-2xl bg-card shadow-sm border border-border-default p-8 text-center">
+        <h1 className="text-lg font-semibold text-ink">{title}</h1>
+        <p className="mt-3 text-sm text-ink-soft leading-relaxed">{message}</p>
       </div>
     </Shell>
   );

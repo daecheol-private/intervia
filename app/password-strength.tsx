@@ -34,7 +34,7 @@ function evaluate(password: string): Check[] {
 export function PasswordStrength({ password }: { password: string }) {
   if (!password) {
     return (
-      <ul className="text-[11px] text-slate-400 mt-1 space-y-0.5">
+      <ul className="text-[11px] text-ink-muted mt-1 space-y-0.5">
         <li>· {MIN_LENGTH}자 이상</li>
         <li>· 영문 대/소·숫자·특수문자 중 {MIN_CATEGORIES}종 이상</li>
         <li>· 유출된 비밀번호 차단 (제출 시 자동 검증)</li>
@@ -49,7 +49,7 @@ export function PasswordStrength({ password }: { password: string }) {
           {c.ok ? "✓" : "·"} {c.label}
         </li>
       ))}
-      <li className="text-slate-400">· 유출 검사는 제출 시 서버에서 수행</li>
+      <li className="text-ink-muted">· 유출 검사는 제출 시 서버에서 수행</li>
     </ul>
   );
 }

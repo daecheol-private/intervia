@@ -81,15 +81,15 @@ export default function MetricsPage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-slate-500 hover:underline">
+        <Link href="/" className="text-xs text-ink-muted hover:underline">
           ← 대시보드
         </Link>
         <div className="flex justify-between items-end mt-2">
-          <h1 className="text-2xl font-bold text-slate-900">운영 메트릭</h1>
+          <h1 className="text-2xl font-bold text-ink">운영 메트릭</h1>
           <select
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+            className="border border-border-strong rounded-lg px-3 py-1.5 text-sm bg-card"
           >
             <option value={7}>최근 7일</option>
             <option value={30}>최근 30일</option>
@@ -106,7 +106,7 @@ export default function MetricsPage() {
       )}
 
       {!data ? (
-        <div className="text-sm text-slate-500">불러오는 중...</div>
+        <div className="text-sm text-ink-muted">불러오는 중...</div>
       ) : (
         <div className="space-y-6">
           <Section title="요약">
@@ -141,7 +141,7 @@ export default function MetricsPage() {
           <Section title="면접 / 큐">
             <div className="grid grid-cols-2 gap-6">
               <div>
-                <div className="text-xs text-slate-500 mb-2">면접 세션</div>
+                <div className="text-xs text-ink-muted mb-2">면접 세션</div>
                 <div className="grid grid-cols-4 gap-2">
                   {(
                     [
@@ -160,7 +160,7 @@ export default function MetricsPage() {
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500 mb-2">평가 큐</div>
+                <div className="text-xs text-ink-muted mb-2">평가 큐</div>
                 <div className="grid grid-cols-4 gap-2">
                   {Object.entries(QUEUE_KO).map(([k, label]) => (
                     <Cell
@@ -178,7 +178,7 @@ export default function MetricsPage() {
 
           <Section title={`토큰 사용 (지난 ${days}일)`}>
             <table className="w-full text-sm">
-              <thead className="text-slate-500 text-xs border-b border-slate-200">
+              <thead className="text-ink-muted text-xs border-b border-border-default">
                 <tr>
                   <th className="text-left py-2">항목</th>
                   <th className="text-right py-2">횟수</th>
@@ -188,7 +188,7 @@ export default function MetricsPage() {
               <tbody>
                 {data.tokenUsage.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="text-slate-400 py-4 text-center">
+                    <td colSpan={3} className="text-ink-muted py-4 text-center">
                       기록 없음
                     </td>
                   </tr>
@@ -196,10 +196,10 @@ export default function MetricsPage() {
                   data.tokenUsage.map((u) => (
                     <tr
                       key={u.reason}
-                      className="border-b border-slate-100"
+                      className="border-b border-border-default"
                     >
                       <td className="py-2">{REASON_KO[u.reason] ?? u.reason}</td>
-                      <td className="text-right text-slate-700">{u.count}</td>
+                      <td className="text-right text-ink-soft">{u.count}</td>
                       <td
                         className={`text-right font-medium ${
                           u.sum < 0 ? "text-danger" : "text-primary"
@@ -218,7 +218,7 @@ export default function MetricsPage() {
           {data.scope === "system" && data.perOrg.length > 0 && (
             <Section title="법인별 후보자 분포">
               <table className="w-full text-sm">
-                <thead className="text-slate-500 text-xs border-b border-slate-200">
+                <thead className="text-ink-muted text-xs border-b border-border-default">
                   <tr>
                     <th className="text-left py-2">법인</th>
                     <th className="text-right py-2">후보자</th>
@@ -228,12 +228,12 @@ export default function MetricsPage() {
                   {data.perOrg.map((o) => (
                     <tr
                       key={o.orgId ?? "null"}
-                      className="border-b border-slate-100"
+                      className="border-b border-border-default"
                     >
                       <td className="py-2">
                         {o.orgName ?? `#${o.orgId ?? "(없음)"}`}
                       </td>
-                      <td className="text-right text-slate-700 font-medium">
+                      <td className="text-right text-ink-soft font-medium">
                         {o.c}
                       </td>
                     </tr>
@@ -250,13 +250,13 @@ export default function MetricsPage() {
             >
               <ul className="text-xs space-y-1.5 font-mono">
                 {data.recentCrossOrg.map((r) => (
-                  <li key={r.id} className="text-slate-700">
-                    <span className="text-slate-400">
+                  <li key={r.id} className="text-ink-soft">
+                    <span className="text-ink-muted">
                       {formatLocalDateTime(r.createdAt, { format: { second: "2-digit" } })}
                     </span>{" "}
                     {r.action}{" "}
                     {r.orgId ? (
-                      <span className="text-amber-700">org#{r.orgId}</span>
+                      <span className="text-warning">org#{r.orgId}</span>
                     ) : null}
                   </li>
                 ))}
@@ -279,10 +279,10 @@ function Section({
   hint?: string;
 }) {
   return (
-    <section className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+    <section className="bg-card border border-border-default rounded-2xl p-5 shadow-sm">
       <div className="flex items-baseline gap-2 mb-3">
-        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-        {hint && <span className="text-[11px] text-slate-400">— {hint}</span>}
+        <h2 className="text-sm font-semibold text-ink">{title}</h2>
+        {hint && <span className="text-[11px] text-ink-muted">— {hint}</span>}
       </div>
       {children}
     </section>
@@ -299,13 +299,13 @@ function Stat({
   accent?: "slate" | "blue";
 }) {
   return (
-    <div className="bg-slate-50 rounded-lg px-4 py-3">
-      <div className="text-[10px] uppercase tracking-wider text-slate-500">
+    <div className="bg-surface-alt rounded-lg px-4 py-3">
+      <div className="text-[10px] uppercase tracking-wider text-ink-muted">
         {label}
       </div>
       <div
         className={`text-2xl font-bold mt-0.5 ${
-          accent === "blue" ? "text-primary" : "text-slate-900"
+          accent === "blue" ? "text-primary" : "text-ink"
         }`}
       >
         {value.toLocaleString()}

@@ -77,7 +77,7 @@ export default function TokensPage() {
     );
   if (!data)
     return (
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-400 text-sm">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted text-sm">
         불러오는 중...
       </main>
     );
@@ -85,54 +85,54 @@ export default function TokensPage() {
   return (
     <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-slate-500 hover:underline">
+        <Link href="/" className="text-xs text-ink-muted hover:underline">
           ← 대시보드
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">토큰</h1>
-        <p className="text-sm text-slate-500 mt-1">법인의 토큰 잔액 및 사용 내역.</p>
+        <h1 className="text-2xl font-bold text-ink mt-2">토큰</h1>
+        <p className="text-sm text-ink-muted mt-1">법인의 토큰 잔액 및 사용 내역.</p>
       </div>
 
       {/* 잔액 카드 — 큰 숫자 + KRW 환산 */}
       <div
         className={`mb-6 rounded-2xl p-6 ${
           data.balance < 0
-            ? "bg-rose-50 border border-rose-200"
+            ? "bg-danger-soft border border-danger/30"
             : data.lowBalance
-              ? "bg-amber-50 border border-amber-200"
+              ? "bg-warning-soft border border-warning/30"
               : "bg-gradient-to-br from-primary-soft to-primary-soft/60 border border-primary/20"
         }`}
       >
         <div className="flex items-baseline justify-between gap-4 flex-wrap">
           <div>
-            <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <div className="text-xs font-medium text-ink-muted uppercase tracking-wider">
               현재 잔액
             </div>
             <div className="flex items-baseline gap-2 mt-1">
               <span
                 className={`text-4xl font-bold tabular-nums ${
-                  data.balance < 0 ? "text-rose-600" : "text-slate-900"
+                  data.balance < 0 ? "text-danger" : "text-ink"
                 }`}
               >
                 {data.balance.toLocaleString()}
               </span>
-              <span className="text-sm text-slate-500">토큰</span>
+              <span className="text-sm text-ink-muted">토큰</span>
             </div>
-            <div className="text-xs text-slate-500 mt-1">
+            <div className="text-xs text-ink-muted mt-1">
               ≈ {(data.balance * 100).toLocaleString()}원
             </div>
           </div>
           {data.balance > 0 && (
-            <div className="text-right text-xs text-slate-600 space-y-0.5">
+            <div className="text-right text-xs text-ink-soft space-y-0.5">
               <div>
                 남은 이력서 평가{" "}
-                <strong className="text-slate-900">
+                <strong className="text-ink">
                   {Math.floor(data.balance / data.pricing.resume_upload).toLocaleString()}
                 </strong>
                 건
               </div>
               <div>
                 남은 AI 면접{" "}
-                <strong className="text-slate-900">
+                <strong className="text-ink">
                   {Math.floor(data.balance / data.pricing.interview).toLocaleString()}
                 </strong>
                 회
@@ -141,12 +141,12 @@ export default function TokensPage() {
           )}
         </div>
         {data.balance <= 0 && (
-          <p className="text-xs text-rose-700 mt-3 bg-white/60 rounded-lg px-3 py-2">
+          <p className="text-xs text-danger mt-3 bg-card/60 rounded-lg px-3 py-2">
             ⚠️ 잔액이 소진되었습니다. 신규 이력서 업로드·평가·면접·이메일 발송이 차단됩니다. 시스템 관리자에게 충전을 요청해 주세요.
           </p>
         )}
         {data.lowBalance && data.balance > 0 && (
-          <p className="text-xs text-amber-700 mt-3 bg-white/60 rounded-lg px-3 py-2">
+          <p className="text-xs text-warning mt-3 bg-card/60 rounded-lg px-3 py-2">
             잔액이 0에 가깝습니다. 미리 충전해 주세요.
           </p>
         )}
@@ -156,16 +156,16 @@ export default function TokensPage() {
       {BETA.active && (
         <div className="mb-6 rounded-2xl border border-primary/30 bg-primary-soft/50 px-5 py-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-primary text-white">
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-primary text-surface">
               {BETA.label}
             </span>
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-ink">
               AI 면접 특가 — {BETA.endsAtLabel}까지
             </span>
           </div>
-          <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+          <p className="text-xs text-ink-soft mt-1.5 leading-relaxed">
             오픈베타 기간 동안 AI 면접·대면 면접 평가를 정가{" "}
-            <span className="line-through text-slate-400">
+            <span className="line-through text-ink-muted">
               {(LIST_PRICING.interview * 100).toLocaleString()}원
             </span>{" "}
             →{" "}
@@ -179,7 +179,7 @@ export default function TokensPage() {
 
       {/* 기능별 단가 — 큰 카드 3개 */}
       <section className="mb-6">
-        <h2 className="text-sm font-semibold text-slate-900 mb-3">기능별 단가</h2>
+        <h2 className="text-sm font-semibold text-ink mb-3">기능별 단가</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <PriceCard
             icon="📋"
@@ -207,7 +207,7 @@ export default function TokensPage() {
             hint="면접 문제 1건 생성 (1·2차 동일)"
           />
         </div>
-        <p className="text-[11px] text-slate-500 mt-2">
+        <p className="text-[11px] text-ink-muted mt-2">
           1 토큰 = 100원 기준 (VAT 별도). 결제 시점 단가로 차감 (이후 가격 변동 영향 없음).
         </p>
       </section>
@@ -215,8 +215,8 @@ export default function TokensPage() {
       {/* 충전 정책 — 카드 그리드 */}
       <section className="mb-6">
         <div className="flex items-baseline justify-between gap-2 mb-3">
-          <h2 className="text-sm font-semibold text-slate-900">충전 가격</h2>
-          <span className="text-[11px] text-slate-500">
+          <h2 className="text-sm font-semibold text-ink">충전 가격</h2>
+          <span className="text-[11px] text-ink-muted">
             100원 = 1 토큰 (VAT 별도) · 많이 충전할수록 보너스 ↑
           </span>
         </div>
@@ -244,13 +244,13 @@ export default function TokensPage() {
         </div>
       </section>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 text-sm font-semibold">
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-border-default text-sm font-semibold">
           최근 사용 내역
         </div>
         <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[600px]">
-          <thead className="bg-slate-50 text-slate-600 text-xs">
+          <thead className="bg-surface-alt text-ink-soft text-xs">
             <tr>
               <th className="text-left px-4 py-2 font-medium">시각</th>
               <th className="text-left px-4 py-2 font-medium">사유</th>
@@ -260,38 +260,38 @@ export default function TokensPage() {
               <th className="text-right px-4 py-2 font-medium">잔액</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-border-default">
             {data.ledger.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={6}>
+                <td className="px-4 py-6 text-ink-muted" colSpan={6}>
                   내역이 없습니다.
                 </td>
               </tr>
             )}
             {data.ledger.map((r) => (
               <tr key={r.id}>
-                <td className="px-4 py-2 text-xs text-slate-500">
+                <td className="px-4 py-2 text-xs text-ink-muted">
                   {formatLocalDateTime(r.createdAt, { format: { second: "2-digit" } })}
                 </td>
                 <td className="px-4 py-2 text-xs">{reasonLabel(r.reason)}</td>
                 <td
-                  className="px-4 py-2 text-xs text-slate-600"
+                  className="px-4 py-2 text-xs text-ink-soft"
                   title={r.byEmail ?? undefined}
                 >
                   {r.byName || "-"}
                 </td>
-                <td className="px-4 py-2 text-xs text-slate-600">
+                <td className="px-4 py-2 text-xs text-ink-soft">
                   {r.memo || "-"}
                 </td>
                 <td
                   className={`px-4 py-2 text-right font-mono ${
-                    r.delta >= 0 ? "text-primary-deep" : "text-danger"
+                    r.delta >= 0 ? "text-primary-deep" : "text-ink"
                   }`}
                 >
                   {r.delta >= 0 ? "+" : ""}
                   {r.delta.toLocaleString()}
                 </td>
-                <td className="px-4 py-2 text-right font-mono text-slate-700">
+                <td className="px-4 py-2 text-right font-mono text-ink-soft">
                   {r.balanceAfter.toLocaleString()}
                 </td>
               </tr>
@@ -325,34 +325,34 @@ function PriceCard({
       className={`rounded-2xl p-4 border ${
         accent
           ? "bg-primary-soft border-primary/30"
-          : "bg-white border-slate-200 shadow-sm"
+          : "bg-card border-border-default shadow-sm"
       }`}
     >
       <div className="flex items-center gap-2">
         <span className="text-2xl">{icon}</span>
-        <div className="text-xs font-medium text-slate-600">{label}</div>
+        <div className="text-xs font-medium text-ink-soft">{label}</div>
       </div>
       <div className="mt-2 flex items-baseline gap-1.5">
         {tokens === 0 ? (
-          <span className="text-2xl font-bold text-slate-900">무료</span>
+          <span className="text-2xl font-bold text-ink">무료</span>
         ) : (
           <>
             {discounted && (
-              <span className="text-sm font-medium text-slate-400 line-through tabular-nums">
+              <span className="text-sm font-medium text-ink-muted line-through tabular-nums">
                 {listTokens!.toLocaleString()}
               </span>
             )}
-            <span className="text-2xl font-bold text-slate-900 tabular-nums">
+            <span className="text-2xl font-bold text-ink tabular-nums">
               {tokens.toLocaleString()}
             </span>
-            <span className="text-xs text-slate-500">토큰</span>
-            <span className="text-[11px] text-slate-400 ml-auto">
+            <span className="text-xs text-ink-muted">토큰</span>
+            <span className="text-[11px] text-ink-muted ml-auto">
               {(tokens * 100).toLocaleString()}원
             </span>
           </>
         )}
       </div>
-      <p className="text-[11px] text-slate-500 mt-1.5">{hint}</p>
+      <p className="text-[11px] text-ink-muted mt-1.5">{hint}</p>
     </div>
   );
 }
@@ -383,19 +383,19 @@ function ChargeCard({
           추천
         </span>
       )}
-      <div className="text-xs text-slate-500">
+      <div className="text-xs text-ink-muted">
         {krw >= 1_000_000 ? `${krw / 10_000}만원` : `${krw / 10_000}만원`}
       </div>
-      <div className="text-base font-bold text-slate-900 mt-1 tabular-nums">
+      <div className="text-base font-bold text-ink mt-1 tabular-nums">
         {total.toLocaleString()}
       </div>
-      <div className="text-[10px] text-slate-500 mt-0.5">토큰</div>
+      <div className="text-[10px] text-ink-muted mt-0.5">토큰</div>
       {bonusPct > 0 ? (
         <div className="mt-2 inline-block text-[10px] font-semibold text-primary-deep bg-primary-soft px-1.5 py-0.5 rounded">
           +{bonusPct}% 보너스
         </div>
       ) : (
-        <div className="mt-2 text-[10px] text-slate-400">보너스 없음</div>
+        <div className="mt-2 text-[10px] text-ink-muted">보너스 없음</div>
       )}
     </div>
   );

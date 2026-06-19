@@ -49,14 +49,14 @@ export function MicHelpModal({
 
   return (
     <Modal open={open} onClose={onClose} title="🎙 마이크 설정 안내">
-      <p className="text-sm text-slate-600 leading-relaxed mb-4">
+      <p className="text-sm text-ink-soft leading-relaxed mb-4">
         음성 입력이 되지 않을 때 아래 순서대로 확인해 주세요. 설정이 어려우면{" "}
-        <strong className="text-slate-800">
+        <strong className="text-ink">
           입력창에 직접 답변을 입력하셔도 평가에는 전혀 영향이 없습니다.
         </strong>
       </p>
 
-      <div className="mb-4 rounded-lg bg-primary-soft/60 border border-primary/20 px-3 py-2 text-xs text-slate-600 leading-relaxed">
+      <div className="mb-4 rounded-lg bg-primary-soft/60 border border-primary/20 px-3 py-2 text-xs text-ink-soft leading-relaxed">
         음성 입력은 <strong>Chrome · Edge · Safari</strong>에서 가장 안정적입니다.
         Firefox 등 일부 브라우저는 음성 인식을 지원하지 않으니 다른 브라우저로 접속해
         주세요.
@@ -64,7 +64,7 @@ export function MicHelpModal({
 
       {/* OS 탭 */}
       <div
-        className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-4"
+        className="flex gap-1 p-1 bg-surface-alt rounded-xl mb-4"
         role="tablist"
         aria-label="운영체제 선택"
       >
@@ -82,8 +82,8 @@ export function MicHelpModal({
             className={
               "flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors " +
               (os === key
-                ? "bg-white text-primary-deep shadow-sm"
-                : "text-slate-500 hover:text-slate-700")
+                ? "bg-card text-primary-deep shadow-sm"
+                : "text-ink-muted hover:text-ink-soft")
             }
           >
             {label}
@@ -93,8 +93,8 @@ export function MicHelpModal({
 
       <ol className="space-y-2.5">
         {steps.map((step, i) => (
-          <li key={i} className="flex gap-2.5 text-sm text-slate-700">
-            <span className="shrink-0 w-5 h-5 rounded-full bg-primary text-white text-[11px] font-bold flex items-center justify-center mt-0.5">
+          <li key={i} className="flex gap-2.5 text-sm text-ink-soft">
+            <span className="shrink-0 w-5 h-5 rounded-full bg-primary text-surface text-[11px] font-bold flex items-center justify-center mt-0.5">
               {i + 1}
             </span>
             <span className="leading-relaxed">{step}</span>
@@ -102,10 +102,10 @@ export function MicHelpModal({
         ))}
       </ol>
 
-      <div className="mt-5 pt-4 border-t border-slate-100">
+      <div className="mt-5 pt-4 border-t border-border-default">
         <button
           onClick={onClose}
-          className="w-full px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
+          className="w-full px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium"
         >
           확인했어요
         </button>

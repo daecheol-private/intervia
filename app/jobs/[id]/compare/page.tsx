@@ -64,7 +64,7 @@ export default function ComparePage() {
 
   if (!all)
     return (
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
         불러오는 중...
       </main>
     );
@@ -76,11 +76,11 @@ export default function ComparePage() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <Link
           href={`/jobs/${params.id}`}
-          className="text-xs text-slate-500 hover:underline"
+          className="text-xs text-ink-muted hover:underline"
         >
           ← 공고 상세
         </Link>
-        <div className="bg-white border border-slate-200 rounded-2xl p-10 mt-4 text-center text-slate-500">
+        <div className="bg-card border border-border-default rounded-2xl p-10 mt-4 text-center text-ink-muted">
           비교할 후보자가 선택되지 않았습니다.
         </div>
       </main>
@@ -91,14 +91,14 @@ export default function ComparePage() {
     <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <Link
         href={`/jobs/${params.id}`}
-        className="text-xs text-slate-500 hover:underline"
+        className="text-xs text-ink-muted hover:underline"
       >
         ← 공고 상세
       </Link>
-      <h1 className="text-2xl font-bold text-slate-900 mt-2">
+      <h1 className="text-2xl font-bold text-ink mt-2">
         후보자 비교 ({selected.length}명)
       </h1>
-      <p className="text-sm text-slate-500 mt-1">
+      <p className="text-sm text-ink-muted mt-1">
         선택된 후보자의 평가 점수, 강점, 우려 사항을 나란히 비교합니다.
       </p>
 
@@ -111,48 +111,48 @@ export default function ComparePage() {
           return (
             <div
               key={c.id}
-              className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden"
+              className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden"
             >
-              <div className="px-4 py-4 border-b border-slate-100 bg-slate-50">
+              <div className="px-4 py-4 border-b border-border-default bg-surface-alt">
                 <Link
                   href={`/candidates/${c.id}`}
-                  className="font-semibold text-slate-900 hover:text-primary"
+                  className="font-semibold text-ink hover:text-primary"
                 >
                   {c.name}
                 </Link>
-                <div className="text-[11px] text-slate-500 mt-0.5">
+                <div className="text-[11px] text-ink-muted mt-0.5">
                   {STAGE_KO[c.stage] ?? c.stage}
                 </div>
               </div>
 
-              <div className="px-4 py-4 grid grid-cols-3 gap-2 text-center border-b border-slate-100">
+              <div className="px-4 py-4 grid grid-cols-3 gap-2 text-center border-b border-border-default">
                 <ScoreBlock label="서류" score={c.screeningScore} />
                 <ScoreBlock label="면접" score={c.latestInterviewScore} />
                 <ScoreBlock label="종합" score={composite} accent="blue" />
               </div>
 
-              <div className="px-4 py-3 text-xs text-slate-600 space-y-1 border-b border-slate-100">
+              <div className="px-4 py-3 text-xs text-ink-soft space-y-1 border-b border-border-default">
                 {c.careerYears != null && <div>경력 {c.careerYears}년</div>}
                 {c.age != null && <div>{c.age}세</div>}
                 {c.email && (
-                  <div className="text-slate-400 truncate">{c.email}</div>
+                  <div className="text-ink-muted truncate">{c.email}</div>
                 )}
               </div>
 
               {c.careerSummary && (
-                <div className="px-4 py-3 text-xs text-slate-700 leading-relaxed border-b border-slate-100">
+                <div className="px-4 py-3 text-xs text-ink-soft leading-relaxed border-b border-border-default">
                   {c.careerSummary}
                 </div>
               )}
 
               {c.screeningReport && (
                 <>
-                  <div className="px-4 py-3 border-b border-slate-100">
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                  <div className="px-4 py-3 border-b border-border-default">
+                    <div className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
                       서류 추천
                     </div>
                     <RecBadge rec={c.screeningReport.recommendation} />
-                    <p className="text-xs text-slate-700 mt-2 leading-relaxed">
+                    <p className="text-xs text-ink-soft mt-2 leading-relaxed">
                       {c.screeningReport.summary}
                     </p>
                   </div>
@@ -171,15 +171,15 @@ export default function ComparePage() {
               )}
 
               {c.latestInterviewRecommendation && (
-                <div className="px-4 py-3 border-t border-slate-200 bg-primary-soft/30">
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+                <div className="px-4 py-3 border-t border-border-default bg-primary-soft/30">
+                  <div className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
                     면접 추천
                   </div>
                   <RecBadge rec={c.latestInterviewRecommendation} />
                 </div>
               )}
 
-              <div className="px-4 py-2 text-[10px] text-slate-400 bg-slate-50">
+              <div className="px-4 py-2 text-[10px] text-ink-muted bg-surface-alt">
                 업로드 {formatKstDateTime(c.createdAt)}
               </div>
             </div>
@@ -201,12 +201,12 @@ function ScoreBlock({
 }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-slate-500">
+      <div className="text-[10px] uppercase tracking-wider text-ink-muted">
         {label}
       </div>
       <div
         className={`text-xl font-bold ${
-          accent === "blue" ? "text-primary" : "text-slate-900"
+          accent === "blue" ? "text-primary" : "text-ink"
         }`}
       >
         {score != null ? score : "-"}
@@ -243,13 +243,13 @@ function BulletSection({
   if (!items || items.length === 0) return null;
   const dotCls = color === "emerald" ? "bg-primary" : "bg-warning";
   return (
-    <div className="px-4 py-3 border-b border-slate-100">
-      <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">
+    <div className="px-4 py-3 border-b border-border-default">
+      <div className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
         {title}
       </div>
       <ul className="space-y-1">
         {items.slice(0, 5).map((it, i) => (
-          <li key={i} className="text-xs text-slate-700 flex gap-2">
+          <li key={i} className="text-xs text-ink-soft flex gap-2">
             <span
               className={`w-1.5 h-1.5 rounded-full ${dotCls} mt-1.5 shrink-0`}
             />

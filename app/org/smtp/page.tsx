@@ -118,11 +118,11 @@ export default function OrgSmtpPage() {
   return (
     <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/org/settings" className="text-xs text-slate-500 hover:underline">
+        <Link href="/org/settings" className="text-xs text-ink-muted hover:underline">
           ← 법인 설정
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">메일 서버 설정</h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <h1 className="text-2xl font-bold text-ink mt-2">메일 서버 설정</h1>
+        <p className="text-sm text-ink-muted mt-1">
           법인의 SMTP 서버를 등록하면 면접 안내 메일이 이 서버를 통해 발송됩니다.
           미설정 시 시스템 기본 서버를 사용합니다.
         </p>
@@ -138,9 +138,9 @@ export default function OrgSmtpPage() {
 
       <div className="hidden sm:block">
       {!loaded ? (
-        <div className="text-sm text-slate-500">불러오는 중...</div>
+        <div className="text-sm text-ink-muted">불러오는 중...</div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="bg-card border border-border-default rounded-2xl p-6 shadow-sm space-y-4">
           {lastChecked && (
             <div
               className={`text-xs px-3 py-2 rounded-lg border ${
@@ -169,7 +169,7 @@ export default function OrgSmtpPage() {
               value={host}
               onChange={(e) => setHost(e.target.value)}
               placeholder="smtp.gmail.com"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </Row>
           <div className="grid grid-cols-2 gap-3">
@@ -178,7 +178,7 @@ export default function OrgSmtpPage() {
                 type="number"
                 value={port}
                 onChange={(e) => setPort(Number(e.target.value))}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </Row>
             <Row label="보안 (SSL/TLS)">
@@ -188,7 +188,7 @@ export default function OrgSmtpPage() {
                   checked={secure}
                   onChange={(e) => setSecure(e.target.checked)}
                 />
-                <span className="text-slate-600">
+                <span className="text-ink-soft">
                   {secure ? "사용 (465)" : "미사용 (587 STARTTLS 등)"}
                 </span>
               </label>
@@ -199,7 +199,7 @@ export default function OrgSmtpPage() {
               value={authUser}
               onChange={(e) => setAuthUser(e.target.value)}
               placeholder="account@yourcompany.com"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </Row>
           <Row label="비밀번호">
@@ -207,13 +207,13 @@ export default function OrgSmtpPage() {
               value={authPass}
               onChange={setAuthPass}
               placeholder={lastChecked ? "변경 시에만 입력" : "앱 비밀번호 권장"}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               autoComplete="new-password"
             />
-            <p className="text-[11px] text-slate-400 mt-1">
+            <p className="text-[11px] text-ink-muted mt-1">
               저장된 비밀번호는 마스킹되어 보입니다. 변경하려면 새 값을 입력하세요.
               {!authPass.includes("*") && /\s/.test(authPass) && (
-                <span className="ml-1 text-amber-700">
+                <span className="ml-1 text-warning">
                   ⚠️ 공백이 포함되어 있습니다 — 저장 시 자동 제거됩니다 (Gmail 앱 비밀번호 OK).
                 </span>
               )}
@@ -221,7 +221,7 @@ export default function OrgSmtpPage() {
                 authPass.length > 0 &&
                 authPass.replace(/\s/g, "").length !== 16 &&
                 isGmail && (
-                  <span className="ml-1 text-amber-700">
+                  <span className="ml-1 text-warning">
                     ⚠️ Gmail 앱 비밀번호는 정확히 16자입니다 (현재{" "}
                     {authPass.replace(/\s/g, "").length}자).
                   </span>
@@ -240,7 +240,7 @@ export default function OrgSmtpPage() {
               value={fromEmail}
               onChange={(e) => setFromEmail(e.target.value)}
               placeholder="hr@yourcompany.com"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </Row>
           <Row label="발신자 이름 (선택)">
@@ -248,7 +248,7 @@ export default function OrgSmtpPage() {
               value={fromName}
               onChange={(e) => setFromName(e.target.value)}
               placeholder="채용팀"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </Row>
 
@@ -269,7 +269,7 @@ export default function OrgSmtpPage() {
             <button
               onClick={save}
               disabled={busy}
-              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
             >
               {busy ? "처리 중..." : "저장 및 헬스체크"}
             </button>
@@ -300,7 +300,7 @@ function Row({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">
+      <label className="block text-xs font-medium text-ink-soft mb-1">
         {label}
       </label>
       {children}

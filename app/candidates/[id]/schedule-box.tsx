@@ -17,8 +17,8 @@ const SCHEDULE_STATUS_COLOR: Record<Schedule["status"], string> = {
   pending: "bg-warning-soft text-warning border-warning/30",
   selected: "bg-primary-soft text-primary-deep border-primary/30",
   counter_proposed: "bg-warning-soft text-warning border-warning/30",
-  withdrawn: "bg-slate-100 text-slate-500 border-slate-200",
-  cancelled: "bg-slate-100 text-slate-500 border-slate-200",
+  withdrawn: "bg-surface-alt text-ink-muted border-border-default",
+  cancelled: "bg-surface-alt text-ink-muted border-border-default",
 };
 
 function formatSlot(s: { start: string; end: string }): string {
@@ -88,7 +88,7 @@ export function ScheduleBox({
         >
           {SCHEDULE_STATUS_LABEL[schedule.status]}
         </span>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-ink-muted">
           {schedule.round === "round1" ? "1차" : "2차"} 면접
         </span>
       </div>
@@ -98,16 +98,16 @@ export function ScheduleBox({
           <div className="text-xs text-primary-deep font-semibold mb-1">
             확정 일시
           </div>
-          <div className="text-base font-semibold text-slate-900">
+          <div className="text-base font-semibold text-ink">
             {formatSlot(selected)}
           </div>
         </div>
       ) : (
         <div>
-          <div className="text-xs font-semibold text-slate-500 mb-2">
+          <div className="text-xs font-semibold text-ink-muted mb-2">
             제시된 시간
           </div>
-          <ul className="text-sm text-slate-700 space-y-1">
+          <ul className="text-sm text-ink-soft space-y-1">
             {schedule.proposedSlots.map((s, i) => (
               <li
                 key={i}
@@ -134,7 +134,7 @@ export function ScheduleBox({
           <div className="text-xs font-semibold text-warning mb-2">
             후보자 역제시
           </div>
-          <ul className="text-sm text-slate-700 space-y-1">
+          <ul className="text-sm text-ink-soft space-y-1">
             {schedule.counterSlots.map((s, i) => (
               <li key={i} className="flex items-center justify-between gap-2">
                 <span>· {formatSlot(s)}</span>
@@ -167,7 +167,7 @@ export function ScheduleBox({
           >
             🔄 일정 다시 잡기
           </button>
-          <span className="text-[11px] text-slate-500">
+          <span className="text-[11px] text-ink-muted">
             새 시간을 다시 제안하거나, 협의된 시간을 직접 확정할 수 있습니다.
             기존 제안은 취소됩니다.
           </span>
@@ -176,15 +176,15 @@ export function ScheduleBox({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
         <div>
-          <div className="text-xs text-slate-500">방식</div>
-          <div className="text-slate-900">
+          <div className="text-xs text-ink-muted">방식</div>
+          <div className="text-ink">
             {schedule.modeOnline ? "온라인" : "오프라인"}
           </div>
         </div>
         {!schedule.modeOnline && schedule.address && (
           <div className="sm:col-span-2">
-            <div className="text-xs text-slate-500">주소</div>
-            <div className="text-slate-900">
+            <div className="text-xs text-ink-muted">주소</div>
+            <div className="text-ink">
               {schedule.address}
               {schedule.addressDetail ? ` ${schedule.addressDetail}` : ""}
             </div>
@@ -197,15 +197,15 @@ export function ScheduleBox({
       )}
 
       {schedule.candidateNote && (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-          <div className="text-xs text-slate-500 mb-1">후보자 메모</div>
-          <div className="text-sm text-slate-700 whitespace-pre-wrap">
+        <div className="bg-surface-alt border border-border-default rounded-lg p-3">
+          <div className="text-xs text-ink-muted mb-1">후보자 메모</div>
+          <div className="text-sm text-ink-soft whitespace-pre-wrap">
             {schedule.candidateNote}
           </div>
         </div>
       )}
 
-      <div className="text-xs text-slate-400">
+      <div className="text-xs text-ink-muted">
         {schedule.respondedAt
           ? `후보자 응답: ${formatKstDateTime(schedule.respondedAt)}`
           : `링크 만료: ${formatKstDateTime(schedule.expiresAt)}`}
@@ -271,21 +271,21 @@ function MeetingLinkPanel({
 
   if (!hasLink) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+      <div className="rounded-xl border border-warning/40 bg-warning-soft p-4 flex items-start gap-3">
         <div className="text-2xl shrink-0" aria-hidden>
           🎥
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-amber-900">
+          <div className="text-sm font-semibold text-warning">
             온라인 미팅 링크가 아직 등록되지 않았습니다
           </div>
-          <div className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+          <div className="text-xs text-warning mt-0.5 leading-relaxed">
             Zoom · Google Meet · Teams 등에서 미팅을 먼저 만든 뒤, 링크를 붙여넣어
             후보자에게 안내해 주세요. 캘린더 초대(.ics) 가 자동으로 첨부됩니다.
           </div>
           <button
             onClick={() => setModalOpen(true)}
-            className="mt-3 px-3 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg"
+            className="mt-3 px-3 py-1.5 text-xs font-semibold bg-warning hover:bg-warning text-white rounded-lg"
           >
             + 미팅 링크 추가
           </button>
@@ -312,37 +312,37 @@ function MeetingLinkPanel({
   }
 
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+    <div className="rounded-xl border border-success/40 bg-success-soft/60 p-4">
       <div className="flex items-start gap-3">
         <div className="text-2xl shrink-0" aria-hidden>
           ✅
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-emerald-900">
+          <div className="text-sm font-semibold text-success">
             미팅 링크 등록 완료
           </div>
           <a
             href={schedule.onlineMeetingUrl!}
             target="_blank"
             rel="noopener noreferrer"
-            className="block mt-1 text-xs text-emerald-800 hover:text-emerald-900 underline break-all"
+            className="block mt-1 text-xs text-success hover:text-success underline break-all"
           >
             {schedule.onlineMeetingUrl}
           </a>
           {schedule.onlineMeetingNote && (
-            <div className="mt-2 text-xs text-slate-700 bg-white border border-slate-200 rounded p-2 whitespace-pre-wrap">
+            <div className="mt-2 text-xs text-ink-soft bg-card border border-border-default rounded p-2 whitespace-pre-wrap">
               {schedule.onlineMeetingNote}
             </div>
           )}
           {schedule.meetingLinkSentAt && (
-            <div className="mt-2 text-[11px] text-emerald-700">
+            <div className="mt-2 text-[11px] text-success">
               📧 발송 완료 · {formatKstDateTime(schedule.meetingLinkSentAt)}
             </div>
           )}
           <div className="mt-3 flex gap-2">
             <button
               onClick={() => setModalOpen(true)}
-              className="px-2.5 py-1 text-xs bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-700 rounded"
+              className="px-2.5 py-1 text-xs bg-card border border-success/40 hover:bg-success-soft text-success rounded"
             >
               수정 · 재발송
             </button>
@@ -395,31 +395,31 @@ function MeetingLinkModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4"
       onClick={onCancel}
     >
       <div
-        className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl"
+        className="bg-card rounded-2xl max-w-lg w-full p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-lg font-bold text-slate-900">{title}</div>
-        <div className="mt-1 text-xs text-slate-500">
+        <div className="text-lg font-bold text-ink">{title}</div>
+        <div className="mt-1 text-xs text-ink-muted">
           Zoom · Google Meet · Teams 등에서 미팅을 먼저 만든 뒤 링크를
           붙여넣어주세요. https:// 로 시작하는 100자 이내 URL.
         </div>
         <label className="block mt-4">
-          <span className="text-xs text-slate-600 font-medium">미팅 URL</span>
+          <span className="text-xs text-ink-soft font-medium">미팅 URL</span>
           <input
             type="url"
             autoFocus
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://zoom.us/j/..."
-            className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+            className="mt-1 w-full border border-border-strong rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </label>
         <label className="block mt-3">
-          <span className="text-xs text-slate-600 font-medium">
+          <span className="text-xs text-ink-soft font-medium">
             추가 안내 (선택)
           </span>
           <textarea
@@ -427,10 +427,10 @@ function MeetingLinkModal({
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             placeholder="예) 10분 전 접속해 카메라·마이크 점검 부탁드립니다. 회의실 비번: 12345"
-            className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+            className="mt-1 w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
           />
         </label>
-        <div className="mt-3 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded p-2">
+        <div className="mt-3 text-[11px] text-ink-muted bg-surface-alt border border-border-default rounded p-2">
           📅 저장 시 후보자와 면접관에게 미팅 정보 + 캘린더 초대 파일(.ics) 이
           즉시 발송됩니다.
         </div>
@@ -442,14 +442,14 @@ function MeetingLinkModal({
         <div className="mt-5 flex justify-end gap-2">
           <button
             onClick={onCancel}
-            className="px-3 py-2 text-sm text-slate-600 hover:text-slate-900"
+            className="px-3 py-2 text-sm text-ink-soft hover:text-ink"
           >
             취소
           </button>
           <button
             onClick={onSubmit}
             disabled={busy || url.trim().length === 0}
-            className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary-deep text-white rounded-lg disabled:opacity-50"
+            className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary-deep text-surface rounded-lg disabled:opacity-50"
           >
             {busy ? "저장 중..." : submitLabel}
           </button>

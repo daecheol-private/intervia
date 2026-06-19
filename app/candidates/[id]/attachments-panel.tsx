@@ -126,12 +126,12 @@ export function AttachmentsPanel({
 
   return (
     <Section title="첨부 파일" collapsible={false}>
-      <p className="text-xs text-slate-500 mb-3">
+      <p className="text-xs text-ink-muted mb-3">
         경력기술서·자기소개서·포트폴리오 등. 텍스트 추출이 가능한 문서(PDF·DOCX·TXT 등)는
         AI 서류평가에 함께 반영되며, 이미지 등 추출 불가 파일은 사람 면접관 참고용입니다.
       </p>
       {rescreenNotice && (
-        <div className="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 mb-3">
+        <div className="text-sm bg-warning-soft border border-warning/40 text-warning rounded-lg p-3 mb-3">
           <strong>첨부 변경은 기존 AI 서류평가에 반영되어 있지 않습니다.</strong>{" "}
           이력서는 업로드 시 자동으로 평가되었으므로, 변경된 첨부를 포함해 평가하려면
           상단의 <strong>🔄 재평가</strong> 버튼을 이용하세요. (재평가 성공 시 토큰이
@@ -145,7 +145,7 @@ export function AttachmentsPanel({
             return (
               <li
                 key={a.id}
-                className="flex items-center justify-between gap-3 px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50"
+                className="flex items-center justify-between gap-3 px-3 py-2 border border-border-default rounded-lg hover:bg-surface-alt"
               >
                 <div className="min-w-0 flex items-center gap-2">
                   <span
@@ -164,13 +164,13 @@ export function AttachmentsPanel({
                   </a>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-ink-muted">
                     {formatBytes(a.sizeBytes)}
                   </span>
                   {canModify && (
                     <button
                       onClick={() => void remove(a)}
-                      className="text-xs text-slate-400 hover:text-danger px-1"
+                      className="text-xs text-ink-muted hover:text-danger px-1"
                       title="첨부 삭제"
                     >
                       ✕
@@ -183,12 +183,12 @@ export function AttachmentsPanel({
         </ul>
       )}
       {canModify && (
-        <div className="mt-3 pt-3 border-t border-slate-100">
+        <div className="mt-3 pt-3 border-t border-border-default">
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value)}
-              className="h-8 text-sm border border-slate-300 rounded-md px-2 bg-white text-slate-700 shrink-0"
+              className="h-8 text-sm border border-border-strong rounded-md px-2 bg-card text-ink-soft shrink-0"
             >
               {KIND_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -200,18 +200,18 @@ export function AttachmentsPanel({
               ref={fileRef}
               type="file"
               accept=".pdf,.docx,.doc,.hwp,.hwpx,.png,.jpg,.jpeg,.pptx,.xlsx,.txt,.md"
-              className="text-sm text-slate-500 file:mr-2 file:h-8 file:px-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:text-slate-700 file:text-sm file:cursor-pointer hover:file:bg-slate-50"
+              className="text-sm text-ink-muted file:mr-2 file:h-8 file:px-3 file:rounded-md file:border file:border-border-strong file:bg-card file:text-ink-soft file:text-sm file:cursor-pointer hover:file:bg-surface-alt"
             />
             <button
               onClick={() => void upload()}
               disabled={uploading}
-              className="h-8 text-sm px-3.5 rounded-md bg-primary hover:bg-primary-deep text-white font-medium disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
+              className="h-8 text-sm px-3.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
             >
               {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
               {uploading ? "업로드 중..." : "첨부 추가"}
             </button>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1.5">
+          <p className="text-[11px] text-ink-muted mt-1.5">
             PDF·DOCX·HWP·이미지 등, 최대 10MB.
           </p>
           {err && <p className="text-xs text-danger mt-1.5 whitespace-pre-wrap">{err}</p>}

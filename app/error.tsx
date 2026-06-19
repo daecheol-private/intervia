@@ -49,28 +49,28 @@ export default function GlobalRouteError({
 
   return (
     <main className="max-w-lg mx-auto w-full px-4 sm:px-6 py-16 sm:py-24">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 text-center shadow-sm">
+      <div className="rounded-2xl border border-border-default bg-card p-6 sm:p-8 text-center shadow-sm">
         <div className="text-4xl mb-3">⚠️</div>
-        <h1 className="text-lg font-bold text-slate-900">
+        <h1 className="text-lg font-bold text-ink">
           일시적인 문제가 발생했습니다
         </h1>
-        <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+        <p className="mt-2 text-sm text-ink-muted leading-relaxed">
           페이지를 표시하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.
           문제가 계속되면 새로고침하거나 대시보드로 돌아가 주세요.
         </p>
         {error?.digest && (
-          <p className="mt-2 text-[11px] text-slate-400">오류 코드: {error.digest}</p>
+          <p className="mt-2 text-[11px] text-ink-muted">오류 코드: {error.digest}</p>
         )}
         <div className="mt-6 flex items-center justify-center gap-2">
           <button
             onClick={() => reset()}
-            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
+            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium"
           >
             다시 시도
           </button>
           <Link
             href="/"
-            className="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-700 hover:bg-slate-50"
+            className="px-4 py-2 rounded-lg border border-border-strong text-sm text-ink-soft hover:bg-surface-alt"
           >
             대시보드로
           </Link>

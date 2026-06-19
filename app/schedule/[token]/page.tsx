@@ -135,10 +135,10 @@ export default function SchedulePage() {
     return (
       <main className="max-w-md mx-auto px-6 py-16">
         <BrandHeader />
-        <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center shadow-sm">
+        <div className="bg-card border border-danger/40 rounded-2xl p-8 text-center shadow-sm">
           <div className="text-4xl mb-3">⚠️</div>
-          <h1 className="text-lg font-bold text-slate-900">접근 실패</h1>
-          <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+          <h1 className="text-lg font-bold text-ink">접근 실패</h1>
+          <p className="text-sm text-ink-soft mt-3 leading-relaxed">
             {err.message}
           </p>
         </div>
@@ -150,7 +150,7 @@ export default function SchedulePage() {
     return (
       <main className="max-w-md mx-auto px-6 py-16">
         <BrandHeader />
-        <div className="text-center text-sm text-slate-400">불러오는 중...</div>
+        <div className="text-center text-sm text-ink-muted">불러오는 중...</div>
       </main>
     );
   }
@@ -160,10 +160,10 @@ export default function SchedulePage() {
     return (
       <main className="max-w-md mx-auto px-6 py-16">
         <BrandHeader />
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
+        <div className="bg-card border border-border-default rounded-2xl p-8 text-center shadow-sm">
           <div className="text-4xl mb-3">🗑️</div>
-          <h1 className="text-lg font-bold text-slate-900">지원 취소 완료</h1>
-          <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+          <h1 className="text-lg font-bold text-ink">지원 취소 완료</h1>
+          <p className="text-sm text-ink-soft mt-3 leading-relaxed">
             지원이 취소되었습니다. 관심 가져주셔서 감사합니다.
           </p>
         </div>
@@ -177,20 +177,20 @@ export default function SchedulePage() {
         <BrandHeader />
         <div className="bg-card border border-primary/30 rounded-2xl p-8 text-center shadow-sm">
           <div className="text-4xl mb-3">✅</div>
-          <h1 className="text-lg font-bold text-slate-900">면접 시간 확정</h1>
-          <p className="text-sm text-slate-600 mt-3">
+          <h1 className="text-lg font-bold text-ink">면접 시간 확정</h1>
+          <p className="text-sm text-ink-soft mt-3">
             {info.orgName} · {info.jobTitle}
           </p>
-          <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl text-left">
-            <div className="text-xs text-slate-500">일시</div>
-            <div className="text-sm font-semibold text-slate-900 mt-1">
+          <div className="mt-4 p-4 bg-surface-alt border border-border-default rounded-xl text-left">
+            <div className="text-xs text-ink-muted">일시</div>
+            <div className="text-sm font-semibold text-ink mt-1">
               {fmtSlot(info.selectedSlot)}
             </div>
-            <div className="text-xs text-slate-500 mt-3">방식</div>
-            <div className="text-sm text-slate-900 mt-1">
+            <div className="text-xs text-ink-muted mt-3">방식</div>
+            <div className="text-sm text-ink mt-1">
               {info.modeOnline ? "온라인" : "오프라인"}
               {!info.modeOnline && info.address && (
-                <div className="text-xs text-slate-600 mt-1">
+                <div className="text-xs text-ink-soft mt-1">
                   {info.address}
                   {info.addressDetail && <> {info.addressDetail}</>}
                 </div>
@@ -198,7 +198,7 @@ export default function SchedulePage() {
             </div>
             {info.modeOnline && info.onlineMeetingUrl && (
               <>
-                <div className="text-xs text-slate-500 mt-3">미팅 링크</div>
+                <div className="text-xs text-ink-muted mt-3">미팅 링크</div>
                 <a
                   href={info.onlineMeetingUrl}
                   target="_blank"
@@ -208,14 +208,14 @@ export default function SchedulePage() {
                   {info.onlineMeetingUrl}
                 </a>
                 {info.onlineMeetingNote && (
-                  <div className="mt-2 text-xs text-slate-700 bg-white border border-slate-200 rounded p-2 whitespace-pre-wrap">
+                  <div className="mt-2 text-xs text-ink-soft bg-card border border-border-default rounded p-2 whitespace-pre-wrap">
                     {info.onlineMeetingNote}
                   </div>
                 )}
               </>
             )}
             {info.modeOnline && !info.onlineMeetingUrl && (
-              <div className="mt-3 text-xs text-slate-500 italic">
+              <div className="mt-3 text-xs text-ink-muted italic">
                 미팅 링크는 면접 일정에 가까워지면 별도로 안내해 드립니다.
               </div>
             )}
@@ -229,19 +229,19 @@ export default function SchedulePage() {
   return (
     <main className="max-w-md mx-auto px-6 py-12">
       <BrandHeader />
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <header className="text-center pb-5 border-b border-slate-100">
+      <div className="bg-card border border-border-default rounded-2xl p-6 shadow-sm">
+        <header className="text-center pb-5 border-b border-border-default">
           <div className="text-3xl mb-2">📅</div>
-          <h1 className="text-lg font-bold text-slate-900">
+          <h1 className="text-lg font-bold text-ink">
             {info.orgName} {info.round === "round2" ? "2차" : "1차"} 면접 일정 선택
           </h1>
-          <p className="text-xs text-slate-500 mt-1">{info.jobTitle}</p>
-          <p className="text-[11px] text-slate-400 mt-1">
+          <p className="text-xs text-ink-muted mt-1">{info.jobTitle}</p>
+          <p className="text-[11px] text-ink-muted mt-1">
             안녕하세요 {info.candidateName}님 — 가능한 시간을 선택해 주세요.
           </p>
         </header>
 
-        <div className="py-4 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 my-4">
+        <div className="py-4 text-xs text-ink-soft bg-surface-alt rounded-lg px-3 my-4">
           방식: <strong>{info.modeOnline ? "온라인" : "오프라인"}</strong>
           {!info.modeOnline && info.address && (
             <>
@@ -254,7 +254,7 @@ export default function SchedulePage() {
 
         {mode === "view" ? (
           <>
-            <h2 className="text-xs font-semibold text-slate-700 mb-2">
+            <h2 className="text-xs font-semibold text-ink-soft mb-2">
               제시된 시간
             </h2>
             <div className="space-y-2">
@@ -264,7 +264,7 @@ export default function SchedulePage() {
                   className={`flex items-center gap-3 px-3 py-3 rounded-lg border cursor-pointer ${
                     selectedIdx === i
                       ? "bg-primary-soft border-primary/40"
-                      : "bg-white border-slate-200 hover:bg-slate-50"
+                      : "bg-card border-border-default hover:bg-surface-alt"
                   }`}
                 >
                   <input
@@ -273,33 +273,33 @@ export default function SchedulePage() {
                     checked={selectedIdx === i}
                     onChange={() => setSelectedIdx(i)}
                   />
-                  <span className="text-sm text-slate-900">{fmtSlot(s)}</span>
+                  <span className="text-sm text-ink">{fmtSlot(s)}</span>
                 </label>
               ))}
             </div>
             {info.status === "counter_proposed" && info.counterSlots && (
-              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-3">
+              <p className="text-[11px] text-warning bg-warning-soft border border-warning/40 rounded-lg p-2 mt-3">
                 이전에 역제시하신 시간이 면접관 검토 중입니다. 새 시간이 제시될 수 있어요.
               </p>
             )}
             <button
               onClick={selectSlot}
               disabled={busy || selectedIdx == null}
-              className="w-full mt-4 px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+              className="w-full mt-4 px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
             >
               {busy ? "처리 중..." : "이 시간으로 확정"}
             </button>
             <div className="flex gap-2 mt-3 text-xs">
               <button
                 onClick={() => setMode("counter")}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700"
+                className="flex-1 px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-ink-soft"
               >
                 다른 시간 제안하기
               </button>
               <button
                 onClick={withdraw}
                 disabled={busy}
-                className="flex-1 px-3 py-2 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                className="flex-1 px-3 py-2 rounded-lg border border-danger/40 text-danger hover:bg-danger-soft disabled:opacity-50"
               >
                 지원 취소
               </button>
@@ -316,12 +316,12 @@ export default function SchedulePage() {
           />
         )}
 
-        <p className="text-[10px] text-slate-400 text-center mt-6">
+        <p className="text-[10px] text-ink-muted text-center mt-6">
           링크 유효기간:{" "}
           {formatLocalDate(info.expiresAt)}
         </p>
       </div>
-      <p className="text-[11px] text-slate-400 text-center mt-4">
+      <p className="text-[11px] text-ink-muted text-center mt-4">
         본 페이지는 Intervia 채용 플랫폼에서 발송되었습니다.{" "}
         <Link href="/privacy" className="underline">
           처리방침
@@ -369,7 +369,7 @@ function CounterForm({
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-600 bg-primary-soft border border-primary/30 rounded-lg p-2">
+      <p className="text-xs text-ink-soft bg-primary-soft border border-primary/30 rounded-lg p-2">
         가능한 시간을 1~5개 제시해 주세요. 면접관이 검토 후 확정 또는 재제시합니다.
       </p>
       <SlotCalendarPicker value={slots} onChange={setSlots} />
@@ -379,7 +379,7 @@ function CounterForm({
         rows={2}
         maxLength={1000}
         placeholder="추가 안내 사항 (선택)"
-        className="w-full text-xs border border-slate-300 rounded-lg px-2 py-1.5"
+        className="w-full text-xs border border-border-strong rounded-lg px-2 py-1.5"
       />
       {err && (
         <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg p-2">
@@ -389,14 +389,14 @@ function CounterForm({
       <div className="flex gap-2">
         <button
           onClick={onCancel}
-          className="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-700"
+          className="flex-1 px-3 py-2 rounded-lg border border-border-strong text-sm text-ink-soft"
         >
           뒤로
         </button>
         <button
           onClick={submit}
           disabled={busy}
-          className="flex-1 px-3 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+          className="flex-1 px-3 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
         >
           {busy ? "전송 중..." : "역제시"}
         </button>

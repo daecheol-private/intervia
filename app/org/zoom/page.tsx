@@ -90,13 +90,13 @@ export default function OrgZoomPage() {
   return (
     <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/org/settings" className="text-xs text-slate-500 hover:underline">
+        <Link href="/org/settings" className="text-xs text-ink-muted hover:underline">
           ← 법인 설정
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">
+        <h1 className="text-2xl font-bold text-ink mt-2">
           화상 면접 (줌) 연동
         </h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <p className="text-sm text-ink-muted mt-1">
           회사 줌 계정을 한 번 연결해 두면, 온라인 1차 면접 시간이 확정될 때
           줌 회의 링크가 자동으로 생성되어 후보자·면접관에게 메일로 발송됩니다.
         </p>
@@ -118,9 +118,9 @@ export default function OrgZoomPage() {
 
       <div className="hidden sm:block">
         {!loaded ? (
-          <div className="text-sm text-slate-500">불러오는 중...</div>
+          <div className="text-sm text-ink-muted">불러오는 중...</div>
         ) : (
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="bg-card border border-border-default rounded-2xl p-6 shadow-sm space-y-4">
             {lastChecked && (
               <div
                 className={`text-xs px-3 py-2 rounded-lg border ${
@@ -140,9 +140,9 @@ export default function OrgZoomPage() {
               </div>
             )}
 
-            <div className="text-xs bg-slate-50 border border-slate-200 text-slate-600 rounded-lg px-3 py-2.5 leading-relaxed">
+            <div className="text-xs bg-surface-alt border border-border-default text-ink-soft rounded-lg px-3 py-2.5 leading-relaxed">
               줌 마켓플레이스에서{" "}
-              <strong className="text-slate-800">Server-to-Server OAuth</strong>{" "}
+              <strong className="text-ink">Server-to-Server OAuth</strong>{" "}
               앱을 만들면 아래 3개 값이 나옵니다. 그대로 복사해 붙여넣으세요.
               자세한 순서는{" "}
               <Link
@@ -159,7 +159,7 @@ export default function OrgZoomPage() {
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 placeholder="줌 앱의 Account ID"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </Row>
             <Row label="Client ID">
@@ -167,7 +167,7 @@ export default function OrgZoomPage() {
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
                 placeholder="줌 앱의 Client ID"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </Row>
             <Row label="Client Secret">
@@ -175,10 +175,10 @@ export default function OrgZoomPage() {
                 value={clientSecret}
                 onChange={setClientSecret}
                 placeholder={lastChecked ? "변경 시에만 입력" : "줌 앱의 Client Secret"}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 autoComplete="new-password"
               />
-              <p className="text-[11px] text-slate-400 mt-1">
+              <p className="text-[11px] text-ink-muted mt-1">
                 저장된 Client Secret 은 마스킹되어 보입니다. 변경하려면 새 값을
                 입력하세요. (비밀번호와 같으니 외부에 공유하지 마세요.)
               </p>
@@ -200,7 +200,7 @@ export default function OrgZoomPage() {
               <button
                 onClick={save}
                 disabled={busy}
-                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
               >
                 {busy ? "처리 중..." : "저장 및 연결 테스트"}
               </button>
@@ -230,7 +230,7 @@ function Row({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">
+      <label className="block text-xs font-medium text-ink-soft mb-1">
         {label}
       </label>
       {children}

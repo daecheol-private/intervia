@@ -74,11 +74,11 @@ export default function AuditPage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-slate-500 hover:underline">
+        <Link href="/" className="text-xs text-ink-muted hover:underline">
           ← 대시보드
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">감사 로그</h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <h1 className="text-2xl font-bold text-ink mt-2">감사 로그</h1>
+        <p className="text-sm text-ink-muted mt-1">
           민감 액션 추적 기록. 시스템관리자가 타 법인 데이터에 접근한 경우 별도 표기.
         </p>
       </div>
@@ -87,7 +87,7 @@ export default function AuditPage() {
         <select
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
         >
           <option value={1}>최근 1일</option>
           <option value={7}>최근 7일</option>
@@ -99,11 +99,11 @@ export default function AuditPage() {
           placeholder="action 필터 (예: candidate.delete)"
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
-          className="flex-1 min-w-[200px] border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="flex-1 min-w-[200px] border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
         />
         <button
           onClick={load}
-          className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm"
+          className="px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-sm"
         >
           새로고침
         </button>
@@ -123,15 +123,15 @@ export default function AuditPage() {
       )}
 
       {!rows ? (
-        <div className="text-sm text-slate-500">불러오는 중...</div>
+        <div className="text-sm text-ink-muted">불러오는 중...</div>
       ) : rows.length === 0 ? (
-        <div className="text-sm text-slate-500 bg-white border border-slate-200 rounded-2xl p-8 text-center">
+        <div className="text-sm text-ink-muted bg-card border border-border-default rounded-2xl p-8 text-center">
           기록이 없습니다.
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
+        <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-slate-600">
+            <thead className="bg-surface-alt text-ink-soft">
               <tr>
                 <th className="text-left px-3 py-2.5 font-medium">시각</th>
                 <th className="text-left px-3 py-2.5 font-medium">액터</th>
@@ -142,43 +142,43 @@ export default function AuditPage() {
                 <th className="text-left px-3 py-2.5 font-medium">메타</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border-default">
               {rows.map((r) => {
                 const isCrossOrg =
                   r.actorRole === "system_admin" &&
                   r.metadata &&
                   (r.metadata as Record<string, unknown>).cross_org;
                 return (
-                  <tr key={r.id} className={isCrossOrg ? "bg-amber-50" : ""}>
-                    <td className="px-3 py-2 text-slate-500 whitespace-nowrap">
+                  <tr key={r.id} className={isCrossOrg ? "bg-warning-soft" : ""}>
+                    <td className="px-3 py-2 text-ink-muted whitespace-nowrap">
                       {fmt(r.createdAt)}
                     </td>
                     <td className="px-3 py-2">
-                      <div className="font-medium text-slate-900">
+                      <div className="font-medium text-ink">
                         {r.actorName ?? r.actorRole ?? "-"}
                       </div>
-                      <div className="text-[10px] text-slate-500">
+                      <div className="text-[10px] text-ink-muted">
                         {r.actorEmail ?? ""}
                       </div>
                     </td>
-                    <td className="px-3 py-2 font-mono text-slate-700">
+                    <td className="px-3 py-2 font-mono text-ink-soft">
                       {actionLabel[r.action] ?? r.action}
                       {isCrossOrg ? (
-                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 font-semibold">
+                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning font-semibold">
                           타법인접근
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 text-slate-700">
+                    <td className="px-3 py-2 text-ink-soft">
                       {r.resourceType && r.resourceId
                         ? `${r.resourceType}#${r.resourceId}`
                         : "-"}
                     </td>
-                    <td className="px-3 py-2 text-slate-700">
+                    <td className="px-3 py-2 text-ink-soft">
                       {r.orgName ?? (r.orgId ? `#${r.orgId}` : "-")}
                     </td>
-                    <td className="px-3 py-2 text-slate-500">{r.ip ?? "-"}</td>
-                    <td className="px-3 py-2 text-slate-500 max-w-[200px] truncate">
+                    <td className="px-3 py-2 text-ink-muted">{r.ip ?? "-"}</td>
+                    <td className="px-3 py-2 text-ink-muted max-w-[200px] truncate">
                       {r.metadata ? JSON.stringify(r.metadata) : "-"}
                     </td>
                   </tr>
@@ -189,7 +189,7 @@ export default function AuditPage() {
         </div>
       )}
 
-      <p className="text-xs text-slate-400 mt-4">
+      <p className="text-xs text-ink-muted mt-4">
         최대 500건 표시. 더 오래된 기록은 일자 범위를 늘리세요.
       </p>
     </main>

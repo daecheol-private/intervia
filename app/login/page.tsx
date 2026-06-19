@@ -6,6 +6,14 @@ import Link from "next/link";
 import { PasswordStrength } from "@/app/password-strength";
 import { LogoMark } from "@/app/components/Logo";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import {
+  buttonClass,
+  Card,
+  Field,
+  inputClass,
+  Checkbox,
+  Alert,
+} from "@/app/components/ui";
 
 // status=pending 사용자가 로그인 시도 시 받는 정보 — 2단계 진행 상태 + 운영자 권한 요청 폼에 사용.
 type PendingInfo = {
@@ -181,7 +189,7 @@ export default function LoginPage() {
 
   if (setupRequired === null) {
     return (
-      <main className="flex-1 flex items-center justify-center text-slate-400">
+      <main className="flex-1 flex items-center justify-center text-ink-muted">
         불러오는 중...
       </main>
     );
@@ -192,7 +200,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <LogoMark size={48} className="mx-auto mb-3 shadow-lg" />
-          <h1 className="text-xl font-bold text-slate-900">
+          <h1 className="text-xl font-bold text-ink">
             {pending
               ? "승인 대기 중"
               : setupRequired
@@ -200,13 +208,13 @@ export default function LoginPage() {
                 : "로그인"}
           </h1>
           {setupRequired && (
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-ink-muted mt-1">
               최초 1회 관리자 계정을 생성합니다.
             </p>
           )}
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <Card className="shadow-sm space-y-4">
           {pending ? (
             <PendingApprovalPanel
               info={pending}
@@ -218,7 +226,7 @@ export default function LoginPage() {
             />
           ) : totpChallenge ? (
             <>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-ink-soft">
                 Authenticator 앱의 6자리 코드를 입력하세요.
               </p>
               <Field label="인증 코드">
@@ -232,15 +240,11 @@ export default function LoginPage() {
                   onKeyDown={(e) => e.key === "Enter" && submitTotp()}
                 />
               </Field>
-              {err && (
-                <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
-                  {err}
-                </div>
-              )}
+              {err && <Alert tone="danger">{err}</Alert>}
               <button
                 onClick={submitTotp}
                 disabled={busy || totpCode.length !== 6}
-                className="w-full bg-primary hover:bg-primary-deep disabled:opacity-50 text-white font-medium py-2.5 rounded-lg shadow-sm transition-colors"
+                className={buttonClass({ fullWidth: true })}
               >
                 {busy ? "확인 중..." : "확인"}
               </button>
@@ -250,7 +254,7 @@ export default function LoginPage() {
                   setTotpCode("");
                   setErr("");
                 }}
-                className="w-full text-xs text-slate-500 hover:underline"
+                className="w-full text-xs text-ink-muted hover:underline"
               >
                 처음으로 돌아가기
               </button>
@@ -290,19 +294,16 @@ export default function LoginPage() {
           </Field>
 
           {!setupRequired && (
-            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
-                checked={rememberId}
-                onChange={(e) => setRememberId(e.target.checked)}
-              />
+            <Checkbox
+              checked={rememberId}
+              onChange={(e) => setRememberId(e.target.checked)}
+            >
               ID 저장
-            </label>
+            </Checkbox>
           )}
 
           {err && (
-            <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
+            <Alert tone="danger">
               {err}
               {needsVerify && (
                 <button
@@ -313,18 +314,14 @@ export default function LoginPage() {
                   인증 메일 재발송
                 </button>
               )}
-            </div>
+            </Alert>
           )}
-          {info && (
-            <div className="text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
-              {info}
-            </div>
-          )}
+          {info && <Alert tone="brand">{info}</Alert>}
 
           <button
             onClick={submit}
             disabled={busy}
-            className="w-full bg-primary hover:bg-primary-deep disabled:opacity-50 text-white font-medium py-2.5 rounded-lg shadow-sm transition-colors"
+            className={buttonClass({ fullWidth: true })}
           >
             {busy
               ? "처리 중..."
@@ -334,11 +331,11 @@ export default function LoginPage() {
           </button>
 
           {!setupRequired && (
-            <div className="text-center text-xs text-slate-500 pt-3 border-t border-slate-100 space-y-2">
+            <div className="text-center text-xs text-ink-muted pt-3 border-t border-border-default space-y-2">
               <div>
                 <Link
                   href="/password-reset"
-                  className="text-slate-600 hover:text-primary hover:underline"
+                  className="text-ink-soft hover:text-primary hover:underline"
                 >
                   비밀번호를 잊으셨나요?
                 </Link>
@@ -353,25 +350,14 @@ export default function LoginPage() {
           )}
           </>
           )}
-        </div>
+        </Card>
       </div>
     </main>
   );
 }
 
-const inputCls =
-  "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
+// 기존 인라인 input 들이 className={inputCls} 로 참조 — 토큰 기반 프리미티브로 브리지.
+const inputCls = inputClass();
 
 /**
  * 합류 요청 후 담당자 승인 대기(status=pending) 사용자가 로그인 시도 시 표시.
@@ -438,27 +424,27 @@ function PendingApprovalPanel({
 
   return (
     <div className="space-y-3">
-      <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-3 leading-relaxed">
+      <Alert tone="warning" className="text-sm">
         <strong>{info.orgName ?? "법인"}</strong> 합류 승인을 기다리는 중입니다.
         이용하려면 아래 두 단계가 모두 완료되어야 합니다.
-      </div>
+      </Alert>
 
       {/* 2단계 진행 상태 — 이메일 인증 + 법인 관리자 승인 둘 다 필요 */}
-      <div className="text-left bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3 space-y-3">
+      <div className="text-left bg-surface-alt border border-border-default rounded-lg px-3.5 py-3 space-y-3">
         <div className="flex items-start gap-2.5">
           <StepBadge done={info.emailVerified} />
           <div className="flex-1 space-y-1.5">
             <div className="text-xs">
-              <strong className="text-slate-800">이메일 인증</strong>{" "}
+              <strong className="text-ink">이메일 인증</strong>{" "}
               {info.emailVerified ? (
-                <span className="text-emerald-600 font-medium">완료</span>
+                <span className="text-success font-medium">완료</span>
               ) : (
-                <span className="text-amber-600 font-medium">미완료</span>
+                <span className="text-warning font-medium">미완료</span>
               )}
             </div>
             {!info.emailVerified && (
               <>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
+                <p className="text-[11px] text-ink-muted leading-relaxed">
                   가입 시 보낸 인증 메일의 링크를 클릭하세요. 메일이 없으면
                   재발송할 수 있습니다.
                 </p>
@@ -470,9 +456,9 @@ function PendingApprovalPanel({
                   {resendBusy ? "발송 중..." : "인증 메일 재발송"}
                 </button>
                 {resendMsg && (
-                  <div className="text-[11px] text-primary-deep bg-primary-soft border border-primary/30 rounded px-2 py-1">
+                  <Alert tone="brand" className="text-[11px] px-2 py-1">
                     {resendMsg}
-                  </div>
+                  </Alert>
                 )}
               </>
             )}
@@ -482,10 +468,10 @@ function PendingApprovalPanel({
           <StepBadge done={false} />
           <div className="flex-1">
             <div className="text-xs">
-              <strong className="text-slate-800">법인 관리자 승인</strong>{" "}
-              <span className="text-amber-600 font-medium">대기 중</span>
+              <strong className="text-ink">법인 관리자 승인</strong>{" "}
+              <span className="text-warning font-medium">대기 중</span>
             </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
+            <p className="text-[11px] text-ink-muted leading-relaxed">
               담당자가 합류 요청을 검토·승인합니다. 결과는 가입하신 이메일로
               안내됩니다.
             </p>
@@ -494,12 +480,12 @@ function PendingApprovalPanel({
       </div>
 
       {submitted ? (
-        <div className="text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2.5 leading-relaxed">
+        <Alert tone="brand" className="px-3 py-2.5">
           운영자에게 권한 부여 요청을 보냈습니다. 신원·재직 증명을 위해 별도
           회신을 드릴 수 있습니다.
-        </div>
+        </Alert>
       ) : !expanded ? (
-        <div className="text-xs text-slate-500 leading-relaxed space-y-2">
+        <div className="text-xs text-ink-muted leading-relaxed space-y-2">
           <p>
             담당자 승인이 지연되거나 담당자와 연락이 닿지 않나요? 운영자에게 법인
             권한 부여를 요청할 수 있습니다.
@@ -512,11 +498,11 @@ function PendingApprovalPanel({
           </button>
         </div>
       ) : (
-        <div className="border border-slate-200 rounded-lg p-3 space-y-2">
-          <div className="text-xs font-medium text-slate-700">
+        <div className="border border-border-default rounded-lg p-3 space-y-2">
+          <div className="text-xs font-medium text-ink-soft">
             시스템 운영자에게 법인 권한 부여 요청
           </div>
-          <div className="text-[11px] text-slate-500">
+          <div className="text-[11px] text-ink-muted">
             신청자: {info.requesterName ? `${info.requesterName} · ` : ""}
             {info.requesterEmail}
           </div>
@@ -527,21 +513,21 @@ function PendingApprovalPanel({
             onChange={(e) => setReason(e.target.value)}
           />
           {err && (
-            <div className="text-[11px] text-danger bg-danger-soft border border-danger/30 rounded px-2.5 py-1.5">
+            <Alert tone="danger" className="text-[11px] px-2.5 py-1.5">
               {err}
-            </div>
+            </Alert>
           )}
           <div className="flex gap-2">
             <button
               onClick={submit}
               disabled={busy}
-              className="px-3 py-1.5 text-xs bg-primary hover:bg-primary-deep text-white rounded font-medium disabled:opacity-50"
+              className={buttonClass({ size: "sm" })}
             >
               {busy ? "전송 중..." : "운영자에게 요청 전송"}
             </button>
             <button
               onClick={() => setExpanded(false)}
-              className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-300"
+              className={buttonClass({ variant: "secondary", size: "sm" })}
             >
               접기
             </button>
@@ -551,7 +537,7 @@ function PendingApprovalPanel({
 
       <button
         onClick={onBack}
-        className="w-full text-xs text-slate-500 hover:underline pt-1"
+        className="w-full text-xs text-ink-muted hover:underline pt-1"
       >
         다른 계정으로 로그인
       </button>
@@ -562,10 +548,10 @@ function PendingApprovalPanel({
 // 2단계(이메일 인증 / 법인 승인) 진행 상태 뱃지 — 완료=emerald 체크, 미완료=amber 빈 원.
 function StepBadge({ done }: { done: boolean }) {
   return done ? (
-    <span className="shrink-0 w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 text-[11px] font-bold flex items-center justify-center mt-0.5">
+    <span className="shrink-0 w-5 h-5 rounded-full bg-success-soft text-success text-[11px] font-bold flex items-center justify-center mt-0.5">
       ✓
     </span>
   ) : (
-    <span className="shrink-0 w-5 h-5 rounded-full border-2 border-amber-300 bg-white mt-0.5" />
+    <span className="shrink-0 w-5 h-5 rounded-full border-2 border-warning/50 bg-card mt-0.5" />
   );
 }

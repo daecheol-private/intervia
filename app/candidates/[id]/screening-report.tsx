@@ -23,7 +23,7 @@ export function LevelMatchBadge({
         </span>
       </div>
       {match.reason && (
-        <p className="text-xs text-slate-700 mt-1 leading-snug">
+        <p className="text-xs text-ink-soft mt-1 leading-snug">
           {match.reason}
         </p>
       )}
@@ -63,14 +63,14 @@ export function RequirementGateBadge({
       {gate.missing && gate.missing.length > 0 && (
         <ul className="mt-1.5 space-y-0.5">
           {gate.missing.map((m, i) => (
-            <li key={i} className="text-xs text-slate-700 leading-snug">
+            <li key={i} className="text-xs text-ink-soft leading-snug">
               · {m}
             </li>
           ))}
         </ul>
       )}
       {gate.reason && (
-        <p className="text-xs text-slate-600 mt-1 leading-snug">{gate.reason}</p>
+        <p className="text-xs text-ink-soft mt-1 leading-snug">{gate.reason}</p>
       )}
     </div>
   );
@@ -202,7 +202,7 @@ export function RequirementCoverageBlock({
 
   return (
     <div className="space-y-2.5">
-      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+      <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
         JD 요건별 충족
       </div>
 
@@ -213,11 +213,11 @@ export function RequirementCoverageBlock({
           {COVERAGE_ORDER.map((s) => (
             <span
               key={s}
-              className="flex items-center gap-1.5 text-xs text-slate-500"
+              className="flex items-center gap-1.5 text-xs text-ink-muted"
             >
               <span className={`w-2.5 h-2.5 rounded-sm ${COVERAGE_META[s].bar}`} />
               {COVERAGE_META[s].label}
-              <span className="tabular-nums font-semibold text-slate-700">
+              <span className="tabular-nums font-semibold text-ink-soft">
                 {counts[s]}
               </span>
             </span>
@@ -233,7 +233,7 @@ export function RequirementCoverageBlock({
           return (
             <div
               key={i}
-              className={`flex items-start gap-2.5 rounded-md border border-slate-100 border-l-[3px] ${m.accent} ${m.row} px-3 py-2`}
+              className={`flex items-start gap-2.5 rounded-md border border-border-default border-l-[3px] ${m.accent} ${m.row} px-3 py-2`}
             >
               <span
                 className={`mt-0.5 flex-none w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold leading-none ${m.badge}`}
@@ -245,18 +245,18 @@ export function RequirementCoverageBlock({
               <div className="flex-1 min-w-0">
                 <div
                   className={`text-sm leading-snug ${
-                    dim ? "text-slate-500" : "text-slate-800 font-medium"
+                    dim ? "text-ink-muted" : "text-ink font-medium"
                   }`}
                 >
                   {c.requirement}
                 </div>
                 {c.evidence ? (
-                  <div className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                  <div className="text-[11px] text-ink-muted leading-snug mt-0.5">
                     {c.evidence}
                   </div>
                 ) : (
                   dim && (
-                    <div className="text-[11px] text-slate-400 leading-snug mt-0.5 italic">
+                    <div className="text-[11px] text-ink-muted leading-snug mt-0.5 italic">
                       이력서에서 근거를 찾지 못함 — 면접 확인 권장
                     </div>
                   )
@@ -453,7 +453,7 @@ export function BreakdownBlock({
     breakdown.achievement != null || breakdown.stability != null;
   return (
     <div className="space-y-3">
-      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+      <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
         공고 적합도 (6축)
       </div>
       {/* 좌: 육각형 차트 (고정폭). 우: 6축 사유 리스트 (남은 폭 채움).
@@ -462,21 +462,21 @@ export function BreakdownBlock({
         <div className="flex justify-center md:justify-start">
           <FitHexagon breakdown={breakdown} />
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-border-default">
           {SCREENING_AXES.map(({ key, label, weight }) => {
             const d = breakdown[key as BreakdownKey];
             return (
               <div key={key} className="py-2 first:pt-0 last:pb-0">
                 <div className="flex items-baseline justify-between gap-2 mb-1">
-                  <span className="text-sm font-medium text-slate-800">
+                  <span className="text-sm font-medium text-ink">
                     {label}
-                    <span className="text-[10px] text-slate-400 ml-1.5 font-normal">
+                    <span className="text-[10px] text-ink-muted ml-1.5 font-normal">
                       {weight}
                     </span>
                   </span>
                   <span
                     className={`text-base font-bold tabular-nums ${
-                      d ? scoreColor(d.score) : "text-slate-300"
+                      d ? scoreColor(d.score) : "text-ink-muted"
                     }`}
                   >
                     {d ? d.score : "—"}
@@ -491,7 +491,7 @@ export function BreakdownBlock({
                   />
                 </div>
                 {d?.reason && (
-                  <p className="text-[11px] text-slate-500 mt-1 leading-snug flex items-start gap-1.5">
+                  <p className="text-[11px] text-ink-muted mt-1 leading-snug flex items-start gap-1.5">
                     <span className="flex-1">{d.reason}</span>
                     <ConfidenceChip c={d.confidence} />
                   </p>
@@ -502,7 +502,7 @@ export function BreakdownBlock({
         </div>
       </div>
       {!hasNewAxes && (
-        <div className="text-[11px] text-slate-400 text-center">
+        <div className="text-[11px] text-ink-muted text-center">
           구버전 평가 데이터 — 성과 임팩트 / 재직 안정성 축은 재평가 후
           채워집니다.
         </div>
@@ -558,7 +558,7 @@ export function BulletBlock({
       </div>
       <ul className="space-y-1.5">
         {items.map((s, i) => (
-          <li key={i} className="flex gap-2 text-slate-700">
+          <li key={i} className="flex gap-2 text-ink-soft">
             <span
               className={`w-1.5 h-1.5 rounded-full ${palette.dot} mt-2 shrink-0`}
             />
@@ -604,7 +604,7 @@ export function QualitativeReviewBlock({
             className="bg-white border border-violet-100 rounded-lg px-3 py-2"
           >
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-slate-800">
+              <span className="text-xs font-semibold text-ink">
                 {r.item}
               </span>
               {r.needs_interview ? (
@@ -617,18 +617,18 @@ export function QualitativeReviewBlock({
                 </span>
               )}
             </div>
-            <div className="text-xs text-slate-700 mt-1 leading-relaxed">
+            <div className="text-xs text-ink-soft mt-1 leading-relaxed">
               <HL text={r.finding} />
             </div>
             {r.evidence && (
-              <div className="text-[11px] text-slate-500 mt-0.5">
+              <div className="text-[11px] text-ink-muted mt-0.5">
                 근거: {r.evidence}
               </div>
             )}
           </li>
         ))}
       </ul>
-      <div className="text-[11px] text-slate-500 mt-2">
+      <div className="text-[11px] text-ink-muted mt-2">
         ※ 자기소개서 등 정성 자료가 없는 이력서는 &quot;면접 확인 필요&quot;로
         분류될 뿐 감점되지 않습니다.
       </div>

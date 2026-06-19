@@ -235,11 +235,11 @@ export default function AdminUsersPage() {
   // ── 공용 표시 헬퍼 ──
   const roleBadge = (u: Row) =>
     u.role === "system_admin" ? (
-      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 uppercase tracking-wide">
+      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary-soft text-primary-deep border border-primary/30 uppercase tracking-wide">
         system_admin
       </span>
     ) : (
-      <span className="text-slate-600">{ROLE_LABELS[u.role]}</span>
+      <span className="text-ink-soft">{ROLE_LABELS[u.role]}</span>
     );
 
   const statusBadge = (u: Row) =>
@@ -255,7 +255,7 @@ export default function AdminUsersPage() {
     ) : u.status === "disabled" ? (
       <span className="text-danger font-medium">비활성</span>
     ) : (
-      <span className="text-emerald-600 font-medium">활성</span>
+      <span className="text-success font-medium">활성</span>
     );
 
   // 이메일 미인증 표시 — 로그인이 차단된 상태임을 관리자가 즉시 인지하도록.
@@ -278,7 +278,7 @@ export default function AdminUsersPage() {
       <div className="flex flex-wrap items-center gap-2">
         {/* 권한 변경 */}
         <label className="inline-flex items-center gap-1.5">
-          <span className="text-[11px] text-slate-400">권한</span>
+          <span className="text-[11px] text-ink-muted">권한</span>
           <select
             aria-label="권한 변경"
             title="권한 변경"
@@ -320,7 +320,7 @@ export default function AdminUsersPage() {
         )}
 
         {/* 상태 변경 ↔ 계정 유틸 구분선 (데스크톱) */}
-        <span aria-hidden className="hidden sm:block w-px h-5 bg-slate-200 mx-0.5" />
+        <span aria-hidden className="hidden sm:block w-px h-5 bg-border-default mx-0.5" />
 
         {/* 계정 유틸 */}
         <button onClick={() => forceLogout(u)} disabled={busy} className={btnWarn}>
@@ -351,13 +351,13 @@ export default function AdminUsersPage() {
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {stepUpModal}
       <div className="mb-6">
-        <Link href="/" className="text-xs text-slate-500 hover:underline">
+        <Link href="/" className="text-xs text-ink-muted hover:underline">
           ← 대시보드
         </Link>
         <div className="flex items-end justify-between mt-2 gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">사용자 관리</h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <h1 className="text-2xl font-bold text-ink">사용자 관리</h1>
+            <p className="text-sm text-ink-muted mt-1">
               전체 사용자 검색 및 권한/상태 변경.
             </p>
           </div>
@@ -392,7 +392,7 @@ export default function AdminUsersPage() {
               const d = (await res.json()) as { sessionsRevoked: number };
               alert(`${d.sessionsRevoked}개 세션을 만료했습니다.`);
             }}
-            className="shrink-0 px-3 py-2 text-xs bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 rounded font-medium"
+            className="shrink-0 px-3 py-2 text-xs bg-card border border-danger/40 hover:bg-danger-soft text-danger rounded font-medium"
           >
             🚨 전체 강제 로그아웃
           </button>
@@ -401,7 +401,7 @@ export default function AdminUsersPage() {
 
       <div className="flex gap-2 mb-4">
         <input
-          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="flex-1 border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
           placeholder="이름, 이메일 또는 법인명"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -409,7 +409,7 @@ export default function AdminUsersPage() {
         />
         <button
           onClick={load}
-          className="px-3 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep"
+          className="px-3 py-2 text-sm bg-primary text-surface rounded-lg hover:bg-primary-deep"
         >
           검색
         </button>
@@ -424,25 +424,25 @@ export default function AdminUsersPage() {
       {/* 모바일: 카드 리스트 (테이블 셀 폭 부족으로 이름·법인이 세로로 깨지는 문제 해결) */}
       <div className="sm:hidden space-y-3">
         {loading && (
-          <div className="text-slate-400 text-sm py-6 text-center">불러오는 중...</div>
+          <div className="text-ink-muted text-sm py-6 text-center">불러오는 중...</div>
         )}
         {!loading && rows.length === 0 && (
-          <div className="text-slate-400 text-sm py-6 text-center">결과가 없습니다.</div>
+          <div className="text-ink-muted text-sm py-6 text-center">결과가 없습니다.</div>
         )}
         {rows.map((u) => (
           <div
             key={u.id}
-            className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+            className="bg-card border border-border-default rounded-xl p-4 shadow-sm"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="font-medium text-slate-900 break-words">
+                <div className="font-medium text-ink break-words">
                   {u.name}
                 </div>
-                <div className="text-xs text-slate-500 break-all mt-0.5">
+                <div className="text-xs text-ink-muted break-all mt-0.5">
                   {u.email}
                 </div>
-                <div className="text-xs text-slate-400 mt-0.5">
+                <div className="text-xs text-ink-muted mt-0.5">
                   {u.orgName || "법인 없음"}
                 </div>
               </div>
@@ -454,7 +454,7 @@ export default function AdminUsersPage() {
                 </span>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-slate-100">
+            <div className="mt-3 pt-3 border-t border-border-default">
               {renderActions(u)}
             </div>
           </div>
@@ -462,9 +462,9 @@ export default function AdminUsersPage() {
       </div>
 
       {/* 데스크톱: 테이블. 권한은 작업 영역의 select 가 곧 현재값 표시를 겸하므로 별도 컬럼 제거 */}
-      <div className="hidden sm:block bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
+      <div className="hidden sm:block bg-card border border-border-default rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-600 text-xs">
+          <thead className="bg-surface-alt text-ink-soft text-xs">
             <tr>
               <th className="text-left px-4 py-3 font-medium">이름</th>
               <th className="text-left px-4 py-3 font-medium">이메일</th>
@@ -473,26 +473,26 @@ export default function AdminUsersPage() {
               <th className="text-right px-4 py-3 font-medium">작업</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-border-default">
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={5}>
+                <td className="px-4 py-6 text-ink-muted" colSpan={5}>
                   불러오는 중...
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={5}>
+                <td className="px-4 py-6 text-ink-muted" colSpan={5}>
                   결과가 없습니다.
                 </td>
               </tr>
             )}
             {rows.map((u) => (
               <tr key={u.id}>
-                <td className="px-4 py-3 font-medium text-slate-900">{u.name}</td>
-                <td className="px-4 py-3 text-slate-600">{u.email}</td>
-                <td className="px-4 py-3 text-slate-600">{u.orgName || "-"}</td>
+                <td className="px-4 py-3 font-medium text-ink">{u.name}</td>
+                <td className="px-4 py-3 text-ink-soft">{u.email}</td>
+                <td className="px-4 py-3 text-ink-soft">{u.orgName || "-"}</td>
                 <td className="px-4 py-3 text-xs whitespace-nowrap">
                   {statusBadge(u)}
                   {verifyBadge(u)}
@@ -512,11 +512,11 @@ export default function AdminUsersPage() {
 // max-sm:* — 모바일(<640px) 터치 타깃 ~40px 확보. 데스크톱 밀도는 유지.
 const btnBase =
   "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3 text-xs rounded disabled:opacity-50";
-const btnSec = `${btnBase} bg-white border border-slate-300 hover:bg-slate-50 text-slate-700`;
+const btnSec = `${btnBase} bg-card border border-border-strong hover:bg-surface-alt text-ink-soft`;
 const btnDanger = `${btnBase} bg-danger-soft border border-danger/30 hover:bg-danger-soft/70 text-danger transition-colors`;
 const btnVerify = `${btnBase} bg-primary-soft border border-primary/40 hover:bg-primary/10 text-primary-deep font-medium`;
-const btnWarn = `${btnBase} bg-white border border-orange-300 hover:bg-orange-50 text-orange-700`;
-const btnAccent = `${btnBase} bg-card border border-accent/50 hover:bg-accent-soft text-accent-deep transition-colors`;
-const btnDeleteSolid = `${btnBase} bg-rose-600 hover:bg-rose-700 text-white`;
+const btnWarn = `${btnBase} bg-card border border-warning/40 hover:bg-warning-soft text-warning`;
+const btnAccent = `${btnBase} bg-card border border-border-strong hover:bg-surface-alt text-ink-soft transition-colors`;
+const btnDeleteSolid = `${btnBase} bg-danger hover:bg-danger/90 text-white`;
 const selectCls =
-  "px-2 py-1 max-sm:py-2.5 text-xs rounded-md border border-slate-300 bg-white text-slate-700 disabled:opacity-50 cursor-pointer hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "px-2 py-1 max-sm:py-2.5 text-xs rounded-md border border-border-strong bg-card text-ink-soft disabled:opacity-50 cursor-pointer hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-primary/30";

@@ -366,14 +366,14 @@ export function LiveRecorder({
     <div className="rounded-xl border border-primary/30 bg-primary-soft/20 p-4 space-y-4">
       {phase === "idle" ? (
         <div className="space-y-3">
-          <p className="text-sm text-slate-700 leading-relaxed">
+          <p className="text-sm text-ink-soft leading-relaxed">
             노트북 마이크로{" "}
             <strong>{round === "round2" ? "2차" : "1차"} 대면 면접</strong>을
             기록합니다. 말하면 <strong>바로 화면에 텍스트</strong>가 뜨고, 잠깐
             멈출 때마다 화자(면접관/지원자)별로 정리됩니다. 시작하면 마이크 권한을
             허용해 주세요. 진행 중 <strong>이 탭을 닫지 마세요.</strong>
           </p>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-ink-muted">
             음성 인식은 브라우저 기능을 사용합니다 — Chrome·Edge·Safari 권장
             (Firefox 미지원). 녹음 파일은 만들지 않으며, 음성은 기기 밖으로
             저장되지 않습니다.
@@ -382,13 +382,13 @@ export function LiveRecorder({
           <div className="flex gap-2">
             <button
               onClick={start}
-              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium shadow-sm"
+              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm"
             >
               ● 녹음 시작
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+              className="px-4 py-2 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm"
             >
               취소
             </button>
@@ -423,16 +423,16 @@ export function LiveRecorder({
           {/* 정리된 대화 (화자 구분) — 메인 */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
                 정리된 대화 (화자 구분)
               </span>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[10px] text-ink-muted">
                 말이 멈출 때마다 정리
               </span>
             </div>
-            <div className="h-72 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 space-y-2 text-sm leading-relaxed">
+            <div className="h-72 overflow-y-auto rounded-lg border border-border-default bg-card p-3 space-y-2 text-sm leading-relaxed">
               {cleaned.length === 0 ? (
-                <p className="text-slate-400 text-xs">
+                <p className="text-ink-muted text-xs">
                   화자별로 정리된 대화가 여기에 쌓입니다. (아래 실시간 인식이 먼저
                   뜹니다)
                 </p>
@@ -442,13 +442,13 @@ export function LiveRecorder({
                     <span
                       className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded h-fit ${
                         s.role === "candidate"
-                          ? "bg-white text-sky-700 border border-sky-300"
-                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                          ? "bg-card text-info border border-info/40"
+                          : "bg-surface-alt text-ink-soft border border-border-default"
                       }`}
                     >
                       {roleKo(s.role)}
                     </span>
-                    <span className="text-slate-800">{s.text}</span>
+                    <span className="text-ink">{s.text}</span>
                   </div>
                 ))
               )}
@@ -458,17 +458,17 @@ export function LiveRecorder({
 
           {/* 실시간 인식 (정리 전) — 즉시 피드백 */}
           <div>
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+            <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
               실시간 인식
             </div>
-            <div className="min-h-[3rem] rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 leading-relaxed">
+            <div className="min-h-[3rem] rounded-lg border border-border-default bg-surface-alt p-3 text-sm text-ink-soft leading-relaxed">
               {rawTail || voice.interim ? (
                 <>
                   <span>{rawTail}</span>{" "}
-                  <span className="text-slate-400 italic">{voice.interim}</span>
+                  <span className="text-ink-muted italic">{voice.interim}</span>
                 </>
               ) : (
-                <span className="text-slate-400 text-xs">
+                <span className="text-ink-muted text-xs">
                   {voice.listening
                     ? "말씀하세요 — 인식되는 즉시 표시됩니다."
                     : "마이크 준비 중..."}
@@ -480,9 +480,9 @@ export function LiveRecorder({
           {/* 추천 질문 — 누적(최대 5). 클릭하면 사용 처리(목록에서 제거). */}
           {suggestions.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
                 추천 질문{" "}
-                <span className="text-slate-400 normal-case font-normal">
+                <span className="text-ink-muted normal-case font-normal">
                   · 클릭하면 목록에서 제거
                 </span>
               </div>
@@ -506,7 +506,7 @@ export function LiveRecorder({
 
           {voice.error && <p className="text-xs text-warning">{voice.error}</p>}
 
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-ink-muted">
             실시간 인식은 즉시, 화자 구분 정리는 몇 초 간격으로 따라붙습니다. 음성은
             저장하지 않으며, 종료 시 전체를 한 번 더 정리해 평가합니다.{" "}
             <strong>최대 1시간까지 녹음되며, 지나면 자동 종료됩니다.</strong>

@@ -303,15 +303,15 @@ export default function InterviewPage() {
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">🚫</div>
-        <h1 className="text-xl font-bold text-slate-900">접속 불가</h1>
-        <p className="text-slate-600 mt-2">{error}</p>
+        <h1 className="text-xl font-bold text-ink">접속 불가</h1>
+        <p className="text-ink-soft mt-2">{error}</p>
       </CenteredCard>
     );
   }
 
   if (!info)
     return (
-      <main className="p-6 text-slate-500 text-center mt-20">불러오는 중...</main>
+      <main className="p-6 text-ink-muted text-center mt-20">불러오는 중...</main>
     );
 
   // 이 면접의 진행 단계(인성/객관식/면접) — 동의 화면·게이트·면접 헤더의 프로그레스 표시에 공유.
@@ -322,8 +322,8 @@ export default function InterviewPage() {
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">🗑️</div>
-        <h1 className="text-xl font-bold text-slate-900">지원이 취소되었습니다</h1>
-        <p className="text-slate-600 mt-2 leading-relaxed">
+        <h1 className="text-xl font-bold text-ink">지원이 취소되었습니다</h1>
+        <p className="text-ink-soft mt-2 leading-relaxed">
           이 지원은 지원자 요청으로 취소되어 면접을 진행할 수 없습니다.
           <br />
           관심 가져주셔서 감사합니다.
@@ -337,8 +337,8 @@ export default function InterviewPage() {
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">✅</div>
-        <h1 className="text-xl font-bold text-slate-900">종료된 전형입니다</h1>
-        <p className="text-slate-600 mt-2 leading-relaxed">
+        <h1 className="text-xl font-bold text-ink">종료된 전형입니다</h1>
+        <p className="text-ink-soft mt-2 leading-relaxed">
           이 전형은 이미 종결되어 면접을 진행할 수 없습니다.
         </p>
       </CenteredCard>
@@ -349,8 +349,8 @@ export default function InterviewPage() {
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">⏱️</div>
-        <h1 className="text-xl font-bold text-slate-900">만료된 링크입니다</h1>
-        <p className="text-slate-600 mt-2">담당자에게 새 링크를 요청하세요.</p>
+        <h1 className="text-xl font-bold text-ink">만료된 링크입니다</h1>
+        <p className="text-ink-soft mt-2">담당자에게 새 링크를 요청하세요.</p>
       </CenteredCard>
     );
   }
@@ -409,26 +409,26 @@ export default function InterviewPage() {
       style={{ height: "100dvh" }}
     >
       {/* Header card */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 shadow-sm shrink-0">
+      <div className="bg-card border border-border-default rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 shadow-sm shrink-0">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex items-center gap-2.5">
             <LogoMark size={36} className="shrink-0" />
             <div className="min-w-0">
             {info.organization?.name ? (
               <>
-                <h1 className="font-bold text-slate-900 truncate text-lg sm:text-xl leading-tight">
+                <h1 className="font-bold text-ink truncate text-lg sm:text-xl leading-tight">
                   {info.organization.name}
                 </h1>
-                <p className="text-xs sm:text-sm font-medium text-slate-600 truncate leading-tight mt-0.5">
+                <p className="text-xs sm:text-sm font-medium text-ink-soft truncate leading-tight mt-0.5">
                   {info.job.title}
                 </p>
               </>
             ) : (
-              <h1 className="font-bold text-slate-900 truncate text-base sm:text-lg leading-tight">
+              <h1 className="font-bold text-ink truncate text-base sm:text-lg leading-tight">
                 {info.job.title}
               </h1>
             )}
-            <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">
+            <p className="text-[11px] sm:text-xs text-ink-muted mt-0.5 truncate">
               {info.job.position} · {info.job.level} · {info.job.employmentType}
               {info.job.interviewDurationMinutes
                 ? ` · 약 ${info.job.interviewDurationMinutes}분`
@@ -441,7 +441,7 @@ export default function InterviewPage() {
               onClick={finalize}
               disabled={finalizing || messages.length < 2}
               aria-label="면접 종료"
-              className="shrink-0 px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-xs sm:text-sm text-slate-700 disabled:opacity-40 min-h-[36px]"
+              className="shrink-0 px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-xs sm:text-sm text-ink-soft disabled:opacity-40 min-h-[36px]"
             >
               면접 종료
             </button>
@@ -449,7 +449,7 @@ export default function InterviewPage() {
         </div>
 
         {!ended && steps.length > 1 && (
-          <div className="mt-3 pt-3 border-t border-slate-100">
+          <div className="mt-3 pt-3 border-t border-border-default">
             <StepProgress steps={steps} current="interview" />
           </div>
         )}
@@ -465,7 +465,7 @@ export default function InterviewPage() {
         <div className="mt-2 text-right">
           <a
             href={`/interview/${token}/inquiry`}
-            className="text-[11px] text-slate-400 hover:text-slate-600 underline"
+            className="text-[11px] text-ink-muted hover:text-ink-soft underline"
           >
             문제가 있나요? 신고 / 문의
           </a>
@@ -473,13 +473,13 @@ export default function InterviewPage() {
       </div>
 
       {/* Chat container */}
-      <div className="flex-1 flex flex-col bg-white border border-slate-200 rounded-2xl shadow-sm min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col bg-card border border-border-default rounded-2xl shadow-sm min-h-0 overflow-hidden">
         <div
           ref={scrollRef}
           role="log"
           aria-live="polite"
           aria-label="면접 대화"
-          className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4 bg-gradient-to-b from-slate-50/50 to-white"
+          className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4 bg-gradient-to-b from-surface-alt/50 to-card"
           // 복사 방지 — 질문을 외부 LLM 으로 옮기는 행위 억제 + 시도 횟수 기록.
           // 차단해도 스크린샷 등 우회는 가능 → 억제·신호 수집 목적.
           onCopy={(e) => {
@@ -512,7 +512,7 @@ export default function InterviewPage() {
 
         {!ended && (
           <div
-            className="border-t border-slate-200 p-2 sm:p-3 bg-white"
+            className="border-t border-border-default p-2 sm:p-3 bg-card"
             style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
           >
             {/* 음성 인식 중간 텍스트 — input 위에 미리보기 */}
@@ -524,7 +524,7 @@ export default function InterviewPage() {
                 </span>
                 <span className="font-medium">듣는 중</span>
                 {voice.interim && (
-                  <span className="text-slate-600 truncate italic">
+                  <span className="text-ink-soft truncate italic">
                     {voice.interim}
                   </span>
                 )}
@@ -546,7 +546,7 @@ export default function InterviewPage() {
               <textarea
                 ref={textareaRef}
                 aria-label="답변 입력"
-                className="flex-1 border border-slate-300 rounded-xl px-3 py-2.5 text-base sm:text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-h-[44px] max-h-[120px]"
+                className="flex-1 border border-border-strong rounded-xl px-3 py-2.5 text-base sm:text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-h-[44px] max-h-[120px]"
                 rows={1}
                 placeholder={voice.listening ? "말씀하세요 — 인식된 내용이 여기에 채워집니다" : "답변을 입력하거나 마이크 버튼을 누르세요"}
                 value={input}
@@ -597,7 +597,7 @@ export default function InterviewPage() {
                     "rounded-xl text-sm font-medium shadow-sm min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors " +
                     (voice.listening
                       ? "bg-rose-600 hover:bg-rose-700 text-white animate-pulse"
-                      : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300")
+                      : "bg-surface-alt hover:bg-slate-200 text-ink-soft border border-border-strong")
                   }
                 >
                   {voice.listening ? (
@@ -620,13 +620,13 @@ export default function InterviewPage() {
                 onClick={handleSend}
                 disabled={streaming || !input.trim()}
                 aria-label="전송"
-                className="bg-primary hover:bg-primary-deep active:bg-primary-deep text-white px-4 sm:px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-40 shadow-sm min-h-[44px] min-w-[60px]"
+                className="bg-primary hover:bg-primary-deep active:bg-primary-deep text-surface px-4 sm:px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-40 shadow-sm min-h-[44px] min-w-[60px]"
               >
                 전송
               </button>
             </div>
             <div className="mt-1 flex items-center justify-between gap-2">
-              <p className="text-[10px] text-slate-400 hidden sm:block">
+              <p className="text-[10px] text-ink-muted hidden sm:block">
                 Enter = 전송, Shift+Enter = 줄바꿈
                 {voice.supported && " · 🎙 마이크로 음성 입력 가능 (Chrome·Edge·Safari)"}
               </p>
@@ -634,7 +634,7 @@ export default function InterviewPage() {
                 <button
                   type="button"
                   onClick={() => setMicHelp(true)}
-                  className="text-[11px] text-slate-400 hover:text-primary-deep underline shrink-0"
+                  className="text-[11px] text-ink-muted hover:text-primary-deep underline shrink-0"
                 >
                   마이크가 안 되나요?
                 </button>
@@ -647,18 +647,18 @@ export default function InterviewPage() {
       {ended && (
         <div className="mt-4 bg-gradient-to-br from-primary-soft to-accent-soft/40 border border-primary/30 rounded-2xl p-8 text-center">
           <div className="text-4xl mb-3">✅</div>
-          <h2 className="text-lg font-bold text-slate-900">
+          <h2 className="text-lg font-bold text-ink">
             면접이 종료되었습니다
           </h2>
-          <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+          <p className="text-sm text-ink-soft mt-2 leading-relaxed">
             소중한 시간 내어 면접에 응해 주셔서 감사합니다.
             <br />
             평가 결과는 채용 담당자에게만 전달되며, 별도로 안내드릴 예정입니다.
           </p>
-          <p className="text-xs text-slate-400 mt-4">
+          <p className="text-xs text-ink-muted mt-4">
             이 창은 안전하게 닫으셔도 됩니다.
           </p>
-          <div className="mt-5 pt-5 border-t border-primary/30 text-xs text-slate-600 space-y-1">
+          <div className="mt-5 pt-5 border-t border-primary/30 text-xs text-ink-soft space-y-1">
             <div>
               <a
                 href={`/interview/${token}/me`}
@@ -694,7 +694,7 @@ function ChatBubble({
   if (role === "user") {
     return (
       <div className="flex justify-end" role="article" aria-label="내 답변">
-        <div className="max-w-[85%] sm:max-w-[80%] bg-primary text-white rounded-2xl rounded-br-md px-3.5 py-2.5 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap shadow-sm break-words">
+        <div className="max-w-[85%] sm:max-w-[80%] bg-primary text-surface rounded-2xl rounded-br-md px-3.5 py-2.5 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap shadow-sm break-words">
           {content}
         </div>
       </div>
@@ -741,9 +741,9 @@ function InlineMd({ text }: { text: string }) {
 function TypingDots() {
   return (
     <span className="inline-flex gap-1 items-center">
-      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
-      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
-      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
+      <span className="w-1.5 h-1.5 rounded-full bg-ink-muted animate-bounce [animation-delay:-0.3s]" />
+      <span className="w-1.5 h-1.5 rounded-full bg-ink-muted animate-bounce [animation-delay:-0.15s]" />
+      <span className="w-1.5 h-1.5 rounded-full bg-ink-muted animate-bounce" />
     </span>
   );
 }
@@ -787,10 +787,10 @@ function StepProgress({
             <span
               className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
                 active
-                  ? "bg-primary text-white ring-2 ring-primary/25"
+                  ? "bg-primary text-surface ring-2 ring-primary/25"
                   : done
-                    ? "bg-primary text-white"
-                    : "bg-slate-100 text-slate-400"
+                    ? "bg-primary text-surface"
+                    : "bg-surface-alt text-ink-muted"
               }`}
               aria-hidden
             >
@@ -801,8 +801,8 @@ function StepProgress({
                 active
                   ? "font-bold text-primary-deep"
                   : done
-                    ? "font-medium text-slate-600"
-                    : "text-slate-400"
+                    ? "font-medium text-ink-soft"
+                    : "text-ink-muted"
               }`}
             >
               {s.label}
@@ -863,21 +863,21 @@ function Timer({
 
   return (
     <div
-      className="mt-3 flex items-center gap-4 text-xs text-slate-500"
+      className="mt-3 flex items-center gap-4 text-xs text-ink-muted"
       aria-label={`면접 경과 ${fmtTime(elapsedMs)}`}
     >
       <span className="flex items-center gap-1.5">
-        <span className="text-[10px] text-slate-400 uppercase tracking-wider">전체</span>
-        <span className="tabular-nums font-semibold text-slate-700 text-sm">
+        <span className="text-[10px] text-ink-muted uppercase tracking-wider">전체</span>
+        <span className="tabular-nums font-semibold text-ink-soft text-sm">
           {fmtTime(elapsedMs)}
         </span>
       </span>
-      <span className="text-slate-200">|</span>
+      <span className="text-border-default">|</span>
       <span className="flex items-center gap-1.5">
-        <span className="text-[10px] text-slate-400 uppercase tracking-wider">이번 질문</span>
+        <span className="text-[10px] text-ink-muted uppercase tracking-wider">이번 질문</span>
         <span
           className={`tabular-nums font-semibold text-sm ${
-            answerMs != null ? "text-primary-deep" : "text-slate-300"
+            answerMs != null ? "text-primary-deep" : "text-ink-muted"
           }`}
         >
           {fmtTime(answerMs ?? 0)}
@@ -968,28 +968,28 @@ function PersonalityGate({
     return (
       <CenteredCard>
         {orgName && (
-          <p className="text-lg font-bold text-slate-900 leading-tight">
+          <p className="text-lg font-bold text-ink leading-tight">
             {orgName}
           </p>
         )}
-        <p className="text-xs text-slate-400 mt-0.5 mb-4">{jobTitle} AI 면접</p>
+        <p className="text-xs text-ink-muted mt-0.5 mb-4">{jobTitle} AI 면접</p>
         <div className="text-3xl mb-3">📝</div>
-        <h1 className="text-xl font-bold text-slate-900">면접 전 사전 문항</h1>
+        <h1 className="text-xl font-bold text-ink">면접 전 사전 문항</h1>
         {steps.length > 1 && (
           <div className="mt-4 flex justify-center">
             <StepProgress steps={steps} current="personality" />
           </div>
         )}
-        <p className="text-sm text-slate-600 mt-4 leading-relaxed text-left">
+        <p className="text-sm text-ink-soft mt-4 leading-relaxed text-left">
           <strong>{jobTitle}</strong> AI 면접을 시작하기 전,{" "}
           <strong>{total}개의 간단한 문항</strong>에 답해 주세요. 각 문항에서{" "}
           <strong>두 문장 중 나에게 더 가까운 쪽</strong>을 고르면 됩니다. 약
           2~3분 소요됩니다.
         </p>
-        <ul className="text-xs text-slate-500 mt-4 space-y-1.5 text-left bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <ul className="text-xs text-ink-muted mt-4 space-y-1.5 text-left bg-surface-alt border border-border-default rounded-xl p-4">
           <li>· 정답은 없습니다 — 두 문장 모두 좋은 모습이며, 평소의 나에 더 가까운 쪽을 고르면 됩니다.</li>
           <li>
-            · <strong className="text-slate-700">응답하신 내용은 이어지는 면접에서 실제 경험 사례로 확인됩니다.</strong>{" "}
+            · <strong className="text-ink-soft">응답하신 내용은 이어지는 면접에서 실제 경험 사례로 확인됩니다.</strong>{" "}
             솔직한 응답이 가장 유리합니다.
           </li>
           <li>· 응답은 면접 참고 자료로만 활용되며 합격·불합격을 결정하지 않습니다.</li>
@@ -1000,7 +1000,7 @@ function PersonalityGate({
             startedAtRef.current = Date.now();
             setStarted(true);
           }}
-          className="mt-6 w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-white text-sm font-semibold shadow-sm"
+          className="mt-6 w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-surface text-sm font-semibold shadow-sm"
         >
           시작하기
         </button>
@@ -1014,8 +1014,8 @@ function PersonalityGate({
         <div className="flex justify-center mb-4">
           <TypingDots />
         </div>
-        <h1 className="text-lg font-bold text-slate-900">응답 제출 중...</h1>
-        <p className="text-sm text-slate-500 mt-2">
+        <h1 className="text-lg font-bold text-ink">응답 제출 중...</h1>
+        <p className="text-sm text-ink-muted mt-2">
           잠시 후 면접이 시작됩니다.
         </p>
       </CenteredCard>
@@ -1026,24 +1026,24 @@ function PersonalityGate({
 
   return (
     <main className="max-w-xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0 justify-center">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
         {/* 브랜드·맥락 헤더 — 어느 회사·공고의 AI 면접인지 + Intervia 로고 (캡처 문의 반영) */}
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2.5">
+        <div className="px-5 py-3.5 border-b border-border-default flex items-center gap-2.5">
           <LogoMark size={32} className="shrink-0" />
           <div className="min-w-0 flex-1">
             {orgName ? (
               <>
-                <p className="text-base font-bold text-slate-900 truncate leading-tight">
+                <p className="text-base font-bold text-ink truncate leading-tight">
                   {orgName}
                 </p>
-                <p className="text-[11px] text-slate-500 truncate leading-tight">
-                  {jobTitle} <span className="text-slate-400">AI 면접</span>
+                <p className="text-[11px] text-ink-muted truncate leading-tight">
+                  {jobTitle} <span className="text-ink-muted">AI 면접</span>
                 </p>
               </>
             ) : (
-              <p className="text-base font-bold text-slate-900 truncate leading-tight">
+              <p className="text-base font-bold text-ink truncate leading-tight">
                 {jobTitle}{" "}
-                <span className="font-normal text-slate-400">AI 면접</span>
+                <span className="font-normal text-ink-muted">AI 면접</span>
               </p>
             )}
           </div>
@@ -1056,18 +1056,18 @@ function PersonalityGate({
         {/* 진행 헤더 */}
         <div className="px-5 pt-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
               사전 문항
             </span>
             <span
-              className="text-xs font-semibold text-slate-600 tabular-nums"
+              className="text-xs font-semibold text-ink-soft tabular-nums"
               aria-label={`${total}문항 중 ${idx + 1}번째`}
             >
               {idx + 1} / {total}
             </span>
           </div>
           <div
-            className="h-1.5 bg-slate-100 rounded-full overflow-hidden"
+            className="h-1.5 bg-surface-alt rounded-full overflow-hidden"
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={total}
@@ -1082,8 +1082,8 @@ function PersonalityGate({
 
         {/* 문항 — 강제선택: 두 진술 중 더 나에 가까운 쪽 */}
         <div className="px-5 py-6">
-          <p className="text-sm font-medium text-slate-500">
-            둘 중 <strong className="text-slate-800">나에게 더 가까운 쪽</strong>을
+          <p className="text-sm font-medium text-ink-muted">
+            둘 중 <strong className="text-ink">나에게 더 가까운 쪽</strong>을
             골라 주세요
           </p>
 
@@ -1105,13 +1105,13 @@ function PersonalityGate({
                   className={`w-full text-left px-4 py-4 rounded-xl border text-[15px] sm:text-sm font-medium leading-relaxed transition-all min-h-[64px] ${
                     isSelected
                       ? "border-primary bg-primary-soft text-primary-deep ring-2 ring-primary/30"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-primary/40 hover:bg-slate-50 active:bg-primary-soft"
+                      : "border-border-default bg-card text-ink-soft hover:border-primary/40 hover:bg-surface-alt active:bg-primary-soft"
                   }`}
                 >
                   <span className="flex items-center gap-3">
                     <span
                       className={`shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                        isSelected ? "border-primary" : "border-slate-300"
+                        isSelected ? "border-primary" : "border-border-strong"
                       }`}
                       aria-hidden
                     >
@@ -1146,11 +1146,11 @@ function PersonalityGate({
             type="button"
             onClick={() => idx > 0 && setIdx(idx - 1)}
             disabled={idx === 0}
-            className="text-xs text-slate-400 hover:text-slate-600 disabled:opacity-0 px-2 py-1.5"
+            className="text-xs text-ink-muted hover:text-ink-soft disabled:opacity-0 px-2 py-1.5"
           >
             ← 이전 문항
           </button>
-          <span className="text-[10px] text-slate-300">
+          <span className="text-[10px] text-ink-muted">
             둘 다 좋은 모습입니다 — 더 가까운 쪽이면 됩니다
           </span>
         </div>
@@ -1234,32 +1234,32 @@ function McqGate({
     return (
       <CenteredCard>
         {orgName && (
-          <p className="text-lg font-bold text-slate-900 leading-tight">
+          <p className="text-lg font-bold text-ink leading-tight">
             {orgName}
           </p>
         )}
-        <p className="text-xs text-slate-400 mt-0.5 mb-4">{jobTitle} AI 면접</p>
+        <p className="text-xs text-ink-muted mt-0.5 mb-4">{jobTitle} AI 면접</p>
         <div className="text-3xl mb-3">📋</div>
-        <h1 className="text-xl font-bold text-slate-900">면접 전 직무 역량 평가</h1>
+        <h1 className="text-xl font-bold text-ink">면접 전 직무 역량 평가</h1>
         {steps.length > 1 && (
           <div className="mt-4 flex justify-center">
             <StepProgress steps={steps} current="mcq" />
           </div>
         )}
-        <p className="text-sm text-slate-600 mt-4 leading-relaxed text-left">
+        <p className="text-sm text-ink-soft mt-4 leading-relaxed text-left">
           <strong>{jobTitle}</strong> AI 면접을 시작하기 전,{" "}
           <strong>{total}개의 4지선다 문제</strong>를 풀어 주세요. 직무 기본기를
           확인하는 문제이며, 각 문항에서 <strong>보기 4개 중 하나</strong>를
           고르면 자동으로 다음 문제로 넘어갑니다.
         </p>
-        <ul className="text-xs text-slate-500 mt-4 space-y-1.5 text-left bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <ul className="text-xs text-ink-muted mt-4 space-y-1.5 text-left bg-surface-alt border border-border-default rounded-xl p-4">
           <li>· 부담 없이 풀어 주세요 — 직무의 기본기를 확인하는 수준입니다.</li>
           <li>· 점수는 면접 참고 자료로만 활용되며 합격·불합격을 결정하지 않습니다.</li>
           <li>· 모든 문항에 응답하면 면접이 자동으로 시작됩니다.</li>
         </ul>
         <button
           onClick={() => setStarted(true)}
-          className="mt-6 w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-white text-sm font-semibold shadow-sm"
+          className="mt-6 w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-surface text-sm font-semibold shadow-sm"
         >
           시작하기
         </button>
@@ -1273,32 +1273,32 @@ function McqGate({
         <div className="flex justify-center mb-4">
           <TypingDots />
         </div>
-        <h1 className="text-lg font-bold text-slate-900">응답 제출 중...</h1>
-        <p className="text-sm text-slate-500 mt-2">잠시 후 면접이 시작됩니다.</p>
+        <h1 className="text-lg font-bold text-ink">응답 제출 중...</h1>
+        <p className="text-sm text-ink-muted mt-2">잠시 후 면접이 시작됩니다.</p>
       </CenteredCard>
     );
   }
 
   return (
     <main className="max-w-xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0 justify-center">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
         {/* 브랜드·맥락 헤더 */}
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2.5">
+        <div className="px-5 py-3.5 border-b border-border-default flex items-center gap-2.5">
           <LogoMark size={32} className="shrink-0" />
           <div className="min-w-0 flex-1">
             {orgName ? (
               <>
-                <p className="text-base font-bold text-slate-900 truncate leading-tight">
+                <p className="text-base font-bold text-ink truncate leading-tight">
                   {orgName}
                 </p>
-                <p className="text-[11px] text-slate-500 truncate leading-tight">
-                  {jobTitle} <span className="text-slate-400">AI 면접</span>
+                <p className="text-[11px] text-ink-muted truncate leading-tight">
+                  {jobTitle} <span className="text-ink-muted">AI 면접</span>
                 </p>
               </>
             ) : (
-              <p className="text-base font-bold text-slate-900 truncate leading-tight">
+              <p className="text-base font-bold text-ink truncate leading-tight">
                 {jobTitle}{" "}
-                <span className="font-normal text-slate-400">AI 면접</span>
+                <span className="font-normal text-ink-muted">AI 면접</span>
               </p>
             )}
           </div>
@@ -1311,18 +1311,18 @@ function McqGate({
         {/* 진행 헤더 */}
         <div className="px-5 pt-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
               직무 역량
             </span>
             <span
-              className="text-xs font-semibold text-slate-600 tabular-nums"
+              className="text-xs font-semibold text-ink-soft tabular-nums"
               aria-label={`${total}문항 중 ${idx + 1}번째`}
             >
               {idx + 1} / {total}
             </span>
           </div>
           <div
-            className="h-1.5 bg-slate-100 rounded-full overflow-hidden"
+            className="h-1.5 bg-surface-alt rounded-full overflow-hidden"
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={total}
@@ -1337,7 +1337,7 @@ function McqGate({
 
         {/* 문제 본문 + 보기 4개 */}
         <div className="px-5 py-6">
-          <p className="text-[15px] sm:text-sm font-semibold text-slate-900 leading-relaxed whitespace-pre-wrap">
+          <p className="text-[15px] sm:text-sm font-semibold text-ink leading-relaxed whitespace-pre-wrap">
             {current.question}
           </p>
 
@@ -1354,7 +1354,7 @@ function McqGate({
                   className={`w-full text-left px-4 py-3.5 rounded-xl border text-[15px] sm:text-sm font-medium leading-relaxed transition-all ${
                     isSelected
                       ? "border-primary bg-primary-soft text-primary-deep ring-2 ring-primary/30"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-primary/40 hover:bg-slate-50 active:bg-primary-soft"
+                      : "border-border-default bg-card text-ink-soft hover:border-primary/40 hover:bg-surface-alt active:bg-primary-soft"
                   }`}
                 >
                   <span className="flex items-center gap-3">
@@ -1362,7 +1362,7 @@ function McqGate({
                       className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold ${
                         isSelected
                           ? "border-primary text-primary"
-                          : "border-slate-300 text-slate-400"
+                          : "border-border-strong text-ink-muted"
                       }`}
                       aria-hidden
                     >
@@ -1388,11 +1388,11 @@ function McqGate({
             type="button"
             onClick={() => idx > 0 && setIdx(idx - 1)}
             disabled={idx === 0}
-            className="text-xs text-slate-400 hover:text-slate-600 disabled:opacity-0 px-2 py-2"
+            className="text-xs text-ink-muted hover:text-ink-soft disabled:opacity-0 px-2 py-2"
           >
             ← 이전
           </button>
-          <span className="text-[10px] text-slate-300">
+          <span className="text-[10px] text-ink-muted">
             {isLast ? "선택하면 면접이 시작됩니다" : "선택하면 다음 문제로 넘어갑니다"}
           </span>
         </div>
@@ -1404,7 +1404,7 @@ function McqGate({
 function CenteredCard({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex-1 flex items-center justify-center p-6">
-      <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center max-w-md shadow-sm">
+      <div className="bg-card border border-border-default rounded-2xl p-10 text-center max-w-md shadow-sm">
         <div className="flex justify-center mb-5">
           <Logo size={36} />
         </div>
@@ -1499,8 +1499,8 @@ function ConsentGate({
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">🗑️</div>
-        <h1 className="text-xl font-bold text-slate-900">지원 취소 완료</h1>
-        <p className="text-slate-600 mt-2 leading-relaxed">
+        <h1 className="text-xl font-bold text-ink">지원 취소 완료</h1>
+        <p className="text-ink-soft mt-2 leading-relaxed">
           지원이 취소되었으며, 제출하신 이력서 정보는 폐기되었습니다.
           <br />
           관심 가져주셔서 감사합니다.
@@ -1511,27 +1511,27 @@ function ConsentGate({
 
   return (
     <main className="max-w-3xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <header className="px-6 py-5 border-b border-slate-100 bg-gradient-to-br from-primary-soft to-primary-soft/60">
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
+        <header className="px-6 py-5 border-b border-border-default bg-gradient-to-br from-primary-soft to-primary-soft/60">
           <div className="mb-3">
             <Logo size={32} />
           </div>
-          <div className="text-xs text-slate-500 mb-1.5">{candidateName} 님</div>
+          <div className="text-xs text-ink-muted mb-1.5">{candidateName} 님</div>
           {orgName ? (
             <>
-              <div className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">
+              <div className="text-xl sm:text-2xl font-bold text-ink leading-tight">
                 {orgName}
               </div>
-              <h1 className="text-sm sm:text-base font-semibold text-slate-700 mt-1">
+              <h1 className="text-sm sm:text-base font-semibold text-ink-soft mt-1">
                 {jobTitle} AI 면접 — 개인정보 처리 동의
               </h1>
             </>
           ) : (
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900">
+            <h1 className="text-lg sm:text-xl font-bold text-ink">
               {jobTitle} AI 면접 — 개인정보 처리 동의
             </h1>
           )}
-          <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+          <p className="text-sm text-ink-soft mt-2 leading-relaxed">
             면접을 진행하기 전, 개인정보 보호법(PIPA) 에 따라 아래 항목에
             동의해 주세요. 모든 <strong className="text-danger">필수</strong>{" "}
             항목에 동의해야 면접을 시작할 수 있습니다.
@@ -1539,10 +1539,10 @@ function ConsentGate({
         </header>
 
         {steps.length > 1 && (
-          <div className="px-6 py-4 border-b border-slate-100 bg-white">
-            <p className="text-xs font-semibold text-slate-700 mb-3">
+          <div className="px-6 py-4 border-b border-border-default bg-card">
+            <p className="text-xs font-semibold text-ink-soft mb-3">
               동의를 완료하면 아래 순서로 진행됩니다{" "}
-              <span className="font-normal text-slate-400">
+              <span className="font-normal text-ink-muted">
                 · 총 {steps.length}단계
               </span>
             </p>
@@ -1550,7 +1550,7 @@ function ConsentGate({
           </div>
         )}
 
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-border-default">
           {consentItems.map((it) => (
             <li key={it.key} className="px-6 py-4">
               <label className="flex items-start gap-3 cursor-pointer">
@@ -1560,11 +1560,11 @@ function ConsentGate({
                   onChange={(e) =>
                     setChecks({ ...checks, [it.key]: e.target.checked })
                   }
-                  className="mt-1 w-4 h-4 rounded border-slate-300"
+                  className="mt-1 w-4 h-4 rounded border-border-strong"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-slate-900">
+                    <span className="text-sm font-semibold text-ink">
                       {it.title}
                     </span>
                     <span
@@ -1576,11 +1576,11 @@ function ConsentGate({
                     >
                       {it.required ? "필수" : "선택"}
                     </span>
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-ink-muted">
                       {it.legalBasis}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-1 leading-relaxed whitespace-pre-line">
+                  <p className="text-xs text-ink-soft mt-1 leading-relaxed whitespace-pre-line">
                     {it.description}
                   </p>
                 </div>
@@ -1590,31 +1590,31 @@ function ConsentGate({
         </ul>
 
         {noticeItems.length > 0 && (
-          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60">
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+          <div className="px-6 py-4 border-t border-border-default bg-surface-alt/60">
+            <div className="text-[11px] font-semibold text-ink-muted uppercase tracking-wide mb-2">
               안내 사항 (확인)
             </div>
             <ul className="space-y-3">
               {noticeItems.map((it) => (
                 <li key={it.key}>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-slate-900">
+                    <span className="text-sm font-semibold text-ink">
                       {it.title}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-surface-alt text-ink-soft">
                       고지
                     </span>
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-ink-muted">
                       {it.legalBasis}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  <p className="text-xs text-ink-soft mt-1 leading-relaxed">
                     {it.description}
                   </p>
                 </li>
               ))}
             </ul>
-            <p className="text-[11px] text-slate-500 mt-3">
+            <p className="text-[11px] text-ink-muted mt-3">
               자세한 내용은{" "}
               <Link
                 href="/privacy"
@@ -1628,9 +1628,9 @@ function ConsentGate({
           </div>
         )}
 
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50">
+        <div className="px-6 py-4 border-t border-border-default bg-surface-alt">
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <label className="block text-xs font-semibold text-ink-soft mb-1.5">
               본인 확인 — 지원 시 등록한 이메일
             </label>
             <input
@@ -1640,14 +1640,14 @@ function ConsentGate({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              className="w-full px-3 py-2 text-sm border border-border-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
             />
-            <p className="text-[11px] text-slate-500 mt-1">
+            <p className="text-[11px] text-ink-muted mt-1">
               면접 링크 유출 방지를 위해 지원 시 등록한 이메일과 일치해야 면접이
               시작됩니다.
             </p>
           </div>
-          <p className="text-[11px] text-slate-500 leading-relaxed mb-3">
+          <p className="text-[11px] text-ink-muted leading-relaxed mb-3">
             동의하지 않거나 지원을 취소하면 면접 절차에 참여할 수 없습니다. 자동화 의사결정 결과에
             대해서는 본인 식별 후 설명 요청 및 이의제기 권리가 있습니다 (PIPA
             §37의2). 자세한 사항은 채용 담당자 또는{" "}
@@ -1670,14 +1670,14 @@ function ConsentGate({
             <button
               onClick={submit}
               disabled={!allRequiredChecked || !emailFilled || busy}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {busy ? "처리 중..." : "동의하고 면접 시작"}
             </button>
             <button
               onClick={withdraw}
               disabled={busy}
-              className="px-4 py-2.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-sm disabled:opacity-50"
+              className="px-4 py-2.5 rounded-lg border border-danger/40 text-danger hover:bg-danger-soft text-sm disabled:opacity-50"
             >
               지원취소
             </button>

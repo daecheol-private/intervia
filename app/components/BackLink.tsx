@@ -27,7 +27,7 @@ export function BackLink({
           router.push(fallbackHref);
         }
       }}
-      className={className ?? "text-xs text-slate-500 hover:underline"}
+      className={className ?? "text-xs text-ink-muted hover:underline"}
     >
       {label}
     </button>

@@ -85,18 +85,18 @@ export default function ApplyIntakeBanner({
   return (
     <>
       {isDraft && (
-        <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-amber-900">
+        <div className="mt-3 rounded-xl border border-warning/40 bg-warning-soft p-4">
+          <p className="text-sm font-semibold text-warning">
             임시 공고입니다 — 아직 정식 등록 전이에요
           </p>
-          <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+          <p className="mt-1 text-xs text-warning leading-relaxed">
             아래 “지원 링크로 직접 받기”에서 링크를 복사해 사람인 등에 등록할 수 있습니다. 공고
             내용을 채워 저장하면 정식 공고로 전환되고, 그동안 들어온 이력서를 평가할 수 있습니다.
             {heldCount > 0 && ` 현재 지원 이력서 ${heldCount}건이 평가 대기 중입니다.`}
           </p>
           <Link
             href={`/jobs/${jobId}/edit`}
-            className="mt-3 inline-flex rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+            className="mt-3 inline-flex rounded-lg bg-warning px-3 py-1.5 text-xs font-semibold text-white hover:bg-warning/90"
           >
             공고 내용 작성하고 정식 등록 →
           </Link>
@@ -112,7 +112,7 @@ export default function ApplyIntakeBanner({
           <button
             onClick={evaluate}
             disabled={busy}
-            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-deep disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-surface hover:bg-primary-deep disabled:opacity-50"
           >
             {busy ? "시작 중…" : "지금 평가 시작"}
           </button>
@@ -120,8 +120,8 @@ export default function ApplyIntakeBanner({
       )}
 
       {pausedCount > 0 && (
-        <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
-          <p className="text-sm text-amber-900">
+        <div className="mt-3 rounded-xl border border-warning/40 bg-warning-soft p-4">
+          <p className="text-sm text-warning">
             ⏸ 토큰 부족으로 평가가 보류된 이력서 <b>{pausedCount}건</b>이 있습니다. 토큰을 충전하면
             자동으로 평가가 재개됩니다.
           </p>

@@ -230,11 +230,11 @@ export function McqPanel({
     "px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
-    <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-4 py-2.5 shadow-sm mt-3 mb-1">
-      <span className="text-sm font-bold text-slate-900 whitespace-nowrap">
+    <div className="flex items-center gap-3 bg-card border border-border-default rounded-2xl px-4 py-2.5 shadow-sm mt-3 mb-1">
+      <span className="text-sm font-bold text-ink whitespace-nowrap">
         AI 면접 객관식 문제
       </span>
-      <span className="text-xs text-slate-500 truncate flex-1 min-w-0">
+      <span className="text-xs text-ink-muted truncate flex-1 min-w-0">
         {statusText}
       </span>
       <div className="flex items-center gap-3 shrink-0">
@@ -247,7 +247,7 @@ export function McqPanel({
           <>
             {/* AI 면접 적용 on/off 토글 */}
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 whitespace-nowrap">
+              <span className="text-xs text-ink-muted whitespace-nowrap">
                 AI 면접 적용
               </span>
               <button
@@ -258,11 +258,11 @@ export function McqPanel({
                 onClick={() => void toggleEnabled()}
                 disabled={busy || disabled}
                 className={`relative w-9 h-5 rounded-full transition-colors disabled:opacity-50 ${
-                  enabled ? "bg-primary" : "bg-slate-300"
+                  enabled ? "bg-primary" : "bg-border-strong"
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-card rounded-full shadow transition-transform ${
                     enabled ? "translate-x-4" : ""
                   }`}
                 />
@@ -272,7 +272,7 @@ export function McqPanel({
               type="button"
               onClick={() => void openView()}
               disabled={busy}
-              className={`${btn} border border-slate-200 text-slate-700 hover:bg-slate-50`}
+              className={`${btn} border border-border-default text-ink-soft hover:bg-surface-alt`}
             >
               문제 보기
             </button>
@@ -284,7 +284,7 @@ export function McqPanel({
             onClick={() => void generate()}
             disabled={busy || disabled || blockedDraft}
             title={blockedDraft ? "임시 공고에서는 생성할 수 없습니다." : undefined}
-            className={`${btn} bg-primary hover:bg-primary-deep text-white shadow-sm`}
+            className={`${btn} bg-primary hover:bg-primary-deep text-surface shadow-sm`}
           >
             문제 생성
           </button>
@@ -299,13 +299,13 @@ export function McqPanel({
       >
         {draft && (
           <div>
-            <p className="text-xs text-slate-500 leading-relaxed mb-1">
-              <strong className="text-slate-700">{draft.length}문항</strong> · 정답을
+            <p className="text-xs text-ink-muted leading-relaxed mb-1">
+              <strong className="text-ink-soft">{draft.length}문항</strong> · 정답을
               확인하고 불필요한 문항은 삭제한 뒤 <strong>확정</strong>하세요. 닫기(X)는
               저장하지 않으며 기존 문제가 그대로 유지됩니다.
             </p>
             {flaggedCount > 0 && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+              <p className="text-xs text-warning bg-warning-soft border border-warning/30 rounded-lg px-3 py-2 mb-2">
                 ⚠ {flaggedCount}문항은 자동 정답 검증에서 불일치가 감지됐습니다 —
                 정답·보기를 한 번 더 확인하거나 삭제하세요.
               </p>
@@ -313,7 +313,7 @@ export function McqPanel({
 
             <div className="space-y-3 mt-3">
               {draft.length === 0 && (
-                <p className="text-sm text-slate-400 text-center py-6">
+                <p className="text-sm text-ink-muted text-center py-6">
                   남은 문항이 없습니다. 확정하면 객관식이 비워집니다.
                 </p>
               )}
@@ -322,16 +322,16 @@ export function McqPanel({
                   key={q.id}
                   className={`border rounded-xl p-3 ${
                     q.verified === false
-                      ? "border-amber-300 bg-amber-50/40"
-                      : "border-slate-200"
+                      ? "border-warning/40 bg-warning-soft/40"
+                      : "border-border-default"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-900 leading-relaxed">
-                      <span className="text-slate-400 mr-1.5">{qi + 1}.</span>
+                    <p className="text-sm font-semibold text-ink leading-relaxed">
+                      <span className="text-ink-muted mr-1.5">{qi + 1}.</span>
                       {q.question}
                       {q.verified === false && (
-                        <span className="ml-2 text-[10px] font-bold text-amber-700 align-middle">
+                        <span className="ml-2 text-[10px] font-bold text-warning align-middle">
                           ⚠ 정답 재확인
                         </span>
                       )}
@@ -339,7 +339,7 @@ export function McqPanel({
                     <button
                       type="button"
                       onClick={() => deleteQ(q.id)}
-                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:text-danger hover:border-danger/50 hover:bg-danger-soft transition-colors"
+                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border-default text-xs font-semibold text-ink-muted hover:text-danger hover:border-danger/50 hover:bg-danger-soft transition-colors"
                     >
                       🗑 삭제
                     </button>
@@ -352,22 +352,22 @@ export function McqPanel({
                           key={oi}
                           className={`text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-2 ${
                             isAnswer
-                              ? "bg-emerald-50 text-emerald-800 font-medium"
-                              : "text-slate-600"
+                              ? "bg-success-soft text-success font-medium"
+                              : "text-ink-soft"
                           }`}
                         >
                           <span
                             className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] font-bold ${
                               isAnswer
-                                ? "border-emerald-500 text-emerald-600"
-                                : "border-slate-300 text-slate-400"
+                                ? "border-success text-success"
+                                : "border-border-strong text-ink-muted"
                             }`}
                           >
                             {oi + 1}
                           </span>
                           {opt}
                           {isAnswer && (
-                            <span className="ml-auto text-[10px] font-bold text-emerald-600">
+                            <span className="ml-auto text-[10px] font-bold text-success">
                               정답
                             </span>
                           )}
@@ -379,12 +379,12 @@ export function McqPanel({
               ))}
             </div>
 
-            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-border-default">
               <button
                 type="button"
                 onClick={() => setDraft(null)}
                 disabled={saving}
-                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                className="px-4 py-2 rounded-lg border border-border-default text-sm font-semibold text-ink-soft hover:bg-surface-alt disabled:opacity-50"
               >
                 닫기
               </button>
@@ -392,7 +392,7 @@ export function McqPanel({
                 type="button"
                 onClick={() => void confirmSave()}
                 disabled={saving}
-                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-semibold shadow-sm disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-semibold shadow-sm disabled:opacity-50"
               >
                 {saving ? "저장 중…" : `확정 (${draft.length}문항)`}
               </button>

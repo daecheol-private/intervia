@@ -718,7 +718,7 @@ export default function JobDetailPage() {
       <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         <Link
           href="/"
-          className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
+          className="text-sm text-ink-muted hover:text-ink transition-colors"
         >
           ← 대시보드
         </Link>
@@ -738,14 +738,14 @@ export default function JobDetailPage() {
     if (loadError === "not_found")
       return (
         <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
-            <div className="text-slate-700 font-medium">삭제된 공고입니다.</div>
-            <div className="mt-1 text-sm text-slate-500">
+          <div className="rounded-lg border border-border-default bg-card p-6 text-center">
+            <div className="text-ink-soft font-medium">삭제된 공고입니다.</div>
+            <div className="mt-1 text-sm text-ink-muted">
               이 공고는 더 이상 존재하지 않습니다.
             </div>
             <button
               onClick={() => router.push("/")}
-              className="mt-4 px-4 py-2 rounded-lg border border-slate-300 text-sm hover:bg-slate-50"
+              className="mt-4 px-4 py-2 rounded-lg border border-border-strong text-sm hover:bg-surface-alt"
             >
               공고 목록으로
             </button>
@@ -755,9 +755,9 @@ export default function JobDetailPage() {
     if (loadError === "failed")
       return (
         <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-center">
-            <div className="text-rose-700 font-medium">불러오기에 실패했습니다.</div>
-            <div className="mt-1 text-sm text-rose-600">
+          <div className="rounded-lg border border-danger/40 bg-danger-soft p-6 text-center">
+            <div className="text-danger font-medium">불러오기에 실패했습니다.</div>
+            <div className="mt-1 text-sm text-danger">
               네트워크 상태를 확인하고 다시 시도해 주세요.
             </div>
             <button
@@ -765,7 +765,7 @@ export default function JobDetailPage() {
                 setLoadError(null);
                 void loadJob();
               }}
-              className="mt-4 px-4 py-2 rounded-lg border border-rose-300 text-sm text-rose-700 hover:bg-rose-100"
+              className="mt-4 px-4 py-2 rounded-lg border border-danger/40 text-sm text-danger hover:bg-danger-soft"
             >
               다시 시도
             </button>
@@ -773,7 +773,7 @@ export default function JobDetailPage() {
         </main>
       );
     return (
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
         불러오는 중...
       </main>
     );
@@ -1193,7 +1193,7 @@ export default function JobDetailPage() {
       <div className="flex items-center gap-2 ml-auto flex-wrap">
         <Link
           href={`/jobs/${jobId}/compare?ids=${selectedInBlock.join(",")}`}
-          className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium whitespace-nowrap"
+          className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium whitespace-nowrap"
         >
           비교
         </Link>
@@ -1201,7 +1201,7 @@ export default function JobDetailPage() {
           <button
             onClick={() => void bulkScreen(screenable.map((c) => c.id))}
             disabled={bulkBusy !== null}
-            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="평가 안 됐거나 실패한 후보를 다시 큐에 넣습니다"
           >
             {bulkBusy === "screen" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -1212,7 +1212,7 @@ export default function JobDetailPage() {
           <button
             onClick={() => void bulkRescreen(rescreenable.map((c) => c.id))}
             disabled={bulkBusy !== null}
-            className="px-2.5 py-1.5 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-50 text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
+            className="px-2.5 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary-soft text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="이미 평가된 후보를 다시 평가합니다 (공고/평가 가이드 수정 후 등)"
           >
             {bulkBusy === "rescreen" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -1225,7 +1225,7 @@ export default function JobDetailPage() {
           <button
             onClick={() => void bulkInterviewSend(inProgress.map((c) => c.id))}
             disabled={bulkBusy !== null}
-            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="선택된 후보 전원에게 AI 면접 링크 메일 발송"
           >
             {bulkBusy === "interviewSend" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -1247,7 +1247,7 @@ export default function JobDetailPage() {
           <button
             onClick={() => void bulkAdvance("round1_candidate", inProgress.map((c) => c.id))}
             disabled={bulkBusy !== null}
-            className="px-2.5 py-1.5 rounded-lg bg-accent-deep hover:bg-accent text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
           >
             ⭐ 1차 면접 후보로 지정
           </button>
@@ -1266,7 +1266,7 @@ export default function JobDetailPage() {
             <button
               onClick={() => void bulkAdvance("round2_passed", inProgress.map((c) => c.id))}
               disabled={bulkBusy !== null}
-              className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+              className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
             >
               → 2차 합격
             </button>
@@ -1338,7 +1338,7 @@ export default function JobDetailPage() {
       )}
       <Link
         href="/"
-        className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
+        className="text-sm text-ink-muted hover:text-ink transition-colors"
       >
         ← 대시보드
       </Link>
@@ -1346,10 +1346,10 @@ export default function JobDetailPage() {
       <ApplyIntakeBanner jobId={jobId} />
 
       {/* Header */}
-      <div data-tour="job-header" className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 mt-3 shadow-sm">
+      <div data-tour="job-header" className="bg-card border border-border-default rounded-2xl p-4 sm:p-6 mt-3 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight break-keep">
+            <h1 className="text-xl sm:text-2xl font-bold text-ink leading-tight break-keep">
               {job.title}
             </h1>
             <div className="flex flex-wrap gap-1.5 mt-3">
@@ -1359,7 +1359,7 @@ export default function JobDetailPage() {
               <Tag>면접 {job.interviewDurationMinutes ?? 20}분</Tag>
               <Tag>톤: {job.tone}</Tag>
             </div>
-            <div className="text-xs text-slate-400 mt-3">
+            <div className="text-xs text-ink-muted mt-3">
               등록 {formatKstDateTime(job.createdAt)}
             </div>
           </div>
@@ -1399,7 +1399,7 @@ export default function JobDetailPage() {
             </Link>
             <Link
               href={`/jobs/${jobId}/edit`}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm text-slate-700"
+              className="px-3 py-1.5 rounded-lg border border-border-strong hover:bg-surface-alt text-sm text-ink-soft"
             >
               수정
             </Link>
@@ -1412,9 +1412,9 @@ export default function JobDetailPage() {
           </div>
         </div>
         {job.evaluationFocus && job.evaluationFocus.trim() && (
-          <div className="mt-4 rounded-lg border border-accent/40 bg-accent-soft/30 px-4 py-3">
+          <div className="mt-4 rounded-lg border border-border-default bg-surface-alt px-4 py-3">
             <div className="flex items-baseline gap-2 mb-1.5">
-              <span className="text-xs font-semibold text-accent-deep">
+              <span className="text-xs font-semibold text-primary-deep">
                 🤖 AI 평가 가이드
               </span>
               <span className="text-[10px] text-ink-soft">
@@ -1565,14 +1565,14 @@ export default function JobDetailPage() {
         }}
         className={`mt-3 rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
           isExpired
-            ? "border-slate-200 bg-slate-50 opacity-50 pointer-events-none"
+            ? "border-border-default bg-surface-alt opacity-50 pointer-events-none"
             : uploading
-              ? "border-slate-200 bg-slate-50 opacity-60 pointer-events-none"
+              ? "border-border-default bg-surface-alt opacity-60 pointer-events-none"
               : !canUpload
-              ? "border-slate-200 bg-slate-50 opacity-60"
+              ? "border-border-default bg-surface-alt opacity-60"
               : dragOver
                 ? "border-primary bg-primary-soft"
-                : "border-slate-300 bg-white hover:bg-slate-50"
+                : "border-border-strong bg-card hover:bg-surface-alt"
         }`}
       >
         <input
@@ -1598,7 +1598,7 @@ export default function JobDetailPage() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading || !canUpload || isExpired}
-            className="text-sm font-medium text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-sm font-medium text-ink disabled:opacity-50 disabled:cursor-not-allowed"
             title={
               isExpired
                 ? "공고 종결일이 지났습니다. 연장 후 업로드 가능"
@@ -1611,7 +1611,7 @@ export default function JobDetailPage() {
               "공고 종결일 경과 — 연장 후 업로드 가능"
             ) : uploading ? (
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-primary animate-spin" />
+                <span className="w-4 h-4 rounded-full border-2 border-border-strong border-t-primary animate-spin" />
                 업로드 중...
               </span>
             ) : !canUpload ? (
@@ -1623,19 +1623,19 @@ export default function JobDetailPage() {
           <button
             onClick={() => folderInputRef.current?.click()}
             disabled={uploading || !canUpload || isExpired}
-            className="text-xs text-slate-600 hover:text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-xs text-ink-soft hover:text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
             📁 폴더로 선택하기
           </button>
         </div>
-        <ul className="text-xs text-slate-500 mt-3 space-y-1 text-left inline-block">
+        <ul className="text-xs text-ink-muted mt-3 space-y-1 text-left inline-block">
           <li>· PDF · DOCX · HWP · 이미지 · ZIP 지원</li>
           <li>· 여러 파일 한 번에, 폴더 드래그도 가능</li>
           <li>· 개별 파일 10MB 초과는 자동 제외 (동영상 삽입된 PPT 등)</li>
           <li>
             · 한 응시자에 이력서 + 포트폴리오를 함께 올리려면 응시자 이름 폴더로 묶어주세요
             <br />
-            <span className="ml-2 font-mono text-[10px] text-slate-400">
+            <span className="ml-2 font-mono text-[10px] text-ink-muted">
               예) 홍길동/이력서.pdf, 홍길동/포트폴리오.pdf
             </span>
           </li>
@@ -1643,7 +1643,7 @@ export default function JobDetailPage() {
 
         {uploadProgress && (
           <div className="mt-4 max-w-md mx-auto text-left">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-600 mb-1">
+            <div className="flex items-center justify-between text-xs font-medium text-ink-soft mb-1">
               <span>
                 {uploadProgress.phase === "uploading"
                   ? `업로드 중… ${uploadProgress.done}/${uploadProgress.total} 파일`
@@ -1651,7 +1651,7 @@ export default function JobDetailPage() {
               </span>
               <span className="tabular-nums">{uploadProgress.pct}%</span>
             </div>
-            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+            <div className="h-2 rounded-full bg-surface-alt overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-200 ${
                   uploadProgress.phase === "processing"
@@ -1661,7 +1661,7 @@ export default function JobDetailPage() {
                 style={{ width: `${uploadProgress.pct}%` }}
               />
             </div>
-            <p className="text-[11px] text-slate-400 mt-1.5">
+            <p className="text-[11px] text-ink-muted mt-1.5">
               업로드가 끝나면 카드가 바로 생기고, 이름·평가는 순차로 채워집니다. 창을 닫아도 분석은 계속됩니다.
             </p>
           </div>
@@ -1684,7 +1684,7 @@ export default function JobDetailPage() {
           className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
             filter === "all"
               ? "bg-ink text-surface border-ink"
-              : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+              : "bg-card text-ink-soft border-border-strong hover:bg-surface-alt"
           }`}
           title="필터 해제 — 전체 표시"
         >
@@ -1704,7 +1704,7 @@ export default function JobDetailPage() {
                     ? "bg-primary text-surface border-primary"
                     : k === "hr" && n > 0
                       ? "bg-warning-soft text-warning border-warning/40 hover:bg-warning/10"
-                      : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+                      : "bg-card text-ink-soft border-border-strong hover:bg-surface-alt"
                 }`}
                 title={
                   k === "hr"
@@ -1726,9 +1726,9 @@ export default function JobDetailPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="이름·이메일·전화·요약·전형·태그·결과·점수 검색"
-            className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full border border-border-strong rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted text-sm">
             🔍
           </span>
         </div>
@@ -1742,7 +1742,7 @@ export default function JobDetailPage() {
               : filter
           }
           onChange={(e) => setFilter(e.target.value as FilterValue)}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
+          className="border border-border-strong rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="all">상세 필터 — 전체</option>
           <optgroup label="전형 버킷 (진행 중)">
@@ -1777,7 +1777,7 @@ export default function JobDetailPage() {
         </select>
         <a
           href={`/api/jobs/${jobId}/candidates/export`}
-          className="hidden sm:block px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm ml-auto"
+          className="hidden sm:block px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-ink-soft text-sm ml-auto"
           title="후보자 데이터 CSV 다운로드"
         >
           📥 CSV
@@ -1815,7 +1815,7 @@ export default function JobDetailPage() {
 
       {/* Candidate list */}
       {filtered.length === 0 ? (
-        <div className="text-center text-slate-500 py-16 bg-white border border-slate-200 rounded-2xl mt-4">
+        <div className="text-center text-ink-muted py-16 bg-card border border-border-default rounded-2xl mt-4">
           후보자가 없습니다.
         </div>
       ) : (
@@ -1829,7 +1829,7 @@ export default function JobDetailPage() {
                   onChange={() =>
                     toggleSection(favoriteCandidates.map((c) => c.id))
                   }
-                  className="rounded border-slate-300"
+                  className="rounded border-border-strong"
                   title="전체 선택"
                 />
                 <span className="text-sm font-semibold text-amber-700">
@@ -1860,7 +1860,7 @@ export default function JobDetailPage() {
             </div>
           )}
           {round1Candidates.length > 0 && (
-            <div className="mt-3 mb-4 bg-accent-soft/50 border border-accent/40 rounded-2xl p-3">
+            <div className="mt-3 mb-4 bg-primary-soft/50 border border-primary/30 rounded-2xl p-3">
               <div className="flex items-center gap-2 mb-2 px-1 flex-wrap">
                 <input
                   type="checkbox"
@@ -1868,13 +1868,13 @@ export default function JobDetailPage() {
                   onChange={() =>
                     toggleSection(round1Candidates.map((c) => c.id))
                   }
-                  className="rounded border-slate-300"
+                  className="rounded border-border-strong"
                   title="전체 선택"
                 />
-                <span className="text-sm font-semibold text-accent-deep">
+                <span className="text-sm font-semibold text-primary-deep">
                   ⭐ 1차 면접 후보
                 </span>
-                <span className="text-xs text-accent-deep/80">
+                <span className="text-xs text-primary-deep/80">
                   ({round1Candidates.length}명)
                 </span>
                 <SchedulePropose
@@ -1930,10 +1930,10 @@ export default function JobDetailPage() {
                     type="checkbox"
                     checked={allBlockSelected}
                     onChange={toggleBlock}
-                    className="rounded border-slate-300"
+                    className="rounded border-border-strong"
                   />
                   <span className={`text-xs font-semibold ${meta.tone}`}>{meta.label}</span>
-                  <span className="text-xs text-slate-400">({items.length}명)</span>
+                  <span className="text-xs text-ink-muted">({items.length}명)</span>
                   {hasSel && (
                     <span className="text-xs text-primary-deep font-medium">
                       · {selectedInBlock.length}명 선택됨
@@ -1959,15 +1959,15 @@ export default function JobDetailPage() {
       )}
       {decideIds && decideIds.length > 0 && (
         <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           onClick={() => setDecideIds(null)}
         >
           <div
-            className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+            className="bg-card rounded-2xl p-6 w-full max-w-sm shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-bold text-slate-900">합/불 결정</h3>
-            <p className="mt-2 text-sm text-slate-600">
+            <h3 className="font-bold text-ink">합/불 결정</h3>
+            <p className="mt-2 text-sm text-ink-soft">
               선택한 {decideIds.length}명에 대한 결정을 선택하세요.
             </p>
             <div className="mt-5 flex flex-col gap-2">
@@ -1995,7 +1995,7 @@ export default function JobDetailPage() {
               </button>
               <button
                 onClick={() => setDecideIds(null)}
-                className="mt-1 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"
+                className="mt-1 px-4 py-2 rounded-lg border border-border-strong text-ink-soft text-sm hover:bg-surface-alt"
               >
                 취소
               </button>
@@ -2021,21 +2021,21 @@ export default function JobDetailPage() {
 
       {round1Schedule && (
         <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           onClick={() => setRound1Schedule(null)}
         >
           <div
-            className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[80vh] flex flex-col"
+            className="bg-card rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[80vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-baseline justify-between gap-2">
-              <h3 className="font-bold text-slate-900">🗓 면접 확정 일정</h3>
-              <span className="text-xs text-slate-400">
+              <h3 className="font-bold text-ink">🗓 면접 확정 일정</h3>
+              <span className="text-xs text-ink-muted">
                 {round1Schedule.length}명 · 시간순
               </span>
             </div>
             {round1Schedule.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-500 text-center py-6">
+              <p className="mt-4 text-sm text-ink-muted text-center py-6">
                 확정된 면접 일정이 없습니다.
               </p>
             ) : (
@@ -2043,7 +2043,7 @@ export default function JobDetailPage() {
                 {groupRound1Schedule(round1Schedule).map((g, i) => (
                   <li
                     key={g.key}
-                    className="flex items-start gap-3 border border-slate-200 rounded-xl p-3"
+                    className="flex items-start gap-3 border border-border-default rounded-xl p-3"
                   >
                     <span className="shrink-0 w-6 h-6 rounded-full bg-primary-soft text-primary-deep text-xs font-bold flex items-center justify-center mt-0.5">
                       {i + 1}
@@ -2053,31 +2053,31 @@ export default function JobDetailPage() {
                         <span
                           className={`text-xs px-1.5 py-0.5 rounded font-semibold ${
                             g.round === "round2"
-                              ? "bg-violet-100 text-violet-700"
+                              ? "bg-surface-alt text-ink-soft"
                               : "bg-primary-soft text-primary-deep"
                           }`}
                         >
                           {g.round === "round2" ? "2차" : "1차"}
                         </span>
-                        <span className="text-sm font-semibold text-slate-900 tabular-nums">
+                        <span className="text-sm font-semibold text-ink tabular-nums">
                           {fmtSlotRange(g.selectedSlot)}
                         </span>
                         <span
                           className={`text-xs px-1.5 py-0.5 rounded ${
                             g.modeOnline
-                              ? "bg-sky-100 text-sky-700"
-                              : "bg-amber-100 text-amber-700"
+                              ? "bg-surface-alt text-ink-soft"
+                              : "bg-surface-alt text-ink-soft"
                           }`}
                         >
                           {g.modeOnline ? "온라인" : "오프라인"}
                         </span>
                         {g.members.length > 1 && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-surface-alt text-ink-soft">
                             {g.members.length}명
                           </span>
                         )}
                         {!g.modeOnline && g.address && (
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-ink-muted">
                             {g.address}
                             {g.addressDetail ? ` ${g.addressDetail}` : ""}
                           </span>
@@ -2087,9 +2087,9 @@ export default function JobDetailPage() {
                         {g.members.map((m) => (
                           <li
                             key={m.candidateId}
-                            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600"
+                            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft"
                           >
-                            <span className="font-medium text-slate-800">
+                            <span className="font-medium text-ink">
                               {m.name}
                             </span>
                             {g.modeOnline && m.onlineMeetingUrl && (
@@ -2104,7 +2104,7 @@ export default function JobDetailPage() {
                             )}
                             <Link
                               href={`/candidates/${m.candidateId}`}
-                              className="text-slate-400 hover:text-primary-deep"
+                              className="text-ink-muted hover:text-primary-deep"
                             >
                               상세 →
                             </Link>
@@ -2118,7 +2118,7 @@ export default function JobDetailPage() {
             )}
             <button
               onClick={() => setRound1Schedule(null)}
-              className="mt-4 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm hover:bg-slate-50 shrink-0"
+              className="mt-4 px-4 py-2 rounded-lg border border-border-strong text-ink-soft text-sm hover:bg-surface-alt shrink-0"
             >
               닫기
             </button>

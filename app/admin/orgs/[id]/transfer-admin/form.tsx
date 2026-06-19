@@ -65,9 +65,9 @@ export default function TransferAdminForm({
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4">
+    <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6 space-y-4">
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+        <label className="block text-sm font-medium text-ink-soft mb-1.5">
           새 관리자 (org_admin 으로 승격)
         </label>
         <select
@@ -75,7 +75,7 @@ export default function TransferAdminForm({
           onChange={(e) =>
             setToUserId(e.target.value ? Number(e.target.value) : "")
           }
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
         >
           <option value="">선택...</option>
           {candidates.map((m) => (
@@ -86,7 +86,7 @@ export default function TransferAdminForm({
         </select>
       </div>
 
-      <div className="border-t border-slate-100 pt-4">
+      <div className="border-t border-border-default pt-4">
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -101,7 +101,7 @@ export default function TransferAdminForm({
             onChange={(e) =>
               setFromUserId(e.target.value ? Number(e.target.value) : "")
             }
-            className="mt-2 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+            className="mt-2 w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
           >
             <option value="">선택...</option>
             {currentAdmins.map((m) => (
@@ -113,8 +113,8 @@ export default function TransferAdminForm({
         )}
       </div>
 
-      <div className="border-t border-slate-100 pt-4">
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+      <div className="border-t border-border-default pt-4">
+        <label className="block text-sm font-medium text-ink-soft mb-1.5">
           이전 사유 (5자+, 감사 로그)
         </label>
         <input
@@ -122,7 +122,7 @@ export default function TransferAdminForm({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="예: 기존 관리자 퇴사 - 후임자에게 이전"
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
         />
       </div>
 
@@ -136,7 +136,7 @@ export default function TransferAdminForm({
         <button
           onClick={submit}
           disabled={busy}
-          className="flex-1 bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg"
+          className="flex-1 bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium py-2.5 rounded-lg"
         >
           이전 실행
         </button>

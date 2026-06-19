@@ -101,19 +101,19 @@ export function InterviewQuestionsPanel({
         sheet ? (
           <span className="text-primary-deep">생성됨 · 클릭하여 열람</span>
         ) : confirmed ? (
-          <span className="text-slate-500">생성 가능</span>
+          <span className="text-ink-muted">생성 가능</span>
         ) : (
-          <span className="text-slate-400">{roundNo} 일정 확정 후 활성화</span>
+          <span className="text-ink-muted">{roundNo} 일정 확정 후 활성화</span>
         )
       }
     >
       {!confirmed && !sheet && (
         <div className="text-center py-6">
           <div className="text-3xl mb-3">📝</div>
-          <p className="text-sm text-slate-600 mb-1">
+          <p className="text-sm text-ink-soft mb-1">
             {roundNo} 면접 일정이 확정되면 면접 문제를 생성할 수 있습니다.
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-muted">
             {isExec
               ? "법인 인재상·컬쳐핏 기준(설정 시)을 반영해 임원 면접용 질문지를 만듭니다."
               : "이력서 · 서류평가 · AI 면접 평가를 종합해 맞춤 질문지를 만듭니다."}
@@ -123,10 +123,10 @@ export function InterviewQuestionsPanel({
 
       {(confirmed || sheet) && (
         <div className="space-y-4">
-          <div className="text-sm font-semibold text-slate-700">
+          <div className="text-sm font-semibold text-ink-soft">
             면접 문제 생성
           </div>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-ink-soft">
             {isExec
               ? "이력서 · 서류평가 · AI 면접 평가에 법인 인재상·컬쳐핏 기준(설정 시)을 반영해 2차(임원) 면접용 질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다."
               : "이력서 · 서류평가 · AI 면접 평가를 종합해 1차 대면 면접용 맞춤 질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다."}
@@ -145,7 +145,7 @@ export function InterviewQuestionsPanel({
                   컬쳐핏 기준 반영
                 </span>
               )}
-              <span className="text-slate-400">
+              <span className="text-ink-muted">
                 {sheet.generatedByName ? `${sheet.generatedByName} · ` : ""}
                 {formatKstDateTime(sheet.updatedAt)} 생성
               </span>
@@ -156,7 +156,7 @@ export function InterviewQuestionsPanel({
             {sheet ? (
               <button
                 onClick={() => setOpen(true)}
-                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium shadow-sm"
+                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm"
               >
                 면접 문제 보기
               </button>
@@ -166,7 +166,7 @@ export function InterviewQuestionsPanel({
               <button
                 onClick={generate}
                 disabled={generating}
-                className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary-deep text-white shadow-sm"
+                className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary-deep text-surface shadow-sm"
               >
                 {generating && <Loader2 className="w-4 h-4 animate-spin" />}
                 {generating
@@ -218,19 +218,19 @@ function QuestionSheetModal({
   const sub = exec ? "text-sm" : "text-xs";
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/40 flex items-stretch sm:items-start justify-center overflow-y-auto p-0 sm:p-4"
+      className="fixed inset-0 z-50 bg-ink/40 flex items-stretch sm:items-start justify-center overflow-y-auto p-0 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-none sm:rounded-2xl shadow-xl w-full max-w-4xl min-h-full sm:min-h-0 sm:my-8"
+        className="bg-card rounded-none sm:rounded-2xl shadow-xl w-full max-w-4xl min-h-full sm:min-h-0 sm:my-8"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center gap-3 px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-none sm:rounded-t-2xl z-10">
-          <h3 className={`${exec ? "text-lg" : "text-base"} font-bold text-slate-900`}>
+        <div className="flex justify-between items-center gap-3 px-6 py-4 border-b border-border-default sticky top-0 bg-card rounded-t-none sm:rounded-t-2xl z-10">
+          <h3 className={`${exec ? "text-lg" : "text-base"} font-bold text-ink`}>
             {title}
           </h3>
           <div className="flex items-center gap-3 shrink-0">
-            <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+            <label className="flex items-center gap-1.5 text-xs text-ink-soft cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={compact}
@@ -241,7 +241,7 @@ function QuestionSheetModal({
             </label>
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-700 text-xl leading-none"
+              className="text-ink-muted hover:text-ink-soft text-xl leading-none"
               aria-label="닫기"
             >
               ×
@@ -251,7 +251,7 @@ function QuestionSheetModal({
         <div className="px-6 py-5 space-y-6">
           {sheet.strategy && (
             <div
-              className={`border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg ${body} text-slate-800 leading-relaxed`}
+              className={`border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg ${body} text-ink leading-relaxed`}
             >
               <div className="text-[11px] font-semibold text-primary-deep uppercase tracking-wider mb-1">
                 면접 전략
@@ -262,11 +262,11 @@ function QuestionSheetModal({
 
           {sheet.sections.map((sec, si) => (
             <div key={si}>
-              <h4 className={`${body} font-bold text-slate-900`}>
+              <h4 className={`${body} font-bold text-ink`}>
                 {si + 1}. {sec.title}
               </h4>
               {sec.focus && !compact && (
-                <p className={`${sub} text-slate-500 mt-0.5 mb-3`}>
+                <p className={`${sub} text-ink-muted mt-0.5 mb-3`}>
                   <HL text={sec.focus} mark={exec} />
                 </p>
               )}
@@ -274,22 +274,22 @@ function QuestionSheetModal({
                 {sec.questions.map((q, qi) => (
                   <li
                     key={qi}
-                    className="rounded-lg border border-slate-200 px-4 py-3"
+                    className="rounded-lg border border-border-default px-4 py-3"
                   >
                     <p
-                      className={`${body} text-slate-800 font-medium leading-relaxed`}
+                      className={`${body} text-ink font-medium leading-relaxed`}
                     >
                       <HL text={q.question} mark={exec} />
                     </p>
                     {q.intent && !compact && (
-                      <p className={`${sub} text-slate-500 mt-1.5`}>
+                      <p className={`${sub} text-ink-muted mt-1.5`}>
                         🎯 <HL text={q.intent} mark={exec} />
                       </p>
                     )}
                     {q.followups && q.followups.length > 0 && !compact && (
-                      <ul className="mt-2 space-y-1 pl-3 border-l-2 border-slate-100">
+                      <ul className="mt-2 space-y-1 pl-3 border-l-2 border-border-default">
                         {q.followups.map((f, fi) => (
-                          <li key={fi} className={`${sub} text-slate-600`}>
+                          <li key={fi} className={`${sub} text-ink-soft`}>
                             ↳ <HL text={f} mark={exec} />
                           </li>
                         ))}
@@ -297,7 +297,7 @@ function QuestionSheetModal({
                     )}
                     {q.basis && !compact && (
                       <p
-                        className={`${exec ? "text-xs" : "text-[11px]"} text-slate-400 mt-2`}
+                        className={`${exec ? "text-xs" : "text-[11px]"} text-ink-muted mt-2`}
                       >
                         근거: {q.basis}
                       </p>
@@ -315,7 +315,7 @@ function QuestionSheetModal({
               </div>
               <ul className="space-y-1">
                 {sheet.red_flags.map((r, ri) => (
-                  <li key={ri} className={`${body} text-slate-700`}>
+                  <li key={ri} className={`${body} text-ink-soft`}>
                     ⚠️ <HL text={r} mark={exec} />
                   </li>
                 ))}

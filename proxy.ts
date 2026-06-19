@@ -83,6 +83,8 @@ export function proxy(req: NextRequest) {
   // 인증 가드 면제: 공개 페이지 + 공개 API
   if (
     pathname === "/" ||
+    // 디자인 시스템 쇼케이스 — 개발 환경에서만 공개 (운영에선 page 가 notFound).
+    (process.env.NODE_ENV !== "production" && pathname === "/design") ||
     pathname === "/login" ||
     pathname === "/signup" ||
     pathname === "/privacy" ||

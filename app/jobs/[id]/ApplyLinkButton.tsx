@@ -80,11 +80,11 @@ export default function ApplyLinkButton({
   }
 
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <div className="mt-4 rounded-xl border border-border-default bg-surface-alt p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-slate-800">지원 링크로 직접 받기</p>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="text-sm font-medium text-ink">지원 링크로 직접 받기</p>
+          <p className="mt-0.5 text-xs text-ink-muted">
             사람인·잡코리아 등 공고의 지원 방법(홈페이지 지원)에 이 링크를 넣으면, 지원자가
             직접 이력서를 올리고 자동으로 평가됩니다.
           </p>
@@ -93,7 +93,7 @@ export default function ApplyLinkButton({
           <button
             onClick={generate}
             disabled={loading || disabled}
-            className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="shrink-0 rounded-lg border border-border-strong bg-card px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "생성 중…" : "지원 링크 만들기"}
           </button>
@@ -106,11 +106,11 @@ export default function ApplyLinkButton({
             readOnly
             value={url}
             onFocus={(e) => e.currentTarget.select()}
-            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700"
+            className="min-w-0 flex-1 rounded-lg border border-border-strong bg-card px-3 py-1.5 text-xs text-ink-soft"
           />
           <button
             onClick={copy}
-            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-surface hover:opacity-90"
           >
             {copied ? "복사됨 ✓" : "복사"}
           </button>

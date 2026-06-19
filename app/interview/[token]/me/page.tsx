@@ -75,10 +75,10 @@ export default function SelfPage() {
   if (deleted) {
     return (
       <main className="flex-1 flex items-center justify-center p-6">
-        <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center max-w-md shadow-sm">
+        <div className="bg-card border border-border-default rounded-2xl p-10 text-center max-w-md shadow-sm">
           <div className="text-4xl mb-3">🗑️</div>
-          <h1 className="text-xl font-bold text-slate-900">폐기 완료</h1>
-          <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+          <h1 className="text-xl font-bold text-ink">폐기 완료</h1>
+          <p className="text-sm text-ink-soft mt-3 leading-relaxed">
             본문 데이터가 즉시 폐기되었습니다. 평가 결과는 공고 종결 +14일 후
             자동 삭제됩니다 (처리방침 §3).
           </p>
@@ -89,23 +89,23 @@ export default function SelfPage() {
 
   return (
     <main className="max-w-2xl mx-auto w-full px-6 py-10">
-      <h1 className="text-2xl font-bold text-slate-900">내 정보 열람·삭제</h1>
-      <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+      <h1 className="text-2xl font-bold text-ink">내 정보 열람·삭제</h1>
+      <p className="text-sm text-ink-soft mt-2 leading-relaxed">
         개인정보 보호법 제35조(열람), 제36조(정정·삭제) 에 따라 본인의 데이터를
         조회하고 폐기를 요청하실 수 있습니다. 본인 확인을 위해 면접 안내 메일을
         받으신 이메일을 입력해 주세요.
       </p>
 
-      <div className="mt-6 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="mt-6 bg-card border border-border-default rounded-2xl p-6 shadow-sm space-y-4">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">
+          <label className="block text-xs font-medium text-ink-soft mb-1">
             본인 이메일
           </label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="you@example.com"
           />
         </div>
@@ -120,13 +120,13 @@ export default function SelfPage() {
           <button
             onClick={load}
             disabled={busy || !email}
-            className="px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+            className="px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
           >
             {busy ? "조회 중..." : "내 정보 조회"}
           </button>
         ) : (
           <>
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm">
+            <div className="bg-surface-alt border border-border-default rounded-lg p-4 text-sm">
               <Row label="이름" value={data.name} />
               <Row label="이메일" value={data.email ?? "(없음)"} />
               <Row
@@ -157,12 +157,12 @@ export default function SelfPage() {
               <Link
                 href="/privacy"
                 target="_blank"
-                className="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+                className="px-4 py-2.5 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm"
               >
                 처리방침
               </Link>
             </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
+            <p className="text-[11px] text-ink-muted leading-relaxed">
               폐기 시 이력서 본문·파일·전화번호가 즉시 삭제됩니다. 이름·이메일·평가
               점수는 공고 종결 +14일 후 자동 삭제됩니다 (처리방침 §3).
             </p>
@@ -175,9 +175,9 @@ export default function SelfPage() {
 
 function Row({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="flex justify-between py-1.5 border-b border-slate-100 last:border-b-0">
-      <span className="text-slate-500">{label}</span>
-      <span className="text-slate-900 font-medium">{value ?? "-"}</span>
+    <div className="flex justify-between py-1.5 border-b border-border-default last:border-b-0">
+      <span className="text-ink-muted">{label}</span>
+      <span className="text-ink font-medium">{value ?? "-"}</span>
     </div>
   );
 }

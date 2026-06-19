@@ -41,26 +41,30 @@
   --success-soft: #e3ece8;
   --warning: #b07424;
   --warning-soft: #fbeede;
+  --warning-deep: #8a5a18; /* hover/pressed */
   --danger: #a72b3a;
   --danger-soft: #fbe5e8;
+  --danger-deep: #861f2c; /* hover/pressed */
   --info: #1f5b8c;
   --info-soft: #e2eaf2;
 
-  /* Elevation */
-  --shadow-xs: 0 1px 2px 0 rgba(15, 26, 20, 0.04);
-  --shadow-sm: 0 1px 3px 0 rgba(15, 26, 20, 0.06),
-    0 1px 2px -1px rgba(15, 26, 20, 0.04);
-  --shadow-md: 0 4px 10px -2px rgba(15, 26, 20, 0.08),
-    0 2px 4px -2px rgba(15, 26, 20, 0.04);
-  --shadow-lg: 0 12px 24px -6px rgba(15, 26, 20, 0.1),
-    0 4px 8px -2px rgba(15, 26, 20, 0.05);
+  /* Elevation — forest(ink) 틴트 그림자(실값). @theme 의 --shadow-* 가 var 로 참조 →
+     Tailwind shadow-xs/sm/md/lg/xl 유틸 + .card-hover 가 공유. 2-레이어로 부드럽게. */
+  --elev-2xs: 0 1px 1px 0 rgba(15, 26, 20, 0.04);
+  --elev-xs: 0 1px 2px 0 rgba(15, 26, 20, 0.05);
+  --elev-sm: 0 1px 2px -1px rgba(15, 26, 20, 0.06),
+    0 2px 4px -1px rgba(15, 26, 20, 0.05);
+  --elev-md: 0 2px 4px -2px rgba(15, 26, 20, 0.05),
+    0 8px 16px -4px rgba(15, 26, 20, 0.09);
+  --elev-lg: 0 4px 8px -3px rgba(15, 26, 20, 0.06),
+    0 16px 32px -8px rgba(15, 26, 20, 0.12);
+  --elev-xl: 0 8px 16px -6px rgba(15, 26, 20, 0.08),
+    0 28px 56px -12px rgba(15, 26, 20, 0.16);
+  --elev-2xl: 0 12px 24px -8px rgba(15, 26, 20, 0.1),
+    0 40px 72px -16px rgba(15, 26, 20, 0.22);
 
-  /* Radius scale — 각지고 약간씩만 둥글게 (이전: 6/10/14/20/28) */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
-  --radius-2xl: 14px;
+  /* Radius scale — 실값은 @theme(Tailwind rounded-* 유틸과 연결).
+     절제·각진 톤: 카드 8px / 버튼·입력 6px. rounded-full(알약·아바타)은 유지. */
 
   /* Tailwind compat (기존 코드의 --background/--foreground 등 유지) */
   --background: var(--surface);
@@ -97,10 +101,30 @@
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-warning-deep: var(--warning-deep);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-danger-deep: var(--danger-deep);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+
+  /* Elevation — :root 의 --elev-* 실값을 Tailwind shadow-* 유틸에 연결. */
+  --shadow-2xs: var(--elev-2xs);
+  --shadow-xs: var(--elev-xs);
+  --shadow-sm: var(--elev-sm);
+  --shadow-md: var(--elev-md);
+  --shadow-lg: var(--elev-lg);
+  --shadow-xl: var(--elev-xl);
+  --shadow-2xl: var(--elev-2xl);
+
+  /* Radius — 절제·각진 톤(Tailwind 기본 4/6/8/12/16/24 대비 축소).
+     카드(rounded-2xl) 8px, 버튼·입력(rounded-lg) 6px. rounded-full 은 유지. */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 7px;
+  --radius-2xl: 8px;
+  --radius-3xl: 10px;
 }
 
 /* 전역 기준 글자 크기 — rem 기반 Tailwind 유틸(text-xs/sm/base…)을 일괄 ~5% 키움.
@@ -122,14 +146,18 @@ body {
   touch-action: manipulation;
 }
 
-/* 타이포 hierarchy — 디스플레이/제목/본문 */
-h1,
-h2,
-h3,
-h4 {
-  letter-spacing: -0.012em; /* 제목 자간 완화 (이전 -0.025em) */
-  color: var(--ink);
-  font-weight: 700;
+/* 타이포 hierarchy — 디스플레이/제목/본문.
+   @layer base 로 둬야 Tailwind text-* 유틸(레이어드)이 제목 색을 덮어쓸 수 있다.
+   unlayered 면 유틸보다 우선해 다크 섹션 제목이 ink 로 고정돼 안 보이는 버그가 난다. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.012em; /* 제목 자간 완화 (이전 -0.025em) */
+    color: var(--ink);
+    font-weight: 700;
+  }
 }
 
 /* 모바일 input 줌 방지 */
@@ -179,9 +207,9 @@ h4 {
     border-color 120ms ease;
 }
 .card-hover:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--elev-lg);
 }
 
 /* 선택 영역 — 브랜드 컬러 미세 적용 */
@@ -204,12 +232,12 @@ h4 {
 @keyframes tour-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 2px rgba(232, 168, 124, 0.9),
-      0 0 0 6px rgba(232, 168, 124, 0.25), 0 0 18px 2px rgba(232, 168, 124, 0.4);
+    box-shadow: 0 0 0 2px rgba(13, 79, 60, 0.9),
+      0 0 0 6px rgba(13, 79, 60, 0.25), 0 0 18px 2px rgba(13, 79, 60, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 3px rgba(232, 168, 124, 1),
-      0 0 0 11px rgba(232, 168, 124, 0), 0 0 26px 6px rgba(232, 168, 124, 0.55);
+    box-shadow: 0 0 0 3px rgba(13, 79, 60, 1),
+      0 0 0 11px rgba(13, 79, 60, 0), 0 0 26px 6px rgba(13, 79, 60, 0.55);
   }
 }
 .tour-glow-ring {
@@ -220,5 +248,39 @@ h4 {
   .tour-glow-ring {
     animation-duration: 0.001ms;
     animation-iteration-count: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 스크롤 등장 모션 — 순수 CSS, JS 0.
+ *   .reveal      : 뷰포트 진입 시 아래에서 떠오르며 페이드인 (scroll-linked)
+ *   .reveal-load : 페이지 로드 시 1회 떠오름 (above-the-fold 히어로용)
+ * 빈 화면 방지: opacity:0 은 @supports 안의 keyframe(both)로만 적용되므로,
+ * animation-timeline 미지원 브라우저(Safari/Firefox)는 콘텐츠가 그냥 보인다.
+ * ------------------------------------------------------------------------- */
+@keyframes reveal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* above-the-fold — 스크롤과 무관하게 로드 시 1회 */
+  .reveal-load {
+    animation: reveal-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* below-the-fold — 스크롤 진입에 연동 (지원 브라우저만) */
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 75%;
+    }
   }
 }

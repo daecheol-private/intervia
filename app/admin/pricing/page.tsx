@@ -71,7 +71,7 @@ export default function PricingPage() {
 
   if (!pricing || !draft)
     return (
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-400 text-sm">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted text-sm">
         불러오는 중...
       </main>
     );
@@ -86,34 +86,34 @@ export default function PricingPage() {
   return (
     <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-slate-500 hover:underline">
+        <Link href="/" className="text-xs text-ink-muted hover:underline">
           ← 대시보드
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">기능별 단가</h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <h1 className="text-2xl font-bold text-ink mt-2">기능별 단가</h1>
+        <p className="text-sm text-ink-muted mt-1">
           시스템 관리자만 변경 가능. 단가는 변경 시점 이후 사용분부터 적용됩니다 (소급 X).
         </p>
-        <p className="text-xs text-slate-500 mt-2 bg-slate-50 border border-slate-200 rounded px-3 py-2">
+        <p className="text-xs text-ink-muted mt-2 bg-surface-alt border border-border-default rounded px-3 py-2">
           기준: <strong>100원 = 1 토큰</strong>. 충전 보너스: 10만원+ 5% · 30만원+ 10% · 50만원+ 15% · 100만원+ 20%. 신규 가입 시 무료 체험 500 토큰 자동 지급.
         </p>
         {BETA.active && (
-          <p className="text-xs text-amber-700 mt-2 bg-amber-50 border border-amber-200 rounded px-3 py-2 leading-relaxed">
+          <p className="text-xs text-warning mt-2 bg-warning-soft border border-warning/30 rounded px-3 py-2 leading-relaxed">
             현재 <strong>{BETA.label}</strong> 할인가 적용 중 (정가 대비 AI 면접·대면 면접 평가 30→10 토큰, ~{BETA.endsAtLabel}). 아래 값은 실제 차감되는 단가입니다. 베타 종료·정가 복귀는 코드의 <code className="font-mono">lib/beta.ts</code> 에서 <code className="font-mono">BETA.active=false</code> 로 전환하세요. ⚠️ 여기서 저장하면 DB override 행이 생겨 코드 기본값보다 우선합니다.
           </p>
         )}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="bg-card border border-border-default rounded-2xl p-6 shadow-sm space-y-4">
         {LABELS.map(({ key, label, desc }) => (
           <div key={key} className="flex items-center justify-between gap-4">
             <div>
-              <div className="font-medium text-slate-900">{label}</div>
-              <div className="text-xs text-slate-500">{desc}</div>
+              <div className="font-medium text-ink">{label}</div>
+              <div className="text-xs text-ink-muted">{desc}</div>
             </div>
             <input
               type="number"
               min={0}
-              className="w-32 border border-slate-300 rounded-lg px-3 py-2 text-sm text-right font-mono"
+              className="w-32 border border-border-strong rounded-lg px-3 py-2 text-sm text-right font-mono"
               value={draft[key]}
               onChange={(e) =>
                 setDraft({ ...draft, [key]: Number(e.target.value) || 0 })
@@ -137,14 +137,14 @@ export default function PricingPage() {
           <button
             onClick={save}
             disabled={busy || !dirty}
-            className="flex-1 bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg shadow-sm"
+            className="flex-1 bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium py-2.5 rounded-lg shadow-sm"
           >
             {busy ? "저장 중..." : "저장"}
           </button>
           <button
             onClick={() => setDraft(pricing)}
             disabled={!dirty}
-            className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium py-2.5 rounded-lg border border-slate-300 disabled:opacity-50"
+            className="px-4 bg-surface-alt hover:bg-slate-200 text-ink-soft text-sm font-medium py-2.5 rounded-lg border border-border-strong disabled:opacity-50"
           >
             되돌리기
           </button>

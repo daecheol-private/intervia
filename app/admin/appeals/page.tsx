@@ -27,10 +27,10 @@ const STATUS_LABEL: Record<AppealRow["status"], string> = {
 };
 
 const STATUS_STYLE: Record<AppealRow["status"], string> = {
-  pending: "bg-amber-100 text-amber-800 border-amber-200",
-  reviewed: "bg-blue-100 text-blue-800 border-blue-200",
-  resolved: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  rejected: "bg-slate-100 text-slate-600 border-slate-200",
+  pending: "bg-warning-soft text-warning border-warning/30",
+  reviewed: "bg-primary-soft text-primary-deep border-primary/30",
+  resolved: "bg-success-soft text-success border-success/30",
+  rejected: "bg-surface-alt text-ink-soft border-border-default",
 };
 
 const FILTERS: { value: string; label: string }[] = [
@@ -74,10 +74,10 @@ export default function AdminAppealsPage() {
 
   return (
     <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-8">
-      <h1 className="text-xl font-bold text-slate-900">
+      <h1 className="text-xl font-bold text-ink">
         자동화 의사결정 이의제기
       </h1>
-      <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+      <p className="text-sm text-ink-soft mt-1 leading-relaxed">
         개인정보 보호법 §37의2 에 따라 접수된 이의제기·설명 요청입니다. 각 건은{" "}
         <strong>법정 기한 내(자체 기준 7영업일)</strong> 검토·회신해야 합니다.
         &quot;검토&quot;를 눌러 후보자 상세에서 상태를 변경하고 후보자에게
@@ -86,7 +86,7 @@ export default function AdminAppealsPage() {
 
       <div className="mt-4 flex items-center gap-3 flex-wrap">
         {pendingCount > 0 && (
-          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-warning bg-warning-soft border border-warning/40 rounded-lg px-3 py-1.5">
             ⏳ 미처리 {pendingCount}건
           </span>
         )}
@@ -97,8 +97,8 @@ export default function AdminAppealsPage() {
               onClick={() => setFilter(f.value)}
               className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                 filter === f.value
-                  ? "bg-slate-900 text-white border-slate-900"
-                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  ? "bg-ink text-surface border-ink"
+                  : "bg-card text-ink-soft border-border-default hover:bg-surface-alt"
               }`}
             >
               {f.label}
@@ -108,14 +108,14 @@ export default function AdminAppealsPage() {
       </div>
 
       {err && (
-        <div className="mt-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+        <div className="mt-4 text-sm text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
           {err}
         </div>
       )}
 
-      <div className="mt-4 overflow-x-auto border border-slate-200 rounded-xl bg-white">
+      <div className="mt-4 overflow-x-auto border border-border-default rounded-xl bg-card">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs">
+          <thead className="bg-surface-alt text-ink-muted text-xs">
             <tr>
               <th className="px-3 py-2 text-left">상태</th>
               <th className="px-3 py-2 text-left">후보자</th>
@@ -125,17 +125,17 @@ export default function AdminAppealsPage() {
               <th className="px-3 py-2 text-right">처리</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-border-default">
             {rows === null && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-3 py-8 text-center text-ink-muted">
                   불러오는 중…
                 </td>
               </tr>
             )}
             {rows !== null && rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-3 py-8 text-center text-ink-muted">
                   이의제기가 없습니다.
                 </td>
               </tr>
@@ -145,7 +145,7 @@ export default function AdminAppealsPage() {
               return (
                 <tr
                   key={r.id}
-                  className={r.status === "pending" ? "bg-amber-50/40" : ""}
+                  className={r.status === "pending" ? "bg-warning-soft/40" : ""}
                 >
                   <td className="px-3 py-2 align-top">
                     <span
@@ -155,34 +155,34 @@ export default function AdminAppealsPage() {
                     </span>
                   </td>
                   <td className="px-3 py-2 align-top">
-                    <div className="font-medium text-slate-900">
+                    <div className="font-medium text-ink">
                       {r.candidateName ?? (
-                        <span className="text-slate-400">(폐기됨)</span>
+                        <span className="text-ink-muted">(폐기됨)</span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500">{r.email}</div>
+                    <div className="text-xs text-ink-muted">{r.email}</div>
                   </td>
-                  <td className="px-3 py-2 align-top text-slate-700">
+                  <td className="px-3 py-2 align-top text-ink-soft">
                     <div>{r.orgName ?? "—"}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-ink-muted">
                       {r.jobTitle ?? "—"}
                     </div>
                   </td>
-                  <td className="px-3 py-2 align-top text-slate-600 max-w-xs">
+                  <td className="px-3 py-2 align-top text-ink-soft max-w-xs">
                     <div className="line-clamp-3 whitespace-pre-wrap">
                       {r.reason}
                     </div>
                   </td>
-                  <td className="px-3 py-2 align-top text-xs text-slate-500 whitespace-nowrap">
+                  <td className="px-3 py-2 align-top text-xs text-ink-muted whitespace-nowrap">
                     {fmt(r.createdAt)}
                   </td>
                   <td className="px-3 py-2 align-top text-right">
                     {purged ? (
-                      <span className="text-xs text-slate-400">검토 불가</span>
+                      <span className="text-xs text-ink-muted">검토 불가</span>
                     ) : (
                       <Link
                         href={`/candidates/${r.candidateId}`}
-                        className="text-xs font-medium text-blue-600 hover:underline whitespace-nowrap"
+                        className="text-xs font-medium text-primary hover:underline whitespace-nowrap"
                       >
                         검토 →
                       </Link>

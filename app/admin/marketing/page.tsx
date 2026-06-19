@@ -264,7 +264,7 @@ export default function AdminMarketingPage() {
       <div className="mb-6">
         <Link
           href="/admin/dashboard"
-          className="text-xs text-slate-500 hover:underline"
+          className="text-xs text-ink-muted hover:underline"
         >
           ← 운영 대시보드
         </Link>
@@ -273,8 +273,8 @@ export default function AdminMarketingPage() {
             <Mail className="w-5 h-5" />
           </span>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">마케팅 메일</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <h1 className="text-2xl font-bold text-ink">마케팅 메일</h1>
+            <p className="text-sm text-ink-muted mt-0.5">
               브로슈어를 등록해 두고, 골라서 발송합니다. (광고) 표시와 수신거부는
               자동으로 처리됩니다.
             </p>
@@ -283,7 +283,7 @@ export default function AdminMarketingPage() {
       </div>
 
       {notice && (
-        <div className="mb-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2.5">
+        <div className="mb-4 text-sm text-success bg-success-soft border border-success/30 rounded-lg px-3.5 py-2.5">
           {notice}
         </div>
       )}
@@ -294,12 +294,12 @@ export default function AdminMarketingPage() {
       )}
 
       {/* 브로슈어 관리 */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 sm:p-6 mb-6">
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm p-5 sm:p-6 mb-6">
         <div className="flex items-center gap-2 mb-1">
           <FileText className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-semibold text-slate-800">브로슈어</h2>
+          <h2 className="text-sm font-semibold text-ink-soft">브로슈어</h2>
         </div>
-        <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
+        <p className="text-[11px] text-ink-muted mb-4 leading-relaxed">
           썸네일을 클릭하면 크게 볼 수 있고, 발송할 브로슈어를 골라 선택합니다.
           (광고) 표시·수신거부 링크는 발송할 때 자동으로 처리되니, 순수 디자인
           HTML만 올리면 됩니다.
@@ -312,10 +312,10 @@ export default function AdminMarketingPage() {
             value={newSubject}
             onChange={(e) => setNewSubject(e.target.value)}
             placeholder="메일 제목 (예: Intervia — AI 면접 플랫폼 소개)"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
           <div className="flex items-center gap-2">
-            <label className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-slate-600 shrink-0">
+            <label className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-border-strong rounded-lg cursor-pointer hover:bg-surface-alt text-ink-soft shrink-0">
               <Upload className="w-3.5 h-3.5" />
               HTML 파일 선택
               <input
@@ -325,13 +325,13 @@ export default function AdminMarketingPage() {
                 className="hidden"
               />
             </label>
-            <span className="text-xs text-slate-400 truncate min-w-0 flex-1">
+            <span className="text-xs text-ink-muted truncate min-w-0 flex-1">
               {newFileName || "선택된 파일 없음"}
             </span>
             <button
               onClick={addBrochure}
               disabled={busy || !newSubject.trim() || !newHtml.trim()}
-              className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium shrink-0"
+              className="px-4 py-2 text-sm bg-primary text-surface rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium shrink-0"
             >
               추가
             </button>
@@ -339,16 +339,16 @@ export default function AdminMarketingPage() {
         </div>
 
         {/* 썸네일 갤러리 */}
-        <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-4">
+        <div className="flex flex-wrap gap-3 border-t border-border-default pt-4">
           {brochures.map((b) => {
             const isSel = selectedBrochure === String(b.id);
             return (
               <div
                 key={String(b.id)}
-                className={`w-[150px] rounded-xl overflow-hidden bg-white transition-shadow ${
+                className={`w-[150px] rounded-xl overflow-hidden bg-card transition-shadow ${
                   isSel
                     ? "ring-2 ring-primary border border-primary"
-                    : "border border-slate-200 hover:shadow-md"
+                    : "border border-border-default hover:shadow-md"
                 }`}
               >
                 {/* 썸네일 — 클릭하면 확대 */}
@@ -356,7 +356,7 @@ export default function AdminMarketingPage() {
                   type="button"
                   onClick={() => setModalId(String(b.id))}
                   title="크게 보기"
-                  className="group relative block w-full h-[200px] overflow-hidden bg-slate-50 border-b border-slate-100"
+                  className="group relative block w-full h-[200px] overflow-hidden bg-surface-alt border-b border-border-default"
                 >
                   <iframe
                     src={previewUrl(b.id)}
@@ -371,13 +371,13 @@ export default function AdminMarketingPage() {
                       transform: "scale(0.25)",
                     }}
                   />
-                  <span className="absolute inset-0 flex items-center justify-center bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors">
-                    <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 text-slate-700 rounded-full p-1.5 shadow">
+                  <span className="absolute inset-0 flex items-center justify-center bg-ink/0 group-hover:bg-ink/10 transition-colors">
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-card/90 text-ink-soft rounded-full p-1.5 shadow">
                       <Maximize2 className="w-4 h-4" />
                     </span>
                   </span>
                   {isSel && (
-                    <span className="absolute top-1.5 right-1.5 bg-primary text-white rounded-full p-1 shadow">
+                    <span className="absolute top-1.5 right-1.5 bg-primary text-surface rounded-full p-1 shadow">
                       <Check className="w-3 h-3" />
                     </span>
                   )}
@@ -395,17 +395,17 @@ export default function AdminMarketingPage() {
                       className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
                         isSel
                           ? "border-primary bg-primary"
-                          : "border-slate-300"
+                          : "border-border-strong"
                       }`}
                     >
-                      {isSel && <Check className="w-2.5 h-2.5 text-white" />}
+                      {isSel && <Check className="w-2.5 h-2.5 text-surface" />}
                     </span>
-                    <span className="text-xs truncate text-slate-700">
+                    <span className="text-xs truncate text-ink-soft">
                       {b.subject}
                     </span>
                   </button>
                   {b.builtin ? (
-                    <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                    <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-alt text-ink-muted">
                       기본
                     </span>
                   ) : (
@@ -414,7 +414,7 @@ export default function AdminMarketingPage() {
                       onClick={() => removeBrochure(b)}
                       disabled={busy}
                       title="삭제"
-                      className="shrink-0 p-1 rounded-md text-slate-400 hover:text-danger hover:bg-danger-soft disabled:opacity-50"
+                      className="shrink-0 p-1 rounded-md text-ink-muted hover:text-danger hover:bg-danger-soft disabled:opacity-50"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -427,8 +427,8 @@ export default function AdminMarketingPage() {
       </div>
 
       {/* 수신자 등록 */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 sm:p-6 mb-6">
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm p-5 sm:p-6 mb-6">
+        <label className="block text-sm font-medium text-ink-soft mb-1.5">
           수신자 등록
         </label>
         <textarea
@@ -436,16 +436,16 @@ export default function AdminMarketingPage() {
           onChange={(e) => setEmails(e.target.value)}
           rows={3}
           placeholder={"hr@company-a.co.kr\nrecruit@company-b.com (줄바꿈·쉼표로 여러 개 입력)"}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         <div className="flex items-center justify-between mt-3">
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-ink-muted">
             중복·형식 오류는 자동으로 걸러집니다. 한 번에 최대 500개.
           </p>
           <button
             onClick={add}
             disabled={busy || !emails.trim()}
-            className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium"
+            className="px-4 py-2 text-sm bg-primary text-surface rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium"
           >
             등록
           </button>
@@ -453,30 +453,30 @@ export default function AdminMarketingPage() {
       </div>
 
       {/* 목록 + 발송 */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 space-y-3">
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-border-default space-y-3">
           <div className="flex items-center gap-2 text-sm min-w-0">
-            <span className="text-slate-500 shrink-0">발송할 브로슈어</span>
-            <span className="font-medium text-slate-800 truncate">
+            <span className="text-ink-muted shrink-0">발송할 브로슈어</span>
+            <span className="font-medium text-ink-soft truncate">
               {selected?.subject ?? "—"}
             </span>
             {selected?.builtin && (
-              <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+              <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-alt text-ink-muted">
                 기본
               </span>
             )}
           </div>
           <div className="flex items-center justify-between">
-            <div className="text-sm text-slate-600">
+            <div className="text-sm text-ink-soft">
               수신 가능{" "}
-              <strong className="text-slate-900">{activeCount}</strong>명 ·
+              <strong className="text-ink">{activeCount}</strong>명 ·
               수신거부{" "}
-              <strong className="text-slate-900">{unsubCount}</strong>명
+              <strong className="text-ink">{unsubCount}</strong>명
             </div>
             <button
               onClick={() => send()}
               disabled={busy || activeCount === 0}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-surface rounded-lg hover:bg-primary-deep disabled:opacity-50 font-medium"
             >
               <Send className="w-3.5 h-3.5" />
               {busy ? "처리 중…" : `전체 발송 (${activeCount}명)`}
@@ -484,11 +484,11 @@ export default function AdminMarketingPage() {
           </div>
         </div>
         {rows.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-10">
+          <p className="text-sm text-ink-muted text-center py-10">
             등록된 수신자가 없습니다.
           </p>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border-default">
             {rows.map((r) => (
               <li
                 key={r.id}
@@ -498,7 +498,7 @@ export default function AdminMarketingPage() {
                   className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md ${
                     r.status === "active"
                       ? "bg-primary-soft text-primary-deep"
-                      : "bg-slate-100 text-slate-400"
+                      : "bg-surface-alt text-ink-muted"
                   }`}
                 >
                   {r.status === "active" ? "수신중" : "수신거부"}
@@ -506,13 +506,13 @@ export default function AdminMarketingPage() {
                 <span
                   className={`min-w-0 flex-1 truncate ${
                     r.status === "active"
-                      ? "text-slate-900"
-                      : "text-slate-400 line-through"
+                      ? "text-ink"
+                      : "text-ink-muted line-through"
                   }`}
                 >
                   {r.email}
                 </span>
-                <span className="shrink-0 text-[11px] text-slate-400 tabular-nums">
+                <span className="shrink-0 text-[11px] text-ink-muted tabular-nums">
                   {r.status === "unsubscribed"
                     ? `거부 ${fmtDate(r.unsubscribedAt)}`
                     : r.lastSentAt
@@ -533,7 +533,7 @@ export default function AdminMarketingPage() {
                   onClick={() => remove(r)}
                   disabled={busy}
                   title="삭제"
-                  className="shrink-0 p-1.5 rounded-md text-slate-400 hover:text-danger hover:bg-danger-soft disabled:opacity-50"
+                  className="shrink-0 p-1.5 rounded-md text-ink-muted hover:text-danger hover:bg-danger-soft disabled:opacity-50"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -543,7 +543,7 @@ export default function AdminMarketingPage() {
         )}
       </div>
 
-      <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">
+      <p className="text-[11px] text-ink-muted mt-3 leading-relaxed">
         · 제목 앞에 <code>(광고)</code>가 자동으로 붙고, 본문에 수신거부 링크가
         자동 삽입됩니다 (정보통신망법). · 브로슈어 HTML 에{" "}
         <code>{`{{UNSUBSCRIBE_URL}}`}</code>를 넣으면 그 위치에 수신거부 링크가
@@ -554,42 +554,42 @@ export default function AdminMarketingPage() {
       {/* 확대 미리보기 모달 */}
       {modalBrochure && (
         <div
-          className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-ink/60 flex items-center justify-center p-4"
           onClick={() => setModalId(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden"
+            className="bg-card rounded-2xl shadow-xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-border-default">
               {modalBrochure.builtin && (
-                <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-surface-alt text-ink-muted">
                   기본
                 </span>
               )}
-              <h3 className="text-sm font-semibold text-slate-800 truncate flex-1">
+              <h3 className="text-sm font-semibold text-ink-soft truncate flex-1">
                 {modalBrochure.subject}
               </h3>
               <button
                 type="button"
                 onClick={() => setModalId(null)}
                 title="닫기"
-                className="shrink-0 p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="shrink-0 p-1.5 rounded-md text-ink-muted hover:text-ink-soft hover:bg-surface-alt"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto bg-slate-100 flex justify-center p-3 sm:p-4">
+            <div className="flex-1 overflow-auto bg-surface-alt flex justify-center p-3 sm:p-4">
               <iframe
                 src={previewUrl(modalBrochure.id)}
                 title={`${modalBrochure.subject} 미리보기`}
-                className="bg-white shadow rounded"
+                className="bg-card shadow rounded"
                 style={{ width: 600, maxWidth: "100%", height: "68vh", border: 0 }}
               />
             </div>
 
-            <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-slate-100">
+            <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border-default">
               {!modalBrochure.builtin ? (
                 <button
                   type="button"
@@ -609,7 +609,7 @@ export default function AdminMarketingPage() {
                   setSelectedBrochure(String(modalBrochure.id));
                   setModalId(null);
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-deep font-medium"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-surface rounded-lg hover:bg-primary-deep font-medium"
               >
                 <Check className="w-4 h-4" />
                 이 브로슈어로 발송 선택

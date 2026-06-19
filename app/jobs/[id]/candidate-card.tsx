@@ -46,19 +46,19 @@ function OpenInNewTabButton({ candidateId }: { candidateId: number }) {
           })
         );
       }}
-      className="absolute right-2 top-2 z-10 rounded-md border border-slate-200 bg-white/90 p-1.5 text-slate-400 shadow-sm backdrop-blur transition opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-primary hover:border-primary/40 focus:outline-none"
+      className="absolute right-2 top-2 z-10 rounded-md border border-border-default bg-card/90 p-1.5 text-ink-muted shadow-sm backdrop-blur transition opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-primary hover:border-primary/40 focus:outline-none"
     >
       <ExternalLink className="w-4 h-4" />
     </button>
   );
 }
 
-// 카드 외곽(배경·테두리)만 섹션별로 다름. 즐겨찾기=amber, 1차 후보=accent, 기본=slate.
+// 카드 외곽(배경·테두리)만 섹션별로 다름. 즐겨찾기=amber, 1차 후보=forest(강조), 기본=중립.
 // 그 외 내부 마크업은 세 섹션이 동일하다.
 const VARIANT_CLASS = {
-  favorite: "bg-white border-2 border-amber-300/60",
-  round1: "bg-card border-2 border-accent/60",
-  default: "bg-white border border-slate-200",
+  favorite: "bg-card border-2 border-warning/60",
+  round1: "bg-card border-2 border-primary/40",
+  default: "bg-card border border-border-default",
 } as const;
 
 type Props = {
@@ -86,7 +86,7 @@ function CandidateCardImpl({
           type="checkbox"
           checked={selected}
           onChange={() => onToggleSelect(c.id)}
-          className="rounded border-slate-300"
+          className="rounded border-border-strong"
         />
       </div>
       <OpenInNewTabButton candidateId={c.id} />
@@ -102,7 +102,7 @@ function CandidateCardImpl({
                 initial={c.favorited}
                 onToggle={onFavoriteToggle}
               />
-              <span className="font-semibold text-slate-900">{c.name}</span>
+              <span className="font-semibold text-ink">{c.name}</span>
               {c.outcome !== "hired" && <StageBadge stage={c.stage} />}
               {c.outcome ? (
                 <OutcomeBadge outcome={c.outcome} />
@@ -120,11 +120,11 @@ function CandidateCardImpl({
                 <RecBadge rec={c.screeningReport.recommendation} />
               )}
             </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 mt-1.5">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted mt-1.5">
               {c.careerYears != null && <span>경력 {c.careerYears}년</span>}
               {c.age != null && <span>{c.age}세</span>}
               {(c.educationLevel || c.educationSchool || c.educationMajor) && (
-                <span className="text-slate-600">
+                <span className="text-ink-soft">
                   {[c.educationSchool, c.educationMajor, c.educationLevel]
                     .filter(Boolean)
                     .join(" ")}
@@ -134,17 +134,17 @@ function CandidateCardImpl({
               {c.email && <span>{c.email}</span>}
             </div>
             {c.careerSummary && (
-              <p className="text-xs text-slate-600 mt-1">{c.careerSummary}</p>
+              <p className="text-xs text-ink-soft mt-1">{c.careerSummary}</p>
             )}
           </div>
           <CandidateScores c={c} />
         </div>
         {c.screeningReport?.summary && (
-          <p className="text-sm text-slate-600 mt-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+          <p className="text-sm text-ink-soft mt-2 bg-surface-alt border border-border-default rounded-lg px-3 py-2">
             <HL text={c.screeningReport.summary} />
           </p>
         )}
-        <div className="text-[11px] text-slate-400 mt-1">
+        <div className="text-[11px] text-ink-muted mt-1">
           {formatKstDateTime(c.createdAt)} 업로드
         </div>
       </Link>

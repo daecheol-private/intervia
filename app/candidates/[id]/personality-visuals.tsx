@@ -268,7 +268,7 @@ export function BehaviorStyleCard({ style }: { style: BehaviorStyle }) {
               </span>
             )}
           </div>
-          <p className="text-sm text-slate-700 mt-2 leading-relaxed">
+          <p className="text-sm text-ink-soft mt-2 leading-relaxed">
             {style.summary}
           </p>
         </div>
@@ -301,7 +301,7 @@ export function CompetencyBadges({ keys }: { keys?: string[] | null }) {
     <div>
       <div className="text-sm font-bold text-violet-800 mb-2.5">
         회사가 중시하는 역량{" "}
-        <span className="text-xs font-normal text-slate-500">
+        <span className="text-xs font-normal text-ink-muted">
           (NCS 직업기초능력)
         </span>
       </div>
@@ -318,7 +318,7 @@ export function CompetencyBadges({ keys }: { keys?: string[] | null }) {
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700">
                 <Icon size={19} strokeWidth={2.2} />
               </span>
-              <span className="text-sm font-bold text-slate-800 truncate">
+              <span className="text-sm font-bold text-ink truncate">
                 {meta.label}
               </span>
             </div>

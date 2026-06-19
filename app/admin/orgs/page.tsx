@@ -301,11 +301,11 @@ export default function AdminOrgsPage() {
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {stepUpModal}
       <div className="mb-6">
-        <Link href="/" className="text-xs text-slate-500 hover:underline">
+        <Link href="/" className="text-xs text-ink-muted hover:underline">
           ← 대시보드
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">법인 관리</h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <h1 className="text-2xl font-bold text-ink mt-2">법인 관리</h1>
+        <p className="text-sm text-ink-muted mt-1">
           전체 법인 {rows.length}개. 토큰 충전은 (추후) 단가 페이지에서.
         </p>
       </div>
@@ -319,23 +319,23 @@ export default function AdminOrgsPage() {
       {/* 모바일: 카드 리스트 (충전/조정·환불·정지·재개 — 급한 운영 처리용) */}
       <div className="sm:hidden space-y-3">
         {loading && (
-          <div className="text-slate-400 text-sm py-6 text-center">불러오는 중...</div>
+          <div className="text-ink-muted text-sm py-6 text-center">불러오는 중...</div>
         )}
         {!loading && rows.length === 0 && (
-          <div className="text-slate-400 text-sm py-6 text-center">법인이 없습니다.</div>
+          <div className="text-ink-muted text-sm py-6 text-center">법인이 없습니다.</div>
         )}
         {rows.map((o) => (
           <div
             key={o.id}
-            className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm"
+            className="bg-card border border-border-default rounded-xl p-4 shadow-sm"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="font-medium text-slate-900 flex items-center gap-2 flex-wrap">
+                <div className="font-medium text-ink flex items-center gap-2 flex-wrap">
                   <span className="break-keep">{o.name}</span>
                   {o.suspendedAt && (
                     <span
-                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200"
+                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-danger-soft text-danger border border-danger/40"
                       title={o.suspendedReason ?? "정지됨"}
                     >
                       정지
@@ -348,15 +348,15 @@ export default function AdminOrgsPage() {
               </div>
               <div className="text-right shrink-0">
                 <div
-                  className={`font-mono text-lg leading-none ${o.balance < 0 ? "text-danger" : "text-slate-900"}`}
+                  className={`font-mono text-lg leading-none ${o.balance < 0 ? "text-danger" : "text-ink"}`}
                 >
                   {o.balance.toLocaleString()}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">토큰 잔액</div>
+                <div className="text-[11px] text-ink-muted mt-1">토큰 잔액</div>
               </div>
             </div>
 
-            <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+            <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-muted">
               <span>멤버 {o.memberCount}</span>
               <span>공고 {o.jobCount}</span>
               {o.bizRegistrationNo && (
@@ -365,13 +365,13 @@ export default function AdminOrgsPage() {
               {o.emailDomain && <span>{o.emailDomain}</span>}
             </div>
 
-            <div className="mt-3 pt-3 border-t border-slate-100">
+            <div className="mt-3 pt-3 border-t border-border-default">
               {grantId === o.id ? (
                 <div className="flex flex-col gap-2">
                   <input
                     type="number"
                     inputMode="numeric"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-right font-mono"
+                    className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm text-right font-mono"
                     placeholder="±수량 (예: 100 충전, -50 차감)"
                     value={grantAmount}
                     onChange={(e) => setGrantAmount(e.target.value)}
@@ -380,7 +380,7 @@ export default function AdminOrgsPage() {
                     <button
                       onClick={() => grant(o.id)}
                       disabled={busy}
-                      className="flex-1 px-3 py-2 text-sm bg-primary hover:bg-primary-deep text-white rounded-lg disabled:opacity-50 font-medium"
+                      className="flex-1 px-3 py-2 text-sm bg-primary hover:bg-primary-deep text-surface rounded-lg disabled:opacity-50 font-medium"
                     >
                       적용
                     </button>
@@ -389,7 +389,7 @@ export default function AdminOrgsPage() {
                         setGrantId(null);
                         setGrantAmount("");
                       }}
-                      className="px-4 py-2 text-sm bg-white border border-slate-300 hover:bg-slate-50 rounded-lg"
+                      className="px-4 py-2 text-sm bg-card border border-border-strong hover:bg-surface-alt rounded-lg"
                     >
                       취소
                     </button>
@@ -400,14 +400,14 @@ export default function AdminOrgsPage() {
                   <input
                     type="number"
                     inputMode="numeric"
-                    className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm text-right font-mono"
+                    className="w-full border border-warning/40 rounded-lg px-3 py-2 text-sm text-right font-mono"
                     placeholder="±수량"
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                   />
                   <input
                     type="text"
-                    className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-warning/40 rounded-lg px-3 py-2 text-sm"
                     placeholder="환불 사유 (5자+, 필수)"
                     value={refundReason}
                     onChange={(e) => setRefundReason(e.target.value)}
@@ -416,7 +416,7 @@ export default function AdminOrgsPage() {
                     <button
                       onClick={() => refund(o.id)}
                       disabled={busy}
-                      className="flex-1 px-3 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 font-medium"
+                      className="flex-1 px-3 py-2 text-sm bg-warning hover:bg-warning text-white rounded-lg disabled:opacity-50 font-medium"
                     >
                       환불
                     </button>
@@ -426,7 +426,7 @@ export default function AdminOrgsPage() {
                         setRefundAmount("");
                         setRefundReason("");
                       }}
-                      className="px-4 py-2 text-sm bg-white border border-slate-300 hover:bg-slate-50 rounded-lg"
+                      className="px-4 py-2 text-sm bg-card border border-border-strong hover:bg-surface-alt rounded-lg"
                     >
                       취소
                     </button>
@@ -436,13 +436,13 @@ export default function AdminOrgsPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setGrantId(o.id)}
-                    className="px-3 py-2 text-sm bg-primary hover:bg-primary-deep text-white rounded-lg font-medium"
+                    className="px-3 py-2 text-sm bg-primary hover:bg-primary-deep text-surface rounded-lg font-medium"
                   >
                     충전 / 조정
                   </button>
                   <button
                     onClick={() => setRefundId(o.id)}
-                    className="px-3 py-2 text-sm bg-white border border-amber-300 hover:bg-amber-50 text-amber-700 rounded-lg"
+                    className="px-3 py-2 text-sm bg-card border border-warning/40 hover:bg-warning-soft text-warning rounded-lg"
                   >
                     환불
                   </button>
@@ -450,7 +450,7 @@ export default function AdminOrgsPage() {
                     <button
                       onClick={() => resume(o.id, o.name)}
                       disabled={busy}
-                      className="px-3 py-2 text-sm bg-white border border-primary/40 hover:bg-primary-soft text-primary-deep rounded-lg disabled:opacity-50"
+                      className="px-3 py-2 text-sm bg-card border border-primary/40 hover:bg-primary-soft text-primary-deep rounded-lg disabled:opacity-50"
                     >
                       재개
                     </button>
@@ -458,7 +458,7 @@ export default function AdminOrgsPage() {
                     <button
                       onClick={() => suspend(o.id, o.name)}
                       disabled={busy}
-                      className="px-3 py-2 text-sm bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 rounded-lg disabled:opacity-50"
+                      className="px-3 py-2 text-sm bg-card border border-danger/40 hover:bg-danger-soft text-danger rounded-lg disabled:opacity-50"
                     >
                       정지
                     </button>
@@ -467,7 +467,7 @@ export default function AdminOrgsPage() {
                     <button
                       onClick={() => deleteOrg(o)}
                       disabled={busy}
-                      className="px-3 py-2 text-sm bg-rose-600 hover:bg-rose-700 text-white rounded-lg disabled:opacity-50 font-medium"
+                      className="px-3 py-2 text-sm bg-danger hover:bg-danger text-white rounded-lg disabled:opacity-50 font-medium"
                     >
                       삭제
                     </button>
@@ -480,9 +480,9 @@ export default function AdminOrgsPage() {
       </div>
 
       {/* 데스크톱: 전체 테이블 */}
-      <div className="hidden sm:block bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
+      <div className="hidden sm:block bg-card border border-border-default rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-600 text-xs">
+          <thead className="bg-surface-alt text-ink-soft text-xs">
             <tr>
               <th className="text-left px-4 py-3 font-medium">법인명</th>
               <th className="text-left px-4 py-3 font-medium">검증</th>
@@ -495,24 +495,24 @@ export default function AdminOrgsPage() {
               <th className="text-right px-4 py-3 font-medium">작업</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-border-default">
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={8}>
+                <td className="px-4 py-6 text-ink-muted" colSpan={8}>
                   불러오는 중...
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={8}>
+                <td className="px-4 py-6 text-ink-muted" colSpan={8}>
                   법인이 없습니다.
                 </td>
               </tr>
             )}
             {rows.map((o) => (
               <tr key={o.id}>
-                <td className="px-4 py-3 font-medium text-slate-900">
+                <td className="px-4 py-3 font-medium text-ink">
                   {editId === o.id ? (
                     <input
                       className="w-full border border-primary/40 rounded px-2 py-1 text-sm"
@@ -524,7 +524,7 @@ export default function AdminOrgsPage() {
                       {o.name}
                       {o.suspendedAt && (
                         <span
-                          className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200"
+                          className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-danger-soft text-danger border border-danger/40"
                           title={o.suspendedReason ?? "정지됨"}
                         >
                           정지
@@ -536,7 +536,7 @@ export default function AdminOrgsPage() {
                 <td className="px-4 py-3 text-xs">
                   <VerificationBadge org={o} onVerify={verifyOrg} />
                 </td>
-                <td className="px-4 py-3 text-slate-600">
+                <td className="px-4 py-3 text-ink-soft">
                   {editId === o.id ? (
                     <input
                       className="w-32 border border-primary/40 rounded px-2 py-1 text-sm font-mono"
@@ -548,7 +548,7 @@ export default function AdminOrgsPage() {
                     o.bizRegistrationNo || "-"
                   )}
                 </td>
-                <td className="px-4 py-3 text-slate-600">
+                <td className="px-4 py-3 text-ink-soft">
                   {editId === o.id ? (
                     <input
                       className="w-40 border border-primary/40 rounded px-2 py-1 text-sm"
@@ -562,7 +562,7 @@ export default function AdminOrgsPage() {
                       <button
                         title="SaaS·공용 메일이면 매핑 해제 — 자동매칭 비활성화"
                         onClick={() => unmapDomain(o.id, o.name, o.emailDomain!)}
-                        className="text-[10px] text-amber-700 hover:text-amber-900 underline"
+                        className="text-[10px] text-warning hover:text-warning underline"
                       >
                         해제
                       </button>
@@ -576,7 +576,7 @@ export default function AdminOrgsPage() {
                 <td className={`px-4 py-3 text-right font-mono ${o.balance < 0 ? "text-danger" : ""}`}>
                   {o.balance.toLocaleString()}
                 </td>
-                <td className="px-4 py-3 text-xs text-slate-500">
+                <td className="px-4 py-3 text-xs text-ink-muted">
                   {formatLocalDate(o.createdAt)}
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -585,13 +585,13 @@ export default function AdminOrgsPage() {
                       <button
                         onClick={() => saveEdit(o.id)}
                         disabled={busy}
-                        className="px-2 py-1 text-xs bg-primary hover:bg-primary-deep text-white rounded disabled:opacity-50"
+                        className="px-2 py-1 text-xs bg-primary hover:bg-primary-deep text-surface rounded disabled:opacity-50"
                       >
                         저장
                       </button>
                       <button
                         onClick={() => setEditId(null)}
-                        className="px-2 py-1 text-xs bg-white border border-slate-300 hover:bg-slate-50 rounded"
+                        className="px-2 py-1 text-xs bg-card border border-border-strong hover:bg-surface-alt rounded"
                       >
                         취소
                       </button>
@@ -600,7 +600,7 @@ export default function AdminOrgsPage() {
                     <div className="flex gap-1 justify-end">
                       <input
                         type="number"
-                        className="w-24 border border-slate-300 rounded px-2 py-1 text-xs text-right font-mono"
+                        className="w-24 border border-border-strong rounded px-2 py-1 text-xs text-right font-mono"
                         placeholder="±수량"
                         value={grantAmount}
                         onChange={(e) => setGrantAmount(e.target.value)}
@@ -608,7 +608,7 @@ export default function AdminOrgsPage() {
                       <button
                         onClick={() => grant(o.id)}
                         disabled={busy}
-                        className="px-2 py-1 text-xs bg-primary hover:bg-primary-deep text-white rounded disabled:opacity-50"
+                        className="px-2 py-1 text-xs bg-primary hover:bg-primary-deep text-surface rounded disabled:opacity-50"
                       >
                         적용
                       </button>
@@ -617,7 +617,7 @@ export default function AdminOrgsPage() {
                           setGrantId(null);
                           setGrantAmount("");
                         }}
-                        className="px-2 py-1 text-xs bg-white border border-slate-300 hover:bg-slate-50 rounded"
+                        className="px-2 py-1 text-xs bg-card border border-border-strong hover:bg-surface-alt rounded"
                       >
                         취소
                       </button>
@@ -627,7 +627,7 @@ export default function AdminOrgsPage() {
                       <div className="flex gap-1">
                         <input
                           type="number"
-                          className="w-24 border border-amber-300 rounded px-2 py-1 text-xs text-right font-mono"
+                          className="w-24 border border-warning/40 rounded px-2 py-1 text-xs text-right font-mono"
                           placeholder="±수량"
                           value={refundAmount}
                           onChange={(e) => setRefundAmount(e.target.value)}
@@ -635,7 +635,7 @@ export default function AdminOrgsPage() {
                         <button
                           onClick={() => refund(o.id)}
                           disabled={busy}
-                          className="px-2 py-1 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded disabled:opacity-50"
+                          className="px-2 py-1 text-xs bg-warning hover:bg-warning text-white rounded disabled:opacity-50"
                         >
                           환불
                         </button>
@@ -645,14 +645,14 @@ export default function AdminOrgsPage() {
                             setRefundAmount("");
                             setRefundReason("");
                           }}
-                          className="px-2 py-1 text-xs bg-white border border-slate-300 hover:bg-slate-50 rounded"
+                          className="px-2 py-1 text-xs bg-card border border-border-strong hover:bg-surface-alt rounded"
                         >
                           취소
                         </button>
                       </div>
                       <input
                         type="text"
-                        className="w-64 border border-amber-300 rounded px-2 py-1 text-xs"
+                        className="w-64 border border-warning/40 rounded px-2 py-1 text-xs"
                         placeholder="환불 사유 (5자+, 필수)"
                         value={refundReason}
                         onChange={(e) => setRefundReason(e.target.value)}
@@ -662,25 +662,25 @@ export default function AdminOrgsPage() {
                     <div className="flex gap-1 justify-end flex-wrap">
                       <button
                         onClick={() => startEdit(o)}
-                        className="px-2 py-1 text-xs bg-white border border-primary/40 hover:bg-primary-soft text-primary-deep rounded"
+                        className="px-2 py-1 text-xs bg-card border border-primary/40 hover:bg-primary-soft text-primary-deep rounded"
                       >
                         수정
                       </button>
                       <Link
                         href={`/admin/orgs/${o.id}/transfer-admin`}
-                        className="px-2 py-1 text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded"
+                        className="px-2 py-1 text-xs bg-card border border-border-strong hover:bg-surface-alt text-ink-soft rounded"
                       >
                         관리자 이전
                       </Link>
                       <button
                         onClick={() => setGrantId(o.id)}
-                        className="px-2 py-1 text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded"
+                        className="px-2 py-1 text-xs bg-card border border-border-strong hover:bg-surface-alt text-ink-soft rounded"
                       >
                         충전/조정
                       </button>
                       <button
                         onClick={() => setRefundId(o.id)}
-                        className="px-2 py-1 text-xs bg-white border border-amber-300 hover:bg-amber-50 text-amber-700 rounded"
+                        className="px-2 py-1 text-xs bg-card border border-warning/40 hover:bg-warning-soft text-warning rounded"
                       >
                         환불
                       </button>
@@ -696,7 +696,7 @@ export default function AdminOrgsPage() {
                         <button
                           onClick={() => suspend(o.id, o.name)}
                           disabled={busy}
-                          className="px-2 py-1 text-xs bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 rounded disabled:opacity-50"
+                          className="px-2 py-1 text-xs bg-card border border-danger/40 hover:bg-danger-soft text-danger rounded disabled:opacity-50"
                         >
                           정지
                         </button>
@@ -706,7 +706,7 @@ export default function AdminOrgsPage() {
                           onClick={() => deleteOrg(o)}
                           disabled={busy}
                           title="법인·멤버·후보자 영구 삭제 (복구 불가)"
-                          className="px-2 py-1 text-xs bg-rose-600 hover:bg-rose-700 text-white rounded disabled:opacity-50"
+                          className="px-2 py-1 text-xs bg-danger hover:bg-danger text-white rounded disabled:opacity-50"
                         >
                           삭제
                         </button>
@@ -734,7 +734,7 @@ function VerificationBadge({
   if (status === "dart_matched") {
     return (
       <span
-        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-success-soft text-success border border-success/30"
         title={org.verificationNote ?? "DART 자동 매칭"}
       >
         ✓ DART
@@ -744,7 +744,7 @@ function VerificationBadge({
   if (status === "verified") {
     return (
       <span
-        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-success-soft text-success border border-success/30"
         title={org.verificationNote ?? "운영자 수동 검증"}
       >
         ✓ 검증
@@ -754,7 +754,7 @@ function VerificationBadge({
   if (status === "rejected") {
     return (
       <span
-        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200"
+        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-danger-soft text-danger border border-danger/30"
         title={org.verificationNote ?? "거절"}
       >
         ✕ 거절
@@ -764,7 +764,7 @@ function VerificationBadge({
   // pending_review
   return (
     <div className="flex flex-col gap-1 items-start">
-      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/30">
         ⏳ 검토 대기
       </span>
       <div className="flex gap-1 mt-0.5">
@@ -774,7 +774,7 @@ function VerificationBadge({
             if (note === null) return;
             onVerify(org.id, "approve", note);
           }}
-          className="px-1.5 py-0.5 text-[10px] bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-emerald-700 rounded"
+          className="px-1.5 py-0.5 text-[10px] bg-success-soft border border-success/40 hover:bg-success/10 text-success rounded"
         >
           승인
         </button>
@@ -787,7 +787,7 @@ function VerificationBadge({
             if (note === null || !note.trim()) return;
             onVerify(org.id, "reject", note);
           }}
-          className="px-1.5 py-0.5 text-[10px] bg-rose-50 border border-rose-300 hover:bg-rose-100 text-rose-700 rounded"
+          className="px-1.5 py-0.5 text-[10px] bg-danger-soft border border-danger/40 hover:bg-danger/10 text-danger rounded"
         >
           거절
         </button>

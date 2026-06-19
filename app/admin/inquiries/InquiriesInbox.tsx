@@ -29,14 +29,14 @@ type InquiryRow = {
 };
 
 const STATUS_STYLE: Record<InquiryStatus, string> = {
-  open: "bg-amber-100 text-amber-800 border-amber-200",
-  in_progress: "bg-blue-100 text-blue-800 border-blue-200",
-  resolved: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  open: "bg-warning-soft text-warning border-warning/30",
+  in_progress: "bg-primary-soft text-primary-deep border-primary/30",
+  resolved: "bg-success-soft text-success border-success/30",
 };
 
 const SOURCE_STYLE: Record<InquirySource, string> = {
-  org_user: "bg-indigo-100 text-indigo-700 border-indigo-200",
-  candidate: "bg-slate-100 text-slate-600 border-slate-200",
+  org_user: "bg-surface-alt text-ink-soft border-border-default",
+  candidate: "bg-surface-alt text-ink-soft border-border-default",
 };
 
 const FILTERS: { value: string; label: string }[] = [
@@ -89,15 +89,15 @@ export function InquiriesInbox() {
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-8">
-      <h1 className="text-xl font-bold text-slate-900">고객센터 문의함</h1>
-      <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+      <h1 className="text-xl font-bold text-ink">고객센터 문의함</h1>
+      <p className="text-sm text-ink-soft mt-1 leading-relaxed">
         고객(법인)과 후보자가 접수한 문의·불편사항입니다. 행을 클릭해 상세를 열고
         상태·답변을 남기면 고객의 &quot;내 문의 내역&quot;에 반영됩니다.
       </p>
 
       <div className="mt-4 flex items-center gap-3 flex-wrap">
         {openCount > 0 && (
-          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-warning bg-warning-soft border border-warning/30 rounded-lg px-3 py-1.5">
             ⏳ 미처리 {openCount}건
           </span>
         )}
@@ -108,8 +108,8 @@ export function InquiriesInbox() {
               onClick={() => setFilter(f.value)}
               className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                 filter === f.value
-                  ? "bg-slate-900 text-white border-slate-900"
-                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  ? "bg-ink text-surface border-ink"
+                  : "bg-card text-ink-soft border-border-default hover:bg-surface-alt"
               }`}
             >
               {f.label}
@@ -119,14 +119,14 @@ export function InquiriesInbox() {
       </div>
 
       {err && (
-        <div className="mt-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+        <div className="mt-4 text-sm text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
           {err}
         </div>
       )}
 
-      <div className="mt-4 overflow-x-auto border border-slate-200 rounded-xl bg-white">
+      <div className="mt-4 overflow-x-auto border border-border-default rounded-xl bg-card">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs">
+          <thead className="bg-surface-alt text-ink-muted text-xs">
             <tr>
               <th className="px-3 py-2.5 text-left w-16">상태</th>
               <th className="px-3 py-2.5 text-left w-16">출처</th>
@@ -136,17 +136,17 @@ export function InquiriesInbox() {
               <th className="px-3 py-2.5 text-left w-36">접수일</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-border-default">
             {rows === null && (
               <tr>
-                <td colSpan={6} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={6} className="px-3 py-10 text-center text-ink-muted">
                   불러오는 중…
                 </td>
               </tr>
             )}
             {rows !== null && rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={6} className="px-3 py-10 text-center text-ink-muted">
                   문의가 없습니다.
                 </td>
               </tr>
@@ -157,8 +157,8 @@ export function InquiriesInbox() {
                 onClick={() => setDetail(r)}
                 className={`cursor-pointer transition-colors ${
                   r.status === "open"
-                    ? "bg-amber-50/40 hover:bg-amber-50"
-                    : "hover:bg-slate-50"
+                    ? "bg-warning-soft/40 hover:bg-warning-soft"
+                    : "hover:bg-surface-alt"
                 }`}
               >
                 <td className="px-3 py-2.5 align-top">
@@ -171,22 +171,22 @@ export function InquiriesInbox() {
                     {SOURCE_LABEL[r.source]}
                   </span>
                 </td>
-                <td className="px-3 py-2.5 align-top text-slate-700 whitespace-nowrap">
+                <td className="px-3 py-2.5 align-top text-ink-soft whitespace-nowrap">
                   {CATEGORY_LABEL[r.category] ?? r.category}
                 </td>
-                <td className="px-3 py-2.5 align-top text-slate-800 max-w-0">
+                <td className="px-3 py-2.5 align-top text-ink max-w-0">
                   <div className="truncate">{r.message}</div>
                   {r.adminNote && (
-                    <span className="text-[11px] text-emerald-600">
+                    <span className="text-[11px] text-success">
                       ↳ 답변 완료
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2.5 align-top text-xs text-slate-600 max-w-0">
+                <td className="px-3 py-2.5 align-top text-xs text-ink-soft max-w-0">
                   <div className="truncate">{r.orgName ?? "—"}</div>
-                  <div className="truncate text-slate-400">{r.contactEmail}</div>
+                  <div className="truncate text-ink-muted">{r.contactEmail}</div>
                 </td>
-                <td className="px-3 py-2.5 align-top text-xs text-slate-500 whitespace-nowrap">
+                <td className="px-3 py-2.5 align-top text-xs text-ink-muted whitespace-nowrap">
                   {fmt(r.createdAt)}
                 </td>
               </tr>
@@ -258,50 +258,50 @@ function InquiryDetailModal({
             >
               {SOURCE_LABEL[row.source]}
             </span>
-            <span className="text-xs font-medium text-slate-700">
+            <span className="text-xs font-medium text-ink-soft">
               {CATEGORY_LABEL[row.category] ?? row.category}
             </span>
             <StatusBadge status={row.status} />
-            <span className="text-[11px] text-slate-400">
+            <span className="text-[11px] text-ink-muted">
               {fmt(row.createdAt)}
             </span>
           </div>
 
-          <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5">
+          <div className="text-xs text-ink-muted flex flex-wrap gap-x-3 gap-y-0.5">
             <span>법인: {row.orgName ?? "—"}</span>
             {row.source === "candidate" && (
               <span>후보자: {row.candidateName ?? "(폐기됨)"}</span>
             )}
             <a
               href={`mailto:${row.contactEmail}`}
-              className="text-blue-600 hover:underline"
+              className="text-primary hover:underline"
             >
               {row.contactEmail}
             </a>
           </div>
 
           <div>
-            <div className="text-[11px] font-medium text-slate-500 mb-1">
+            <div className="text-[11px] font-medium text-ink-muted mb-1">
               문의 내용
             </div>
-            <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed bg-slate-50 border border-slate-200 rounded-lg p-3">
+            <p className="text-sm text-ink-soft whitespace-pre-wrap leading-relaxed bg-surface-alt border border-border-default rounded-lg p-3">
               {row.message}
             </p>
           </div>
 
-          <div className="pt-1 border-t border-slate-100">
-            <label className="block text-[11px] font-medium text-slate-500 mb-1 mt-3">
+          <div className="pt-1 border-t border-border-default">
+            <label className="block text-[11px] font-medium text-ink-muted mb-1 mt-3">
               운영팀 답변 (고객에게 노출됨)
             </label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary leading-relaxed"
+              className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary leading-relaxed"
               placeholder="처리 결과나 안내를 작성하면 고객의 문의 내역에 답변으로 표시됩니다."
             />
-            <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-              ✉️ <span className="font-medium text-slate-500">완료</span>로
+            <p className="text-[11px] text-ink-muted mt-1.5 leading-relaxed">
+              ✉️ <span className="font-medium text-ink-muted">완료</span>로
               변경하거나 답변을 작성해 저장하면, 문의자({row.contactEmail})에게
               처리 상태·답변이 이메일로 발송됩니다.
             </p>
@@ -315,8 +315,8 @@ function InquiryDetailModal({
                   onClick={() => setStatus(s)}
                   className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                     status === s
-                      ? "bg-slate-900 text-white border-slate-900"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                      ? "bg-ink text-surface border-ink"
+                      : "bg-card text-ink-soft border-border-default hover:bg-surface-alt"
                   }`}
                 >
                   {STATUS_LABEL[s]}
@@ -326,14 +326,14 @@ function InquiryDetailModal({
             <div className="flex gap-2">
               <button
                 onClick={onClose}
-                className="text-xs px-4 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+                className="text-xs px-4 py-1.5 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt"
               >
                 닫기
               </button>
               <button
                 onClick={save}
                 disabled={busy || !dirty}
-                className="text-xs px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-white font-medium disabled:opacity-40"
+                className="text-xs px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-40"
               >
                 {busy ? "저장 중..." : "저장"}
               </button>

@@ -81,7 +81,7 @@ export function AppealsPanel({ candidateId }: { candidateId: number }) {
 
   return (
     <Section title="자동화 의사결정 이의제기" collapsible={false}>
-      <div className="text-xs text-slate-500 mb-3">
+      <div className="text-xs text-ink-muted mb-3">
         PIPA §37의2 에 따라 영업일 기준 7일 이내 답변 회신 의무.
         해결됨/기각으로 변경하면 작성된 답변이 후보자 이메일로 자동
         발송됩니다.
@@ -90,7 +90,7 @@ export function AppealsPanel({ candidateId }: { candidateId: number }) {
         {list.map((a) => (
           <li
             key={a.id}
-            className="bg-amber-50 border border-amber-200 rounded-xl p-4"
+            className="bg-warning-soft border border-warning/40 rounded-xl p-4"
           >
             <div className="flex items-center gap-2 flex-wrap">
               <span
@@ -104,23 +104,23 @@ export function AppealsPanel({ candidateId }: { candidateId: number }) {
                       ? "해결됨"
                       : "기각"}
               </span>
-              <span className="text-xs text-slate-700 font-medium">
+              <span className="text-xs text-ink-soft font-medium">
                 {a.email}
               </span>
-              <span className="text-[11px] text-slate-500">
+              <span className="text-[11px] text-ink-muted">
                 · 접수 {fmt(a.createdAt)}
               </span>
               {a.reviewedAt && (
-                <span className="text-[11px] text-slate-500">
+                <span className="text-[11px] text-ink-muted">
                   · 처리 {fmt(a.reviewedAt)}
                 </span>
               )}
             </div>
-            <div className="mt-3 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed bg-white border border-slate-200 rounded-lg p-3">
+            <div className="mt-3 text-sm text-ink-soft whitespace-pre-wrap leading-relaxed bg-card border border-border-default rounded-lg p-3">
               {a.reason}
             </div>
             <details className="mt-3">
-              <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-900">
+              <summary className="text-xs text-ink-muted cursor-pointer hover:text-ink">
                 답변 작성 / 상태 변경
               </summary>
               <div className="mt-2 space-y-2">
@@ -136,7 +136,7 @@ export function AppealsPanel({ candidateId }: { candidateId: number }) {
                   }}
                   rows={3}
                   placeholder="후보자에게 발송될 답변 — 해결됨/기각 처리 시 이 내용이 메일로 자동 발송됩니다"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs"
+                  className="w-full border border-border-strong rounded-lg px-3 py-2 text-xs"
                 />
                 <div className="flex flex-wrap gap-2">
                   {(
@@ -176,7 +176,7 @@ export function AppealsPanel({ candidateId }: { candidateId: number }) {
                           void update(a.id, body, a.email);
                         }}
                         disabled={busy === a.id}
-                        className="text-xs px-3 py-1 rounded-md border border-slate-300 hover:bg-slate-100 disabled:opacity-50"
+                        className="text-xs px-3 py-1 rounded-md border border-border-strong hover:bg-surface-alt disabled:opacity-50"
                       >
                         {s === "reviewed"
                           ? "검토중으로"

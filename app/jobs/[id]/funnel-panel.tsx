@@ -126,8 +126,8 @@ export function FunnelPanel({
       label: "최종 합격",
       n: s("hired"),
       subs: [],
-      dot: "bg-white/80",
-      fill: "border-primary bg-primary text-white shadow-[var(--shadow-sm)]",
+      dot: "bg-surface/80",
+      fill: "border-primary bg-primary text-surface shadow-[var(--shadow-sm)]",
       ring: "ring-primary/50",
       solid: true,
     },
@@ -219,7 +219,7 @@ export function FunnelPanel({
   const actionTotal = actionItems.reduce((s, x) => s + x.count, 0);
 
   return (
-    <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+    <div className="mt-4 bg-card border border-border-default rounded-2xl p-5 shadow-sm">
       {/* 🔔 오늘 결정할 일 — 인사담당이 처리해야 할 단계 */}
       {actionTotal > 0 && (
         <div className="mb-4 rounded-xl border border-primary/25 bg-primary-soft/40 p-3">
@@ -245,13 +245,13 @@ export function FunnelPanel({
       )}
 
       <div className="flex items-baseline justify-between mb-2 gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-slate-900">전형 단계 현황</h3>
-        <div className="text-xs text-slate-500">
-          총 <strong className="text-slate-900">{data.total}</strong>명
+        <h3 className="text-sm font-semibold text-ink">전형 단계 현황</h3>
+        <div className="text-xs text-ink-muted">
+          총 <strong className="text-ink">{data.total}</strong>명
           {data.avgScreeningScore != null && (
             <>
               {" · "}AI 서류 평균{" "}
-              <strong className="text-slate-900">
+              <strong className="text-ink">
                 {data.avgScreeningScore}
               </strong>
               점 ({data.countWithScreeningScore}명)
@@ -288,7 +288,7 @@ export function FunnelPanel({
                   filled ? cell.fill : dimCell
                 } ${
                   selected
-                    ? `ring-2 ring-offset-1 ring-offset-white shadow-[var(--shadow-sm)] ${cell.ring}`
+                    ? `ring-2 ring-offset-1 ring-offset-card shadow-[var(--shadow-sm)] ${cell.ring}`
                     : ""
                 }`}
               >
@@ -332,13 +332,13 @@ export function FunnelPanel({
 
       {/* 결정 현황 — 불합격/지원취소만, 컴팩트하게 단계별 breakdown */}
       {(rejectedTotal > 0 || withdrawnTotal > 0) && (
-        <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-2 text-[11px]">
+        <div className="mt-3 pt-3 border-t border-border-default flex flex-wrap gap-x-4 gap-y-2 text-[11px]">
           {rejectedTotal > 0 && (
             <div className="flex items-baseline gap-1.5">
               <span className="text-danger font-medium">
                 ✗ 불합격 {rejectedTotal}건
               </span>
-              <span className="text-slate-400">
+              <span className="text-ink-muted">
                 {rejectedBreakdown.map((r, idx) => (
                   <span key={idx}>
                     {idx > 0 && ", "}
@@ -353,10 +353,10 @@ export function FunnelPanel({
           )}
           {withdrawnTotal > 0 && (
             <div className="flex items-baseline gap-1.5">
-              <span className="text-slate-600 font-medium">
+              <span className="text-ink-soft font-medium">
                 ↩ 지원취소 {withdrawnTotal}건
               </span>
-              <span className="text-slate-400">
+              <span className="text-ink-muted">
                 {withdrawnBreakdown.map((r, idx) => (
                   <span key={idx}>
                     {idx > 0 && ", "}

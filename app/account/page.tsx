@@ -68,20 +68,20 @@ export default function AccountPage() {
 
   if (!user)
     return (
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-slate-500">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
         불러오는 중...
       </main>
     );
 
   return (
     <main className="max-w-2xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      <Link href="/" className="text-sm text-slate-500 hover:text-slate-900">
+      <Link href="/" className="text-sm text-ink-muted hover:text-ink">
         ← 대시보드
       </Link>
       <h1 className="text-2xl font-bold mt-3 mb-6">계정 설정</h1>
 
-      <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+      <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm mb-6">
+        <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">
           내 정보
         </h2>
         <div className="space-y-2 text-sm">
@@ -92,8 +92,8 @@ export default function AccountPage() {
 
       <OrgInfoPanel />
 
-      <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+      <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm">
+        <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">
           비밀번호 변경
         </h2>
         <div className="space-y-4">
@@ -140,7 +140,7 @@ export default function AccountPage() {
           <button
             onClick={submit}
             disabled={busy}
-            className="bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg shadow-sm"
+            className="bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium px-5 py-2 rounded-lg shadow-sm"
           >
             {busy ? "변경 중..." : "비밀번호 변경"}
           </button>
@@ -151,11 +151,11 @@ export default function AccountPage() {
       <SessionsPanel />
       <MarketingEmailPanel />
 
-      <section className="mt-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+      <section className="mt-8 bg-card border border-border-default rounded-2xl p-6 shadow-sm">
+        <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">
           로그아웃
         </h2>
-        <p className="text-sm text-slate-600 mb-4">
+        <p className="text-sm text-ink-soft mb-4">
           현재 디바이스의 세션을 종료합니다. 다른 디바이스의 세션은 영향받지 않습니다 — 모든 디바이스를 한 번에 종료하려면 위 "활성 세션" 패널의 "다른 모든 세션 종료" 를 사용하세요.
         </p>
         <LogoutButton variant="full" />
@@ -223,11 +223,11 @@ function DangerZone({ email }: { email: string }) {
   };
 
   return (
-    <section className="mt-8 bg-white border border-danger/30 rounded-2xl p-6 shadow-sm">
+    <section className="mt-8 bg-card border border-danger/30 rounded-2xl p-6 shadow-sm">
       <h2 className="text-xs font-semibold text-danger uppercase tracking-wider mb-3">
         계정 탈퇴
       </h2>
-      <p className="text-sm text-slate-600 mb-4 leading-relaxed">
+      <p className="text-sm text-ink-soft mb-4 leading-relaxed">
         계정을 영구적으로 삭제합니다. <strong>되돌릴 수 없습니다.</strong> 로그인
         정보·알림·즐겨찾기와 본인이 작성한 면접관 메모가 함께 삭제됩니다. 본인이
         등록한 공고·후보자 데이터는 법인에 그대로 보존됩니다.
@@ -241,7 +241,7 @@ function DangerZone({ email }: { email: string }) {
           계정 탈퇴
         </button>
       ) : (
-        <div className="space-y-4 border-t border-slate-100 pt-4">
+        <div className="space-y-4 border-t border-border-default pt-4">
           <Field label="현재 비밀번호">
             <PasswordInput
               className={inputCls}
@@ -294,7 +294,7 @@ function DangerZone({ email }: { email: string }) {
                 setConfirmEmail("");
                 setErr("");
               }}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-5 py-2 rounded-lg border border-slate-300"
+              className="bg-slate-100 hover:bg-slate-200 text-ink-soft text-sm font-medium px-5 py-2 rounded-lg border border-border-strong"
             >
               취소
             </button>
@@ -388,8 +388,8 @@ function TwoFactorPanel() {
   if (enabled === null) return null;
 
   return (
-    <section className="mt-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-      <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+    <section className="mt-8 bg-card border border-border-default rounded-2xl p-6 shadow-sm">
+      <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">
         2단계 인증 (TOTP)
       </h2>
       {enabled ? (
@@ -397,8 +397,8 @@ function TwoFactorPanel() {
           <div className="text-sm text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
             2단계 인증이 <strong>활성화</strong>되어 있습니다. 로그인 시 Authenticator 앱의 6자리 코드가 필요합니다.
           </div>
-          <div className="border-t border-slate-100 pt-4 space-y-3">
-            <p className="text-sm text-slate-600 font-medium">2단계 인증 해제</p>
+          <div className="border-t border-border-default pt-4 space-y-3">
+            <p className="text-sm text-ink-soft font-medium">2단계 인증 해제</p>
             <Field label="현재 비밀번호">
               <PasswordInput
                 className={inputCls}
@@ -438,27 +438,27 @@ function TwoFactorPanel() {
         </div>
       ) : setup ? (
         <div className="space-y-4">
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-ink-soft">
             <strong>Google Authenticator</strong> 앱을 열고 우하단 <strong>+</strong> 버튼 → <strong>QR 코드 스캔</strong>으로 아래 QR을 찍어주세요. 스캔할 수 없는 환경이면 아래 시크릿을 수동 입력하세요.
           </p>
-          <div className="flex flex-col items-center bg-white border border-slate-200 rounded-xl p-4">
+          <div className="flex flex-col items-center bg-card border border-border-default rounded-xl p-4">
             <img
               src={setup.qr}
               alt="2단계 인증 QR 코드"
               className="w-60 h-60"
             />
-            <div className="text-[11px] text-slate-500 mt-2">
+            <div className="text-[11px] text-ink-muted mt-2">
               스캔 후 앱에 표시되는 6자리 코드를 아래에 입력하면 활성화됩니다.
             </div>
           </div>
           <details className="text-xs">
-            <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
+            <summary className="cursor-pointer text-ink-muted hover:text-ink-soft">
               스캔이 안 되나요? 시크릿 수동 입력
             </summary>
-            <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 space-y-1.5">
-              <div className="text-slate-500">시크릿</div>
+            <div className="mt-2 bg-surface-alt border border-border-default rounded-lg px-3 py-2.5 space-y-1.5">
+              <div className="text-ink-muted">시크릿</div>
               <code className="font-mono text-sm break-all select-all">{setup.secret}</code>
-              <div className="text-slate-500 pt-2">otpauth 링크 (모바일에서 직접 클릭)</div>
+              <div className="text-ink-muted pt-2">otpauth 링크 (모바일에서 직접 클릭)</div>
               <a
                 href={setup.url}
                 className="font-mono text-xs text-primary hover:underline break-all"
@@ -492,7 +492,7 @@ function TwoFactorPanel() {
             <button
               onClick={enableConfirm}
               disabled={busy || code.length !== 6}
-              className="bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg shadow-sm"
+              className="bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium px-5 py-2 rounded-lg shadow-sm"
             >
               {busy ? "처리 중..." : "활성화"}
             </button>
@@ -502,7 +502,7 @@ function TwoFactorPanel() {
                 setCode("");
                 setMsg(null);
               }}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium px-5 py-2 rounded-lg border border-slate-300"
+              className="bg-slate-100 hover:bg-slate-200 text-ink-soft text-sm font-medium px-5 py-2 rounded-lg border border-border-strong"
             >
               취소
             </button>
@@ -510,7 +510,7 @@ function TwoFactorPanel() {
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-ink-soft">
             로그인 시 비밀번호 외에 Authenticator 앱의 6자리 코드를 한 번 더 요구합니다. 보안 강화를 위해 권장됩니다 (특히 시스템관리자).
           </p>
           {msg && (
@@ -527,7 +527,7 @@ function TwoFactorPanel() {
           <button
             onClick={startSetup}
             disabled={busy}
-            className="bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg shadow-sm"
+            className="bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium px-5 py-2 rounded-lg shadow-sm"
           >
             {busy ? "처리 중..." : "2단계 인증 설정 시작"}
           </button>
@@ -598,11 +598,11 @@ function SessionsPanel() {
   const fmt = (s: string | null) => (s ? formatLocalDateTime(s) : "-");
 
   return (
-    <section className="mt-8 bg-white rounded-2xl border border-slate-200 shadow-sm">
-      <header className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
+    <section className="mt-8 bg-card rounded-2xl border border-border-default shadow-sm">
+      <header className="px-6 py-5 border-b border-border-default flex justify-between items-center">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">활성 세션</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h2 className="text-base font-semibold text-ink">활성 세션</h2>
+          <p className="text-xs text-ink-muted mt-0.5">
             로그인된 디바이스 목록. 모르는 세션이 있으면 즉시 종료하세요.
           </p>
         </div>
@@ -623,11 +623,11 @@ function SessionsPanel() {
           </div>
         )}
         {!list ? (
-          <div className="text-sm text-slate-500">불러오는 중...</div>
+          <div className="text-sm text-ink-muted">불러오는 중...</div>
         ) : list.length === 0 ? (
-          <div className="text-sm text-slate-500">활성 세션 없음.</div>
+          <div className="text-sm text-ink-muted">활성 세션 없음.</div>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border-default">
             {list.map((s) => (
               <li
                 key={s.displayId}
@@ -635,7 +635,7 @@ function SessionsPanel() {
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-900">
+                    <span className="text-sm font-medium text-ink">
                       {s.browser}
                     </span>
                     {s.isCurrent && (
@@ -645,7 +645,7 @@ function SessionsPanel() {
                     )}
                   </div>
                   <div
-                    className="text-[11px] text-slate-500 mt-0.5 truncate"
+                    className="text-[11px] text-ink-muted mt-0.5 truncate"
                     title={s.userAgent ?? ""}
                   >
                     {s.ip ? `IP ${s.ip} · ` : ""}
@@ -657,7 +657,7 @@ function SessionsPanel() {
                   <button
                     onClick={() => revoke(s.displayId)}
                     disabled={busy === s.displayId}
-                    className="text-xs px-3 py-1 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 shrink-0"
+                    className="text-xs px-3 py-1 rounded-md border border-border-strong text-ink-soft hover:bg-surface-alt disabled:opacity-50 shrink-0"
                   >
                     {busy === s.displayId ? "종료 중..." : "세션 종료"}
                   </button>
@@ -711,12 +711,12 @@ function MarketingEmailPanel() {
   if (optIn === null) return null;
 
   return (
-    <section className="mt-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-      <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+    <section className="mt-8 bg-card border border-border-default rounded-2xl p-6 shadow-sm">
+      <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">
         마케팅 메일 수신
       </h2>
       <div className="flex items-start justify-between gap-4">
-        <p className="text-sm text-slate-600 leading-relaxed">
+        <p className="text-sm text-ink-soft leading-relaxed">
           제품 소식·이벤트 등 마케팅(광고성) 메일 수신 여부입니다. 끄면 즉시 수신거부
           처리됩니다. 면접 일정·합격 통지 등 서비스 운영·계정 관련 안내 메일은 이 설정과
           무관하게 계속 발송됩니다.
@@ -732,7 +732,7 @@ function MarketingEmailPanel() {
           }`}
         >
           <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+            className={`inline-block h-5 w-5 transform rounded-full bg-card shadow transition-transform ${
               optIn ? "translate-x-5" : "translate-x-0.5"
             }`}
           />
@@ -754,12 +754,12 @@ function MarketingEmailPanel() {
 }
 
 const inputCls =
-  "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+  "w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+      <label className="block text-sm font-medium text-ink-soft mb-1.5">
         {label}
       </label>
       {children}
@@ -770,8 +770,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-3">
-      <span className="w-20 text-slate-500">{label}</span>
-      <span className="text-slate-900">{value}</span>
+      <span className="w-20 text-ink-muted">{label}</span>
+      <span className="text-ink">{value}</span>
     </div>
   );
 }
@@ -811,9 +811,9 @@ function OrgInfoPanel() {
   if (!org || !org.id) return null;
 
   return (
-    <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
+    <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm mb-6">
       <div className="flex items-baseline justify-between mb-3">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
           소속 법인
         </h2>
         {canEdit && (
@@ -835,7 +835,7 @@ function OrgInfoPanel() {
           <Row label="상세 주소" value={org.officeAddressDetail} />
         )}
         {!org.officeAddress && (
-          <p className="text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-2 mt-1">
+          <p className="text-[11px] text-ink-muted bg-surface-alt rounded-md px-3 py-2 mt-1">
             오프라인 면접 일정 메일에 회사 주소가 포함됩니다.
             {canEdit
               ? " 법인 설정에서 등록해 두면 매번 입력하지 않아도 됩니다."
@@ -843,7 +843,7 @@ function OrgInfoPanel() {
           </p>
         )}
         {canEdit && (
-          <p className="text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-2 mt-1">
+          <p className="text-[11px] text-ink-muted bg-surface-alt rounded-md px-3 py-2 mt-1">
             회사 주소·스캔 PDF AI OCR 등 법인 단위 설정은{" "}
             <Link href="/org/settings" className="text-primary hover:underline">
               법인 설정

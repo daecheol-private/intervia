@@ -15,22 +15,22 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <main className="max-w-3xl mx-auto w-full px-6 py-10">
-      <Link href="/" className="text-xs text-slate-500 hover:underline">
+      <Link href="/" className="text-xs text-ink-muted hover:underline">
         ← 홈
       </Link>
-      <h1 className="text-2xl font-bold text-slate-900 mt-3">
+      <h1 className="text-2xl font-bold text-ink mt-3">
         {SITE_INFO.serviceName} 개인정보 처리방침
       </h1>
-      <p className="text-xs text-slate-500 mt-1">
+      <p className="text-xs text-ink-muted mt-1">
         시행일: {PRIVACY_EFFECTIVE_DATE}
       </p>
 
-      <p className="text-sm text-slate-700 leading-relaxed mt-6">
+      <p className="text-sm text-ink-soft leading-relaxed mt-6">
         {COMPANY_INFO.name}(이하 &quot;회사&quot;)은 「개인정보 보호법」을
         준수하며, 정보주체의 개인정보를 보호하고 권익을 신속히 처리하기 위해
         다음과 같이 개인정보 처리방침을 수립·공개합니다.
       </p>
-      <p className="text-sm text-slate-700 leading-relaxed mt-3">
+      <p className="text-sm text-ink-soft leading-relaxed mt-3">
         지원자(후보자)의 개인정보에 관하여는 채용을 진행하는 기업이
         개인정보처리자이며, 회사는 그로부터 처리를 위탁받은 수탁자의 지위에서
         본 방침이 정하는 바에 따라 처리합니다. 회원(채용기업 소속 사용자)의
@@ -83,7 +83,7 @@ export default function PrivacyPage() {
             </tr>
           </tbody>
         </Table>
-        <p className="mt-3 text-xs text-slate-600">
+        <p className="mt-3 text-xs text-ink-soft">
           이력서 원본 텍스트는 데이터베이스에 저장되지 않습니다. 정규식으로
           이름·이메일·전화번호·나이만 추출 후 본문은 마스킹 처리하여 저장합니다.
         </p>
@@ -170,7 +170,7 @@ export default function PrivacyPage() {
             ))}
           </tbody>
         </Table>
-        <p className="mt-3 text-xs text-slate-600">
+        <p className="mt-3 text-xs text-ink-soft">
           AI 처리(서류 평가·면접 채팅·면접 평가)는 모두 Google Cloud 서울
           리전(asia-northeast3) 에서 수행되어 AI 처리 단계에서의 국외이전이
           발생하지 않습니다. 호스팅(Vercel·미국)·데이터베이스(Turso·일본 도쿄)·
@@ -273,8 +273,8 @@ export default function PrivacyPage() {
         </p>
       </Section>
 
-      <hr className="my-8 border-slate-200" />
-      <div className="text-xs text-slate-500 space-y-1">
+      <hr className="my-8 border-border-default" />
+      <div className="text-xs text-ink-muted space-y-1">
         <div>
           <strong>{COMPANY_INFO.name}</strong> · 대표 {COMPANY_INFO.representative}
         </div>
@@ -298,10 +298,10 @@ function Section({
 }) {
   return (
     <section className="mt-8">
-      <h2 className="text-base font-semibold text-slate-900">
+      <h2 className="text-base font-semibold text-ink">
         제{n}조 · {title}
       </h2>
-      <div className="text-sm text-slate-700 leading-relaxed mt-2 space-y-2">
+      <div className="text-sm text-ink-soft leading-relaxed mt-2 space-y-2">
         {children}
       </div>
     </section>
@@ -311,7 +311,7 @@ function Section({
 function Table({ children }: { children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs border border-slate-200 rounded mt-2 [&_th]:bg-slate-50 [&_th]:font-medium [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:border-b [&_th]:border-slate-200 [&_td]:px-3 [&_td]:py-2 [&_td]:border-b [&_td]:border-slate-100 [&_tr:last-child_td]:border-b-0">
+      <table className="w-full text-xs border border-border-default rounded mt-2 [&_th]:bg-surface-alt [&_th]:font-medium [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:border-b [&_th]:border-border-default [&_td]:px-3 [&_td]:py-2 [&_td]:border-b [&_td]:border-border-default [&_tr:last-child_td]:border-b-0">
         {children}
       </table>
     </div>

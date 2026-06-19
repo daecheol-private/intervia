@@ -614,32 +614,32 @@ export default async function JobReportPage({
       <div className="flex items-center justify-between mb-4 print:hidden">
         <Link
           href={`/jobs/${jobId}`}
-          className="text-sm text-slate-500 hover:text-slate-900"
+          className="text-sm text-ink-muted hover:text-ink"
         >
           ← 공고로 돌아가기
         </Link>
         <PrintButton />
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm print:border-0 print:shadow-none print:rounded-none print:p-0">
+      <div className="bg-card border border-border-default rounded-2xl p-8 shadow-sm print:border-0 print:shadow-none print:rounded-none print:p-0">
         {/* 헤더 */}
-        <header className="border-b border-slate-200 pb-5 mb-6">
+        <header className="border-b border-border-default pb-5 mb-6">
           <div className="text-[11px] uppercase tracking-widest text-primary font-semibold mb-1">
             채용 결과 리포트
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 leading-tight">
+          <h1 className="text-2xl font-bold text-ink leading-tight">
             {job.title}
           </h1>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 mt-3">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft mt-3">
             <span>
-              <strong className="text-slate-900">{org?.name ?? "-"}</strong>
+              <strong className="text-ink">{org?.name ?? "-"}</strong>
             </span>
             <span>
               {job.position} · {job.level} · {job.employmentType}
             </span>
             <span>면접 {job.interviewDurationMinutes}분</span>
           </div>
-          <div className="text-xs text-slate-500 mt-2">
+          <div className="text-xs text-ink-muted mt-2">
             기간: {formatLocalDate(job.createdAt)} ~{" "}
             {job.closedAt
               ? formatLocalDate(job.closedAt)
@@ -652,7 +652,7 @@ export default async function JobReportPage({
             <> · 상태: {job.status === "closed" ? "종결" : "진행 중"}</>
           </div>
           {interviewers.length > 0 && (
-            <div className="text-xs text-slate-500 mt-1">
+            <div className="text-xs text-ink-muted mt-1">
               면접관: {interviewers.map((i) => i.name).join(", ")}
             </div>
           )}
@@ -660,7 +660,7 @@ export default async function JobReportPage({
 
         {/* 요약 카드 */}
         <section className="mb-7">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+          <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
             한눈에 보기
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -681,7 +681,7 @@ export default async function JobReportPage({
 
         {/* 채용 퍼널 & 전환율 */}
         <section className="mb-7 print:break-inside-avoid">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+          <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
             채용 퍼널 (단계별 통과 · 전환율)
           </h2>
           <div className="space-y-1.5">
@@ -696,8 +696,8 @@ export default async function JobReportPage({
                     : 0;
               return (
                 <div key={f.label} className="flex items-center gap-3 text-xs">
-                  <span className="w-24 shrink-0 text-slate-600">{f.label}</span>
-                  <div className="flex-1 bg-slate-100 rounded h-6 relative overflow-hidden">
+                  <span className="w-24 shrink-0 text-ink-soft">{f.label}</span>
+                  <div className="flex-1 bg-surface-alt rounded h-6 relative overflow-hidden">
                     <div
                       className="absolute inset-y-0 left-0 rounded transition-all"
                       style={{
@@ -706,31 +706,31 @@ export default async function JobReportPage({
                         opacity: 0.25 + 0.75 * (1 - i / funnel.length),
                       }}
                     />
-                    <span className="absolute inset-0 flex items-center px-2 text-[10px] text-slate-800 font-semibold tabular-nums">
+                    <span className="absolute inset-0 flex items-center px-2 text-[10px] text-ink font-semibold tabular-nums">
                       {f.count}명
-                      <span className="text-slate-400 font-normal ml-1">
+                      <span className="text-ink-muted font-normal ml-1">
                         ({Math.round((f.count / base) * 100)}%)
                       </span>
                     </span>
                   </div>
-                  <span className="w-16 shrink-0 text-right text-[10px] tabular-nums text-slate-500">
+                  <span className="w-16 shrink-0 text-right text-[10px] tabular-nums text-ink-muted">
                     {stepConv != null ? `↳ ${stepConv}%` : "—"}
                   </span>
                 </div>
               );
             })}
           </div>
-          <p className="text-[10px] text-slate-400 mt-2">
+          <p className="text-[10px] text-ink-muted mt-2">
             오른쪽 수치(↳)는 직전 단계 대비 전환율 — 병목 단계 식별용.
           </p>
         </section>
 
         {/* 결과 분포 */}
         <section className="mb-7">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+          <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
             결과 분포
           </h2>
-          <div className="rounded-lg overflow-hidden border border-slate-200">
+          <div className="rounded-lg overflow-hidden border border-border-default">
             <StackBar
               segments={[
                 { label: "최종 합격", count: hiredCount, color: "bg-primary" },
@@ -757,7 +757,7 @@ export default async function JobReportPage({
 
         {/* 단계별 깔때기 */}
         <section className="mb-7">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+          <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
             단계별 분포 (현재 stage 기준)
           </h2>
           <div className="space-y-1.5">
@@ -780,15 +780,15 @@ export default async function JobReportPage({
               const pct = totalCount > 0 ? (n / totalCount) * 100 : 0;
               return (
                 <div key={s} className="flex items-center gap-3 text-xs">
-                  <span className="w-32 shrink-0 text-slate-600">
+                  <span className="w-32 shrink-0 text-ink-soft">
                     {STAGE_LABEL[s] ?? s}
                   </span>
-                  <div className="flex-1 bg-slate-100 rounded h-5 relative overflow-hidden">
+                  <div className="flex-1 bg-surface-alt rounded h-5 relative overflow-hidden">
                     <div
                       className="absolute inset-y-0 left-0 bg-primary/30 rounded"
                       style={{ width: `${pct}%` }}
                     />
-                    <span className="absolute inset-0 flex items-center px-2 text-[10px] text-slate-700 font-medium tabular-nums">
+                    <span className="absolute inset-0 flex items-center px-2 text-[10px] text-ink-soft font-medium tabular-nums">
                       {n}명 ({pct.toFixed(1)}%)
                     </span>
                   </div>
@@ -800,7 +800,7 @@ export default async function JobReportPage({
 
         {/* 응답률 */}
         <section className="mb-7">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+          <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
             응답률
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -824,7 +824,7 @@ export default async function JobReportPage({
         {/* 운영 건강도 */}
         {linkSentTotal > 0 && (
           <section className="mb-7 print:break-inside-avoid">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
               운영 건강도 (AI 면접 링크)
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-center">
@@ -854,7 +854,7 @@ export default async function JobReportPage({
             </div>
             {respDays.length > 0 && (
               <div className="mt-5">
-                <div className="text-[11px] text-slate-500 mb-2">
+                <div className="text-[11px] text-ink-muted mb-2">
                   응답까지 소요시간 (발송→응답, 근사 · {respDays.length}건)
                 </div>
                 <VBars bars={respTimeBars} color={C.blue} height={120} />
@@ -866,7 +866,7 @@ export default async function JobReportPage({
         {/* AI 평가 통계 */}
         {countWithScreening > 0 && (
           <section className="mb-7">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
               AI 서류 평가 통계
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -900,12 +900,12 @@ export default async function JobReportPage({
         {/* 점수 캘리브레이션 */}
         {countWithScreening > 0 && (
           <section className="mb-7 print:break-inside-avoid">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
               점수 캘리브레이션 (평가가 실제 채용과 맞는가)
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
-                <div className="text-[11px] text-slate-500 mb-2">
+                <div className="text-[11px] text-ink-muted mb-2">
                   서류 점수 분포 (합격자 강조)
                 </div>
                 <VBars
@@ -919,7 +919,7 @@ export default async function JobReportPage({
               </div>
               {hasScreenBreakdown && (
                 <div>
-                  <div className="text-[11px] text-slate-500 mb-2">
+                  <div className="text-[11px] text-ink-muted mb-2">
                     서류 4축 프로필 (전체 vs 합격자)
                   </div>
                   <Radar
@@ -942,7 +942,7 @@ export default async function JobReportPage({
             </div>
             {scatterPts.length > 0 && (
               <div className="mt-5">
-                <div className="text-[11px] text-slate-500 mb-2">
+                <div className="text-[11px] text-ink-muted mb-2">
                   서류 점수 vs AI 면접 점수 (점 = 지원자 · 색 = 결과)
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -957,21 +957,21 @@ export default async function JobReportPage({
                         className="w-2.5 h-2.5 rounded-full"
                         style={{ background: C.primary }}
                       />
-                      <span className="text-slate-500">합격</span>
+                      <span className="text-ink-muted">합격</span>
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <span
                         className="w-2.5 h-2.5 rounded-full"
                         style={{ background: C.danger }}
                       />
-                      <span className="text-slate-500">불합격</span>
+                      <span className="text-ink-muted">불합격</span>
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <span
                         className="w-2.5 h-2.5 rounded-full"
                         style={{ background: C.muted }}
                       />
-                      <span className="text-slate-500">진행 중</span>
+                      <span className="text-ink-muted">진행 중</span>
                     </span>
                   </div>
                 </div>
@@ -983,7 +983,7 @@ export default async function JobReportPage({
         {/* AI 면접 평가 통계 */}
         {evalCount > 0 && (
           <section className="mb-7">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
               AI 면접 평가 통계 ({evalCount}건)
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1007,12 +1007,12 @@ export default async function JobReportPage({
         {/* 면접관 평가 비교 */}
         {hasNotes && (
           <section className="mb-7 print:break-inside-avoid">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
               사람 면접 평가
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start">
               <div>
-                <div className="text-[11px] text-slate-500 mb-2">
+                <div className="text-[11px] text-ink-muted mb-2">
                   면접관별 평균 점수 (관대/엄격 일관성)
                 </div>
                 <HBars rows={interviewerRows} />
@@ -1033,7 +1033,7 @@ export default async function JobReportPage({
                 )}
               </div>
               <div>
-                <div className="text-[11px] text-slate-500 mb-2">
+                <div className="text-[11px] text-ink-muted mb-2">
                   사람 면접 4축 평균
                 </div>
                 <Radar
@@ -1050,12 +1050,12 @@ export default async function JobReportPage({
         {/* 채용 속도 / 리드타임 */}
         {(durRows.length > 0 || aiDurMin != null) && (
           <section className="mb-7 print:break-inside-avoid">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
               채용 속도 (단계별 소요 · 리드타임)
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
-                <div className="text-[11px] text-slate-500 mb-2">
+                <div className="text-[11px] text-ink-muted mb-2">
                   지원일 기준 평균 누적 소요 (일)
                 </div>
                 {durRows.length > 0 ? (
@@ -1069,7 +1069,7 @@ export default async function JobReportPage({
                     }))}
                   />
                 ) : (
-                  <p className="text-xs text-slate-400">데이터 없음</p>
+                  <p className="text-xs text-ink-muted">데이터 없음</p>
                 )}
                 {aiDurMin != null && (
                   <div className="mt-3">
@@ -1082,7 +1082,7 @@ export default async function JobReportPage({
               </div>
               {leadPts.length > 0 && (
                 <div>
-                  <div className="text-[11px] text-slate-500 mb-2">
+                  <div className="text-[11px] text-ink-muted mb-2">
                     결정 리드타임 추이 (시간순 · 가속/지연 확인)
                   </div>
                   <DotTrend
@@ -1099,13 +1099,13 @@ export default async function JobReportPage({
         {/* 합격자 프로파일 */}
         {(hasEdu || hasCareer || recRows.length > 0 || topKw.length > 0) && (
           <section className="mb-7 print:break-inside-avoid">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
               지원자 · 합격자 프로파일
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {hasEdu && (
                 <div>
-                  <div className="text-[11px] text-slate-500 mb-2">
+                  <div className="text-[11px] text-ink-muted mb-2">
                     최종학력 분포 (전체 지원자 · 파싱불가 = 미상)
                   </div>
                   <Donut data={eduData} />
@@ -1113,7 +1113,7 @@ export default async function JobReportPage({
               )}
               {hasCareer && (
                 <div>
-                  <div className="text-[11px] text-slate-500 mb-2">
+                  <div className="text-[11px] text-ink-muted mb-2">
                     경력년수 분포 (합격자 강조)
                   </div>
                   <VBars
@@ -1129,7 +1129,7 @@ export default async function JobReportPage({
             </div>
             {recRows.length > 0 && (
               <div className="mt-5">
-                <div className="text-[11px] text-slate-500 mb-2">
+                <div className="text-[11px] text-ink-muted mb-2">
                   서류 추천등급별 → 실제 합격 (AI 추천 보정 점검)
                 </div>
                 <div className="space-y-1.5">
@@ -1141,10 +1141,10 @@ export default async function JobReportPage({
                         key={r.grade}
                         className="flex items-center gap-3 text-xs"
                       >
-                        <span className="w-16 shrink-0 text-slate-600">
+                        <span className="w-16 shrink-0 text-ink-soft">
                           {r.grade}
                         </span>
-                        <div className="flex-1 bg-slate-100 rounded h-5 relative overflow-hidden">
+                        <div className="flex-1 bg-surface-alt rounded h-5 relative overflow-hidden">
                           <div
                             className="absolute inset-y-0 left-0 rounded"
                             style={{
@@ -1159,7 +1159,7 @@ export default async function JobReportPage({
                               background: REC_COLOR[r.grade],
                             }}
                           />
-                          <span className="absolute inset-0 flex items-center px-2 text-[10px] text-slate-800 font-medium tabular-nums">
+                          <span className="absolute inset-0 flex items-center px-2 text-[10px] text-ink font-medium tabular-nums">
                             {r.total}명
                             {r.hiredN > 0 && (
                               <span className="text-primary-deep ml-1">
@@ -1176,7 +1176,7 @@ export default async function JobReportPage({
             )}
             {topKw.length > 0 && (
               <div className="mt-5">
-                <div className="text-[11px] text-slate-500 mb-2">
+                <div className="text-[11px] text-ink-muted mb-2">
                   이력서 매칭 키워드 TOP {topKw.length}
                 </div>
                 <HBars
@@ -1196,7 +1196,7 @@ export default async function JobReportPage({
         {/* 합격자 명단 */}
         {hired.length > 0 && (
           <section className="mb-7 print:break-inside-avoid">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
               최종 합격자 ({hired.length}명)
             </h2>
             <div className="overflow-x-auto">
@@ -1214,22 +1214,22 @@ export default async function JobReportPage({
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-border-default">
                   {hired.map((c) => (
                     <tr key={c.id}>
-                      <td className="px-3 py-2 font-medium text-slate-900">
+                      <td className="px-3 py-2 font-medium text-ink">
                         {c.name}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">
+                      <td className="px-3 py-2 text-ink-soft">
                         {c.email ?? "-"}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">
+                      <td className="px-3 py-2 text-ink-soft">
                         {c.careerYears != null ? `${c.careerYears}년` : "-"}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {c.screeningScore ?? "-"}
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-500 tabular-nums">
+                      <td className="px-3 py-2 text-right text-ink-muted tabular-nums">
                         {c.decidedAt ? formatLocalDate(c.decidedAt) : "-"}
                       </td>
                     </tr>
@@ -1243,7 +1243,7 @@ export default async function JobReportPage({
         {/* 종결 사유 분포 */}
         {(rejectedCount > 0 || withdrawnCount > 0) && (
           <section className="mb-7 print:break-inside-avoid">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-3">
               종결 사유 분포 (어느 단계에서 종결됐나)
             </h2>
             <div className="text-xs space-y-2">
@@ -1256,10 +1256,10 @@ export default async function JobReportPage({
                 );
                 return (
                   <div key={oc} className="flex flex-wrap gap-x-3 gap-y-1">
-                    <span className="font-semibold text-slate-700 w-20 shrink-0">
+                    <span className="font-semibold text-ink-soft w-20 shrink-0">
                       {OUTCOME_LABEL[oc]} ({totalForOutcome})
                     </span>
-                    <span className="text-slate-500">
+                    <span className="text-ink-muted">
                       {Object.entries(breakdown)
                         .map(
                           ([stage, n]) => `${STAGE_LABEL[stage] ?? stage} ${n}`
@@ -1274,7 +1274,7 @@ export default async function JobReportPage({
         )}
 
         {/* 푸터 */}
-        <footer className="mt-10 pt-4 border-t border-slate-200 text-[10px] text-slate-400 flex justify-between">
+        <footer className="mt-10 pt-4 border-t border-border-default text-[10px] text-ink-muted flex justify-between">
           <span>생성: {formatKstDateTime(new Date().toISOString())}</span>
           <span>Intervia · {org?.name ?? ""}</span>
         </footer>
@@ -1297,17 +1297,17 @@ function SummaryCard({
   const accent =
     tone === "primary"
       ? "bg-primary-soft/40 border-primary/30"
-      : "bg-slate-50 border-slate-200";
-  const valueColor = tone === "primary" ? "text-primary-deep" : "text-slate-900";
+      : "bg-surface-alt border-border-default";
+  const valueColor = tone === "primary" ? "text-primary-deep" : "text-ink";
   return (
     <div className={`rounded-lg border px-3 py-2.5 ${accent}`}>
-      <div className="text-[10px] text-slate-500 uppercase tracking-wider">
+      <div className="text-[10px] text-ink-muted uppercase tracking-wider">
         {label}
       </div>
       <div className={`text-base font-bold tabular-nums mt-0.5 ${valueColor}`}>
         {value}
       </div>
-      {sub && <div className="text-[10px] text-slate-500 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-ink-muted mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -1321,7 +1321,7 @@ function StackBar({
 }) {
   if (total === 0) {
     return (
-      <div className="px-4 py-6 text-xs text-slate-400 text-center">
+      <div className="px-4 py-6 text-xs text-ink-muted text-center">
         후보자가 없습니다.
       </div>
     );
@@ -1350,10 +1350,10 @@ function StackBar({
         {segments.map((s) => (
           <span key={s.label} className="inline-flex items-center gap-1.5">
             <span className={`w-2.5 h-2.5 rounded-sm ${s.color}`} />
-            <span className="text-slate-600">
-              {s.label} <strong className="text-slate-900">{s.count}</strong>
+            <span className="text-ink-soft">
+              {s.label} <strong className="text-ink">{s.count}</strong>
               {total > 0 && (
-                <span className="text-slate-400">
+                <span className="text-ink-muted">
                   {" "}
                   ({Math.round((s.count / total) * 1000) / 10}%)
                 </span>

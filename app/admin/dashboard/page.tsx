@@ -128,8 +128,8 @@ export default async function AdminDashboardPage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">운영 대시보드</h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <h1 className="text-2xl font-bold text-ink">운영 대시보드</h1>
+        <p className="text-sm text-ink-muted mt-1">
           시스템 관리자 — 매일 한 번 훑어보고 이상 상태 빠르게 잡기.
         </p>
       </div>
@@ -181,18 +181,18 @@ export default async function AdminDashboardPage() {
       {negative.length > 0 && (
         <Section title="🔴 마이너스 토큰 법인" subtitle="환불·정지·결제 독촉 검토">
           <table className="w-full text-sm">
-            <thead className="text-xs text-slate-500">
+            <thead className="text-xs text-ink-muted">
               <tr>
                 <th className="text-left py-2">법인</th>
                 <th className="text-right py-2">잔액</th>
                 <th className="text-right py-2"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border-default">
               {negative.map((n) => (
                 <tr key={n.orgId}>
                   <td className="py-2 font-medium">{n.name}</td>
-                  <td className="py-2 text-right font-mono text-rose-700">
+                  <td className="py-2 text-right font-mono text-danger">
                     {n.balance.toLocaleString()}
                   </td>
                   <td className="py-2 text-right">
@@ -222,12 +222,12 @@ export default async function AdminDashboardPage() {
                 <span>
                   <strong>{s.name}</strong>
                   {s.suspendedReason && (
-                    <span className="ml-2 text-xs text-slate-500">
+                    <span className="ml-2 text-xs text-ink-muted">
                       {s.suspendedReason}
                     </span>
                   )}
                 </span>
-                <span className="text-xs text-slate-400 shrink-0">
+                <span className="text-xs text-ink-muted shrink-0">
                   {s.suspendedAt
                     ? formatLocalDate(s.suspendedAt)
                     : ""}
@@ -244,25 +244,25 @@ export default async function AdminDashboardPage() {
           title={`👋 신규 가입 (${recentSignups.length}건)`}
           subtitle="최근 24시간"
         >
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border-default">
             {recentSignups.map((u) => (
               <li
                 key={u.id}
                 className="flex items-baseline justify-between gap-3 py-2 text-sm"
               >
                 <span className="min-w-0">
-                  <strong className="text-slate-900">{u.name}</strong>{" "}
-                  <span className="text-xs text-slate-500">{u.email}</span>
+                  <strong className="text-ink">{u.name}</strong>{" "}
+                  <span className="text-xs text-ink-muted">{u.email}</span>
                   {u.orgName && (
-                    <span className="ml-2 text-xs text-slate-500">
+                    <span className="ml-2 text-xs text-ink-muted">
                       · {u.orgName}
                     </span>
                   )}
-                  <span className="ml-2 text-[10px] uppercase text-slate-400">
+                  <span className="ml-2 text-[10px] uppercase text-ink-muted">
                     {u.role}
                   </span>
                 </span>
-                <span className="text-xs text-slate-400 shrink-0 tabular-nums">
+                <span className="text-xs text-ink-muted shrink-0 tabular-nums">
                   {formatLocalDateTime(u.createdAt, {
                     format: { year: undefined },
                   })}
@@ -282,7 +282,7 @@ export default async function AdminDashboardPage() {
           <div className="flex gap-4 text-sm">
             <span>
               대기{" "}
-              <strong className="text-amber-700">{queue.queued ?? 0}</strong>
+              <strong className="text-warning">{queue.queued ?? 0}</strong>
             </span>
             <span>
               진행{" "}
@@ -290,7 +290,7 @@ export default async function AdminDashboardPage() {
             </span>
             <span>
               실패{" "}
-              <strong className="text-rose-700">{queue.failed ?? 0}</strong>
+              <strong className="text-danger">{queue.failed ?? 0}</strong>
             </span>
           </div>
         </Section>
@@ -299,9 +299,9 @@ export default async function AdminDashboardPage() {
       {/* 최근 critical 액션 */}
       <Section title="🔔 최근 관리자 액션 (24h)">
         {recentActions.length === 0 ? (
-          <p className="text-sm text-slate-400">최근 24시간 내 액션 없음.</p>
+          <p className="text-sm text-ink-muted">최근 24시간 내 액션 없음.</p>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-border-default">
             {recentActions.map((a) => {
               const meta = (a.metadata ?? {}) as Record<string, unknown>;
               return (
@@ -310,29 +310,29 @@ export default async function AdminDashboardPage() {
                   className="flex items-baseline justify-between gap-3 py-2 text-sm"
                 >
                   <span className="min-w-0">
-                    <span className="text-xs font-mono text-slate-500 mr-2">
+                    <span className="text-xs font-mono text-ink-muted mr-2">
                       {a.action}
                     </span>
-                    <span className="text-xs text-slate-600">
+                    <span className="text-xs text-ink-soft">
                       {a.actorEmail}
                     </span>
                     {Boolean(meta.orgName) && (
-                      <span className="ml-2 text-xs text-slate-500">
+                      <span className="ml-2 text-xs text-ink-muted">
                         → {String(meta.orgName)}
                       </span>
                     )}
                     {Boolean(meta.targetEmail) && (
-                      <span className="ml-2 text-xs text-slate-500">
+                      <span className="ml-2 text-xs text-ink-muted">
                         → {String(meta.targetEmail)}
                       </span>
                     )}
                     {Boolean(meta.reason) && (
-                      <span className="ml-2 text-xs text-slate-400 italic truncate">
+                      <span className="ml-2 text-xs text-ink-muted italic truncate">
                         “{String(meta.reason)}”
                       </span>
                     )}
                   </span>
-                  <span className="text-xs text-slate-400 shrink-0 tabular-nums">
+                  <span className="text-xs text-ink-muted shrink-0 tabular-nums">
                     {formatLocalDateTime(a.createdAt, {
                       format: { year: undefined },
                     })}
@@ -366,21 +366,21 @@ function AlertCard({
   tone: "slate" | "blue" | "amber" | "rose";
 }) {
   const toneMap: Record<string, string> = {
-    slate: "border-slate-100 text-slate-600",
-    blue: "border-primary/30 text-primary-deep bg-primary-soft/40",
-    amber: "border-amber-200 text-amber-700 bg-amber-50/40",
-    rose: "border-rose-200 text-rose-700 bg-rose-50/40",
+    slate: "border-border-default text-ink-soft",
+    blue: "border-border-default text-ink-soft",
+    amber: "border-warning/30 text-warning bg-warning-soft/40",
+    rose: "border-danger/30 text-danger bg-danger-soft/40",
   };
   const inner = (
     <div
-      className={`bg-white border rounded-2xl p-4 shadow-sm h-full ${toneMap[tone]} ${
+      className={`bg-card border rounded-2xl p-4 shadow-sm h-full ${toneMap[tone]} ${
         href ? "hover:shadow-md transition-shadow" : ""
       }`}
     >
-      <div className="text-xs text-slate-500 font-medium">{label}</div>
+      <div className="text-xs text-ink-muted font-medium">{label}</div>
       <div className="mt-2 text-2xl font-bold tabular-nums">{value}</div>
       {sub && (
-        <div className="text-[11px] text-slate-500 mt-1 truncate">{sub}</div>
+        <div className="text-[11px] text-ink-muted mt-1 truncate">{sub}</div>
       )}
     </div>
   );
@@ -397,11 +397,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-4">
+    <section className="bg-card border border-border-default rounded-2xl shadow-sm p-5 mb-4">
       <header className="mb-3">
-        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        <h2 className="text-sm font-semibold text-ink">{title}</h2>
         {subtitle && (
-          <p className="text-[11px] text-slate-500 mt-0.5">{subtitle}</p>
+          <p className="text-[11px] text-ink-muted mt-0.5">{subtitle}</p>
         )}
       </header>
       {children}

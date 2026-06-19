@@ -20,7 +20,7 @@ export function HL({ text }: { text: string }) {
         const m = /^\*\*([^*]+)\*\*$/.exec(p);
         if (m)
           return (
-            <strong key={i} className="font-semibold text-slate-900">
+            <strong key={i} className="font-semibold text-ink">
               {m[1]}
             </strong>
           );
@@ -32,7 +32,7 @@ export function HL({ text }: { text: string }) {
 
 export function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
+    <span className="text-[11px] px-2 py-0.5 rounded-md bg-surface-alt text-ink-soft">
       {children}
     </span>
   );
@@ -74,7 +74,7 @@ export function stageGroupBorder(
   if (stage === "ai_pending" || stage === "ai_evaluated")
     return "border-l-4 border-l-info";
   // applied · screened
-  return "border-l-4 border-l-slate-400";
+  return "border-l-4 border-l-ink-muted";
 }
 
 const STAGE_META = STAGE_META_SHARED as Record<

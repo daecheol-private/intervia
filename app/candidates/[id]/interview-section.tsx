@@ -105,7 +105,7 @@ export function InterviewLinkBox({
         >
           {sl.text}
         </span>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-ink-muted">
           만료 {formatKstDateTime(session.expiresAt)}
         </span>
       </div>
@@ -113,7 +113,7 @@ export function InterviewLinkBox({
         <input
           readOnly
           value={url}
-          className="flex-1 border border-slate-300 rounded-lg px-3 py-2 bg-slate-50 text-xs font-mono text-slate-700"
+          className="flex-1 border border-border-strong rounded-lg px-3 py-2 bg-surface-alt text-xs font-mono text-ink-soft"
         />
         <button
           onClick={copy}
@@ -167,7 +167,7 @@ export function InterviewLinkBox({
                 <div className="mt-2 flex gap-2">
                   <Link
                     href="/org/smtp"
-                    className="inline-flex items-center px-2.5 py-1 rounded-md bg-amber-600 text-white font-medium hover:bg-amber-700"
+                    className="inline-flex items-center px-2.5 py-1 rounded-md bg-warning text-white font-medium hover:bg-warning"
                   >
                     메일서버 설정으로 이동
                   </Link>
@@ -177,7 +177,7 @@ export function InterviewLinkBox({
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1500);
                     }}
-                    className="inline-flex items-center px-2.5 py-1 rounded-md border border-amber-300 text-amber-800 hover:bg-amber-100"
+                    className="inline-flex items-center px-2.5 py-1 rounded-md border border-warning/40 text-warning hover:bg-warning-soft"
                   >
                     링크 복사로 직접 전달
                   </button>
@@ -195,19 +195,19 @@ export function InterviewLinkBox({
             value={emailInput}
             onChange={(e) => setEmailInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && emailInput && send(emailInput)}
-            className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            className="flex-1 border border-border-strong rounded-lg px-3 py-2 text-sm"
             autoFocus
           />
           <button
             onClick={() => emailInput && send(emailInput)}
             disabled={sending || !emailInput}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-primary hover:bg-primary-deep text-white disabled:opacity-50"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-primary hover:bg-primary-deep text-surface disabled:opacity-50"
           >
             보내기
           </button>
           <button
             onClick={() => setShowEmailForm(false)}
-            className="px-3 py-2 rounded-lg text-sm border border-slate-300 hover:bg-slate-50"
+            className="px-3 py-2 rounded-lg text-sm border border-border-strong hover:bg-surface-alt"
           >
             취소
           </button>
@@ -215,7 +215,7 @@ export function InterviewLinkBox({
       )}
       <button
         onClick={onRegenerate}
-        className="text-xs text-slate-500 hover:text-slate-900 underline"
+        className="text-xs text-ink-muted hover:text-ink underline"
       >
         링크 새로 발급
       </button>
@@ -234,13 +234,13 @@ export function InterviewEvaluationPending({
 }) {
   return (
     <div className="space-y-3 text-sm">
-      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-start gap-3">
-        <Loader2 className="w-5 h-5 animate-spin text-blue-500 shrink-0 mt-0.5" />
+      <div className="rounded-xl border border-border-default bg-surface-alt px-4 py-3 flex items-start gap-3">
+        <Loader2 className="w-5 h-5 animate-spin text-primary shrink-0 mt-0.5" />
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-700 mb-0.5">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-0.5">
             AI 평가 생성 중
           </div>
-          <p className="text-blue-900 leading-relaxed">
+          <p className="text-ink-soft leading-relaxed">
             면접이 정상 종료되어 AI 평가를 생성하고 있습니다. 보통 1분 내외
             소요되며, 완료되면 결과가 자동으로 표시됩니다. 이 화면을 떠나도 평가는
             계속 진행됩니다.
@@ -249,7 +249,7 @@ export function InterviewEvaluationPending({
       </div>
       <button
         onClick={onShowTranscript}
-        className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+        className="px-4 py-2 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm"
       >
         대화록 보기
       </button>
@@ -321,11 +321,11 @@ export function InterviewEvaluationRetry({
   };
   return (
     <div className="space-y-3 text-sm">
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700 mb-1">
+      <div className="rounded-xl border border-warning/40 bg-warning-soft px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-warning mb-1">
           AI 평가 생성 실패
         </div>
-        <p className="text-amber-900 leading-relaxed">
+        <p className="text-warning leading-relaxed">
           면접은 정상 종료되었으나 AI 평가 JSON 생성에 실패했습니다. 평가에 실패해
           토큰은 차감되지 않았습니다. 아래 버튼으로 재평가를 요청해 평가가 성공하면
           그때 토큰이 차감됩니다 (실패하면 과금 없음).
@@ -335,14 +335,14 @@ export function InterviewEvaluationRetry({
         <button
           onClick={retry}
           disabled={busy}
-          className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+          className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
         >
           {busy && <Loader2 className="w-4 h-4 animate-spin" />}
           {busy ? "재평가 중..." : "🔄 AI 평가 재시도"}
         </button>
         <button
           onClick={onShowTranscript}
-          className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm"
+          className="px-4 py-2 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm"
         >
           대화록 보기
         </button>
@@ -432,7 +432,7 @@ export function InterviewResult({
         <div className={`text-5xl font-bold tabular-nums ${scoreColor(ev.overall_score)}`}>
           {ev.overall_score}
         </div>
-        <span className="text-base text-slate-400 font-medium">/ 100</span>
+        <span className="text-base text-ink-muted font-medium">/ 100</span>
         {showRec(ev.recommendation) && (
           <span
             className={`text-xs font-semibold px-2.5 py-1 rounded-md border ${recColor[ev.recommendation]}`}
@@ -440,11 +440,11 @@ export function InterviewResult({
             {ev.recommendation}
           </span>
         )}
-        <span className="ml-auto text-xs text-slate-500">
+        <span className="ml-auto text-xs text-ink-muted">
           면접 {session.completedAt ? formatKstDateTime(session.completedAt) : "-"}
         </span>
       </div>
-      <blockquote className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-slate-800 leading-relaxed">
+      <blockquote className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-ink leading-relaxed">
         <HL text={ev.summary} />
       </blockquote>
 
@@ -452,23 +452,23 @@ export function InterviewResult({
         {Object.entries(ev.scores ?? {}).map(([k, v]) => (
           <div
             key={k}
-            className="border border-slate-200 rounded-xl p-4 bg-slate-50/50"
+            className="border border-border-default rounded-xl p-4 bg-surface-alt/50"
           >
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-semibold text-slate-700">{k}</span>
+              <span className="text-sm font-semibold text-ink-soft">{k}</span>
               <span
                 className={`text-2xl font-bold tabular-nums leading-none ${scoreColor(v.score)}`}
               >
                 {v.score}
               </span>
             </div>
-            <div className="mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div className="mt-2 h-2 bg-surface-alt rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${scoreBarColor(v.score)}`}
                 style={{ width: `${Math.max(0, Math.min(100, v.score))}%` }}
               />
             </div>
-            <div className="text-[13px] text-slate-600 mt-2.5 leading-relaxed">
+            <div className="text-[13px] text-ink-soft mt-2.5 leading-relaxed">
               <HL text={v.comment} />
             </div>
           </div>
@@ -499,14 +499,14 @@ export function InterviewResult({
       )}
 
       {ev.llm_assist_note && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mt-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
+        <div className="rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-warning">
             외부 LLM 보조 분석
           </div>
-          <div className="text-sm text-amber-900 mt-1 leading-relaxed">
+          <div className="text-sm text-warning mt-1 leading-relaxed">
             <HL text={ev.llm_assist_note} />
           </div>
-          <div className="text-[11px] text-amber-700 mt-2">
+          <div className="text-[11px] text-warning mt-2">
             ※ 객관 입력 패턴(붙여넣기 비율·탭 이탈·복사 시도) 기반 추정입니다.
             단정 금물 — 정당 사용 가능성도 있으니 다음 면접에서 본인 발언으로 재확인 권장.
           </div>
@@ -524,7 +524,7 @@ export function InterviewResult({
           }`}
         >
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
               AI 답변 자동 판별 (문체 분석)
             </div>
             <span
@@ -540,7 +540,7 @@ export function InterviewResult({
             </span>
           </div>
           {ev.ai_authorship.signals?.length > 0 && (
-            <ul className="list-disc pl-5 mt-2 space-y-0.5 text-sm text-slate-700">
+            <ul className="list-disc pl-5 mt-2 space-y-0.5 text-sm text-ink-soft">
               {ev.ai_authorship.signals.map((s, i) => (
                 <li key={i}>
                   <HL text={s} />
@@ -549,18 +549,18 @@ export function InterviewResult({
             </ul>
           )}
           {ev.ai_authorship.note && (
-            <div className="text-sm text-slate-800 mt-2 leading-relaxed">
+            <div className="text-sm text-ink mt-2 leading-relaxed">
               <HL text={ev.ai_authorship.note} />
             </div>
           )}
-          <div className="text-[11px] text-slate-500 mt-2">
+          <div className="text-[11px] text-ink-muted mt-2">
             ※ 답변 텍스트의 문체만 본 LLM 추정입니다. 행동 신호(위)와 별개 —
             단정 금물, 면접 자리에서 본인 발언으로 재확인 권장.
           </div>
         </div>
       )}
 
-      <div className="flex gap-3 pt-3 border-t border-slate-100 items-center flex-wrap">
+      <div className="flex gap-3 pt-3 border-t border-border-default items-center flex-wrap">
         <button
           onClick={onShowTranscript}
           className="text-xs text-primary hover:underline"
@@ -570,7 +570,7 @@ export function InterviewResult({
         {!disabled && (
           <button
             onClick={onRegenerate}
-            className="text-xs text-slate-500 hover:text-slate-900 underline"
+            className="text-xs text-ink-muted hover:text-ink underline"
           >
             재면접 링크 발급
           </button>
@@ -579,7 +579,7 @@ export function InterviewResult({
           <button
             onClick={reevaluate}
             disabled={reBusy}
-            className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 inline-flex items-center justify-center gap-1"
+            className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-border-strong text-primary hover:bg-surface-alt disabled:opacity-50 inline-flex items-center justify-center gap-1"
             title="같은 대화록으로 AI 평가를 다시 실행 (성공 시 토큰 차감)"
           >
             {reBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -591,8 +591,8 @@ export function InterviewResult({
         <div
           className={`text-xs whitespace-pre-line rounded-lg px-3 py-2 ${
             reMsg.kind === "ok"
-              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-              : "bg-rose-50 text-rose-700 border border-rose-200"
+              ? "bg-success-soft text-success border border-success/40"
+              : "bg-danger-soft text-danger border border-danger/40"
           }`}
         >
           {reMsg.text}
@@ -701,7 +701,7 @@ function McqResultBlock({
                   type="checkbox"
                   checked={wrongOnly}
                   onChange={(e) => setWrongOnly(e.target.checked)}
-                  className="w-4 h-4 accent-rose-500"
+                  className="w-4 h-4 accent-danger"
                 />
                 오답만 보기
               </label>
@@ -717,14 +717,14 @@ function McqResultBlock({
                     key={r.id ?? num}
                     className={`rounded-xl border-2 px-4 py-3.5 ${
                       correct
-                        ? "border-emerald-200 bg-emerald-50/40"
-                        : "border-rose-300 bg-rose-50"
+                        ? "border-success/40 bg-success-soft/40"
+                        : "border-danger/40 bg-danger-soft"
                     }`}
                   >
                     <p className="text-[15px] font-bold text-ink leading-relaxed flex items-start gap-2.5">
                       <span
                         className={`shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-sm font-extrabold mt-0.5 ${
-                          correct ? "bg-emerald-500" : "bg-rose-500"
+                          correct ? "bg-success" : "bg-danger"
                         }`}
                         aria-label={correct ? "정답" : "오답"}
                       >
@@ -744,21 +744,21 @@ function McqResultBlock({
                             key={oi}
                             className={`text-sm leading-relaxed flex items-start gap-2 rounded-lg px-2.5 py-1.5 ${
                               isCorrect
-                                ? "bg-emerald-100 text-emerald-900 font-semibold"
+                                ? "bg-success-soft text-success font-semibold"
                                 : isChosen
-                                  ? "bg-rose-100 text-rose-900 font-semibold"
+                                  ? "bg-danger-soft text-danger font-semibold"
                                   : "text-ink-soft"
                             }`}
                           >
                             <span className="text-ink-muted shrink-0">{oi + 1}.</span>
                             <span className="flex-1">{opt}</span>
                             {isCorrect && (
-                              <span className="shrink-0 text-xs font-bold text-emerald-700 whitespace-nowrap">
+                              <span className="shrink-0 text-xs font-bold text-success whitespace-nowrap">
                                 {isChosen ? "✓ 정답 (선택함)" : "✓ 정답"}
                               </span>
                             )}
                             {isChosen && !isCorrect && (
-                              <span className="shrink-0 text-xs font-bold text-rose-700 whitespace-nowrap">
+                              <span className="shrink-0 text-xs font-bold text-danger whitespace-nowrap">
                                 ✕ 응시자 선택
                               </span>
                             )}
@@ -815,12 +815,12 @@ function CultureFitBlock({
   };
 
   return (
-    <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-3">
+    <div className="rounded-xl border border-border-default bg-surface-alt/50 px-4 py-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="text-xs font-bold uppercase tracking-wider text-violet-800">
+        <div className="text-xs font-bold uppercase tracking-wider text-ink-soft">
           컬처핏 · 정성 검증
         </div>
-        <span className="text-[11px] font-medium px-2 py-0.5 rounded border border-violet-300 bg-white text-violet-700">
+        <span className="text-[11px] font-medium px-2 py-0.5 rounded border border-border-default bg-card text-ink-muted">
           참고 정보 — 점수 미반영
         </span>
       </div>
@@ -832,15 +832,15 @@ function CultureFitBlock({
             {style && <BehaviorStyleCard style={style} />}
 
             {/* Big Five 레이더 */}
-            <div className="rounded-xl border border-violet-200 bg-white px-4 py-3.5">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-violet-700">
+            <div className="rounded-xl border border-border-default bg-card px-4 py-3.5">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
                 성향 분포 · Big Five
               </div>
               <BigFiveRadar
                 traits={personalityProfile.traits}
                 jobTraitProfile={jobTraitProfile}
               />
-              <div className="flex items-center justify-center gap-4 text-[11px] font-medium text-slate-600 -mt-1">
+              <div className="flex items-center justify-center gap-4 text-[11px] font-medium text-ink-soft -mt-1">
                 <span className="inline-flex items-center gap-1.5">
                   <span className="inline-block h-2.5 w-2.5 rounded-full bg-violet-700" />
                   후보자
@@ -853,7 +853,7 @@ function CultureFitBlock({
             </div>
           </div>
           {flagNotes.length > 0 && (
-            <div className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-2.5 py-1.5 mt-2.5">
+            <div className="text-xs font-medium text-warning bg-warning-soft border border-warning/40 rounded-md px-2.5 py-1.5 mt-2.5">
               ⚠ 응답 신뢰 신호: {flagNotes.join(" · ")} — 자가응답 해석에 주의
             </div>
           )}
@@ -861,7 +861,7 @@ function CultureFitBlock({
       )}
 
       {hasCompetencies && (
-        <div className="mt-3 rounded-xl border border-violet-200 bg-white px-4 py-3.5">
+        <div className="mt-3 rounded-xl border border-border-default bg-card px-4 py-3.5">
           <CompetencyBadges keys={orgCoreCompetencies} />
         </div>
       )}
@@ -871,10 +871,10 @@ function CultureFitBlock({
           {cultureFit.items.map((it, i) => (
             <li
               key={i}
-              className="bg-white border border-violet-100 rounded-lg px-3 py-2"
+              className="bg-card border border-border-default rounded-lg px-3 py-2"
             >
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold text-slate-800">
+                <span className="text-sm font-bold text-ink">
                   {it.topic}
                 </span>
                 <span
@@ -883,10 +883,10 @@ function CultureFitBlock({
                   {it.verification}
                 </span>
               </div>
-              <div className="text-xs text-slate-600 mt-1">
+              <div className="text-xs text-ink-soft mt-1">
                 자가응답: {it.self_report}
               </div>
-              <div className="text-sm text-slate-700 mt-0.5 leading-relaxed">
+              <div className="text-sm text-ink-soft mt-0.5 leading-relaxed">
                 <HL text={it.evidence} />
               </div>
             </li>
@@ -895,7 +895,7 @@ function CultureFitBlock({
       )}
 
       {cultureFit?.fit_note && (
-        <div className="text-sm text-slate-700 mt-2.5 leading-relaxed">
+        <div className="text-sm text-ink-soft mt-2.5 leading-relaxed">
           <HL text={cultureFit.fit_note} />
         </div>
       )}
@@ -918,23 +918,23 @@ export function TranscriptModal({
 }) {
   return (
     <div
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl"
+        className="bg-card rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-5 border-b border-slate-200 flex justify-between items-center">
-          <h3 className="font-bold text-slate-900">면접 대화록</h3>
+        <div className="p-5 border-b border-border-default flex justify-between items-center">
+          <h3 className="font-bold text-ink">면접 대화록</h3>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+            className="w-8 h-8 rounded-lg hover:bg-surface-alt text-ink-muted hover:text-ink transition-colors"
           >
             ✕
           </button>
         </div>
-        <div className="overflow-y-auto p-5 space-y-3 bg-slate-50">
+        <div className="overflow-y-auto p-5 space-y-3 bg-surface-alt">
           {messages
             .filter((m, i) => !(i === 0 && m.role === "user"))
             .map((m, i) => (
@@ -945,8 +945,8 @@ export function TranscriptModal({
                 <div
                   className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
                     m.role === "user"
-                      ? "bg-primary text-white"
-                      : "bg-white text-slate-900 border border-slate-200"
+                      ? "bg-primary text-surface"
+                      : "bg-card text-ink border border-border-default"
                   }`}
                 >
                   {m.content.replace("[INTERVIEW_END]", "")}

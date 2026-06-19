@@ -158,11 +158,11 @@ export default function OrgMembersPage() {
   return (
     <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-slate-500 hover:underline">
+        <Link href="/" className="text-xs text-ink-muted hover:underline">
           ← 대시보드
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 mt-2">법인 멤버 관리</h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <h1 className="text-2xl font-bold text-ink mt-2">법인 멤버 관리</h1>
+        <p className="text-sm text-ink-muted mt-1">
           멤버 권한을 부여·비활성화하거나, 법인 합류 요청을 승인할 수 있습니다.
         </p>
       </div>
@@ -182,11 +182,11 @@ export default function OrgMembersPage() {
           아는(관계사) 법인은 "확인"으로 숨기고, 모르는 법인이면 운영자에게 신고(검토 요청).
           확인된(acknowledged) 법인은 목록에서 제외 — 검토가 필요한 것만 남긴다. */}
       {domainOrgs.filter((o) => o.reviewStatus !== "acknowledged").length > 0 && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3">
-          <div className="text-sm font-semibold text-amber-900 mb-1">
+        <div className="mb-4 rounded-lg border border-warning bg-warning-soft/60 px-4 py-3">
+          <div className="text-sm font-semibold text-warning mb-1">
             같은 도메인을 쓰는 다른 법인
           </div>
-          <p className="text-xs text-amber-800 leading-relaxed mb-3">
+          <p className="text-xs text-warning leading-relaxed mb-3">
             아래 법인이 같은 이메일 도메인으로 등록되어 있습니다. 계열사 등{" "}
             <strong>아는 법인</strong>이면 “확인”을 눌러 정리하고,{" "}
             <strong>모르는 법인</strong>이면 신고해 주세요 — 시스템 운영자가
@@ -198,13 +198,13 @@ export default function OrgMembersPage() {
               .map((o) => (
                 <li
                   key={o.id}
-                  className="flex items-center justify-between gap-3 bg-white border border-amber-200 rounded-lg px-3 py-2"
+                  className="flex items-center justify-between gap-3 bg-card border border-warning rounded-lg px-3 py-2"
                 >
                   <div className="min-w-0">
-                    <div className="font-medium text-slate-900 text-sm break-words">
+                    <div className="font-medium text-ink text-sm break-words">
                       {o.name}
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                    <div className="text-[11px] text-ink-muted mt-0.5 flex items-center gap-2 flex-wrap">
                       <OrgVerifyBadge status={o.verificationStatus} />
                       {o.createdAt && (
                         <span>등록일 {o.createdAt.slice(0, 10)}</span>
@@ -212,7 +212,7 @@ export default function OrgMembersPage() {
                     </div>
                   </div>
                   {o.reviewStatus === "reported" ? (
-                    <span className="shrink-0 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">
+                    <span className="shrink-0 text-xs text-danger bg-danger-soft border border-danger rounded px-2 py-1">
                       ✓ 신고됨 — 운영자 검토 중
                     </span>
                   ) : (
@@ -220,14 +220,14 @@ export default function OrgMembersPage() {
                       <button
                         onClick={() => review(o, "acknowledge")}
                         disabled={reviewBusyId === o.id}
-                        className="px-2.5 py-1.5 text-xs bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded disabled:opacity-50"
+                        className="px-2.5 py-1.5 text-xs bg-card border border-border-strong text-ink-soft hover:bg-surface-alt rounded disabled:opacity-50"
                       >
                         {reviewBusyId === o.id ? "처리 중..." : "아는 법인 (확인)"}
                       </button>
                       <button
                         onClick={() => review(o, "report")}
                         disabled={reviewBusyId === o.id}
-                        className="px-2.5 py-1.5 text-xs bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 rounded disabled:opacity-50"
+                        className="px-2.5 py-1.5 text-xs bg-card border border-danger text-danger hover:bg-danger-soft rounded disabled:opacity-50"
                       >
                         모르는 법인 신고
                       </button>
@@ -248,10 +248,10 @@ export default function OrgMembersPage() {
       {/* 모바일: 카드 리스트 (테이블 셀 폭 부족으로 이름이 세로로 깨지는 문제 해결) */}
       <div className="sm:hidden space-y-3">
         {loading && (
-          <div className="text-slate-400 text-sm py-6 text-center">불러오는 중...</div>
+          <div className="text-ink-muted text-sm py-6 text-center">불러오는 중...</div>
         )}
         {!loading && rows.length === 0 && (
-          <div className="text-slate-400 text-sm py-6 text-center">멤버가 없습니다.</div>
+          <div className="text-ink-muted text-sm py-6 text-center">멤버가 없습니다.</div>
         )}
         {rows.map((m) => {
           const isPending = m.status === "pending" && m.joinRequestId != null;
@@ -260,22 +260,22 @@ export default function OrgMembersPage() {
               key={m.id}
               className={`border rounded-xl p-4 shadow-sm ${
                 isPending
-                  ? "bg-amber-50/60 border-amber-200"
-                  : "bg-white border-slate-200"
+                  ? "bg-warning-soft/60 border-warning"
+                  : "bg-card border-border-default"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-medium text-slate-900 break-words">
+                  <div className="font-medium text-ink break-words">
                     {m.name && m.name.trim() ? (
                       m.name
                     ) : (
-                      <span className="text-slate-400 italic font-normal">
+                      <span className="text-ink-muted italic font-normal">
                         이름 미등록
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-slate-500 break-all mt-0.5">
+                  <div className="text-xs text-ink-muted break-all mt-0.5">
                     {m.email}
                   </div>
                 </div>
@@ -288,7 +288,7 @@ export default function OrgMembersPage() {
 
               {isPending && <JoinRequestNotice verified={!!m.emailVerifiedAt} sharedDomain={domainShared} />}
 
-              <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
+              <div className="mt-3 pt-3 border-t border-border-default flex flex-wrap gap-1.5">
                 {isPending ? (
                   <>
                     <button
@@ -316,9 +316,9 @@ export default function OrgMembersPage() {
       </div>
 
       {/* 데스크톱: 전체 테이블 */}
-      <div className="hidden sm:block bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
+      <div className="hidden sm:block bg-card border border-border-default rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-600 text-xs">
+          <thead className="bg-surface-alt text-ink-soft text-xs">
             <tr>
               <th className="text-left px-4 py-3 font-medium">이름</th>
               <th className="text-left px-4 py-3 font-medium">이메일</th>
@@ -327,17 +327,17 @@ export default function OrgMembersPage() {
               <th className="text-right px-4 py-3 font-medium">작업</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-border-default">
             {loading && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={5}>
+                <td className="px-4 py-6 text-ink-muted" colSpan={5}>
                   불러오는 중...
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-slate-400" colSpan={5}>
+                <td className="px-4 py-6 text-ink-muted" colSpan={5}>
                   멤버가 없습니다.
                 </td>
               </tr>
@@ -345,17 +345,17 @@ export default function OrgMembersPage() {
             {rows.map((m) => {
               const isPending = m.status === "pending" && m.joinRequestId != null;
               return (
-                <tr key={m.id} className={isPending ? "bg-amber-50/50" : undefined}>
-                  <td className="px-4 py-3 font-medium text-slate-900">
+                <tr key={m.id} className={isPending ? "bg-warning-soft/50" : undefined}>
+                  <td className="px-4 py-3 font-medium text-ink">
                     {m.name && m.name.trim() ? (
                       m.name
                     ) : (
-                      <span className="text-slate-400 italic font-normal">
+                      <span className="text-ink-muted italic font-normal">
                         이름 미등록
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{m.email}</td>
+                  <td className="px-4 py-3 text-ink-soft">{m.email}</td>
                   <td className="px-4 py-3">
                     <RoleBadge role={m.role} />
                   </td>
@@ -497,17 +497,17 @@ function JoinRequestNotice({
   return (
     <div className="mt-1.5 space-y-1.5">
       {verified ? (
-        <div className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+        <div className="inline-flex items-center gap-1 text-[11px] font-medium text-success bg-success-soft border border-success rounded px-1.5 py-0.5">
           ✓ 메일 소유 확인됨
         </div>
       ) : (
-        <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1 leading-relaxed text-left">
+        <div className="text-[11px] text-warning bg-warning-soft border border-warning rounded px-2 py-1 leading-relaxed text-left">
           ⚠ 메일 소유 미확인 — 요청자가 인증 메일을 아직 확인하지 않았습니다. 본인·재직
           여부를 직접 확인한 뒤 승인하세요.
         </div>
       )}
       {sharedDomain && (
-        <div className="text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded px-2 py-1 leading-relaxed text-left">
+        <div className="text-[11px] text-danger bg-danger-soft border border-danger rounded px-2 py-1 leading-relaxed text-left">
           ⚠ 공유 도메인 — 이 이메일 도메인은 여러 법인이 함께 사용합니다. 메일 소유가
           확인되더라도 우리 회사 소속이 아닐 수 있으니, 실제 본인·재직 여부를 직접 확인한
           뒤 승인하세요.
@@ -525,12 +525,12 @@ function OrgVerifyBadge({
 }) {
   const cfg =
     status === "dart_matched"
-      ? { label: "✓ DART", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+      ? { label: "✓ DART", cls: "bg-success-soft text-success border-success/30" }
       : status === "verified"
-        ? { label: "✓ 검증", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+        ? { label: "✓ 검증", cls: "bg-success-soft text-success border-success/30" }
         : status === "pending_review"
-          ? { label: "⏳ 검토 대기", cls: "bg-amber-50 text-amber-800 border-amber-200" }
-          : { label: "✕ 거절", cls: "bg-rose-100 text-rose-700 border-rose-200" };
+          ? { label: "⏳ 검토 대기", cls: "bg-warning-soft text-warning border-warning/30" }
+          : { label: "✕ 거절", cls: "bg-danger-soft text-danger border-danger/30" };
   return (
     <span
       className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${cfg.cls}`}
@@ -542,9 +542,9 @@ function OrgVerifyBadge({
 
 function RoleBadge({ role }: { role: Member["role"] }) {
   const map = {
-    system_admin: { label: "시스템 관리자", cls: "bg-amber-50 text-amber-700" },
+    system_admin: { label: "시스템 관리자", cls: "bg-surface-alt text-ink-soft" },
     org_admin: { label: "법인 관리자", cls: "bg-primary-soft text-primary-deep" },
-    member: { label: "일반", cls: "bg-slate-100 text-slate-700" },
+    member: { label: "일반", cls: "bg-surface-alt text-ink-soft" },
   };
   const { label, cls } = map[role];
   return <span className={`text-xs px-2 py-0.5 rounded ${cls}`}>{label}</span>;
@@ -565,8 +565,8 @@ function UnverifiedBadge() {
 function StatusBadge({ status }: { status: Member["status"] }) {
   const map = {
     active: { label: "활성", cls: "bg-primary-soft text-primary-deep" },
-    pending: { label: "승인대기", cls: "bg-amber-50 text-amber-700" },
-    disabled: { label: "비활성", cls: "bg-slate-100 text-slate-500" },
+    pending: { label: "승인대기", cls: "bg-warning-soft text-warning" },
+    disabled: { label: "비활성", cls: "bg-surface-alt text-ink-muted" },
   };
   const { label, cls } = map[status];
   return <span className={`text-xs px-2 py-0.5 rounded ${cls}`}>{label}</span>;
@@ -574,8 +574,8 @@ function StatusBadge({ status }: { status: Member["status"] }) {
 
 // max-sm:* — 모바일(<640px) 터치 타깃 ~40px 확보. 데스크톱 테이블 밀도는 유지.
 const btnPrimary =
-  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3.5 text-xs bg-primary hover:bg-primary-deep text-white rounded disabled:opacity-50";
+  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3.5 text-xs bg-primary hover:bg-primary-deep text-surface rounded disabled:opacity-50";
 const btnSecondary =
-  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3.5 text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded disabled:opacity-50";
+  "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3.5 text-xs bg-card border border-border-strong hover:bg-surface-alt text-ink-soft rounded disabled:opacity-50";
 const btnDanger =
   "px-2.5 py-1 max-sm:py-2.5 max-sm:px-3.5 text-xs bg-danger-soft border border-danger/30 hover:bg-danger-soft/70 text-danger rounded disabled:opacity-50 transition-colors";

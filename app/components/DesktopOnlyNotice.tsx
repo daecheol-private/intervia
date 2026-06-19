@@ -13,12 +13,12 @@ export function DesktopOnlyNotice({
   description?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center">
-      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white border border-slate-200">
-        <Monitor className="h-5 w-5 text-slate-400" />
+    <div className="rounded-2xl border border-dashed border-border-strong bg-surface-alt px-5 py-6 text-center">
+      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-card border border-border-default">
+        <Monitor className="h-5 w-5 text-ink-muted" />
       </div>
-      <div className="text-sm font-medium text-slate-700">{title}</div>
-      <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+      <div className="text-sm font-medium text-ink-soft">{title}</div>
+      <p className="mt-1 text-xs text-ink-muted leading-relaxed">
         {description ?? "이 기능은 PC(데스크톱)에서 이용해 주세요."}
       </p>
     </div>

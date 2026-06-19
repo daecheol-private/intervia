@@ -60,18 +60,18 @@ export function LifecyclePanel({
   };
 
   return (
-    <div className="mt-4 pt-4 border-t border-slate-100">
+    <div className="mt-4 pt-4 border-t border-border-default">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-xs text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
+        <div className="text-xs text-ink-soft flex flex-wrap gap-x-4 gap-y-1">
           {status === "closed" ? (
             <>
-              <span className="font-medium text-slate-700">
+              <span className="font-medium text-ink-soft">
                 종결됨
                 {closedAt
                   ? ` · ${formatLocalDate(closedAt)}`
                   : ""}
               </span>
-              <span className="text-amber-700">
+              <span className="text-warning">
                 +7일 후 이력서 PDF 자동 폐기 / +14일 후 후보자 PII 자동 폐기
               </span>
             </>
@@ -79,7 +79,7 @@ export function LifecyclePanel({
             <>
               <span>
                 종결 예정:{" "}
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-ink">
                   {closesAt ? formatLocalDate(closesAt) : "-"}
                 </span>{" "}
                 {dLeft != null && (
@@ -89,7 +89,7 @@ export function LifecyclePanel({
                         ? "text-danger"
                         : dLeft <= 14
                           ? "text-warning"
-                          : "text-primary"
+                          : "text-ink-soft"
                     }
                   >
                     (D-{dLeft})
@@ -97,7 +97,7 @@ export function LifecyclePanel({
                 )}
               </span>
               {(job.extensionCount ?? 0) > 0 && (
-                <span className="text-slate-500">
+                <span className="text-ink-muted">
                   연장 {job.extensionCount}회
                 </span>
               )}
@@ -119,16 +119,16 @@ export function LifecyclePanel({
 
       {showExtend && (
         <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
           onClick={() => setShowExtend(false)}
         >
           <div
-            className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-bold text-slate-900">공고 연장</h3>
+            <h3 className="font-bold text-ink">공고 연장</h3>
             {info ? (
-              <div className="mt-4 text-sm text-slate-700 space-y-2">
+              <div className="mt-4 text-sm text-ink-soft space-y-2">
                 <div className="flex justify-between">
                   <span>보관 중 이력서</span>
                   <span className="font-medium">
@@ -139,13 +139,13 @@ export function LifecyclePanel({
                   <span>이력서 단가</span>
                   <span className="font-medium">{info.perResume} 토큰</span>
                 </div>
-                <div className="flex justify-between border-t pt-2 text-slate-900">
+                <div className="flex justify-between border-t pt-2 text-ink">
                   <span>차감 합계</span>
                   <span className="font-bold">
                     {info.totalCost} 토큰
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 mt-3 bg-slate-50 rounded-lg p-3 space-y-1">
+                <div className="text-xs text-ink-muted mt-3 bg-surface-alt rounded-lg p-3 space-y-1">
                   <div>종결 예정일이 {info.extensionDays}일 연장됩니다.</div>
                   {info.totalCandidateCount > info.candidateCount && (
                     <div>
@@ -156,31 +156,31 @@ export function LifecyclePanel({
                   )}
                 </div>
                 {!info.allowed && info.reason === "too_early" && (
-                  <div className="text-xs text-amber-800 mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="text-xs text-warning mt-2 bg-warning-soft border border-warning/30 rounded-lg p-3">
                     ⏳ 종결 {info.visibleWithinDays}일 전부터 연장 가능합니다.
                     (현재 D-{info.daysLeft})
                   </div>
                 )}
                 {!info.allowed && info.reason === "no_candidates" && (
-                  <div className="text-xs text-amber-800 mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="text-xs text-warning mt-2 bg-warning-soft border border-warning/30 rounded-lg p-3">
                     📋 보관 중인 이력서가 없어 연장이 불필요합니다. (불합격·지원취소 이력서는 보관비용이 없습니다)
                   </div>
                 )}
               </div>
             ) : (
-              <div className="mt-4 text-sm text-slate-500">정보 불러오는 중...</div>
+              <div className="mt-4 text-sm text-ink-muted">정보 불러오는 중...</div>
             )}
             <div className="flex gap-2 mt-5">
               <button
                 onClick={() => setShowExtend(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-slate-300 text-sm"
+                className="flex-1 px-4 py-2 rounded-lg border border-border-strong text-sm"
               >
                 취소
               </button>
               <button
                 onClick={doExtend}
                 disabled={busy || !info || !info.allowed}
-                className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
               >
                 {busy ? "처리 중..." : "연장"}
               </button>
@@ -254,21 +254,21 @@ export function InterviewersInline({ jobId }: { jobId: number }) {
       data-tour="interviewers-inline"
       className="flex items-center flex-wrap justify-end gap-1.5 text-xs"
     >
-      <span className="text-slate-400">면접관</span>
+      <span className="text-ink-muted">면접관</span>
       {data.interviewers.length === 0 ? (
-        <span className="text-slate-400">미지정</span>
+        <span className="text-ink-muted">미지정</span>
       ) : (
         data.interviewers.map((r) => (
           <span
             key={r.userId}
             title={r.email}
-            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-slate-100 text-slate-700"
+            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-surface-alt text-ink-soft"
           >
             {r.name}
             <button
               onClick={() => remove(r.userId, r.name)}
               disabled={busy}
-              className="text-slate-400 hover:text-danger disabled:opacity-50 leading-none"
+              className="text-ink-muted hover:text-danger disabled:opacity-50 leading-none"
               title="면접관에서 제외"
             >
               ✕

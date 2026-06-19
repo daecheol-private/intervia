@@ -48,13 +48,13 @@ function RequestForm() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <LogoMark size={48} className="mx-auto mb-3 shadow-lg" />
-          <h1 className="text-xl font-bold text-slate-900">비밀번호 찾기</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-xl font-bold text-ink">비밀번호 찾기</h1>
+          <p className="text-sm text-ink-muted mt-1">
             가입하신 이메일로 재설정 링크를 보내드립니다.
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="bg-card border border-border-default rounded-2xl p-6 shadow-sm space-y-4">
           {done ? (
             <>
               <div className="text-sm text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-3">
@@ -89,11 +89,11 @@ function RequestForm() {
               <button
                 onClick={submit}
                 disabled={busy}
-                className="w-full bg-primary hover:bg-primary-deep disabled:opacity-50 text-white font-medium py-2.5 rounded-lg shadow-sm transition-colors"
+                className="w-full bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface font-medium py-2.5 rounded-lg shadow-sm transition-colors"
               >
                 {busy ? "발송 중..." : "재설정 링크 받기"}
               </button>
-              <div className="text-center text-xs text-slate-500 pt-3 border-t border-slate-100">
+              <div className="text-center text-xs text-ink-muted pt-3 border-t border-border-default">
                 <Link href="/login" className="text-primary hover:underline">
                   로그인으로 돌아가기
                 </Link>
@@ -156,12 +156,12 @@ function ConfirmForm({
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <LogoMark size={48} className="mx-auto mb-3 shadow-lg" />
-          <h1 className="text-xl font-bold text-slate-900">비밀번호 재설정</h1>
+          <h1 className="text-xl font-bold text-ink">비밀번호 재설정</h1>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="bg-card border border-border-default rounded-2xl p-6 shadow-sm space-y-4">
           {valid === null && (
-            <div className="text-sm text-slate-400 text-center">확인 중...</div>
+            <div className="text-sm text-ink-muted text-center">확인 중...</div>
           )}
           {valid === false && (
             <>
@@ -205,7 +205,7 @@ function ConfirmForm({
               <button
                 onClick={submit}
                 disabled={busy}
-                className="w-full bg-primary hover:bg-primary-deep disabled:opacity-50 text-white font-medium py-2.5 rounded-lg shadow-sm transition-colors"
+                className="w-full bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface font-medium py-2.5 rounded-lg shadow-sm transition-colors"
               >
                 {busy ? "처리 중..." : "비밀번호 변경"}
               </button>
@@ -223,12 +223,12 @@ function ConfirmForm({
 }
 
 const inputCls =
-  "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
+  "w-full border border-border-strong rounded-lg px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+      <label className="block text-sm font-medium text-ink-soft mb-1.5">
         {label}
       </label>
       {children}

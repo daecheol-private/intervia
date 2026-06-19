@@ -68,7 +68,7 @@ export function HL({ text, mark = false }: { text: string; mark?: boolean }) {
               key={i}
               className={
                 mark
-                  ? "font-semibold text-ink bg-amber-100 rounded-sm px-0.5 box-decoration-clone"
+                  ? "font-semibold text-ink bg-warning-soft rounded-sm px-0.5 box-decoration-clone"
                   : "font-semibold text-ink"
               }
             >
@@ -84,14 +84,14 @@ export function HL({ text, mark = false }: { text: string; mark?: boolean }) {
 export function InfoCell({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="min-w-0">
-      <div className="text-[11px] text-slate-500 uppercase tracking-wider">
+      <div className="text-[11px] text-ink-muted uppercase tracking-wider">
         {label}
       </div>
       <div
-        className="text-sm font-medium text-slate-900 mt-0.5 truncate"
+        className="text-sm font-medium text-ink mt-0.5 truncate"
         title={value ?? undefined}
       >
-        {value ?? <span className="text-slate-300">-</span>}
+        {value ?? <span className="text-ink-muted">-</span>}
       </div>
     </div>
   );
@@ -143,26 +143,26 @@ export function Section({
   return (
     <section className="mt-4">
       <div
-        className={`bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden transition-shadow ${open ? "" : "hover:shadow-md"}`}
+        className={`bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden transition-shadow ${open ? "" : "hover:shadow-md"}`}
       >
         <button
           type="button"
           onClick={toggle}
           disabled={!collapsible}
           aria-expanded={open}
-          className={`w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left ${collapsible ? "hover:bg-slate-50 cursor-pointer" : "cursor-default"} transition-colors`}
+          className={`w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left ${collapsible ? "hover:bg-surface-alt cursor-pointer" : "cursor-default"} transition-colors`}
         >
           <span className="flex items-center gap-3 min-w-0 flex-1">
-            <span className="text-sm font-bold text-slate-900 shrink-0">
+            <span className="text-sm font-bold text-ink shrink-0">
               {title}
             </span>
             {summary && (
-              <span className="text-xs text-slate-500 truncate">{summary}</span>
+              <span className="text-xs text-ink-muted truncate">{summary}</span>
             )}
           </span>
           {collapsible && (
             <span
-              className={`text-slate-400 text-xs transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
+              className={`text-ink-muted text-xs transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
               aria-hidden
             >
               ▶
@@ -170,7 +170,7 @@ export function Section({
           )}
         </button>
         {open && (
-          <div className="border-t border-slate-100 px-6 py-5">{children}</div>
+          <div className="border-t border-border-default px-6 py-5">{children}</div>
         )}
       </div>
     </section>
@@ -180,11 +180,11 @@ export function Section({
 export function ScoreBar({ label, score }: { label: string; score: number | null }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="w-10 text-xs text-slate-500">{label}</span>
-      <span className="w-10 text-right font-bold text-slate-900">
+      <span className="w-10 text-xs text-ink-muted">{label}</span>
+      <span className="w-10 text-right font-bold text-ink">
         {score != null ? score : "-"}
       </span>
-      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+      <div className="flex-1 h-2 bg-surface-alt rounded-full overflow-hidden">
         {score != null && (
           <div
             className="h-full bg-gradient-to-r from-primary to-primary-deep rounded-full transition-all"
@@ -207,18 +207,18 @@ export function Modal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-ink/40 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+        className="bg-card rounded-2xl shadow-xl max-w-md w-full p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold text-slate-900">{title}</h3>
+          <h3 className="font-semibold text-ink">{title}</h3>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-700"
+            className="text-ink-muted hover:text-ink-soft"
           >
             ✕
           </button>

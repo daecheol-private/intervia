@@ -8,6 +8,14 @@ import { LogoMark } from "@/app/components/Logo";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { isPublicDomain, getEmailDomain } from "@/lib/email-domain";
 import { COMPANY_INFO } from "@/lib/site-info";
+import {
+  buttonClass,
+  Card,
+  Field,
+  inputClass,
+  Alert,
+  Badge,
+} from "@/app/components/ui";
 
 type CheckResponse = {
   available: boolean;
@@ -417,29 +425,29 @@ export default function SignupPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <LogoMark size={48} className="mx-auto mb-3 shadow-lg" />
-          <h1 className="text-xl font-bold text-slate-900">회원가입</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-xl font-bold text-ink">회원가입</h1>
+          <p className="text-sm text-ink-muted mt-1">
             법인 계정에 합류하거나 새 법인을 등록합니다
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <Card className="shadow-sm space-y-4">
           {stage.kind === "done" ? (
             <div className="text-center py-4 space-y-4">
               <div className="w-12 h-12 rounded-full bg-primary-soft mx-auto flex items-center justify-center text-primary text-2xl">
                 ✓
               </div>
               <div>
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-ink">
                   {stage.title}
                 </h2>
-                <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                <p className="text-sm text-ink-soft mt-2 leading-relaxed">
                   {stage.body}
                 </p>
               </div>
               {stage.needsApproval && (
-                <div className="text-left bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3 space-y-2.5">
-                  <div className="text-xs font-semibold text-slate-700">
+                <div className="text-left bg-surface-alt border border-border-default rounded-lg px-3.5 py-3 space-y-2.5">
+                  <div className="text-xs font-semibold text-ink-soft">
                     이용하려면 두 단계가 모두 완료되어야 합니다
                   </div>
                   <ol className="space-y-2">
@@ -447,8 +455,8 @@ export default function SignupPage() {
                       <span className="shrink-0 w-5 h-5 rounded-full bg-primary-soft text-primary-deep text-[11px] font-bold flex items-center justify-center mt-0.5">
                         1
                       </span>
-                      <span className="text-xs text-slate-600 leading-relaxed">
-                        <strong className="text-slate-800">이메일 인증</strong> —
+                      <span className="text-xs text-ink-soft leading-relaxed">
+                        <strong className="text-ink">이메일 인증</strong> —
                         방금 보낸 인증 메일의 링크를 클릭하세요.
                       </span>
                     </li>
@@ -456,28 +464,26 @@ export default function SignupPage() {
                       <span className="shrink-0 w-5 h-5 rounded-full bg-primary-soft text-primary-deep text-[11px] font-bold flex items-center justify-center mt-0.5">
                         2
                       </span>
-                      <span className="text-xs text-slate-600 leading-relaxed">
-                        <strong className="text-slate-800">법인 관리자 승인</strong>{" "}
+                      <span className="text-xs text-ink-soft leading-relaxed">
+                        <strong className="text-ink">법인 관리자 승인</strong>{" "}
                         — 담당자가 합류 요청을 검토·승인합니다.
                       </span>
                     </li>
                   </ol>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                  <p className="text-[11px] text-ink-muted leading-relaxed">
                     두 단계가 모두 끝나면 로그인할 수 있으며, 진행 결과는 입력하신
                     이메일로 안내됩니다.
                   </p>
                 </div>
               )}
               {stage.verifyEmail && (
-                <div className="text-left bg-amber-50 border border-amber-200 rounded-lg px-3 py-3 text-xs text-amber-900 leading-relaxed space-y-2">
+                <Alert tone="warning" className="text-left space-y-2">
                   {stage.mailSent === false && (
                     <div className="font-semibold text-danger">
                       ⚠️ 인증 메일 발송에 실패했습니다. 아래 “인증 메일 재발송”을 눌러주세요.
                     </div>
                   )}
-                  <div className="font-semibold text-amber-800">
-                    인증 메일이 오지 않나요?
-                  </div>
+                  <div className="font-semibold">인증 메일이 오지 않나요?</div>
                   <ul className="list-disc pl-4 space-y-0.5">
                     <li>스팸·정크 메일함을 먼저 확인해 주세요.</li>
                     <li>
@@ -512,27 +518,24 @@ export default function SignupPage() {
                     <button
                       onClick={() => resendVerification(stage.verifyEmail!)}
                       disabled={busy}
-                      className="px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded font-medium"
+                      className={buttonClass({ size: "sm" })}
                     >
                       {busy ? "발송 중..." : "인증 메일 재발송"}
                     </button>
                   </div>
                   {resendInfo && (
-                    <div className="text-primary-deep bg-primary-soft border border-primary/30 rounded px-2.5 py-1.5">
+                    <Alert tone="brand" className="px-2.5 py-1.5">
                       {resendInfo}
-                    </div>
+                    </Alert>
                   )}
                   {err && (
-                    <div className="text-danger bg-danger-soft border border-danger/30 rounded px-2.5 py-1.5">
+                    <Alert tone="danger" className="px-2.5 py-1.5">
                       {err}
-                    </div>
+                    </Alert>
                   )}
-                </div>
+                </Alert>
               )}
-              <Link
-                href="/login"
-                className="inline-block px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
-              >
+              <Link href="/login" className={buttonClass({ size: "md" })}>
                 로그인 페이지로
               </Link>
             </div>
@@ -553,7 +556,7 @@ export default function SignupPage() {
               <button
                 onClick={checkEmail}
                 disabled={busy || stage.kind === "join"}
-                className="shrink-0 px-3 text-sm bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 disabled:opacity-50"
+                className="shrink-0 px-3 text-sm font-medium text-ink-soft bg-surface-alt hover:bg-border-default rounded-lg border border-border-strong disabled:opacity-50"
               >
                 중복확인
               </button>
@@ -630,7 +633,7 @@ export default function SignupPage() {
 
           {stage.kind === "choose_match" && (
             <div className="space-y-3">
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
+              <Alert tone="warning">
                 {stage.orgs.length === 1 ? (
                   <>
                     <strong>이 도메인으로 등록된 법인이 있습니다.</strong>{" "}
@@ -642,28 +645,28 @@ export default function SignupPage() {
                     <strong>같은 도메인에 여러 법인이 등록되어 있습니다.</strong> 계열사 등으로 한 회사 도메인을 여러 법인이 나눠 쓰는 경우입니다. 본인 회사를 선택해 합류 요청을 보내세요. 목록에 없으면 아래 "새 법인 등록"으로 진행하세요.
                   </>
                 )}
-              </div>
+              </Alert>
               <ul className="space-y-2">
                 {stage.orgs.map((o) => (
                   <li
                     key={o.id}
-                    className="border border-slate-200 rounded-lg p-3 hover:bg-slate-50"
+                    className="border border-border-default rounded-lg p-3 hover:bg-surface-alt"
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-slate-900">
+                          <span className="font-medium text-ink">
                             {o.name}
                           </span>
                           <VerificationChip status={o.verificationStatus} />
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
+                        <div className="text-xs text-ink-muted mt-0.5">
                           {o.bizRegistrationNo
                             ? `사업자번호 ${o.bizRegistrationNo}`
                             : "사업자번호 미등록"}
                         </div>
                         {o.adminCount > 0 && (
-                          <div className="text-[11px] text-slate-500 mt-1">
+                          <div className="text-[11px] text-ink-muted mt-1">
                             담당자 {o.adminCount}명 — 합류 요청 시 알림이 전달됩니다
                           </div>
                         )}
@@ -672,7 +675,7 @@ export default function SignupPage() {
                         onClick={() =>
                           enterJoinFromSearch({ id: o.id, name: o.name })
                         }
-                        className="shrink-0 px-3 py-1.5 text-xs bg-primary hover:bg-primary-deep text-white rounded-lg"
+                        className={buttonClass({ size: "sm", className: "shrink-0" })}
                       >
                         합류 요청
                       </button>
@@ -680,10 +683,13 @@ export default function SignupPage() {
                   </li>
                 ))}
               </ul>
-              <div className="pt-2 mt-1 border-t border-slate-100">
+              <div className="pt-2 mt-1 border-t border-border-default">
                 <button
                   onClick={() => setStage({ kind: "create" })}
-                  className="w-full bg-white hover:bg-slate-50 text-slate-600 text-sm font-medium py-2.5 rounded-lg border border-slate-300"
+                  className={buttonClass({
+                    variant: "secondary",
+                    fullWidth: true,
+                  })}
                 >
                   내 회사가 목록에 없어요 — 새 법인 등록
                 </button>
@@ -693,31 +699,31 @@ export default function SignupPage() {
 
           {stage.kind === "match_suggest" && (
             <div className="space-y-3">
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
+              <Alert tone="warning">
                 <strong>이미 등록된 것으로 보이는 법인이 있습니다.</strong> 같은
                 회사라면 아래에서 합류 요청을 보내세요 (중복 법인 등록 시
                 데이터·권한이 분리됩니다). 본인 회사가 아니면 새 법인으로 등록할
                 수 있습니다.
-              </div>
+              </Alert>
               <ul className="space-y-2">
                 {stage.orgs.map((o) => (
                   <li
                     key={o.id}
-                    className="border border-slate-200 rounded-lg p-3 hover:bg-slate-50"
+                    className="border border-border-default rounded-lg p-3 hover:bg-surface-alt"
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-slate-900">
+                          <span className="font-medium text-ink">
                             {o.name}
                           </span>
                           {o.reason && (
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-200">
+                            <Badge tone="warning" className="text-[10px]">
                               {o.reason}
-                            </span>
+                            </Badge>
                           )}
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
+                        <div className="text-xs text-ink-muted mt-0.5">
                           {o.bizRegistrationNo
                             ? `사업자번호 ${o.bizRegistrationNo}`
                             : "사업자번호 미등록"}
@@ -728,7 +734,7 @@ export default function SignupPage() {
                         onClick={() =>
                           enterJoinFromSearch({ id: o.id, name: o.name })
                         }
-                        className="shrink-0 px-3 py-1.5 text-xs bg-primary hover:bg-primary-deep text-white rounded-lg"
+                        className={buttonClass({ size: "sm", className: "shrink-0" })}
                       >
                         합류 요청
                       </button>
@@ -757,7 +763,7 @@ export default function SignupPage() {
           {stage.kind === "create" && (
             <div className="space-y-3">
               {!emailDomainIsPublic && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 leading-relaxed">
+                <Alert tone="warning">
                   <strong>도메인 안내</strong> — 가입을 진행하면{" "}
                   <code className="font-mono">
                     {getEmailDomain(email) ?? ""}
@@ -766,15 +772,15 @@ export default function SignupPage() {
                   분은{" "}
                   <strong>“이 법인에 합류” 또는 “새 법인 등록”</strong> 중에서
                   선택하게 되며, 자동으로 본 법인에 합류되지 않습니다. <br />
-                  <span className="text-amber-800">
+                  <span>
                     계열사 등으로 한 회사 도메인을 여러 법인이 함께 쓰는 경우에도
                     각 법인이 따로 등록할 수 있습니다.
                   </span>
-                </div>
+                </Alert>
               )}
               {domainHasOrgs && (
-                <div className="rounded-lg border border-primary/30 bg-primary-soft px-3 py-2.5 space-y-2">
-                  <div className="text-xs text-primary-deep leading-relaxed">
+                <Alert tone="brand" className="space-y-2">
+                  <div className="leading-relaxed">
                     이 도메인은 이미 다른 법인이 등록되어 있습니다.{" "}
                     <strong>사업자번호를 입력하면 즉시 이용 + 무료 체험 토큰</strong>이
                     지급됩니다. 비워두면 가입·이용은 바로 되지만, 무료 토큰은 운영자
@@ -784,12 +790,7 @@ export default function SignupPage() {
                     <div className="flex gap-2">
                       <input
                         ref={bizFieldRef}
-                        className={
-                          inputCls +
-                          (bizErr
-                            ? " border-danger ring-1 ring-danger focus:ring-danger"
-                            : "")
-                        }
+                        className={inputClass({ error: !!bizErr })}
                         inputMode="numeric"
                         aria-invalid={bizErr ? true : undefined}
                         placeholder="숫자 10자리 (예: 123-45-67890)"
@@ -805,26 +806,26 @@ export default function SignupPage() {
                         type="button"
                         onClick={lookupBiz}
                         disabled={bizBusy}
-                        className="shrink-0 px-4 text-sm bg-primary hover:bg-primary-deep text-white rounded-lg disabled:opacity-50"
+                        className="shrink-0 px-4 text-sm font-medium text-surface bg-primary hover:bg-primary-deep rounded-lg disabled:opacity-50"
                       >
                         {bizBusy ? "조회 중..." : "조회"}
                       </button>
                     </div>
                     {bizErr && (
-                      <p className="mt-1.5 text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
+                      <Alert tone="danger" className="mt-1.5">
                         {bizErr}
-                      </p>
+                      </Alert>
                     )}
                     {bizLookup && (
-                      <div
-                        className={
-                          "mt-1.5 text-xs rounded-lg px-3 py-2 border " +
-                          (bizLookup.tone === "ok"
-                            ? "text-primary-deep bg-primary-soft border-primary/30"
+                      <Alert
+                        tone={
+                          bizLookup.tone === "ok"
+                            ? "brand"
                             : bizLookup.tone === "warn"
-                              ? "text-amber-900 bg-amber-50 border-amber-200"
-                              : "text-danger bg-danger-soft border-danger/30")
+                              ? "warning"
+                              : "danger"
                         }
+                        className="mt-1.5"
                       >
                         <div>{bizLookup.message}</div>
                         {bizLookup.existingOrg && (
@@ -835,19 +836,22 @@ export default function SignupPage() {
                               if (o)
                                 enterJoinFromSearch({ id: o.id, name: o.name });
                             }}
-                            className="mt-1.5 px-2.5 py-1 text-xs bg-primary hover:bg-primary-deep text-white rounded font-medium"
+                            className={buttonClass({
+                              size: "sm",
+                              className: "mt-1.5",
+                            })}
                           >
                             합류 요청 보내기
                           </button>
                         )}
-                      </div>
+                      </Alert>
                     )}
-                    <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
+                    <p className="mt-1 text-[11px] text-ink-muted leading-relaxed">
                       조회 시 상장·외감법인은 법인명을 자동으로 채워드립니다. 그
                       외 법인은 영업 여부만 확인되며 법인명은 직접 입력해주세요.
                     </p>
                   </Field>
-                </div>
+                </Alert>
               )}
               <DartCorpCombobox
                 value={orgName}
@@ -876,7 +880,7 @@ export default function SignupPage() {
                 />
                 <PasswordStrength password={password} />
               </Field>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-ink-muted">
                 새 법인 등록 시 본인이 법인 관리자가 됩니다.
               </p>
               <ConsentBox
@@ -900,18 +904,10 @@ export default function SignupPage() {
             </div>
           )}
 
-          {err && (
-            <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
-              {err}
-            </div>
-          )}
-          {info && (
-            <div className="text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
-              {info}
-            </div>
-          )}
+          {err && <Alert tone="danger">{err}</Alert>}
+          {info && <Alert tone="brand">{info}</Alert>}
 
-          <div className="text-center text-xs text-slate-500 pt-2 border-t border-slate-100">
+          <div className="text-center text-xs text-ink-muted pt-2 border-t border-border-default">
             이미 계정이 있나요?{" "}
             <Link href="/login" className="text-primary hover:underline">
               로그인
@@ -919,7 +915,7 @@ export default function SignupPage() {
           </div>
             </>
           )}
-        </div>
+        </Card>
       </div>
     </main>
   );
@@ -935,36 +931,10 @@ function formatBizNoInput(raw: string): string {
   return `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}`;
 }
 
-const inputCls =
-  "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
-const primaryBtn =
-  "flex-1 bg-primary hover:bg-primary-deep disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg shadow-sm";
-const secondaryBtn =
-  "px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium py-2.5 rounded-lg border border-slate-300";
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">
-        {label}
-        {required && (
-          <span className="text-danger ml-0.5" aria-hidden="true">
-            *
-          </span>
-        )}
-      </label>
-      {children}
-    </div>
-  );
-}
+// 기존 인라인 input/button 들이 이 상수들을 참조 — 토큰 기반 프리미티브로 브리지.
+const inputCls = inputClass();
+const primaryBtn = buttonClass({ className: "flex-1" });
+const secondaryBtn = buttonClass({ variant: "secondary", size: "md" });
 
 /**
  * 법인명 입력 콤보박스 — DART 상장·외감법인 자동완성. 선택 시 사업자번호도 함께 채움.
@@ -1043,7 +1013,7 @@ function DartCorpCombobox({
           placeholder="회사명 일부만 입력해도 자동완성됩니다 (상장사·외감법인)"
         />
         {open && results.length > 0 && (
-          <ul className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-auto">
+          <ul className="absolute z-10 mt-1 w-full bg-card border border-border-default rounded-lg shadow-lg max-h-72 overflow-auto">
             {results.map((r, i) => (
               <li key={i}>
                 <button
@@ -1054,19 +1024,19 @@ function DartCorpCombobox({
                   }}
                   className={
                     "w-full text-left px-3 py-2 text-sm flex items-baseline justify-between gap-3 " +
-                    (i === activeIdx ? "bg-primary-soft" : "hover:bg-slate-50")
+                    (i === activeIdx ? "bg-primary-soft" : "hover:bg-surface-alt")
                   }
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="font-medium text-slate-900">{r.name}</span>
+                    <span className="font-medium text-ink">{r.name}</span>
                     {r.eng && (
-                      <span className="ml-2 text-xs text-slate-400 truncate">
+                      <span className="ml-2 text-xs text-ink-muted truncate">
                         {r.eng}
                       </span>
                     )}
                   </span>
                   {r.bizno && (
-                    <span className="text-[11px] text-slate-500 tabular-nums shrink-0">
+                    <span className="text-[11px] text-ink-muted tabular-nums shrink-0">
                       {r.bizno.replace(/(\d{3})(\d{2})(\d{5})/, "$1-$2-$3")}
                     </span>
                   )}
@@ -1076,7 +1046,7 @@ function DartCorpCombobox({
           </ul>
         )}
       </div>
-      <p className="text-[11px] text-slate-400 mt-1">
+      <p className="text-[11px] text-ink-muted mt-1">
         검색되지 않는 법인은 직접 입력하세요 (비상장 기업, 신생법인 등).
       </p>
     </Field>
@@ -1115,8 +1085,8 @@ function SimilarOrgsHint({
 
   if (similar.length === 0) return null;
   return (
-    <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 space-y-1.5">
-      <div className="font-semibold text-amber-800">
+    <Alert tone="warning" className="space-y-1.5">
+      <div className="font-semibold">
         혹시 이 법인 아닌가요? 중복 등록을 방지하려고 안내드립니다.
       </div>
       {similar.map((o) => (
@@ -1124,18 +1094,18 @@ function SimilarOrgsHint({
           key={o.id}
           type="button"
           onClick={() => onSelect({ id: o.id, name: o.name })}
-          className="w-full text-left px-2.5 py-1.5 text-xs bg-white border border-amber-300 rounded hover:bg-amber-100"
+          className="w-full text-left px-2.5 py-1.5 text-xs bg-card border border-warning/40 rounded hover:bg-warning-soft"
         >
-          <span className="font-medium text-slate-900">{o.name}</span>
+          <span className="font-medium text-ink">{o.name}</span>
           {o.bizRegistrationNo && (
-            <span className="text-slate-500 ml-2">{o.bizRegistrationNo}</span>
+            <span className="text-ink-muted ml-2">{o.bizRegistrationNo}</span>
           )}
           {o.emailDomain && (
-            <span className="text-slate-400 ml-2">{o.emailDomain}</span>
+            <span className="text-ink-muted ml-2">{o.emailDomain}</span>
           )}
         </button>
       ))}
-    </div>
+    </Alert>
   );
 }
 
@@ -1146,27 +1116,21 @@ function VerificationChip({
 }) {
   const cfg =
     status === "dart_matched"
-      ? { label: "✓ DART", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+      ? { label: "✓ DART", tone: "success" as const }
       : status === "verified"
-        ? { label: "✓ 검증", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+        ? { label: "✓ 검증", tone: "success" as const }
         : status === "pending_review"
-          ? { label: "⏳ 검토 대기", cls: "bg-amber-50 text-amber-800 border-amber-200" }
-          : { label: "✕ 거절", cls: "bg-rose-100 text-rose-700 border-rose-200" };
+          ? { label: "⏳ 검토 대기", tone: "warning" as const }
+          : { label: "✕ 거절", tone: "danger" as const };
   return (
-    <span
-      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${cfg.cls}`}
-    >
+    <Badge tone={cfg.tone} className="text-[10px]">
       {cfg.label}
-    </span>
+    </Badge>
   );
 }
 
 function Banner({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
-      {children}
-    </div>
-  );
+  return <Alert tone="brand">{children}</Alert>;
 }
 
 function AdminContactsPanel({
@@ -1177,13 +1141,13 @@ function AdminContactsPanel({
   admins: MaskedAdmin[];
 }) {
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-      <div className="text-xs font-semibold text-slate-700">
+    <div className="bg-surface-alt border border-border-default rounded-lg p-3 space-y-2">
+      <div className="text-xs font-semibold text-ink-soft">
         법인 담당자 (org admin)
       </div>
       {adminCount > 0 ? (
         <>
-          <div className="text-xs text-slate-600">
+          <div className="text-xs text-ink-soft">
             이 법인에는 합류 요청을 검토할 담당자가 {adminCount}명 있습니다. 합류
             요청을 보내면 담당자에게 알림이 전달됩니다.
           </div>
@@ -1192,26 +1156,26 @@ function AdminContactsPanel({
               {admins.map((a, i) => (
                 <li
                   key={i}
-                  className="flex items-center gap-2 text-xs bg-white border border-slate-200 rounded px-2.5 py-1.5"
+                  className="flex items-center gap-2 text-xs bg-card border border-border-default rounded px-2.5 py-1.5"
                 >
-                  <span className="font-medium text-slate-800">{a.name}</span>
+                  <span className="font-medium text-ink">{a.name}</span>
                   {a.email && (
                     <>
-                      <span className="text-slate-300">·</span>
-                      <span className="text-slate-500">{a.email}</span>
+                      <span className="text-ink-muted/50">·</span>
+                      <span className="text-ink-muted">{a.email}</span>
                     </>
                   )}
                 </li>
               ))}
             </ul>
           )}
-          <p className="text-[11px] text-slate-500 pt-1">
+          <p className="text-[11px] text-ink-muted pt-1">
             개인정보 보호를 위해 이름·이메일 일부는 가려서 표시됩니다. 본인 회사
             담당자가 맞는지 확인한 뒤 합류 요청을 보내주세요.
           </p>
         </>
       ) : (
-        <div className="text-xs text-slate-600">
+        <div className="text-xs text-ink-soft">
           현재 활성 담당자가 확인되지 않습니다. 합류 요청을 보낸 뒤 승인이
           지연되면, 로그인 화면에서 운영자에게 권한 부여를 요청할 수 있습니다.
         </div>
@@ -1248,17 +1212,17 @@ function ConsentBox({
     onMarketing(v);
   };
   return (
-    <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-      <label className="flex items-start gap-2 cursor-pointer pb-2 mb-2 border-b border-slate-200 font-medium text-slate-800">
+    <div className="text-xs text-ink-soft bg-surface-alt border border-border-default rounded-lg px-3 py-2.5">
+      <label className="flex items-start gap-2 cursor-pointer pb-2 mb-2 border-b border-border-default font-medium text-ink">
         <input
           type="checkbox"
-          className="mt-0.5"
+          className="mt-0.5 accent-primary"
           checked={allChecked}
           onChange={(e) => toggleAll(e.target.checked)}
         />
         <span>
           전체 동의{" "}
-          <span className="text-[11px] font-normal text-slate-400">
+          <span className="text-[11px] font-normal text-ink-muted">
             (선택 항목 포함)
           </span>
         </span>
@@ -1267,7 +1231,7 @@ function ConsentBox({
         <label className="flex items-start gap-2 cursor-pointer">
           <input
             type="checkbox"
-            className="mt-0.5"
+            className="mt-0.5 accent-primary"
             checked={ageOver14}
             onChange={(e) => onAge(e.target.checked)}
           />
@@ -1278,7 +1242,7 @@ function ConsentBox({
         <label className="flex items-start gap-2 cursor-pointer">
           <input
             type="checkbox"
-            className="mt-0.5"
+            className="mt-0.5 accent-primary"
             checked={acceptTerms}
             onChange={(e) => onTerms(e.target.checked)}
           />
@@ -1292,7 +1256,7 @@ function ConsentBox({
         <label className="flex items-start gap-2 cursor-pointer">
           <input
             type="checkbox"
-            className="mt-0.5"
+            className="mt-0.5 accent-primary"
             checked={acceptPrivacy}
             onChange={(e) => onPrivacy(e.target.checked)}
           />
@@ -1306,14 +1270,14 @@ function ConsentBox({
         <label className="flex items-start gap-2 cursor-pointer">
           <input
             type="checkbox"
-            className="mt-0.5"
+            className="mt-0.5 accent-primary"
             checked={marketingOptIn}
             onChange={(e) => onMarketing(e.target.checked)}
           />
           <span>
             마케팅·이벤트 정보 메일 수신에 동의합니다.{" "}
-            <span className="text-slate-400">(선택)</span>
-            <span className="block text-[11px] text-slate-400 mt-0.5">
+            <span className="text-ink-muted">(선택)</span>
+            <span className="block text-[11px] text-ink-muted mt-0.5">
               동의하지 않아도 가입할 수 있으며, 가입 후 계정 설정에서 언제든 변경할 수 있습니다.
             </span>
           </span>

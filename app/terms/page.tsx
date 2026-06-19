@@ -8,13 +8,13 @@ export const metadata = {
 export default function TermsPage() {
   return (
     <main className="max-w-3xl mx-auto w-full px-6 py-10">
-      <Link href="/" className="text-xs text-slate-500 hover:underline">
+      <Link href="/" className="text-xs text-ink-muted hover:underline">
         ← 홈
       </Link>
-      <h1 className="text-2xl font-bold text-slate-900 mt-3">
+      <h1 className="text-2xl font-bold text-ink mt-3">
         {SITE_INFO.serviceName} 이용약관
       </h1>
-      <p className="text-xs text-slate-500 mt-1">시행일: {TERMS_EFFECTIVE_DATE}</p>
+      <p className="text-xs text-ink-muted mt-1">시행일: {TERMS_EFFECTIVE_DATE}</p>
 
       <Section n="1" title="목적">
         본 약관은 {COMPANY_INFO.name}(이하 &quot;회사&quot;)가 제공하는 AI 채용
@@ -67,7 +67,7 @@ export default function TermsPage() {
       </Section>
 
       <Section n="5" title="이용자의 의무 — 지원자 동의 취득 책임">
-        <p className="text-sm text-slate-700 mb-2">
+        <p className="text-sm text-ink-soft mb-2">
           본 서비스는 채용기업(이용자)이 위탁한 데이터를 처리하는{" "}
           <strong>수탁자(processor)</strong> 의 지위에 있으며, 개인정보보호법상{" "}
           <strong>개인정보처리자(controller)</strong> 는 채용기업입니다. 따라서
@@ -79,7 +79,7 @@ export default function TermsPage() {
             업로드하기 전, 해당 후보자에게 다음 사항을 적법하게 고지하고, 그중
             동의가 필요한 사항에 대해서는 후보자로부터 적법한 동의를 취득할
             책임을 진다.
-            <ul className="list-disc list-inside ml-5 mt-1 space-y-0.5 text-slate-700">
+            <ul className="list-disc list-inside ml-5 mt-1 space-y-0.5 text-ink-soft">
               <li>{COMPANY_INFO.name} 에 대한 개인정보 처리위탁 (PIPA §26)</li>
               <li>
                 Vercel Inc.(미국)·Turso(일본 도쿄) 등 인프라 단계 국외 처리자로의
@@ -264,8 +264,8 @@ export default function TermsPage() {
         </ul>
       </Section>
 
-      <hr className="my-8 border-slate-200" />
-      <div className="text-xs text-slate-500 space-y-1">
+      <hr className="my-8 border-border-default" />
+      <div className="text-xs text-ink-muted space-y-1">
         <div>
           <strong>{COMPANY_INFO.name}</strong> · 대표 {COMPANY_INFO.representative}
         </div>
@@ -287,10 +287,10 @@ function Section({
 }) {
   return (
     <section className="mt-8">
-      <h2 className="text-base font-semibold text-slate-900">
+      <h2 className="text-base font-semibold text-ink">
         제{n}조 · {title}
       </h2>
-      <div className="text-sm text-slate-700 leading-relaxed mt-2 space-y-2">
+      <div className="text-sm text-ink-soft leading-relaxed mt-2 space-y-2">
         {children}
       </div>
     </section>

@@ -97,14 +97,14 @@ export default function ApplyForm({
 
   if (done) {
     return (
-      <div className="rounded-2xl bg-white shadow-sm border border-slate-200 p-8 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600 text-2xl">
+      <div className="rounded-2xl bg-card shadow-sm border border-border-default p-8 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary text-2xl">
           ✓
         </div>
-        <h1 className="mt-4 text-lg font-semibold text-slate-900">
+        <h1 className="mt-4 text-lg font-semibold text-ink">
           지원이 완료되었습니다
         </h1>
-        <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+        <p className="mt-2 text-sm text-ink-soft leading-relaxed">
           {companyName} · {jobTitle} 에 지원해 주셔서 감사합니다.
           <br />
           제출하신 이력서는 채용 절차에 따라 검토됩니다.
@@ -116,12 +116,12 @@ export default function ApplyForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-2xl bg-white shadow-sm border border-slate-200 p-5 sm:p-6 space-y-4"
+      className="rounded-2xl bg-card shadow-sm border border-border-default p-5 sm:p-6 space-y-4"
     >
       <div>
-        <p className="text-xs font-medium text-blue-600">{companyName}</p>
-        <h1 className="mt-1 text-lg font-semibold text-slate-900">{jobTitle}</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="text-xs font-medium text-primary">{companyName}</p>
+        <h1 className="mt-1 text-lg font-semibold text-ink">{jobTitle}</h1>
+        <p className="mt-1 text-sm text-ink-muted">
           아래 정보를 입력하고 이력서를 첨부해 지원해 주세요.
         </p>
       </div>
@@ -134,7 +134,7 @@ export default function ApplyForm({
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="example@email.com"
-            className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-lg border border-border-strong px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </Field>
         <Field label="이름">
@@ -143,7 +143,7 @@ export default function ApplyForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="홍길동"
-            className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-lg border border-border-strong px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </Field>
         <Field label="연락처">
@@ -152,7 +152,7 @@ export default function ApplyForm({
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="010-0000-0000"
-            className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-lg border border-border-strong px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </Field>
         <Field label="이력서 파일" required>
@@ -161,21 +161,21 @@ export default function ApplyForm({
             type="file"
             accept={ACCEPT}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100"
+            className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-primary-soft file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-primary-soft"
           />
           {file && (
-            <div className="mt-1.5 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-xs text-slate-600">
+            <div className="mt-1.5 flex items-center justify-between rounded-lg bg-surface-alt px-3 py-1.5 text-xs text-ink-soft">
               <span className="truncate">📄 {file.name}</span>
               <button
                 type="button"
                 onClick={removeResume}
-                className="ml-2 shrink-0 text-slate-400 hover:text-red-500"
+                className="ml-2 shrink-0 text-ink-muted hover:text-danger"
               >
                 ✕ 제거
               </button>
             </div>
           )}
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-ink-muted">
             PDF 또는 DOCX, 최대 {MAX_FILE_MB}MB
           </p>
         </Field>
@@ -196,23 +196,23 @@ export default function ApplyForm({
               });
               e.target.value = ""; // 같은 파일 재선택 허용 + 다음 선택은 누적
             }}
-            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-surface-alt file:px-4 file:py-2 file:text-sm file:font-medium file:text-ink-soft hover:file:bg-surface-alt"
           />
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-ink-muted">
             경력기술서·포트폴리오·자기소개서 등. 여러 개 추가 가능 · 1개당 최대 {MAX_FILE_MB}MB
           </p>
           {attachments.length > 0 && (
-            <ul className="mt-1.5 space-y-1 text-xs text-slate-600">
+            <ul className="mt-1.5 space-y-1 text-xs text-ink-soft">
               {attachments.map((a, i) => (
                 <li
                   key={`${a.name}-${a.size}-${i}`}
-                  className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5"
+                  className="flex items-center justify-between rounded-lg bg-surface-alt px-3 py-1.5"
                 >
                   <span className="truncate">📎 {a.name}</span>
                   <button
                     type="button"
                     onClick={() => removeAttachment(i)}
-                    className="ml-2 shrink-0 text-slate-400 hover:text-red-500"
+                    className="ml-2 shrink-0 text-ink-muted hover:text-danger"
                     aria-label="첨부 제거"
                   >
                     ✕
@@ -224,7 +224,7 @@ export default function ApplyForm({
         </Field>
       </div>
 
-      <div className="space-y-2 rounded-xl bg-slate-50 p-3.5">
+      <div className="space-y-2 rounded-xl bg-surface-alt p-3.5">
         <Check
           checked={agreeCollection}
           onChange={setAgreeCollection}
@@ -245,7 +245,7 @@ export default function ApplyForm({
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+        <p className="text-sm text-danger bg-danger-soft rounded-lg px-3 py-2">
           {error}
         </p>
       )}
@@ -253,7 +253,7 @@ export default function ApplyForm({
       <button
         type="submit"
         disabled={!canSubmit}
-        className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-surface hover:bg-primary-deep disabled:cursor-not-allowed disabled:bg-border-strong"
       >
         {submitting ? "제출 중…" : "지원서 제출"}
       </button>
@@ -272,9 +272,9 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-0.5 block text-sm font-medium text-slate-700">
+      <span className="mb-0.5 block text-sm font-medium text-ink-soft">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </span>
       {children}
     </label>
@@ -298,11 +298,11 @@ function Check({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-strong accent-primary focus:ring-primary"
       />
-      <span className="text-sm text-slate-700">
+      <span className="text-sm text-ink-soft">
         <span className="font-medium">{label}</span>
-        {desc && <span className="mt-0.5 block text-xs text-slate-500 leading-relaxed">{desc}</span>}
+        {desc && <span className="mt-0.5 block text-xs text-ink-muted leading-relaxed">{desc}</span>}
       </span>
     </label>
   );

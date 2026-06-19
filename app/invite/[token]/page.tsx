@@ -50,15 +50,15 @@ export default function InvitePage() {
   if (err) {
     return (
       <main className="max-w-md mx-auto px-6 py-16">
-        <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center shadow-sm">
+        <div className="bg-card border border-danger/40 rounded-2xl p-8 text-center shadow-sm">
           <div className="text-4xl mb-3">⚠️</div>
-          <h1 className="text-lg font-bold text-slate-900">초대 수락 실패</h1>
-          <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+          <h1 className="text-lg font-bold text-ink">초대 수락 실패</h1>
+          <p className="text-sm text-ink-soft mt-3 leading-relaxed">
             {err.message}
           </p>
           <Link
             href="/"
-            className="inline-block mt-6 px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-sm text-slate-700"
+            className="inline-block mt-6 px-4 py-2 rounded-lg bg-surface-alt hover:bg-surface-alt text-sm text-ink-soft"
           >
             홈으로
           </Link>
@@ -69,7 +69,7 @@ export default function InvitePage() {
 
   if (!info) {
     return (
-      <main className="max-w-md mx-auto px-6 py-16 text-center text-sm text-slate-400">
+      <main className="max-w-md mx-auto px-6 py-16 text-center text-sm text-ink-muted">
         불러오는 중...
       </main>
     );
@@ -78,20 +78,20 @@ export default function InvitePage() {
   if (pending) {
     return (
       <main className="max-w-md mx-auto px-6 py-16">
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
+        <div className="bg-card border border-border-default rounded-2xl p-8 text-center shadow-sm">
           <div className="text-4xl mb-3">📨</div>
-          <h1 className="text-lg font-bold text-slate-900">합류 신청 완료</h1>
-          <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+          <h1 className="text-lg font-bold text-ink">합류 신청 완료</h1>
+          <p className="text-sm text-ink-soft mt-3 leading-relaxed">
             <strong>{info.orgName}</strong> 법인담당자의 승인을 기다리고 있습니다.
             승인되면 공유된 공고에 면접관으로 자동 등록되어, 공고 비밀번호 없이
             후보자·평가를 확인하실 수 있습니다.
           </p>
-          <p className="text-xs text-slate-500 mt-3">
+          <p className="text-xs text-ink-muted mt-3">
             승인 완료 후 로그인해 주세요.
           </p>
           <Link
             href="/login"
-            className="inline-block mt-6 px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-sm text-slate-700"
+            className="inline-block mt-6 px-4 py-2 rounded-lg bg-surface-alt hover:bg-surface-alt text-sm text-ink-soft"
           >
             로그인 화면으로
           </Link>
@@ -102,42 +102,42 @@ export default function InvitePage() {
 
   return (
     <main className="max-w-md mx-auto px-6 py-16">
-      <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+      <div className="bg-card border border-border-default rounded-2xl p-8 shadow-sm">
         <div className="text-center">
           <div className="text-4xl mb-3">📨</div>
-          <h1 className="text-xl font-bold text-slate-900">
+          <h1 className="text-xl font-bold text-ink">
             {info.orgName} 합류 초대
           </h1>
-          <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+          <p className="text-sm text-ink-soft mt-3 leading-relaxed">
             <strong>{info.emailMasked}</strong> 로 발송된 초대입니다.
           </p>
         </div>
 
         {info.job && (
-          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-            <div className="text-xs text-slate-500">공유된 공고</div>
-            <div className="text-sm font-semibold text-slate-900 mt-1">
+          <div className="mt-6 p-4 bg-surface-alt border border-border-default rounded-xl">
+            <div className="text-xs text-ink-muted">공유된 공고</div>
+            <div className="text-sm font-semibold text-ink mt-1">
               {info.job.title}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
+            <div className="text-xs text-ink-muted mt-0.5">
               {info.job.position}
             </div>
           </div>
         )}
 
         {info.jobDeleted && (
-          <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-            <div className="text-sm font-semibold text-amber-800">
+          <div className="mt-6 p-4 bg-warning-soft border border-warning/40 rounded-xl">
+            <div className="text-sm font-semibold text-warning">
               공유된 공고가 삭제되었습니다
             </div>
-            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+            <p className="text-xs text-warning mt-1 leading-relaxed">
               그래도 <strong>{info.orgName}</strong> 채용 시스템에 가입을 신청하시겠어요?
               법인담당자 승인 후 다른 공고에 면접관으로 참여할 수 있습니다.
             </p>
           </div>
         )}
 
-        <p className="text-[11px] text-slate-500 mt-4">
+        <p className="text-[11px] text-ink-muted mt-4">
           링크 유효기간:{" "}
           {formatLocalDate(info.expiresAt)}
         </p>
@@ -156,20 +156,20 @@ export default function InvitePage() {
             />
           ) : mode === "prompt" ? (
             <div className="space-y-3">
-              <p className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-xs text-ink-soft bg-warning-soft border border-warning/40 rounded-lg p-3">
                 초대받은 이메일로 가입을 신청하면, {info.orgName} 법인담당자 승인 후
                 이 공고에 면접관으로 자동 등록됩니다 (공고 비밀번호 불요). 이미{" "}
                 {info.orgName} 소속 계정이라면 로그인 시 바로 등록됩니다.
               </p>
               <button
                 onClick={() => setMode("signup")}
-                className="block w-full text-center px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
+                className="block w-full text-center px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium"
               >
                 신규 가입 신청
               </button>
               <Link
                 href={`/login?next=${encodeURIComponent(`/invite/${info.token}`)}`}
-                className="block w-full text-center px-4 py-3 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm text-slate-700"
+                className="block w-full text-center px-4 py-3 rounded-lg border border-border-strong hover:bg-surface-alt text-sm text-ink-soft"
               >
                 이미 계정이 있어요 — 로그인
               </Link>
@@ -201,15 +201,15 @@ function AlreadyRegistered({
   if (status === "pending") {
     return (
       <div className="space-y-3 text-center">
-        <p className="text-sm text-slate-700 bg-amber-50 border border-amber-200 rounded-lg p-4 leading-relaxed">
+        <p className="text-sm text-ink-soft bg-warning-soft border border-warning/40 rounded-lg p-4 leading-relaxed">
           이미 이 이메일로 가입을 신청하셨습니다. 현재{" "}
           <strong>{orgName}</strong> 법인담당자의 승인을 기다리는 중입니다.
           승인되면 공유된 공고에 면접관으로 자동 등록됩니다.
         </p>
-        <p className="text-xs text-slate-500">승인 완료 후 로그인해 주세요.</p>
+        <p className="text-xs text-ink-muted">승인 완료 후 로그인해 주세요.</p>
         <Link
           href="/login"
-          className="block w-full text-center px-4 py-3 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm text-slate-700"
+          className="block w-full text-center px-4 py-3 rounded-lg border border-border-strong hover:bg-surface-alt text-sm text-ink-soft"
         >
           로그인 화면으로
         </Link>
@@ -218,7 +218,7 @@ function AlreadyRegistered({
   }
   if (status === "disabled") {
     return (
-      <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-4 leading-relaxed text-center">
+      <p className="text-sm text-ink-soft bg-surface-alt border border-border-default rounded-lg p-4 leading-relaxed text-center">
         이 이메일 계정은 현재 비활성화되어 있습니다. <strong>{orgName}</strong>{" "}
         법인담당자에게 문의해 주세요.
       </p>
@@ -227,12 +227,12 @@ function AlreadyRegistered({
   // active — 이미 가입 완료된 계정. 로그인하면 이 공고 면접관으로 등록된다.
   return (
     <div className="space-y-3 text-center">
-      <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-4 leading-relaxed">
+      <p className="text-sm text-ink-soft bg-surface-alt border border-border-default rounded-lg p-4 leading-relaxed">
         이미 가입된 계정입니다. 로그인하시면 공유된 공고에 면접관으로 등록됩니다.
       </p>
       <Link
         href={`/login?next=${encodeURIComponent(`/invite/${token}`)}`}
-        className="block w-full text-center px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium"
+        className="block w-full text-center px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium"
       >
         로그인하고 합류하기
       </Link>
@@ -280,7 +280,7 @@ function AcceptButton({
       <button
         onClick={accept}
         disabled={busy}
-        className="w-full px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+        className="w-full px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
       >
         {busy ? "처리 중..." : "합류하기"}
       </button>
@@ -335,30 +335,30 @@ function SignupForm({
       <button
         type="button"
         onClick={onBack}
-        className="text-xs text-slate-500 hover:underline"
+        className="text-xs text-ink-muted hover:underline"
       >
         ← 뒤로
       </button>
       <label className="block">
-        <span className="text-xs text-slate-600">이름</span>
+        <span className="text-xs text-ink-soft">이름</span>
         <input
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+          className="mt-1 w-full border border-border-strong rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
         />
       </label>
       <label className="block">
-        <span className="text-xs text-slate-600">비밀번호</span>
+        <span className="text-xs text-ink-soft">비밀번호</span>
         <PasswordInput
           required
           value={password}
           onChange={setPassword}
-          className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+          className="mt-1 w-full border border-border-strong rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
         />
         <PasswordStrength password={password} />
       </label>
-      <div className="space-y-1 text-xs text-slate-600">
+      <div className="space-y-1 text-xs text-ink-soft">
         <label className="flex items-start gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -413,7 +413,7 @@ function SignupForm({
       <button
         type="submit"
         disabled={busy || !ageOver14 || !acceptTerms || !acceptPrivacy}
-        className="w-full px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50"
+        className="w-full px-4 py-3 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
       >
         {busy ? "신청 중..." : "가입 신청"}
       </button>
