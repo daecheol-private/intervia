@@ -1432,7 +1432,13 @@ export type RecordedInterviewReport = {
   summary: string;
   scores: Record<
     string,
-    { score: number; comment: string; evidence_seq?: number[] }
+    {
+      score: number;
+      comment: string;
+      evidence_seq?: number[];
+      /** 면접관이 그 차원을 묻지 않아 평가 불가 — UI 는 "평가하지 못함" 표시, overall 산정에서 제외. */
+      not_assessed?: boolean;
+    }
   >;
   strengths: Array<{ text: string; evidence_seq?: number[] }>;
   concerns: Array<{ text: string; evidence_seq?: number[] }>;

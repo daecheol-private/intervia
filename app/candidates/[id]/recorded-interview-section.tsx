@@ -24,7 +24,12 @@ type Report = {
   summary: string;
   scores: Record<
     string,
-    { score: number; comment: string; evidence_seq?: number[] }
+    {
+      score: number;
+      comment: string;
+      evidence_seq?: number[];
+      not_assessed?: boolean;
+    }
   >;
   strengths: Array<{ text: string; evidence_seq?: number[] }>;
   concerns: Array<{ text: string; evidence_seq?: number[] }>;
@@ -464,30 +469,44 @@ function RecordedReportCard({
 
           {/* ② 역량 평가 */}
           <div className="space-y-3">
-            {Object.entries(report.scores).map(([dim, v]) => (
-              <div key={dim}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-ink">{dim}</span>
-                  <span
-                    className={`text-xs font-bold tabular-nums ${scoreColor(v.score)}`}
-                  >
-                    {v.score}
-                  </span>
-                </div>
-                <div className="h-1.5 bg-surface-alt rounded-full overflow-hidden my-1.5">
-                  <div
-                    className={`h-full rounded-full ${scoreBarColor(v.score)}`}
-                    style={{ width: `${Math.max(0, Math.min(100, v.score))}%` }}
-                  />
-                </div>
-                {v.comment && (
-                  <p className="text-xs text-ink-soft leading-relaxed">
-                    <HL text={v.comment} />
-                    <EvidenceChips seqs={v.evidence_seq} onJump={jumpTo} />
+            {Object.entries(report.scores).map(([dim, v]) =>
+              v.not_assessed ? (
+                <div key={dim} className="opacity-70">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-ink-soft">{dim}</span>
+                    <span className="text-[11px] font-medium text-ink-muted bg-surface-alt px-2 py-0.5 rounded-full whitespace-nowrap">
+                      평가하지 못함
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-muted leading-relaxed mt-1">
+                    면접에서 이 항목에 대한 질문이 없어 평가하지 않았습니다.
                   </p>
-                )}
-              </div>
-            ))}
+                </div>
+              ) : (
+                <div key={dim}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-ink">{dim}</span>
+                    <span
+                      className={`text-xs font-bold tabular-nums ${scoreColor(v.score)}`}
+                    >
+                      {v.score}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-surface-alt rounded-full overflow-hidden my-1.5">
+                    <div
+                      className={`h-full rounded-full ${scoreBarColor(v.score)}`}
+                      style={{ width: `${Math.max(0, Math.min(100, v.score))}%` }}
+                    />
+                  </div>
+                  {v.comment && (
+                    <p className="text-xs text-ink-soft leading-relaxed">
+                      <HL text={v.comment} />
+                      <EvidenceChips seqs={v.evidence_seq} onJump={jumpTo} />
+                    </p>
+                  )}
+                </div>
+              )
+            )}
           </div>
 
           {/* 강점 / 우려 */}

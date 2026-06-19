@@ -201,6 +201,7 @@ function normalizeReport(
       score: clampScore(v?.score),
       comment: typeof v?.comment === "string" ? v.comment : "",
       evidence_seq: validSeqs(v?.evidence_seq, validSeqSet),
+      not_assessed: v?.not_assessed === true,
     };
   }
   const mapEvidenceItems = (
