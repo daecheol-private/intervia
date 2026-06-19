@@ -41,6 +41,7 @@ SDK 단일: **`@google/genai`** (vertexai: true). 분기 없음 — `clientFor(t
 - 아키텍처: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - DB 스키마: [docs/SCHEMA.md](docs/SCHEMA.md)
 - API 엔드포인트: [docs/API.md](docs/API.md)
+- **디자인 시스템**: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) ← **디자인·UI 작업 전 필독** (색 규칙·토큰·프리미티브, Forest+Ivory v2)
 - 함정 모음: [docs/GOTCHAS.md](docs/GOTCHAS.md) ← **작업 전 한번 훑기**
 - 배포: [DEPLOY.md](DEPLOY.md)
 - 장애 대응: [docs/RUNBOOK.md](docs/RUNBOOK.md) ← **사고 시 무엇을 보고/누르고/복구하는지** + 백업·복구
@@ -58,7 +59,7 @@ SDK 단일: **`@google/genai`** (vertexai: true). 분기 없음 — `clientFor(t
 
 ## 새 기능 추가 시 체크리스트
 
-1. UI: client component (`"use client"`) + Tailwind. 기존 디자인 톤 유지 (slate-50 배경, white 카드, blue accent).
+1. UI: client component (`"use client"`) + Tailwind. **[docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) 규칙 준수** — 거의 모노톤 + 포레스트 포인트(Forest+Ivory v2). 토큰(`text-ink`/`bg-surface`/`bg-primary` 등)·프리미티브(`@/app/components/ui`)만 사용, Tailwind 팔레트 직접 색(`text-blue-600` 등) 금지.
 2. API: `app/api/.../route.ts`, `runtime = "nodejs"`, params는 `Promise`.
 3. DB 변경 (정식 워크플로우):
    - `lib/schema.ts` 수정
