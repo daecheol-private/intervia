@@ -11,7 +11,7 @@
  *   답변이 길수록 길어진다(읽을 시간 확보).
  * prefers-reduced-motion: reduce 시 전체 대화를 정적으로 표시(애니메이션·루프 없음).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sparkles, User } from "lucide-react";
 
 type Msg = { role: "ai" | "user"; text: string };
@@ -85,6 +85,8 @@ export function ChatPreview() {
   const [reduced, setReduced] = useState(false);
   const [step, setStep] = useState(0); // 현재 타이핑 중인 메시지 인덱스
   const [done, setDone] = useState(false); // step 메시지가 확정 표시됐는가
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false); // 위로 넘쳐 잘리기 시작했는가(상단 페이드용)
 
   // prefers-reduced-motion 감지 — reduce 면 전체 대화를 정적 표시
   useEffect(() => {
@@ -118,6 +120,16 @@ export function ChatPreview() {
   const shown = SCRIPT.slice(0, shownCount);
   const typingRole =
     !reduced && !done && step < SCRIPT.length ? SCRIPT[step].role : null;
+
+  // 새 메시지가 등장할 때마다 맨 아래로 스크롤 — 일반 채팅창처럼 위에서
+  // 시작해 아래로 쌓이고, 넘치면 최신 메시지가 보이도록 따라 내려간다.
+  // (overflow-hidden 이라 사용자 스크롤은 없고 scrollTop 프로그래밍 제어만)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    setScrolled(el.scrollTop > 1); // 실제로 잘렸을 때만 상단 페이드 표시
+  }, [shownCount, typingRole]);
 
   // 메트릭 — 확정된 지원자 답변 수에 연동
   const answers = shown.filter((m) => m.role === "user").length;
@@ -156,14 +168,17 @@ export function ChatPreview() {
           </div>
         </div>
 
-        {/* 메시지 — 고정 높이, 아래 정렬, 넘치면 위로 페이드아웃 */}
+        {/* 메시지 — 고정 높이, 위에서 시작해 아래로 쌓이고, 넘치면 자동 스크롤 */}
         <div className="relative bg-surface h-[300px] overflow-hidden">
-          {/* 상단 페이드 마스크 — 넘친 메시지가 자연스럽게 사라지도록 */}
+          {/* 상단 페이드 마스크 — 위로 잘려 사라지는 메시지를 부드럽게(넘칠 때만) */}
           <div
             aria-hidden
-            className="absolute top-0 inset-x-0 h-10 bg-gradient-to-b from-surface to-transparent z-10 pointer-events-none"
+            className={`absolute top-0 inset-x-0 h-10 bg-gradient-to-b from-surface to-transparent z-10 pointer-events-none transition-opacity duration-300 ${scrolled ? "opacity-100" : "opacity-0"}`}
           />
-          <div className="absolute inset-0 p-4 flex flex-col justify-end gap-3">
+          <div
+            ref={scrollRef}
+            className="absolute inset-0 p-4 flex flex-col gap-3 overflow-hidden"
+          >
             {shown.map((m, i) => (
               <Bubble key={i} role={m.role} animate={!reduced}>
                 {m.text}
