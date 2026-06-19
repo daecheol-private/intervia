@@ -36,7 +36,10 @@ export type ConsentItem = {
   kind: "consent" | "notice";
   required: boolean; // consent 에만 의미. notice 는 항상 false.
   title: string;
-  description: string;
+  // 동의 항목 접힘 시 노출할 한 줄 핵심 (PIPA 시행령 §17 '중요한 내용' 압축: 수집항목·목적·보유·거부 불이익).
+  // 고지 항목은 접힘 시 제목만 노출하므로 미사용. description 은 '자세히 보기' 펼침 전문.
+  summary: string;
+  description: string; // '자세히 보기' 펼침 시 전문 (부연·상세 포함)
   legalBasis: string; // 표시용
 };
 
@@ -46,6 +49,9 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     kind: "consent",
     required: true,
     title: "개인정보 수집 · 이용 동의",
+    summary:
+      "수집: 이름·연락처·나이·학력·이력서·면접 대화록 · 목적: 채용 절차(서류·면접·합·불) · " +
+      "보유: 합·불 결정 후 단계적 폐기 · 거부 시 면접 불가",
     description:
       "수집 항목: 이름·이메일·전화·나이·학력(수준·전공·학교)·이력서 본문·면접 대화록. " +
       "이용 목적: 채용 절차 수행(서류 평가·면접 진행·합·불 결정). " +
@@ -60,6 +66,9 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     kind: "consent",
     required: true,
     title: "개인정보 국외이전 동의",
+    summary:
+      "국외 이전: Vercel(미국)·Turso(일본)·Resend(미국) · " +
+      "AI 평가·면접은 국내(서울) 처리로 이전 제외 · 거부 시 면접 불가",
     description:
       "서비스 운영을 위해 위 개인정보가 다음과 같이 국외로 이전됩니다. 이전받는 자·국가·목적: Vercel Inc.(미국, 호스팅·이력서 파일 저장), Turso(일본 도쿄, 데이터베이스), Resend(미국, 시스템 기본 메일 발송 — 법인이 자체 SMTP 를 등록한 경우 해당 서버). " +
       "이전 항목: 위 수집 항목 및 면접 대화록. 이전 시기·방법: 서비스 이용 전 과정에서 HTTPS 로 전송·저장. 보유기간: 위 수집·이용 동의와 동일. " +
@@ -71,6 +80,9 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     kind: "notice",
     required: false,
     title: "AI 자동화 평가 안내 및 권리 고지",
+    summary:
+      "AI가 점수·추천을 산출하지만 최종 합·불 결정은 채용 담당자(사람)가 합니다. " +
+      "본인은 평가 결과 설명 요청·이의제기·AI 평가 거부 후 일반 채용 절차 요청 권리를 가집니다.",
     description:
       "이력서·면접 응답에 대해 AI(Google Gemini, Google Cloud 서울 리전)가 점수·추천을 산출하나, 최종 합·불 결정은 채용 담당자의 인간 검토로 이루어지며 AI 단독으로 결정하지 않습니다. " +
       "본인은 (1) AI 평가 결과에 대한 설명 요청, (2) 이의제기(채널 제공), (3) AI 평가 거부 후 지원 법인의 일반 채용 절차(서면 이력서 + 사람 면접) 요청 권리를 가집니다.",
@@ -81,6 +93,9 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     kind: "notice",
     required: false,
     title: "처리위탁 수탁자 안내",
+    summary:
+      "Google Cloud Korea·Vercel·Turso·Resend 에 개인정보 처리를 위탁합니다. " +
+      "수탁자·위탁업무·국가·보유기간 전체는 개인정보 처리방침 §5 에서 확인하실 수 있습니다.",
     description:
       "원활한 서비스 제공을 위해 Google Cloud Korea(AI 평가·면접, 서울 asia-northeast3)·Vercel(호스팅·파일 저장)·Turso(DB)·Resend(메일 발송)에 개인정보 처리를 위탁합니다. 수탁자·위탁업무·국가·보유기간 전체와 처리위탁계약(DPA) 안내는 개인정보 처리방침 §5 에서 확인하실 수 있습니다.",
     legalBasis: "PIPA §26",

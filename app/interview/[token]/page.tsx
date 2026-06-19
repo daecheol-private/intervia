@@ -2,7 +2,6 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useVoiceInput } from "./use-voice-input";
 import { LogoMark, Logo } from "@/app/components/Logo";
 import { MicHelpModal } from "@/app/components/MicHelpModal";
@@ -20,6 +19,7 @@ type ConsentItem = {
   kind: "consent" | "notice";
   required: boolean;
   title: string;
+  summary: string;
   description: string;
   legalBasis: string;
 };
@@ -756,15 +756,18 @@ function TypingDots() {
 function StepProgress({
   steps,
   current,
+  size = "sm",
 }: {
   steps: Step[];
   current: StepKey | null;
+  size?: "sm" | "lg";
 }) {
   if (steps.length < 2) return null;
   const currentIdx = current ? steps.findIndex((s) => s.key === current) : -1;
+  const lg = size === "lg";
   return (
     <ol
-      className="flex items-center gap-1 sm:gap-1.5"
+      className={`flex items-center ${lg ? "gap-1.5 sm:gap-2" : "gap-1 sm:gap-1.5"}`}
       aria-label="면접 진행 단계"
     >
       {steps.map((s, i) => {
@@ -773,19 +776,21 @@ function StepProgress({
         return (
           <li
             key={s.key}
-            className="flex items-center gap-1 sm:gap-1.5 min-w-0"
+            className={`flex items-center ${lg ? "gap-1.5 sm:gap-2" : "gap-1 sm:gap-1.5"} min-w-0`}
             aria-current={active ? "step" : undefined}
           >
             {i > 0 && (
               <span
-                className={`h-px w-2.5 sm:w-5 shrink-0 ${
+                className={`h-px shrink-0 ${lg ? "w-4 sm:w-8" : "w-2.5 sm:w-5"} ${
                   done || active ? "bg-primary" : "bg-slate-200"
                 }`}
                 aria-hidden
               />
             )}
             <span
-              className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+              className={`shrink-0 inline-flex items-center justify-center rounded-full font-bold ${
+                lg ? "w-7 h-7 text-xs" : "w-5 h-5 text-[10px]"
+              } ${
                 active
                   ? "bg-primary text-surface ring-2 ring-primary/25"
                   : done
@@ -797,7 +802,9 @@ function StepProgress({
               {done ? "✓" : i + 1}
             </span>
             <span
-              className={`text-[11px] sm:text-xs whitespace-nowrap ${
+              className={`whitespace-nowrap ${
+                lg ? "text-sm sm:text-[15px]" : "text-[11px] sm:text-xs"
+              } ${
                 active
                   ? "font-bold text-primary-deep"
                   : done
@@ -1439,6 +1446,10 @@ function ConsentGate({
   // H5 — 본인 확인용 이메일 (지원 시 등록한 메일과 일치 여부 서버 검증)
   const [email, setEmail] = useState("");
   const [withdrawn, setWithdrawn] = useState(false);
+  // 항목별 전문 펼침 상태. 기본은 접힘(요약만 노출)으로 첫 화면 글자수를 줄인다.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const toggleExpanded = (key: string) =>
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
 
   // 지원취소 — 자의로 지원 철회 시 outcome=withdrawn + 본문 즉시 폐기.
   const withdraw = async () => {
@@ -1531,28 +1542,23 @@ function ConsentGate({
               {jobTitle} AI 면접 — 개인정보 처리 동의
             </h1>
           )}
-          <p className="text-sm text-ink-soft mt-2 leading-relaxed">
-            면접을 진행하기 전, 개인정보 보호법(PIPA) 에 따라 아래 항목에
-            동의해 주세요. 모든 <strong className="text-danger">필수</strong>{" "}
-            항목에 동의해야 면접을 시작할 수 있습니다.
-          </p>
         </header>
 
         {steps.length > 1 && (
-          <div className="px-6 py-4 border-b border-border-default bg-card">
-            <p className="text-xs font-semibold text-ink-soft mb-3">
-              동의를 완료하면 아래 순서로 진행됩니다{" "}
-              <span className="font-normal text-ink-muted">
+          <div className="px-6 py-5 border-b border-border-default bg-card">
+            <p className="text-[15px] font-bold text-ink mb-3">
+              동의를 완료하면 아래 순서로 진행됩니다
+              <span className="font-medium text-ink-soft text-xs ml-1.5">
                 · 총 {steps.length}단계
               </span>
             </p>
-            <StepProgress steps={steps} current={null} />
+            <StepProgress steps={steps} current={null} size="lg" />
           </div>
         )}
 
         <ul className="divide-y divide-border-default">
           {consentItems.map((it) => (
-            <li key={it.key} className="px-6 py-4">
+            <li key={it.key} className="px-6 py-3">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1564,7 +1570,7 @@ function ConsentGate({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-ink">
+                    <span className="text-[13px] font-semibold text-ink">
                       {it.title}
                     </span>
                     <span
@@ -1580,25 +1586,32 @@ function ConsentGate({
                       {it.legalBasis}
                     </span>
                   </div>
-                  <p className="text-xs text-ink-soft mt-1 leading-relaxed whitespace-pre-line">
-                    {it.description}
+                  <p className="text-[11px] text-ink-soft mt-1 leading-relaxed whitespace-pre-line">
+                    {expanded[it.key] ? it.description : it.summary}
                   </p>
                 </div>
               </label>
+              <button
+                type="button"
+                onClick={() => toggleExpanded(it.key)}
+                className="ml-7 mt-1.5 text-[11px] font-medium text-primary hover:underline"
+              >
+                {expanded[it.key] ? "접기" : "자세히 보기"}
+              </button>
             </li>
           ))}
         </ul>
 
         {noticeItems.length > 0 && (
-          <div className="px-6 py-4 border-t border-border-default bg-surface-alt/60">
-            <div className="text-[11px] font-semibold text-ink-muted uppercase tracking-wide mb-2">
+          <div className="px-6 py-3 border-t border-border-default bg-surface-alt/60">
+            <div className="text-[10px] font-semibold text-ink-muted uppercase tracking-wide mb-2">
               안내 사항 (확인)
             </div>
-            <ul className="space-y-3">
+            <ul className="space-y-2.5">
               {noticeItems.map((it) => (
                 <li key={it.key}>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-ink">
+                    <span className="text-[13px] font-semibold text-ink">
                       {it.title}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-surface-alt text-ink-soft">
@@ -1608,30 +1621,31 @@ function ConsentGate({
                       {it.legalBasis}
                     </span>
                   </div>
-                  <p className="text-xs text-ink-soft mt-1 leading-relaxed">
-                    {it.description}
-                  </p>
+                  {expanded[it.key] && (
+                    <p className="text-[11px] text-ink-soft mt-1 leading-relaxed">
+                      {it.description}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(it.key)}
+                    className="mt-1.5 text-[11px] font-medium text-primary hover:underline"
+                  >
+                    {expanded[it.key] ? "접기" : "자세히 보기"}
+                  </button>
                 </li>
               ))}
             </ul>
-            <p className="text-[11px] text-ink-muted mt-3">
-              자세한 내용은{" "}
-              <Link
-                href="/privacy"
-                target="_blank"
-                className="text-primary hover:underline"
-              >
-                개인정보 처리방침
-              </Link>
-              에서 확인하실 수 있습니다.
-            </p>
           </div>
         )}
 
         <div className="px-6 py-4 border-t border-border-default bg-surface-alt">
-          <div className="mb-4">
-            <label className="block text-xs font-semibold text-ink-soft mb-1.5">
+          <div className="mb-4 bg-card border border-border-default rounded-xl p-4">
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink mb-2">
               본인 확인 — 지원 시 등록한 이메일
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-danger-soft text-danger">
+                필수
+              </span>
             </label>
             <input
               type="email"
@@ -1640,9 +1654,13 @@ function ConsentGate({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-3 py-2 text-sm border border-border-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary ${
+                allRequiredChecked && !emailFilled
+                  ? "border-primary ring-2 ring-primary/30"
+                  : "border-border-strong"
+              }`}
             />
-            <p className="text-[11px] text-ink-muted mt-1">
+            <p className="text-[11px] text-ink-muted mt-1.5">
               면접 링크 유출 방지를 위해 지원 시 등록한 이메일과 일치해야 면접이
               시작됩니다.
             </p>
@@ -1672,7 +1690,13 @@ function ConsentGate({
               disabled={!allRequiredChecked || !emailFilled || busy}
               className="flex-1 px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {busy ? "처리 중..." : "동의하고 면접 시작"}
+              {busy
+                ? "처리 중..."
+                : !allRequiredChecked
+                  ? "필수 항목에 동의해 주세요"
+                  : !emailFilled
+                    ? "본인 확인 이메일을 입력해 주세요"
+                    : "동의하고 면접 시작"}
             </button>
             <button
               onClick={withdraw}
