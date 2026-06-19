@@ -284,3 +284,25 @@ body {
     }
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * 랜딩 Hero 채팅 프리뷰 — 메시지·타이핑 버블 순차 등장 모션. (ChatPreview.tsx)
+ * reduce 선호 시 .chat-bubble-in 규칙 자체가 빠져 opacity:1 정적 표시
+ * (reveal 과 동일한 빈-화면 방지 안전 패턴).
+ * ------------------------------------------------------------------------- */
+@keyframes chat-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chat-bubble-in {
+    animation: chat-bubble-in 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
