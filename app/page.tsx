@@ -1596,7 +1596,7 @@ function WhyNotJobBoard() {
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-ink truncate">
-                      후보 ▦▦▦ · 백엔드 5년
+                      후보 김OO · 백엔드 5년
                     </div>
                     <div className="text-[10px] text-ink-soft">
                       AI 면접 완료 · 20분
