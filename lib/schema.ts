@@ -1015,6 +1015,15 @@ export const interviewQuestionSheets = sqliteTable("interview_question_sheets", 
   questions: text("questions", { mode: "json" })
     .$type<InterviewQuestionSheet>()
     .notNull(),
+  // 백그라운드(after) 생성 추적 — 'generating' 동안 클라이언트가 폴링하고, 완료 시 'ready'.
+  // (MCQ 의 mcqGeneratingAt 과 같은 목적이나, 이 테이블은 행이 없을 수도 있어 enum 으로 둔다.
+  //  생성 중에는 questions 가 placeholder 이고 status='ready' 일 때만 UI 에 노출한다.)
+  // 기존 행은 전부 완료본이라 default 'ready' 로 백필 — 비파괴 ADD COLUMN.
+  status: text("status", { enum: ["generating", "ready", "failed"] })
+    .notNull()
+    .default("ready"),
+  // 생성 실패 사유 (실패 시에만, UI 표시용).
+  genError: text("gen_error"),
   generatedByUserId: integer("generated_by_user_id").references(
     () => users.id,
     { onDelete: "set null" }

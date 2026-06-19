@@ -504,6 +504,12 @@ Cron 안전망: 매분 `/api/cron/process-screenings` 로 stuck 복구 + 잔여 
 **`interview_question_gen` 토큰 차감(기본 5, 라운드 구분 없이 동일 단가)** — 생성 성공 시 후차감,
 재생성·라운드 추가 생성도 매번 과금(`chargeRepeatable`, refType `candidate`/`candidate_re{N}` — 회차는 라운드 합산). (과거 "무료" 서술은 stale)
 
+**비동기(백그라운드) 생성** (2026-06-19): POST 가 `status`(`generating`/`ready`/`failed`)를 세팅하고 즉시 202 반환,
+`after()` 가 백그라운드에서 LLM·저장·과금 수행 — MCQ 생성과 동일 패턴. 생성 중 새로고침/이탈해도 진행 유지(상태 DB 영속),
+완료 시 클라이언트 폴링이 자동 반영. `status='ready'` 일 때만 `questions` 가 실제 질문지(생성 중엔 placeholder, UI 미노출).
+`generating` 이 5분 넘으면(함수 중단 등) GET 이 `failed` 로 노출해 재생성 허용. `gen_error` 는 실패 사유(UI 표시용).
+기존 행은 마이그레이션 0042 에서 default `'ready'` 로 백필(비파괴 ADD COLUMN).
+
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
 | id | INTEGER PK auto | |

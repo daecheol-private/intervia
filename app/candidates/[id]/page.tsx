@@ -839,7 +839,6 @@ export default function CandidateDetailPage() {
       {activeSchedule && (
         <Section
           title={`${activeSchedule.round === "round2" ? "2차" : "1차"} 면접 일정`}
-          collapsible={false}
           summary={
             activeSchedule.status === "selected" && activeSchedule.selectedSlot ? (
               <span className="flex items-center gap-2">

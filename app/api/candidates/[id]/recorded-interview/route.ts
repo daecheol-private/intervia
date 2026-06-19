@@ -15,9 +15,11 @@ import { finalizeRecordedInterview } from "@/lib/recorded-interview";
 import { triggerRecordedWorker } from "@/lib/recorded-interview-queue";
 import { saveFile } from "@/lib/storage";
 import { logAudit } from "@/lib/audit";
+import { after } from "next/server";
 
 export const runtime = "nodejs";
-// PATCH 재평가(finalize: 역할배정+평가 LLM 2회)가 기본 함수 한도를 넘을 수 있어 유지.
+// PATCH 재평가는 status='processing' 표시 후 백그라운드(after)에서 finalize(역할배정+평가 LLM)를
+// 수행한다 — after 작업도 maxDuration 안에 끝나야 하므로 한도 유지.
 // (업로드 POST 는 저장+enqueue 뿐이라 짧다 — 전사·평가는 백그라운드 워커가 수행.)
 export const maxDuration = 300;
 
@@ -244,16 +246,31 @@ export async function PATCH(
     );
   if (!ri) return new Response("Not found", { status: 404 });
 
-  // 재평가 — 같은 녹취(전사)로 평가만 다시 수행 (프롬프트 보정 반영). 성공 시 매번 후차감.
+  // 재평가 — 같은 녹취(전사)로 역할배정+평가만 다시 수행 (성공 시 매번 후차감).
+  // 비동기: status='processing' 표시 후 즉시 202 → 백그라운드(after)에서 finalize.
+  // 클라이언트는 processing 을 폴링하다 완료(ready/failed) 시 자동 반영하므로, 재평가 중
+  // 페이지를 닫거나 새로고침해도 된다. (finalize 가 ready/failed 설정. 함수가 죽어 processing 에
+  // 멈추면 cleanupStuckRecorded cron 이 안전망 — 다만 복구 경로는 charge 'once' 멱등.)
   if (body.action === "reevaluate") {
     if (ri.status === "recording" || ri.status === "processing")
       return new Response("처리 중에는 재평가할 수 없습니다.", { status: 409 });
-    try {
-      await finalizeRecordedInterview(riId);
-    } catch {
-      return Response.json({ status: "failed" }, { status: 200 });
-    }
-    return Response.json({ status: "ready" }, { status: 200 });
+    await db
+      .update(recordedInterviews)
+      .set({
+        status: "processing",
+        error: null,
+        startedAt: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(eq(recordedInterviews.id, riId));
+    after(async () => {
+      try {
+        await finalizeRecordedInterview(riId);
+      } catch (e) {
+        // finalize 가 내부에서 status='failed' 로 설정 후 rethrow — 여기선 로깅만.
+        console.error("[recorded-interview] background reevaluate failed", e);
+      }
+    });
+    return Response.json({ status: "processing" }, { status: 202 });
   }
 
   // confirm

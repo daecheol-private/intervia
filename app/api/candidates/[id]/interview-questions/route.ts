@@ -9,11 +9,17 @@
  * 생성 입력: 이력서(마스킹) + 서류평가(screeningReport) + AI 면접 평가(있으면)
  *   + 법인 컬쳐핏 기준(organizations.culture_fit_profile, 있으면 — 두 라운드 공통).
  * 면접관(같은 법인 누구나) 이 버튼을 누르면 LLM 이 질문지를 만들어 후보자당 라운드별 1건 저장.
- * 재생성하면 같은 row 를 덮어쓴다.
  *
- * 과금: 생성 성공마다 interview_question_gen(기본 5토큰) **후차감** — 라운드 구분 없이 동일 단가.
- *   chargeRepeatable 로 회차를 분리(refId=후보자, 라운드·재생성 합산 회차)하므로 성공 1회당 1건 과금.
- *   (멱등이 아님 — 단가표에 interview_question_gen 이 없어도 DEFAULT_PRICING=5 로 폴백.)
+ * 비동기(백그라운드) 생성 — MCQ 생성과 동일 패턴:
+ *   POST 는 row 를 status='generating' 으로 표시하고 즉시 202 반환한 뒤, `after()` 가
+ *   백그라운드에서 LLM 호출·저장·과금을 수행한다. 그래서 사용자가 생성 중 페이지를 닫거나
+ *   새로고침해도 진행이 유지되고(상태는 DB 영속), 완료되면 GET 이 status='ready' 로 응답해
+ *   클라이언트 폴링이 자동으로 질문지를 표시한다. 실패는 status='failed'(+gen_error).
+ *   questions 는 status='ready' 가 되기 전엔 placeholder 이며 UI 에 노출하지 않는다.
+ *
+ * 과금: 생성 성공마다(after 안에서) interview_question_gen(기본 5토큰) **후차감** — 라운드 구분 없이
+ *   동일 단가. chargeRepeatable 로 회차를 분리(refId=후보자, 라운드·재생성 합산 회차)하므로 성공
+ *   1회당 1건 과금. (멱등이 아님 — 단가표에 interview_question_gen 이 없어도 DEFAULT_PRICING=5 폴백.)
  */
 import { db } from "@/lib/db";
 import {
@@ -37,8 +43,19 @@ import {
 } from "@/lib/prompts";
 import { logAudit } from "@/lib/audit";
 import { chargeRepeatable } from "@/lib/tokens";
+import { after } from "next/server";
 
 export const runtime = "nodejs";
+// 백그라운드(after) 생성이 maxDuration 안에 끝나야 함 — Vertex 서울 기준 LLM 1회 수십 초.
+export const maxDuration = 120;
+
+// generating 표시가 이 시간을 넘으면 함수 중단 등으로 간주 → GET 이 failed 로 노출(재생성 허용).
+const QUESTION_GEN_STALE_MS = 5 * 60 * 1000;
+function genIsStale(updatedAt: string | null | undefined): boolean {
+  if (!updatedAt) return true;
+  const t = Date.parse(updatedAt);
+  return Number.isFinite(t) ? Date.now() - t > QUESTION_GEN_STALE_MS : true;
+}
 
 type Round = "round1" | "round2";
 
@@ -87,26 +104,39 @@ export async function GET(
       )
     );
 
+  // 생성 상태 — generating/ready/failed. generating 이 너무 오래(함수 중단 등)면 failed 로 노출.
+  let status: "generating" | "ready" | "failed" | null = sheet?.status ?? null;
+  let error: string | null =
+    status === "failed" ? (sheet?.genError ?? "생성에 실패했습니다.") : null;
+  if (status === "generating" && genIsStale(sheet?.updatedAt)) {
+    status = "failed";
+    error = "생성이 시간 내에 완료되지 않았습니다. 다시 시도해 주세요.";
+  }
+  // questions 는 status='ready' 일 때만 실제 질문지 — generating placeholder 는 노출하지 않는다.
+  const ready = status === "ready" && !!sheet;
+
   let generatedByName: string | null = null;
-  if (sheet?.generatedByUserId) {
+  if (ready && sheet!.generatedByUserId) {
     const [u] = await db
       .select({ name: users.name })
       .from(users)
-      .where(eq(users.id, sheet.generatedByUserId));
+      .where(eq(users.id, sheet!.generatedByUserId));
     generatedByName = u?.name ?? null;
   }
 
   return Response.json({
     scheduleConfirmed: !!confirmed,
-    sheet: sheet
+    status,
+    error,
+    sheet: ready
       ? {
-          questions: sheet.questions,
-          basedOnScreening: sheet.basedOnScreening,
-          basedOnInterview: sheet.basedOnInterview,
-          basedOnCultureFit: sheet.basedOnCultureFit,
+          questions: sheet!.questions,
+          basedOnScreening: sheet!.basedOnScreening,
+          basedOnInterview: sheet!.basedOnInterview,
+          basedOnCultureFit: sheet!.basedOnCultureFit,
           generatedByName,
-          createdAt: sheet.createdAt,
-          updatedAt: sheet.updatedAt,
+          createdAt: sheet!.createdAt,
+          updatedAt: sheet!.updatedAt,
         }
       : null,
   });
@@ -156,90 +186,28 @@ export async function POST(
 
   if (!job) return new Response("공고를 찾을 수 없습니다.", { status: 404 });
 
-  const org = candidate.orgId
-    ? (
-        await db
-          .select({
-            name: organizations.name,
-            cultureFitProfile: organizations.cultureFitProfile,
-          })
-          .from(organizations)
-          .where(eq(organizations.id, candidate.orgId))
-      )[0]
-    : null;
-  let cultureFit: CultureFitProfile | null = null;
-  if (org?.cultureFitProfile) {
-    try {
-      cultureFit = JSON.parse(org.cultureFitProfile) as CultureFitProfile;
-    } catch {
-      /* 손상된 JSON 은 미설정으로 취급 */
-    }
-  }
-
-  // 가장 최근 완료된 AI 면접 평가 (있으면)
-  const [latestCompleted] = await db
-    .select({ evaluation: interviewSessions.evaluation })
-    .from(interviewSessions)
+  // 동시/중복 생성 가드 — 이미 생성 중(stale 아님)이면 새 생성을 띄우지 않고 폴링 그대로 진행시킨다.
+  const [existing] = await db
+    .select({
+      status: interviewQuestionSheets.status,
+      updatedAt: interviewQuestionSheets.updatedAt,
+    })
+    .from(interviewQuestionSheets)
     .where(
       and(
-        eq(interviewSessions.candidateId, cid),
-        eq(interviewSessions.status, "completed")
+        eq(interviewQuestionSheets.candidateId, cid),
+        eq(interviewQuestionSheets.round, round)
       )
-    )
-    .orderBy(desc(interviewSessions.completedAt))
-    .limit(1);
-  const interviewEval = latestCompleted?.evaluation ?? null;
-  const screening = candidate.screeningReport ?? null;
-
-  const jobInfo = {
-    company: org?.name ?? undefined,
-    position: job.position,
-    level: job.level,
-    employmentType: job.employmentType,
-    responsibilities: job.responsibilities,
-    requirements: job.requirements,
-    idealProfile: job.idealProfile,
-    evaluationFocus: job.evaluationFocus,
-    tone: job.tone,
-  };
-  const prompt =
-    round === "round2"
-      ? buildExecutiveInterviewQuestionsPrompt(
-          jobInfo,
-          resume,
-          screening,
-          interviewEval,
-          cultureFit
-        )
-      : buildInterviewQuestionsPrompt(
-          jobInfo,
-          resume,
-          screening,
-          interviewEval,
-          cultureFit
-        );
-
-  let sheet: InterviewQuestionSheet;
-  try {
-    sheet = await generateJSON<InterviewQuestionSheet>(prompt, {
-      task: "questionGen",
-    });
-  } catch (e) {
-    console.error("[interview-questions] generation failed", e);
-    return new Response(
-      "면접 문제 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
-      { status: 502 }
     );
-  }
+  if (existing?.status === "generating" && !genIsStale(existing.updatedAt))
+    return Response.json({ status: "generating" }, { status: 202 });
 
-  if (!sheet || !Array.isArray(sheet.sections) || sheet.sections.length === 0)
-    return new Response(
-      "면접 문제 생성 결과가 비어 있습니다. 다시 시도해 주세요.",
-      { status: 502 }
-    );
-
-  const basedOnCultureFit = hasCultureFit(cultureFit);
-  const now = new Date().toISOString();
+  // 진행 표시(generating) 세팅 후 즉시 202 — 실제 생성은 백그라운드(after).
+  // 새로고침/재방문해도 GET 이 generating 으로 응답하고, 완료되면 status='ready' 로 바뀌어
+  // 클라이언트 폴링이 자동으로 질문지를 표시한다 (MCQ 생성과 동일한 패턴).
+  // questions 는 placeholder — status='ready' 가 되기 전에는 UI 에 노출하지 않는다.
+  const startedAt = new Date().toISOString();
+  const placeholder: InterviewQuestionSheet = { strategy: "", sections: [] };
   await db
     .insert(interviewQuestionSheets)
     .values({
@@ -247,13 +215,15 @@ export async function POST(
       round,
       jobId: candidate.jobId,
       orgId: candidate.orgId,
-      basedOnScreening: !!screening,
-      basedOnInterview: !!interviewEval,
-      basedOnCultureFit,
-      questions: sheet,
+      basedOnScreening: false,
+      basedOnInterview: false,
+      basedOnCultureFit: false,
+      questions: placeholder,
+      status: "generating",
+      genError: null,
       generatedByUserId: me!.id,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: startedAt,
+      updatedAt: startedAt,
     })
     .onConflictDoUpdate({
       target: [
@@ -261,53 +231,148 @@ export async function POST(
         interviewQuestionSheets.round,
       ],
       set: {
-        jobId: candidate.jobId,
-        orgId: candidate.orgId,
-        basedOnScreening: !!screening,
-        basedOnInterview: !!interviewEval,
-        basedOnCultureFit,
-        questions: sheet,
+        status: "generating",
+        genError: null,
         generatedByUserId: me!.id,
-        updatedAt: now,
+        updatedAt: startedAt,
       },
     });
 
-  // 후차감 — 생성이 성공할 때마다 매번 과금 (재생성·라운드 추가 생성도 LLM 비용 발생 → chargeRepeatable 회차 분리).
-  if (candidate.orgId) {
-    await chargeRepeatable({
-      orgId: candidate.orgId,
-      feature: "interview_question_gen",
-      baseRefType: "candidate",
-      refId: cid,
-      userId: me!.id,
-      memo: `${round === "round2" ? "2차(임원) " : ""}면접 문제 생성 - ${candidate.name ?? ""}`.trim(),
-    });
-  }
+  // 백그라운드 생성 — 입력 수집 → LLM → 저장/과금/감사. 실패 시 status='failed'.
+  after(async () => {
+    try {
+      const org = candidate.orgId
+        ? (
+            await db
+              .select({
+                name: organizations.name,
+                cultureFitProfile: organizations.cultureFitProfile,
+              })
+              .from(organizations)
+              .where(eq(organizations.id, candidate.orgId))
+          )[0]
+        : null;
+      let cultureFit: CultureFitProfile | null = null;
+      if (org?.cultureFitProfile) {
+        try {
+          cultureFit = JSON.parse(org.cultureFitProfile) as CultureFitProfile;
+        } catch {
+          /* 손상된 JSON 은 미설정으로 취급 */
+        }
+      }
 
-  logAudit(req, {
-    actor: me!,
-    action: "interview_questions.generate",
-    resourceType: "candidate",
-    resourceId: cid,
-    orgId: candidate.orgId,
-    metadata: {
-      round,
-      basedOnScreening: !!screening,
-      basedOnInterview: !!interviewEval,
-      basedOnCultureFit,
-      sections: sheet.sections.length,
-    },
+      // 가장 최근 완료된 AI 면접 평가 (있으면)
+      const [latestCompleted] = await db
+        .select({ evaluation: interviewSessions.evaluation })
+        .from(interviewSessions)
+        .where(
+          and(
+            eq(interviewSessions.candidateId, cid),
+            eq(interviewSessions.status, "completed")
+          )
+        )
+        .orderBy(desc(interviewSessions.completedAt))
+        .limit(1);
+      const interviewEval = latestCompleted?.evaluation ?? null;
+      const screening = candidate.screeningReport ?? null;
+
+      const jobInfo = {
+        company: org?.name ?? undefined,
+        position: job.position,
+        level: job.level,
+        employmentType: job.employmentType,
+        responsibilities: job.responsibilities,
+        requirements: job.requirements,
+        idealProfile: job.idealProfile,
+        evaluationFocus: job.evaluationFocus,
+        tone: job.tone,
+      };
+      const prompt =
+        round === "round2"
+          ? buildExecutiveInterviewQuestionsPrompt(
+              jobInfo,
+              resume,
+              screening,
+              interviewEval,
+              cultureFit
+            )
+          : buildInterviewQuestionsPrompt(
+              jobInfo,
+              resume,
+              screening,
+              interviewEval,
+              cultureFit
+            );
+
+      const sheet = await generateJSON<InterviewQuestionSheet>(prompt, {
+        task: "questionGen",
+      });
+      if (!sheet || !Array.isArray(sheet.sections) || sheet.sections.length === 0)
+        throw new Error("생성 결과가 비어 있습니다.");
+
+      const basedOnCultureFit = hasCultureFit(cultureFit);
+      const doneAt = new Date().toISOString();
+      await db
+        .update(interviewQuestionSheets)
+        .set({
+          questions: sheet,
+          basedOnScreening: !!screening,
+          basedOnInterview: !!interviewEval,
+          basedOnCultureFit,
+          status: "ready",
+          genError: null,
+          updatedAt: doneAt,
+        })
+        .where(
+          and(
+            eq(interviewQuestionSheets.candidateId, cid),
+            eq(interviewQuestionSheets.round, round)
+          )
+        );
+
+      // 후차감 — 생성 성공마다 매번 과금 (재생성·라운드 추가 생성도 chargeRepeatable 회차 분리).
+      if (candidate.orgId) {
+        await chargeRepeatable({
+          orgId: candidate.orgId,
+          feature: "interview_question_gen",
+          baseRefType: "candidate",
+          refId: cid,
+          userId: me!.id,
+          memo: `${round === "round2" ? "2차(임원) " : ""}면접 문제 생성 - ${candidate.name ?? ""}`.trim(),
+        });
+      }
+
+      logAudit(req, {
+        actor: me!,
+        action: "interview_questions.generate",
+        resourceType: "candidate",
+        resourceId: cid,
+        orgId: candidate.orgId,
+        metadata: {
+          round,
+          basedOnScreening: !!screening,
+          basedOnInterview: !!interviewEval,
+          basedOnCultureFit,
+          sections: sheet.sections.length,
+        },
+      });
+    } catch (e) {
+      console.error("[interview-questions] background generation failed", e);
+      await db
+        .update(interviewQuestionSheets)
+        .set({
+          status: "failed",
+          genError: "면접 문제 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+          updatedAt: new Date().toISOString(),
+        })
+        .where(
+          and(
+            eq(interviewQuestionSheets.candidateId, cid),
+            eq(interviewQuestionSheets.round, round)
+          )
+        );
+    }
   });
 
-  return Response.json({
-    sheet: {
-      questions: sheet,
-      basedOnScreening: !!screening,
-      basedOnInterview: !!interviewEval,
-      basedOnCultureFit,
-      generatedByName: me!.name,
-      createdAt: now,
-      updatedAt: now,
-    },
-  });
+  return Response.json({ status: "generating" }, { status: 202 });
 }

@@ -148,6 +148,13 @@ export function RecordedInterviewPanel({
   // 이 라운드 건만 표시.
   const roundInterviews = (interviews ?? []).filter((i) => i.round === round);
 
+  // 이 라운드의 대면 면접 평가가 이미 완료(리포트 생성/확정)됐는지.
+  // 완료됐으면 업로드/라이브 녹음 영역은 불필요한 클러터라 숨긴다 — 다시 평가가 필요하면
+  // 리포트 카드의 '재평가'(같은 녹취) 버튼을 사용한다.
+  const hasCompletedReport = roundInterviews.some(
+    (i) => i.status === "ready" || i.status === "confirmed"
+  );
+
   // 백그라운드 처리 중인 건이 있으면 폴링 — 업로드 후 새로고침/재방문해도 진행상태가
   // 그대로 보이고, 워커가 끝내면 자동으로 리포트로 갱신된다 (사용자가 새로고침할 필요 없음).
   const hasActive = roundInterviews.some(
@@ -229,12 +236,8 @@ export function RecordedInterviewPanel({
       notify(await r.text(), { title: "재평가 실패", tone: "danger" });
       return;
     }
-    const body = (await r.json().catch(() => ({}))) as { status?: string };
-    if (body.status === "failed")
-      notify("재평가 중 오류가 발생했습니다.", {
-        title: "재평가 실패",
-        tone: "danger",
-      });
+    // 202 — 백그라운드 재평가 시작. status='processing' 으로 바뀌고 폴링이 완료까지 인계한다
+    // (재평가 중 새로고침/이탈해도 됨). 실패는 카드의 'failed' 상태로 표시된다.
     await load();
   };
 
@@ -250,11 +253,13 @@ export function RecordedInterviewPanel({
           {roundLabel} 면접 · 녹음 업로드 또는 라이브
         </span>
       </div>
-      <p className="text-sm text-ink-soft leading-relaxed">
-        사람이 진행한 <strong>대면 면접</strong>을 녹음 업로드하거나 라이브로
-        진행하면, 전사 → 화자 분리 → AI 역량 평가 리포트를 만들어 줍니다. 녹음
-        파일은 보관하지 않습니다.
-      </p>
+      {!hasCompletedReport && (
+        <p className="text-sm text-ink-soft leading-relaxed">
+          사람이 진행한 <strong>대면 면접</strong>을 녹음 업로드하거나 라이브로
+          진행하면, 전사 → 화자 분리 → AI 역량 평가 리포트를 만들어 줍니다. 녹음
+          파일은 보관하지 않습니다.
+        </p>
+      )}
 
       {canModify && liveOpen && (
         <LiveRecorder
@@ -269,7 +274,7 @@ export function RecordedInterviewPanel({
         />
       )}
 
-      {canModify && !liveOpen && (
+      {canModify && !liveOpen && !hasCompletedReport && (
         <div className="rounded-xl border border-border-default bg-surface-alt p-4 space-y-3">
           <label className="flex items-start gap-2 text-xs text-ink-soft cursor-pointer select-none">
             <input

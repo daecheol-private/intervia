@@ -25,6 +25,9 @@ type QuestionSheet = {
 };
 type QuestionSheetResp = {
   scheduleConfirmed: boolean;
+  // 백그라운드 생성 상태 — null=생성 이력 없음. generating 동안 폴링, ready 면 sheet 노출.
+  status: "generating" | "ready" | "failed" | null;
+  error?: string | null;
   sheet: {
     questions: QuestionSheet;
     basedOnScreening: boolean;
@@ -48,7 +51,7 @@ export function InterviewQuestionsPanel({
   canModify?: boolean;
 }) {
   const [data, setData] = useState<QuestionSheetResp | null>(null);
-  const [generating, setGenerating] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -65,8 +68,22 @@ export function InterviewQuestionsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId, round]);
 
+  const sheet = data?.sheet ?? null;
+  const status = data?.status ?? null;
+  const generating = status === "generating";
+  const failed = status === "failed";
+
+  // 생성 중이면 완료(ready/failed)까지 폴링 — 페이지를 닫거나 새로고침/재방문해도
+  // 백그라운드 생성이 끝나면 자동으로 질문지가 반영된다 (사용자가 새로고침할 필요 없음).
+  useEffect(() => {
+    if (!generating) return;
+    const t = setTimeout(() => void load(), 4000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generating, data]);
+
   const generate = async () => {
-    setGenerating(true);
+    setSubmitting(true);
     setErr(null);
     try {
       const r = await fetch(apiUrl, { method: "POST" });
@@ -74,32 +91,33 @@ export function InterviewQuestionsPanel({
         setErr(await r.text());
         return;
       }
-      const body = (await r.json()) as { sheet: QuestionSheetResp["sheet"] };
-      setData((prev) => ({
-        scheduleConfirmed: prev?.scheduleConfirmed ?? true,
-        sheet: body.sheet,
-      }));
-      setOpen(true);
+      // 202 — 백그라운드 생성 시작. 즉시 상태 재조회 → generating 으로 바뀌고 폴링이 인계.
+      await load();
     } catch {
       setErr("네트워크 오류가 발생했습니다.");
     } finally {
-      setGenerating(false);
+      setSubmitting(false);
     }
   };
 
-  const sheet = data?.sheet ?? null;
   // 게이트는 부모가 내려주는 일정 확정 상태를 신뢰 — 일정 확정 직후
   // 페이지 새로고침 없이 즉시 "면접 문제 생성" 버튼이 활성화되도록.
   // (자체 GET 의 scheduleConfirmed 는 마운트 시점 값이라 stale 가능)
   const confirmed = scheduleConfirmed;
+  // 생성 이력(generating/ready/failed)이 있으면 일정 미확정이어도 패널 본문을 보여준다.
+  const hasRow = status !== null;
 
   return (
     <Section
       title={isExec ? "2차 면접" : "1차 면접"}
       defaultOpen={false}
       summary={
-        sheet ? (
+        generating ? (
+          <span className="text-primary-deep">⏳ 생성 중</span>
+        ) : sheet ? (
           <span className="text-primary-deep">생성됨 · 클릭하여 열람</span>
+        ) : failed ? (
+          <span className="text-danger">생성 실패 · 재시도</span>
         ) : confirmed ? (
           <span className="text-ink-muted">생성 가능</span>
         ) : (
@@ -107,7 +125,7 @@ export function InterviewQuestionsPanel({
         )
       }
     >
-      {!confirmed && !sheet && (
+      {!confirmed && !hasRow && (
         <div className="text-center py-6">
           <div className="text-3xl mb-3">📝</div>
           <p className="text-sm text-ink-soft mb-1">
@@ -121,7 +139,7 @@ export function InterviewQuestionsPanel({
         </div>
       )}
 
-      {(confirmed || sheet) && (
+      {(confirmed || hasRow) && (
         <div className="space-y-4">
           <div className="text-sm font-semibold text-ink-soft">
             면접 문제 생성
@@ -153,7 +171,13 @@ export function InterviewQuestionsPanel({
           )}
 
           <div className="flex items-center gap-2 flex-wrap">
-            {sheet ? (
+            {generating ? (
+              // 백그라운드 생성 중 — 새로고침/재방문해도 폴링이 이어받아 자동 반영.
+              <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-surface-alt text-primary-deep text-sm font-medium">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                생성 중... (최대 1분 · 새로고침해도 됩니다)
+              </span>
+            ) : sheet ? (
               <button
                 onClick={() => setOpen(true)}
                 className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm"
@@ -161,24 +185,22 @@ export function InterviewQuestionsPanel({
                 면접 문제 보기
               </button>
             ) : (
-              // 생성 전이거나, 오류로 생성에 실패했을 때만 노출.
-              // 성공 생성 후에는 재생성 버튼을 숨긴다 (무료 기능 — 불필요한 재생성 비용 방지).
+              // 생성 전이거나 실패 시 노출. 성공(ready) 후에는 "보기" 로 바뀌어
+              // 재생성 버튼을 숨긴다 (무료 기능 — 불필요한 재생성 비용 방지).
               <button
                 onClick={generate}
-                disabled={generating}
+                disabled={submitting}
                 className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary-deep text-surface shadow-sm"
               >
-                {generating && <Loader2 className="w-4 h-4 animate-spin" />}
-                {generating
-                  ? "생성 중... (최대 1분)"
-                  : err
-                    ? "재생성"
-                    : "면접 문제 생성"}
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {submitting ? "요청 중..." : failed || err ? "재생성" : "면접 문제 생성"}
               </button>
             )}
           </div>
 
-          {err && <p className="text-sm text-danger">{err}</p>}
+          {(err || (failed && data?.error)) && (
+            <p className="text-sm text-danger">{err ?? data?.error}</p>
+          )}
 
           {/* 대면 면접 평가 — 같은 라운드(녹음 업로드 / 라이브 + 평가 결과) */}
           <RecordedInterviewPanel

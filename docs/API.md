@@ -94,8 +94,8 @@
 | GET | `/api/candidates/[id]/attachments` | 첨부 목록 (메인 이력서 kind=resume 포함) |
 | POST | `/api/candidates/[id]/attachments` | 첨부 추가 (multipart `file`, `kind?`=career_history/portfolio/cover_letter/other). 추가 시점에 파싱+마스킹 — 기존 평가엔 미반영, **재평가 시 포함**. 결정된 후보·원본 폐기 후보 409. 10MB 상한. 감사 `candidate.attachment_add` |
 | DELETE | `/api/candidates/[id]/attachments/[aid]` | 첨부 삭제 (kind=resume 불가). 기존 평가에서 빼려면 재평가 필요. 감사 `candidate.attachment_delete` |
-| GET | `/api/candidates/[id]/interview-questions?round=round1\|round2` | 저장된 해당 라운드 면접 질문지 + `scheduleConfirmed`(해당 라운드 일정 확정 여부) 반환. round 생략 시 round1. 없으면 `sheet:null` |
-| POST | `/api/candidates/[id]/interview-questions?round=round1\|round2` | 면접 질문지 **생성/재생성**. **`interview_question_gen` 토큰 차감(기본 5, 라운드 동일 단가, 생성 성공 시 후차감 — 재생성·라운드 추가 생성도 매번 과금, `chargeRepeatable` 회차 refType `candidate`/`candidate_re{N}` 라운드 합산)**. 게이트: 해당 라운드 일정 `selected` 아니면 409. 이력서+서류평가+AI면접 평가+법인 컬쳐핏 기준(있으면) 종합 LLM(task=questionGen) — round1=실무 프롬프트, round2=임원(컬쳐핏·인재상 중심) 프롬프트 → 후보자당 라운드별 1건 upsert. 감사 `interview_questions.generate`(metadata.round) |
+| GET | `/api/candidates/[id]/interview-questions?round=round1\|round2` | 저장된 해당 라운드 면접 질문지 + `scheduleConfirmed`(해당 라운드 일정 확정 여부) + `status`(`generating`/`ready`/`failed`/null) + `error` 반환. round 생략 시 round1. `sheet` 는 status=`ready` 일 때만(생성 중 placeholder 미노출). `generating` 이 stale(>5분)이면 `failed` 로 노출 |
+| POST | `/api/candidates/[id]/interview-questions?round=round1\|round2` | 면접 질문지 **비동기 생성/재생성** — row 를 `status=generating` 으로 표시 후 즉시 **202** 반환, `after()` 가 백그라운드에서 LLM·저장·과금 수행(생성 중 새로고침/이탈해도 진행 유지, 완료 시 GET 폴링이 자동 반영, 실패 시 `status=failed`+`gen_error`). 이미 생성 중(stale 아님)이면 새 생성 안 띄우고 202. **`interview_question_gen` 토큰 차감(기본 5, 라운드 동일 단가, after 안에서 생성 성공 시 후차감 — 재생성·라운드 추가 생성도 매번 과금, `chargeRepeatable` 회차 refType `candidate`/`candidate_re{N}` 라운드 합산)**. 게이트: 해당 라운드 일정 `selected` 아니면 409. 입력: 이력서+서류평가+AI면접 평가+법인 컬쳐핏 기준(있으면) 종합 LLM(task=questionGen) — round1=실무, round2=임원(컬쳐핏·인재상 중심) 프롬프트 → 후보자당 라운드별 1건 upsert. 감사 `interview_questions.generate`(metadata.round) |
 
 ## 면접 (외부 — 후보자용)
 
