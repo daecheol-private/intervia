@@ -13,6 +13,7 @@ import { desc, eq, count, sql, and } from "drizzle-orm";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { getUnlockChecker } from "@/lib/job-lock";
 import { ChatPreview } from "./components/ChatPreview";
+import { CountUp } from "./components/CountUp";
 import { HowItWorksCarousel } from "./components/HowItWorksCarousel";
 import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
 import { GuideStepList, GuideStripCta } from "./components/tour/guide-steps";
@@ -1195,10 +1196,10 @@ async function Landing() {
           width="xl"
           className="py-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center"
         >
-          <Stat value="75%" label="채용 사이클 단축" sub="평균 2주 → 4일" />
-          <Stat value="89%" label="후보자 응답률" sub="채팅 면접 완료 기준" />
-          <Stat value="4.6" suffix="/5" label="인사담당자 만족도" sub="AI 평가 결과 설문 기준" />
-          <Stat value="10분" label="평균 면접 시간" sub="10·20·30분 선택" />
+          <Stat value={75} unit="%" label="채용 사이클 단축" sub="평균 2주 → 4일" />
+          <Stat value={89} unit="%" label="후보자 응답률" sub="채팅 면접 완료 기준" />
+          <Stat value={4.6} decimals={1} suffix="/5" label="인사담당자 만족도" sub="AI 평가 결과 설문 기준" />
+          <Stat value={10} unit="분" label="평균 면접 시간" sub="10·20·30분 선택" />
         </Container>
         <p className="text-center text-[11px] text-surface/40 pb-6 px-6">
           * 베타 사용자 내부 측정값 · 출시 후 실데이터로 갱신
@@ -1847,19 +1848,24 @@ function LedgerRow({
 
 function Stat({
   value,
+  decimals,
+  unit,
   suffix,
   label,
   sub,
 }: {
-  value: string;
-  suffix?: string;
+  value: number;
+  decimals?: number;
+  unit?: string; // 숫자 뒤 단위 (% · 분)
+  suffix?: string; // 별도 톤의 접미사 (/5)
   label: string;
   sub?: string;
 }) {
   return (
     <div>
       <div className="text-3xl sm:text-4xl font-bold tabular-nums tracking-tight">
-        {value}
+        <CountUp value={value} decimals={decimals} />
+        {unit}
         {suffix && (
           <span className="text-lg font-medium opacity-50 ml-0.5">{suffix}</span>
         )}

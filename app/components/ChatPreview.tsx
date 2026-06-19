@@ -69,14 +69,14 @@ const SCRIPT: Msg[] = [
   },
 ];
 
-// 단계 전환 타이밍(ms)
-const AI_TYPING = 850; // AI 가 질문을 "작성"하는 시간
-const USER_TYPING = 1100; // 지원자가 답변을 "입력"하는 시간
-const LOOP_HOLD = 3200; // 마지막 메시지 후 처음으로 되돌아가기 전 정지
+// 단계 전환 타이밍(ms) — 더 빠르게 (원본 대비 누적 ~56%)
+const AI_TYPING = 480; // AI 가 질문을 "작성"하는 시간
+const USER_TYPING = 620; // 지원자가 답변을 "입력"하는 시간
+const LOOP_HOLD = 1800; // 마지막 메시지 후 처음으로 되돌아가기 전 정지
 
 // 메시지 확정 후 다음 단계까지 머무는 시간 — 길수록 오래(읽을 시간)
 function holdFor(text: string) {
-  return Math.min(4400, 1200 + text.length * 50);
+  return Math.min(2480, 680 + text.length * 28);
 }
 
 const TOTAL_ANSWERS = SCRIPT.filter((m) => m.role === "user").length;
