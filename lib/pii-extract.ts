@@ -74,8 +74,23 @@ const RE_EMAIL = new RegExp(
   `\\b[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.(?:${EMAIL_TLDS})`,
   "gi"
 );
+// 끝 경계 (?!\d) 를 두지 않는다 — 표 양식 PDF 에서 인접 셀(본인 휴대폰 + 긴급연락처)이 구분자
+// 없이 "010-5145-7472010-5299-7472" 로 붙어 추출되는 케이스(candidate 374)에서, 끝 가드가 있으면
+// 첫 번호 뒤에 둘째 번호 숫자가 붙어 매칭이 통째로 실패했다(앞 가드 때문에 둘째 번호도 못 잡음 → phone=null).
+// 시작 경계 (?<!\d) 는 유지(긴 숫자열 중간 오매칭 방지) + 자릿수(3~4 + 4)로 길이가 고정이라,
+// 끝 가드 없이도 g 플래그가 첫 11자리(=본인 번호)만 정확히 끊어 읽는다. lib/mask.ts RE_PHONE 와 동일 정책.
 const RE_PHONE =
-  /(?<!\d)(?:\+?82[-.\s]?)?0?1[016-9][-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)|(?<!\d)0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)/g;
+  /(?<!\d)(?:\+?82[-.\s]?)?0?1[016-9][-.\s]?\d{3,4}[-.\s]?\d{4}|(?<!\d)0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/g;
+
+// 라벨 우선 추출용 — "휴대폰/연락처" 라벨 바로 뒤 번호를 본문 첫 매치보다 우선해 본인 번호 정확도를 높인다.
+// (카카오톡/이메일 알림이 엉뚱한 번호로 가지 않도록.) PRIMARY(본인 휴대폰 강신호) > SECONDARY(일반 연락처) > 본문 첫 매치 순.
+const RE_PHONE_PRIMARY_LABEL =
+  /휴\s*대\s*폰|핸\s*드\s*폰|휴대전화|\bMobile\b|\bCell(?:\s*Phone)?\b|\bH\.?\s*P\b|\bM\.?\s*P\b/gi;
+const RE_PHONE_SECONDARY_LABEL = /연락처|전화번호|전화|\bTel\b|\bPhone\b/gi;
+// 라벨 바로 앞에 이런 수식어가 있으면 타인/비개인 번호(긴급연락처·보호자·회사대표·팩스) → 라벨 매칭에서 제외.
+const RE_PHONE_LABEL_EXCLUDE = /(?:긴\s*급|비\s*상|보\s*호\s*자|가\s*족|회\s*사|대\s*표|팩\s*스|fax)\s*$/i;
+// 이메일 라벨 — "이메일/전자우편/E-mail" 뒤 주소 우선.
+const RE_EMAIL_LABEL = /이\s*메\s*일|전자우편|E-?\s*mail/gi;
 
 // "이름: 홍길동" / "Name: John Doe" / "姓名: 王力宏"
 const RE_NAME_LABEL =
@@ -125,6 +140,33 @@ function normalizePhone(raw: string): string {
     return `${digits.slice(0, head)}-${rest.slice(0, mid)}-${rest.slice(mid)}`;
   }
   return trimmed.replace(/[.\s]+/g, "-").replace(/-+/g, "-");
+}
+
+// 라벨(휴대폰/연락처 등) 바로 뒤 40자 윈도우에서 첫 전화 매치. "긴급/회사" 등 수식어 붙은 라벨은 건너뜀.
+// 라벨이 없거나 뒤에 번호가 없으면 null → 호출부가 본문 첫 매치로 폴백(기존 동작 유지, 회귀 없음).
+function phoneNearLabel(text: string, labelRe: RegExp): string | null {
+  labelRe.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = labelRe.exec(text)) !== null) {
+    const before = text.slice(Math.max(0, m.index - 8), m.index);
+    if (RE_PHONE_LABEL_EXCLUDE.test(before)) continue;
+    const start = m.index + m[0].length;
+    const found = text.slice(start, start + 40).match(RE_PHONE);
+    if (found) return found[0];
+  }
+  return null;
+}
+
+// 이메일 라벨 바로 뒤 60자 윈도우에서 첫 이메일 매치.
+function emailNearLabel(text: string): string | null {
+  RE_EMAIL_LABEL.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = RE_EMAIL_LABEL.exec(text)) !== null) {
+    const start = m.index + m[0].length;
+    const found = text.slice(start, start + 60).match(RE_EMAIL);
+    if (found) return found[0];
+  }
+  return null;
 }
 
 function calcAgeFromDOBYear(year: number): number | null {
@@ -222,17 +264,20 @@ export function extractPII(
     }
   }
 
-  // 이메일 — hints 우선, 없으면 본문 첫 매치
+  // 이메일 — hints(폼 입력) > 라벨 뒤 주소 > 본문 첫 매치
   if (hints?.providedEmail?.trim()) {
     result.email = hints.providedEmail.trim();
   } else {
-    const m = text.match(RE_EMAIL);
-    if (m) result.email = m[0];
+    result.email = emailNearLabel(text) ?? text.match(RE_EMAIL)?.[0] ?? null;
   }
 
-  // 전화 — 본문 첫 매치
-  const phoneMatch = text.match(RE_PHONE);
-  if (phoneMatch) result.phone = normalizePhone(phoneMatch[0]);
+  // 전화 — 라벨(휴대폰 > 연락처) 우선, 없으면 본문 첫 매치. 라벨 우선으로 본인 번호 정확도↑.
+  const phoneRaw =
+    phoneNearLabel(text, RE_PHONE_PRIMARY_LABEL) ??
+    phoneNearLabel(text, RE_PHONE_SECONDARY_LABEL) ??
+    text.match(RE_PHONE)?.[0] ??
+    null;
+  if (phoneRaw) result.phone = normalizePhone(phoneRaw);
 
   // 나이 — 라벨 우선, 그 다음 (만 XX세) 표기, 마지막으로 DOB 계산
   const ageLabel = text.match(RE_AGE_LABEL);
