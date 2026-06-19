@@ -826,21 +826,39 @@ export function HowItWorksCarousel() {
   const n = SLIDES.length;
   const touchX = useRef<number | null>(null);
   const [paused, setPaused] = useState(false);
+  const [inView, setInView] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const go = useCallback((d: number) => setI((p) => (p + d + n) % n), [n]);
 
-  // 자동 재생 — 마지막 전환(자동·수동 무관) 5초 뒤 다음 단계로. i 가 deps 에 있어
-  // 수동 이동 시 타이머가 리셋된다. 호버·포커스 중(paused)엔 멈추고, 모션 줄이기
-  // 선호 시 아예 돌지 않는다(reveal 등과 동일한 reduced-motion 정책).
+  // 캐러셀이 화면에 들어왔는지 추적 — 자동 재생을 "도착한 뒤"부터 시작하기 위함.
+  // 페이지 상단에 머무는 동안 미리 넘어가 버리던 문제를 막는다. 스크롤로 벗어나면
+  // 다시 멈췄다가, 돌아오면 그 시점부터 또 5초 머문다.
   useEffect(() => {
-    if (paused) return;
+    const el = rootRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold: 0.25 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  // 자동 재생 — 화면에 보이기 시작한 뒤(inView) 5초 간격으로 다음 단계로. i 가
+  // deps 에 있어 도착 직후·수동 이동 직후 모두 꼬박 5초를 머문 뒤 넘어간다.
+  // 호버·포커스 중(paused)엔 멈추고, 모션 줄이기 선호 시 아예 돌지 않는다
+  // (reveal 등과 동일한 reduced-motion 정책).
+  useEffect(() => {
+    if (!inView || paused) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const id = setInterval(() => setI((p) => (p + 1) % n), 5000);
     return () => clearInterval(id);
-  }, [paused, n, i]);
+  }, [inView, paused, n, i]);
 
   return (
     <div
+      ref={rootRef}
       role="group"
       aria-roledescription="carousel"
       aria-label="제품 사용 안내 7단계"
