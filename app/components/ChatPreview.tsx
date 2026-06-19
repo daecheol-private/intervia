@@ -188,13 +188,13 @@ export function ChatPreview() {
         </div>
       </div>
 
-      {/* 떠 있는 평가 카드 */}
-      <div className="absolute -bottom-6 -left-4 rounded-xl bg-ink text-surface px-3 py-2.5 shadow-lg flex items-center gap-2.5">
+      {/* 떠 있는 평가 카드 — 헤더 LIVE 하단, 대화창 우측 상단에 걸치게 */}
+      <div className="absolute top-14 -right-3 rounded-xl bg-ink text-surface px-2.5 py-2 shadow-lg flex items-center gap-2">
         <div className="text-[10px] uppercase tracking-wider text-accent font-semibold">
           실시간 평가
         </div>
         <div className="flex items-baseline gap-1">
-          <span className="text-lg font-bold tabular-nums transition-all">
+          <span className="text-base font-bold tabular-nums transition-all">
             {score}
           </span>
           <span className="text-[10px] opacity-70">/ 5.0</span>
