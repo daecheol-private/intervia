@@ -125,7 +125,6 @@ export function ChatPreview() {
     ? 100
     : Math.min(100, Math.round(12 + (answers / TOTAL_ANSWERS) * 88));
   const remainMin = Math.max(1, Math.round(8 * (1 - progress / 100)));
-  const score = (4.1 + answers * (0.8 / TOTAL_ANSWERS)).toFixed(1);
 
   return (
     <div className="relative w-full max-w-md mx-auto">
@@ -185,19 +184,6 @@ export function ChatPreview() {
               style={{ width: `${progress}%` }}
             />
           </div>
-        </div>
-      </div>
-
-      {/* 떠 있는 평가 카드 — 헤더 LIVE 하단, 대화창 우측 상단에 걸치게 */}
-      <div className="absolute top-14 -right-3 rounded-xl bg-ink text-surface px-2.5 py-2 shadow-lg flex items-center gap-2">
-        <div className="text-[10px] uppercase tracking-wider text-accent font-semibold">
-          실시간 평가
-        </div>
-        <div className="flex items-baseline gap-1">
-          <span className="text-base font-bold tabular-nums transition-all">
-            {score}
-          </span>
-          <span className="text-[10px] opacity-70">/ 5.0</span>
         </div>
       </div>
     </div>
