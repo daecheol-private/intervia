@@ -1536,7 +1536,7 @@ function WhyNotJobBoard() {
         {/* 비교 — 데스크톱 가로(좌 더미 / 마커 / 우 리포트), 모바일 세로 */}
         <div className="grid lg:grid-cols-[1fr_auto_1fr] items-center gap-6 lg:gap-3 reveal">
           {/* 왼쪽 — 구인 사이트: 이력서 더미 */}
-          <div className="lg:scale-[0.97] lg:opacity-90">
+          <div>
             <PanelLabel
               eyebrow="구인 사이트가 주는 것"
               title="이력서 더미"
@@ -1552,11 +1552,15 @@ function WhyNotJobBoard() {
                   247명
                 </span>
               </div>
-              <div className="space-y-2">
-                <ResumeRow />
-                <ResumeRow />
-                <ResumeRow dim />
-                <ResumeRow dim />
+              <div className="resume-feed" style={{ height: 266 }}>
+                <div className="resume-track">
+                  {[...Array(6)].map((_, i) => (
+                    <ResumeRow key={`r1-${i}`} />
+                  ))}
+                  {[...Array(6)].map((_, i) => (
+                    <ResumeRow key={`r2-${i}`} />
+                  ))}
+                </div>
               </div>
               <p className="mt-3.5 text-center text-[11px] text-ink-muted italic">
                 …이력서는 쌓이는데, 누가 좋은지는 직접 봐야 합니다
@@ -1572,9 +1576,6 @@ function WhyNotJobBoard() {
                 strokeWidth={2.5}
               />
             </div>
-            <span className="text-[10px] uppercase tracking-widest text-ink-muted font-semibold">
-              그 다음
-            </span>
           </div>
 
           {/* 오른쪽 — Intervia: 면접 끝낸 후보 + 평가 리포트 */}
@@ -1589,7 +1590,7 @@ function WhyNotJobBoard() {
               Icon={Sparkles}
               tone="brand"
             />
-            <div className="rounded-2xl bg-card border-2 border-primary/25 ring-1 ring-primary/10 p-4 shadow-lg">
+            <div className="relative rounded-2xl bg-card border-2 border-primary/25 ring-1 ring-primary/10 p-4 shadow-lg">
               <div className="flex items-center justify-between mb-3.5">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
@@ -1600,7 +1601,7 @@ function WhyNotJobBoard() {
                       후보 김OO · 백엔드 5년
                     </div>
                     <div className="text-[10px] text-ink-soft">
-                      AI 면접 완료 · 20분
+                      AI 평가 완료 · 6축 분석
                     </div>
                   </div>
                 </div>
@@ -1612,11 +1613,7 @@ function WhyNotJobBoard() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <SkillBar label="문제해결" pct={92} />
-                <SkillBar label="커뮤니케이션" pct={100} />
-                <SkillBar label="컬처핏" pct={84} />
-              </div>
+              <ScreeningRadar />
 
               <div className="mt-3.5 rounded-lg bg-surface-alt/60 border border-border-default px-3 py-2">
                 <p className="text-[11px] text-ink-soft leading-relaxed">
@@ -1629,12 +1626,12 @@ function WhyNotJobBoard() {
                 <CheckCircle2 className="w-4 h-4" strokeWidth={2.5} />
                 1차 면접 진행 권장
               </div>
-            </div>
 
-            {/* 떠 있는 배지 */}
-            <div className="absolute -top-3 -right-3 rounded-lg bg-ink text-surface px-2.5 py-1.5 shadow-lg flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-surface" strokeWidth={2.5} />
-              <span className="text-[10px] font-semibold">자동 평가 완료</span>
+              {/* 카드 우상단 모서리에 살짝 걸친 배지 — 핵심 포인트라 크게 */}
+              <div className="absolute -top-[23px] right-[13px] z-20 rounded-xl bg-ink text-surface px-3.5 py-2 shadow-lg flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-surface" strokeWidth={2.5} />
+                <span className="text-[13px] font-semibold">자동 평가 완료</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1693,14 +1690,9 @@ function PanelLabel({
   );
 }
 
-function ResumeRow({ dim }: { dim?: boolean }) {
+function ResumeRow() {
   return (
-    <div
-      className={
-        "flex items-center gap-2.5 rounded-lg bg-card border border-border-default px-3 py-2 " +
-        (dim ? "opacity-45" : "")
-      }
-    >
+    <div className="flex items-center gap-2.5 rounded-lg bg-card border border-border-default px-3 py-2 mb-2">
       <div className="w-6 h-6 rounded-full bg-surface-alt shrink-0" />
       <div className="flex-1 min-w-0 space-y-1.5">
         <div className="h-2 w-20 rounded bg-border-strong/70" />
@@ -1714,19 +1706,104 @@ function ResumeRow({ dim }: { dim?: boolean }) {
   );
 }
 
-function SkillBar({ label, pct }: { label: string; pct: number }) {
+// 이력서 서류 평가 6축 — 실제 제품(candidates/[id] BreakdownBlock)처럼 육각 레이더(좌) +
+// 6축 점수 바(우)를 나란히. lib/screening.ts / screening-report.tsx SCREENING_AXES 와
+// 동일 라벨·순서·가중치. (점수는 데모용 고정값)
+function ScreeningRadar() {
+  const axes = [
+    { label: "기술 적합도", score: 92, weight: "20%" },
+    { label: "경험 깊이", score: 86, weight: "20%" },
+    { label: "직무 매칭도", score: 95, weight: "25%" },
+    { label: "성과 임팩트", score: 80, weight: "15%" },
+    { label: "재직 안정성", score: 76, weight: "10%" },
+    { label: "성장·태도", score: 88, weight: "10%" },
+  ];
+  const S = 168;
+  const c = S / 2;
+  const R = 68;
+  // 12시(-90°)부터 시계방향 60°씩 — screening-report 의 FitHexagon 과 동일 배치
+  const pt = (i: number, radius: number): [number, number] => {
+    const a = ((i * 60 - 90) * Math.PI) / 180;
+    return [c + radius * Math.cos(a), c + radius * Math.sin(a)];
+  };
+  const polyPoints = (radius: (i: number) => number) =>
+    axes.map((_, i) => pt(i, radius(i)).join(",")).join(" ");
+  const dataPoly = polyPoints((i) => (R * axes[i].score) / 100);
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="text-[10px] text-ink-soft w-16 shrink-0">{label}</span>
-      <div className="flex-1 h-1.5 rounded-full bg-surface-alt overflow-hidden">
-        <div
-          className="h-full rounded-full bg-primary"
-          style={{ width: `${pct}%` }}
+    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+      {/* 좌: 육각 레이더 — 6축 균형을 한눈에 (크게) */}
+      <svg
+        viewBox={`0 0 ${S} ${S}`}
+        className="shrink-0 w-[164px] h-[164px]"
+        role="img"
+        aria-label="6축 적합도 레이더"
+      >
+        {[0.4, 0.7, 1].map((f, k) => (
+          <polygon
+            key={k}
+            points={polyPoints(() => R * f)}
+            fill="none"
+            stroke="var(--border)"
+            strokeWidth="1"
+          />
+        ))}
+        {axes.map((_, i) => {
+          const [x, y] = pt(i, R);
+          return (
+            <line
+              key={i}
+              x1={c}
+              y1={c}
+              x2={x}
+              y2={y}
+              stroke="var(--border)"
+              strokeWidth="1"
+            />
+          );
+        })}
+        <polygon
+          points={dataPoly}
+          fill="var(--primary)"
+          fillOpacity="0.16"
+          stroke="var(--primary)"
+          strokeWidth="2"
+          strokeLinejoin="round"
         />
+        {axes.map((ax, i) => {
+          const [x, y] = pt(i, (R * ax.score) / 100);
+          return <circle key={i} cx={x} cy={y} r="3" fill="var(--primary)" />;
+        })}
+      </svg>
+      {/* 우: 6축 점수 바 — 라벨·가중치·점수 */}
+      <div className="w-full space-y-2 sm:w-auto sm:max-w-[260px] sm:flex-1">
+        {axes.map((ax, i) => (
+          <div key={ax.label}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[11px] text-ink-soft">
+                {ax.label}
+                <span className="text-[9px] text-ink-muted ml-1">
+                  {ax.weight}
+                </span>
+              </span>
+              <span className="text-[11px] font-bold tabular-nums text-primary">
+                {ax.score}
+              </span>
+            </div>
+            <div className="mt-0.5 h-1.5 rounded-full bg-surface-alt overflow-hidden">
+              <div
+                className="skill-flux h-full rounded-full bg-primary"
+                style={
+                  {
+                    width: `${ax.score}%`,
+                    "--skill-w": ax.score,
+                    animationDelay: `${i * 0.3}s`,
+                  } as React.CSSProperties
+                }
+              />
+            </div>
+          </div>
+        ))}
       </div>
-      <span className="text-[9px] text-ink-muted tabular-nums w-6 text-right shrink-0">
-        {pct}
-      </span>
     </div>
   );
 }
