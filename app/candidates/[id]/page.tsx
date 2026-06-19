@@ -815,7 +815,6 @@ export default function CandidateDetailPage() {
             orgCoreCompetencies={data.orgCoreCompetencies ?? null}
             onShowTranscript={() => setShowTranscript(true)}
             onRegenerate={createLink}
-            onReevaluated={load}
             disabled={aiStagePassed}
           />
         )}

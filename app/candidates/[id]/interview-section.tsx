@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
-import { confirmDialog } from "@/app/components/Dialog";
 import { BulletBlock } from "./screening-report";
 import { HL, recColor, scoreColor, scoreBarColor, showRec } from "./shared";
 import { behaviorStyleOf } from "@/lib/personality";
@@ -368,7 +367,6 @@ export function InterviewResult({
   orgCoreCompetencies,
   onShowTranscript,
   onRegenerate,
-  onReevaluated,
   disabled = false,
 }: {
   session: Session;
@@ -376,56 +374,11 @@ export function InterviewResult({
   orgCoreCompetencies?: string[] | null;
   onShowTranscript: () => void;
   onRegenerate: () => void;
-  onReevaluated: () => void;
   disabled?: boolean;
 }) {
   const ev = session.evaluation!;
-  const [reBusy, setReBusy] = useState(false);
-  const [reMsg, setReMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
-    null
-  );
-  // 성공한 AI 면접도 재평가 허용 — 같은 대화록 재평가, 성공할 때마다 토큰 차감(후차감).
-  const reevaluate = async () => {
-    if (
-      !(await confirmDialog(
-        "같은 면접 대화록으로 AI 평가를 다시 실행합니다.\n기존 평가 결과는 덮어쓰며, 평가가 성공하면 토큰이 다시 차감됩니다 (실패 시 과금 없음).",
-        { title: "AI 면접 재평가", confirmText: "재평가" }
-      ))
-    )
-      return;
-    setReBusy(true);
-    setReMsg(null);
-    try {
-      const res = await fetch(
-        `/api/interview-sessions/${session.id}/reevaluate`,
-        { method: "POST" }
-      );
-      const raw = await res.text();
-      let data: { ok?: boolean; error?: string; detail?: string } | null = null;
-      try {
-        data = raw ? JSON.parse(raw) : null;
-      } catch {
-        data = null;
-      }
-      if (res.ok && data?.ok) {
-        setReMsg({ kind: "ok", text: "재평가 성공. 잠시 후 결과가 갱신됩니다." });
-        onReevaluated();
-      } else {
-        const base = data?.error ?? raw ?? `재평가 실패 (HTTP ${res.status}).`;
-        setReMsg({
-          kind: "err",
-          text: data?.detail ? `${base}\n(원인: ${data.detail})` : base,
-        });
-      }
-    } catch (e) {
-      setReMsg({
-        kind: "err",
-        text: `재평가 요청 중 오류: ${e instanceof Error ? e.message : String(e)}`,
-      });
-    } finally {
-      setReBusy(false);
-    }
-  };
+  // 성공한 AI 면접에는 재평가 버튼을 두지 않는다 — 같은 대화록 재평가는 토큰만 더 쓰고
+  // 변별력이 없다(정책: AI 작업은 오류 시에만 재시도). 평가 실패는 InterviewEvaluationRetry 가 담당.
   return (
     <div className="space-y-5 text-sm">
       <div className="flex items-baseline gap-3 flex-wrap">
@@ -575,29 +528,7 @@ export function InterviewResult({
             재면접 링크 발급
           </button>
         )}
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={reevaluate}
-            disabled={reBusy}
-            className="shrink-0 text-xs px-3 py-1.5 rounded-md border border-border-strong text-primary hover:bg-surface-alt disabled:opacity-50 inline-flex items-center justify-center gap-1"
-            title="같은 대화록으로 AI 평가를 다시 실행 (성공 시 토큰 차감)"
-          >
-            {reBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {reBusy ? "재평가 중..." : "🔄 재평가"}
-          </button>
-        </div>
       </div>
-      {reMsg && (
-        <div
-          className={`text-xs whitespace-pre-line rounded-lg px-3 py-2 ${
-            reMsg.kind === "ok"
-              ? "bg-success-soft text-success border border-success/40"
-              : "bg-danger-soft text-danger border border-danger/40"
-          }`}
-        >
-          {reMsg.text}
-        </div>
-      )}
     </div>
   );
 }
