@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -825,14 +825,29 @@ export function HowItWorksCarousel() {
   const [i, setI] = useState(0);
   const n = SLIDES.length;
   const touchX = useRef<number | null>(null);
+  const [paused, setPaused] = useState(false);
 
   const go = useCallback((d: number) => setI((p) => (p + d + n) % n), [n]);
+
+  // 자동 재생 — 마지막 전환(자동·수동 무관) 5초 뒤 다음 단계로. i 가 deps 에 있어
+  // 수동 이동 시 타이머가 리셋된다. 호버·포커스 중(paused)엔 멈추고, 모션 줄이기
+  // 선호 시 아예 돌지 않는다(reveal 등과 동일한 reduced-motion 정책).
+  useEffect(() => {
+    if (paused) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => setI((p) => (p + 1) % n), 5000);
+    return () => clearInterval(id);
+  }, [paused, n, i]);
 
   return (
     <div
       role="group"
       aria-roledescription="carousel"
       aria-label="제품 사용 안내 7단계"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={() => setPaused(false)}
       onKeyDown={(e) => {
         // 화살표/점 버튼에 포커스가 있을 때 좌우 키로 이동 (이벤트 버블).
         if (e.key === "ArrowRight") {

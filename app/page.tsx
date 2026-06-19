@@ -1122,7 +1122,7 @@ async function Landing() {
         />
         <div
           aria-hidden
-          className="absolute -z-10 right-0 top-32 w-[400px] h-[400px] rounded-full bg-primary-soft/35 blur-3xl"
+          className="absolute -z-10 right-0 top-32 w-[400px] h-[400px] rounded-full bg-accent-soft/40 blur-3xl"
         />
         <div
           aria-hidden
@@ -1222,7 +1222,7 @@ async function Landing() {
         />
         <div
           aria-hidden
-          className="absolute -z-10 right-0 top-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-primary-soft/35 blur-3xl"
+          className="absolute -z-10 right-0 top-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-accent-soft/40 blur-3xl"
         />
 
         <Container width="xl" className="py-20 sm:py-24">
@@ -1362,9 +1362,9 @@ async function Landing() {
                 <div className="text-xs font-semibold uppercase tracking-widest text-surface/70">
                   법인 첫 등록 시
                 </div>
-                <div className="mt-2 text-4xl sm:text-5xl font-bold tabular-nums">
+                <div className="mt-2 text-4xl sm:text-5xl font-bold tabular-nums text-accent">
                   {WELCOME_BONUS_TOKENS}{" "}
-                  <span className="text-2xl font-medium opacity-80">토큰</span>
+                  <span className="text-2xl font-medium text-surface opacity-80">토큰</span>
                 </div>
                 <div className="text-sm opacity-80 mt-1">
                   ≈ {welcomeKrw.toLocaleString()}원
@@ -1457,8 +1457,8 @@ async function Landing() {
 
       <section className="bg-ink text-surface">
         <Container width="sm" className="py-16 sm:py-24 text-center reveal">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md border border-white/15 text-[11px] uppercase tracking-widest text-surface/60 mb-6">
-            <span className="w-1 h-1 rounded-full bg-surface/50" />
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md border border-accent/25 text-[11px] uppercase tracking-widest text-accent/80 mb-6">
+            <span className="w-1 h-1 rounded-full bg-accent" />
             Get Started
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-surface">
@@ -1502,7 +1502,7 @@ function WhyNotJobBoard() {
       />
       <div
         aria-hidden
-        className="absolute -z-10 right-0 top-10 w-[400px] h-[400px] rounded-full bg-primary-soft/35 blur-3xl"
+        className="absolute -z-10 right-0 top-10 w-[400px] h-[400px] rounded-full bg-accent-soft/40 blur-3xl"
       />
       <div
         aria-hidden
@@ -1940,7 +1940,7 @@ function Stat({
 }) {
   return (
     <div>
-      <div className="text-3xl sm:text-4xl font-bold tabular-nums tracking-tight">
+      <div className="text-3xl sm:text-4xl font-bold tabular-nums tracking-tight text-accent">
         <CountUp value={value} decimals={decimals} />
         {unit}
         {suffix && (

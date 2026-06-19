@@ -41,7 +41,7 @@
 | **브랜드** | `primary` | `#0d4f3c` (Deep Forest) | CTA·강조·active — **유일한 포인트 컬러** |
 | | `primary-deep` | `#073529` | hover/pressed |
 | | `primary-soft` | `#e3ece8` | 태그·배지 배경 |
-| | `accent` | `#e8a87c` (apricot) | 보조 강조 — **절제. 실사용 거의 없음(포레스트 우선)** |
+| | `accent` | `#e8a87c` (apricot) | 보조 강조 — **다크·반전 섹션 한정**(랜딩 통계밴드·무료체험 숫자, 우측 배경 글로우). 밝은 배경엔 텍스트로 쓰지 않음(포레스트 묻히는 곳에서만 apricot, 그 외 포레스트 우선) |
 | **표면** | `surface` | `#fbf9f5` (ivory) | 페이지 배경 |
 | | `surface-alt` | `#f1ede4` | 섹션 구분·테이블 헤더·비활성 |
 | | `card` | `#ffffff` | 카드·모달 등 떠 있는 표면 |
