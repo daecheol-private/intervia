@@ -162,7 +162,12 @@ async function withRetry<T>(
 
 export async function generateJSON<T>(
   prompt: string,
-  opts?: { task?: LlmTask; responseSchema?: unknown; temperature?: number }
+  opts?: {
+    task?: LlmTask;
+    responseSchema?: unknown;
+    temperature?: number;
+    timeoutMs?: number;
+  }
 ): Promise<T> {
   const task: LlmTask = opts?.task ?? "screening";
   const thinkingBudget = THINKING_BUDGET[task];
@@ -181,14 +186,29 @@ export async function generateJSON<T>(
       if (thinkingBudget !== undefined) {
         config.thinkingConfig = { thinkingBudget };
       }
-      const result = await clientFor(task).models.generateContent({
-        model: MODELS[task],
-        contents: prompt,
-        config: config as Parameters<
-          ReturnType<typeof clientFor>["models"]["generateContent"]
-        >[0]["config"],
-      });
-      return parseJsonResponse<T>(result);
+      // 하드 타임아웃 — 호출부가 timeoutMs 를 주면 httpOptions.timeout + AbortController 로
+      // 응답 지연에 상한을 건다. 서버리스(maxDuration) 안에서 도는 무거운 호출(대면 면접 평가 등)이
+      // 늦어질 때 함수가 통째로 강제종료(→ 큐가 "stuck: 재시도 상한 초과" 로 영구실패)되는 대신,
+      // 여기서 abort 로 깔끔히 끊겨 호출부의 catch·재시도로 이어지게 한다. (멀티모달 전사와 동일 사상.)
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      if (opts?.timeoutMs) {
+        config.httpOptions = { timeout: opts.timeoutMs };
+        const ctrl = new AbortController();
+        timer = setTimeout(() => ctrl.abort(), opts.timeoutMs);
+        config.abortSignal = ctrl.signal;
+      }
+      try {
+        const result = await clientFor(task).models.generateContent({
+          model: MODELS[task],
+          contents: prompt,
+          config: config as Parameters<
+            ReturnType<typeof clientFor>["models"]["generateContent"]
+          >[0]["config"],
+        });
+        return parseJsonResponse<T>(result);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     },
     { op: "generateJSON", task }
   );

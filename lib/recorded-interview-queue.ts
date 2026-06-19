@@ -33,8 +33,12 @@ import {
 } from "./recorded-interview";
 import { deleteFile, readStoredFile } from "./storage";
 import { withDbRetry } from "./db-retry";
+import { captureError } from "./error-reporter";
 
-export const MAX_RECORDED_ATTEMPTS = 3;
+// 전사·평가를 별도 함수 실행으로 분리(아래 processRecordedInterview)하면서 둘이 attempts 카운터를
+// 공유한다 — 전사 1회 + 평가 재시도 여유를 위해 상한을 넉넉히. 각 시도는 하드 타임아웃으로
+// 경계가 잡혀(강제종료 없이 깔끔히 실패) 상한이 커도 폭주하지 않는다.
+export const MAX_RECORDED_ATTEMPTS = 5;
 // 워커 maxDuration(300s) 보다 커야 — 전사+평가로 길어진 *살아있는* 실행을 stuck 으로
 // 오인해 재큐하면, 두 워커가 같은 건을 동시에 처리(전사 중복·LLM 낭비)할 수 있다.
 const LOCK_STALE_SECONDS = 360;
@@ -123,9 +127,17 @@ export async function cleanupStuckRecorded(): Promise<number> {
   if (stuck.length === 0) return 0;
 
   // 상한 초과(영구실패)분의 고아 오디오는 즉시 폐기 (worker 가 죽어 markFailed 를 못 거친 경우).
+  // 이 경로는 worker 가 강제종료(maxDuration/OOM)돼 catch·captureError 를 못 거친 stuck 실패라
+  // 모니터링에 안 잡힌다 — 여기서 직접 Sentry 로 보고해 가시화한다.
   const overLimit = stuck.filter((r) => r.attempts >= MAX_RECORDED_ATTEMPTS);
   for (const r of overLimit) {
     if (r.audioBlobKey) await deleteFile(r.audioBlobKey).catch(() => {});
+    captureError(
+      new Error(
+        `recorded_interview ${r.id} stuck 영구실패 (attempts=${r.attempts}) — worker 반복 강제종료(maxDuration/OOM 추정)`
+      ),
+      { route: "cleanupStuckRecorded", recordedInterviewId: r.id, attempts: r.attempts }
+    );
   }
 
   await withDbRetry(
@@ -154,7 +166,18 @@ export async function cleanupStuckRecorded(): Promise<number> {
 }
 
 /**
- * 한 건의 전 과정 — 전사(필요 시) → 오디오 폐기 → 역할 배정·평가·후차감.
+ * 한 건을 **한 단계만** 진행한다 — 전사와 평가를 별도 함수 실행으로 분리.
+ *
+ *  - 세그먼트 없음 → 1단계(전사): 전사 → 세그먼트 저장 → 오디오 폐기 → status='queued' 로 되돌림.
+ *    (finalize 는 하지 않고 리턴 — 워커가 self-chain/cron 으로 이 행을 다시 claim 해 2단계 수행.)
+ *  - 세그먼트 있음 → 2단계(평가): 역할 배정 → 평가 → 리포트 저장 → 멱등 후차감(once).
+ *
+ * 왜 분리하나: 전사(≤240s)와 평가(LLM 2회)를 한 함수 실행(maxDuration 300s)에 욱여넣으면
+ * 긴 녹취는 평가 도중 함수가 강제종료돼 catch 를 못 거치고 'processing' 에 멈춘다
+ * → cleanupStuck 이 "stuck: 재시도 상한 초과" 로 영구실패시킨다(2026-06-20 실제 사고).
+ * 단계를 나누면 평가가 온전한 maxDuration 예산을 받는다. 세그먼트 존재가 멱등 가드라
+ * 재시도가 전사를 중복하지 않는다.
+ *
  * 실패하면 throw (호출 워커가 재시도/영구실패 판정).
  */
 export async function processRecordedInterview(riId: number): Promise<void> {
@@ -164,13 +187,13 @@ export async function processRecordedInterview(riId: number): Promise<void> {
     .where(eq(recordedInterviews.id, riId));
   if (!ri) throw new RecordedInterviewError(`recorded_interview ${riId} 없음`, true);
 
-  // 1) 전사 — 세그먼트가 아직 없을 때만 (재시도 시 중복 전사 방지).
   const [seg] = await db
     .select({ c: sql<number>`COUNT(*)` })
     .from(interviewTranscriptSegments)
     .where(eq(interviewTranscriptSegments.recordedInterviewId, riId));
   const hasSegments = Number(seg?.c ?? 0) > 0;
 
+  // ── 1단계: 전사 (세그먼트가 아직 없을 때만) ──────────────────────────────────
   if (!hasSegments) {
     if (!ri.audioBlobKey)
       throw new RecordedInterviewError(
@@ -216,13 +239,23 @@ export async function processRecordedInterview(riId: number): Promise<void> {
         lowConfidence: s.lowConfidence,
       }))
     );
+    // 전사 끝 — 오디오 즉시 폐기(미보관 원칙) + status='queued' 로 되돌려 평가를 다음 실행에 맡긴다.
+    // startedAt=null 로 두면 cleanupStuck 의 stale 윈도우 계산에서도 깔끔하다(다음 claim 이 재설정).
+    if (ri.audioBlobKey) await deleteFile(ri.audioBlobKey).catch(() => {});
     await db
       .update(recordedInterviews)
-      .set({ durationSeconds })
+      .set({
+        durationSeconds,
+        audioBlobKey: null,
+        status: "queued",
+        startedAt: null,
+      })
       .where(eq(recordedInterviews.id, riId));
+    return;
   }
 
-  // 전사가 끝났으면(또는 이미 세그먼트가 있으면) 오디오 즉시 폐기 — 미보관 원칙. best-effort.
+  // ── 2단계: 평가 (세그먼트 존재) ─────────────────────────────────────────────
+  // 1단계에서 오디오를 폐기하지만, 만일 남아 있으면(폐기 실패 등) 방어적으로 한 번 더 폐기.
   if (ri.audioBlobKey) {
     await deleteFile(ri.audioBlobKey).catch(() => {});
     await db
@@ -231,7 +264,7 @@ export async function processRecordedInterview(riId: number): Promise<void> {
       .where(eq(recordedInterviews.id, riId));
   }
 
-  // 2) 역할 배정 → 평가 → 리포트 저장 → 멱등 후차감(once). finalize 가 status='ready' 설정.
+  // 역할 배정 → 평가 → 리포트 저장 → 멱등 후차감(once). finalize 가 status='ready' 설정.
   await finalizeRecordedInterview(riId, { charge: "once" });
 }
 

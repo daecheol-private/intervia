@@ -149,8 +149,9 @@ export function RecordedInterviewPanel({
   const roundInterviews = (interviews ?? []).filter((i) => i.round === round);
 
   // 이 라운드의 대면 면접 평가가 이미 완료(리포트 생성/확정)됐는지.
-  // 완료됐으면 업로드/라이브 녹음 영역은 불필요한 클러터라 숨긴다 — 다시 평가가 필요하면
-  // 리포트 카드의 '재평가'(같은 녹취) 버튼을 사용한다.
+  // 완료됐으면 업로드/라이브 녹음 영역은 불필요한 클러터라 숨긴다. 성공한 평가는 이미 과금됐으므로
+  // 재평가 버튼을 두지 않는다 — 재평가는 '실패' 카드에서만 (정책: 차감 기능은 오류 시에만 재평가,
+  // 과금은 실행 후 성공 시 차감). 예외는 이력서평가(서류 스크리닝)뿐.
   const hasCompletedReport = roundInterviews.some(
     (i) => i.status === "ready" || i.status === "confirmed"
   );
@@ -440,11 +441,47 @@ function RecordedReportCard({
             : "전사·평가 중입니다..."}
         </div>
       ) : ri.status === "failed" ? (
-        <div className="px-4 py-5 text-sm text-danger">
-          처리에 실패했습니다.
-          {ri.error && (
-            <span className="block text-xs text-ink-muted mt-1">사유: {ri.error}</span>
-          )}
+        <div className="px-4 py-5 space-y-3">
+          <div className="text-sm text-danger">
+            처리에 실패했습니다.
+            {ri.error && (
+              <span className="block text-xs text-ink-muted mt-1">
+                사유: {ri.error}
+              </span>
+            )}
+          </div>
+          {/* 전사 세그먼트가 남아 있으면 재업로드(재전사) 없이 평가만 다시 시도 — 가장 싸고 빠른 복구.
+              (성공 시 1회 과금. 전사 전에 실패한 경우엔 위 업로드 영역에서 다시 올린다.) */}
+          {canModify &&
+            (ri.segments.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={async () => {
+                    setReevaluating(true);
+                    try {
+                      await onReevaluate();
+                    } finally {
+                      setReevaluating(false);
+                    }
+                  }}
+                  disabled={reevaluating}
+                  className="px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep hover:bg-primary-soft text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+                  title="이미 전사된 내용으로 평가만 다시 시도합니다 (성공 시 과금)"
+                >
+                  {reevaluating && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  )}
+                  평가 다시 시도
+                </button>
+                <span className="text-[11px] text-ink-muted">
+                  전사는 완료됐습니다 — 평가만 다시 시도할 수 있어요.
+                </span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-ink-muted">
+                전사 전에 실패했습니다 — 위에서 녹음 파일을 다시 업로드해 주세요.
+              </p>
+            ))}
         </div>
       ) : !report ? (
         <div className="px-4 py-5 text-sm text-ink-muted">리포트 데이터 없음</div>
@@ -659,42 +696,24 @@ function RecordedReportCard({
                   : "확정됨"}
               </span>
             ) : (
+              // 성공(ready)한 대면 평가는 이미 과금됐으므로 재평가 버튼을 두지 않는다 — 확정만 가능.
+              // (재평가는 '실패' 카드에서만. AI 면접 평가와 동일 정책.)
               canModify && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={async () => {
-                      setReevaluating(true);
-                      try {
-                        await onReevaluate();
-                      } finally {
-                        setReevaluating(false);
-                      }
-                    }}
-                    disabled={reevaluating || confirming}
-                    className="px-3 py-1.5 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
-                    title="같은 녹취로 평가만 다시 (과금됨)"
-                  >
-                    {reevaluating && (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    )}
-                    재평가
-                  </button>
-                  <button
-                    onClick={async () => {
-                      setConfirming(true);
-                      try {
-                        await onConfirm();
-                      } finally {
-                        setConfirming(false);
-                      }
-                    }}
-                    disabled={confirming || reevaluating}
-                    className="px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep hover:bg-primary-soft text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
-                  >
-                    {confirming && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    확정
-                  </button>
-                </div>
+                <button
+                  onClick={async () => {
+                    setConfirming(true);
+                    try {
+                      await onConfirm();
+                    } finally {
+                      setConfirming(false);
+                    }
+                  }}
+                  disabled={confirming}
+                  className="px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep hover:bg-primary-soft text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {confirming && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  확정
+                </button>
               )
             )}
           </div>

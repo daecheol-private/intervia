@@ -90,11 +90,11 @@
 
 ### Phase 2 — 업로드 모드 (백그라운드 큐로 재설계, 2026-06-17)
 - [x] **업로드/평가 분리 — 백그라운드 큐**. `POST /api/candidates/[id]/recorded-interview` 는 이제 오디오를 임시 저장(`saveFile`→Blob/로컬)하고 `recorded_interviews` 행만 `status='queued'` 로 만든 뒤 **즉시 202 응답**한다(전사·평가는 동기 처리 안 함). 사용자는 업로드 후 화면을 닫거나 새로고침해도 됨 — 상태가 DB 에 영속되기 때문. (이전: 전사+평가를 한 요청에서 동기 처리 → 전사 도중 새로고침 시 행이 없어 "초기화"처럼 보이던 문제 해결.)
-- [x] **워커** `app/api/internal/process-recorded-interviews` (+ `lib/recorded-interview-queue.ts`): claim(queued→processing) → 전사(세그먼트 없을 때만) → 오디오 즉시 폐기 → `finalizeRecordedInterview(charge:"once")`. 큐 = `recorded_interviews` 행 자체(별도 jobs 테이블 없음, `audio_blob_key`/`audio_mime`/`attempts` 컬럼·마이그레이션 0034 additive). LOCK_STALE(360s) > maxDuration(300s) 로 살아있는 실행 중복처리 차단.
+- [x] **워커** `app/api/internal/process-recorded-interviews` (+ `lib/recorded-interview-queue.ts`): claim(queued→processing) → **전사·평가를 별도 함수 실행으로 분리**(2026-06-20). ① 세그먼트 없으면 전사 → 세그먼트 저장 → 오디오 폐기 → `status='queued'` 로 되돌리고 **리턴**(finalize 안 함). ② 다음 claim(세그먼트 존재)에서 `finalizeRecordedInterview(charge:"once")` 만 수행. 큐 = `recorded_interviews` 행 자체(별도 jobs 테이블 없음, `audio_blob_key`/`audio_mime`/`attempts` 컬럼·마이그레이션 0034 additive). LOCK_STALE(360s) > maxDuration(300s) 로 살아있는 실행 중복처리 차단. **왜 분리**: 전사(≤240s)+평가(LLM 2회)를 한 300s 실행에 욱여넣으면 긴 녹취는 평가 도중 함수 강제종료 → catch 못 거치고 'processing' 에 멈춰 `cleanupStuck` 이 "stuck: 재시도 상한 초과" 로 영구실패(2026-06-20 8분50초 녹취 실제 사고). 분리하면 평가가 온전한 maxDuration 예산을 받는다. 추가로 평가 LLM(역할배정 45s·평가 200s)에 하드 타임아웃 → 초과 시 강제종료 대신 abort 로 깔끔히 실패·재시도.
 - [x] **트리거·안전망**: 업로드 직후 `triggerRecordedWorker`(fire-and-forget) + 매분 `cron/process-screenings` 가 워커를 함께 깨움(별도 cron 추가 없음) + 성공 시 self-chain. stuck 복구는 `cleanupStuckRecorded`.
 - [x] **과금 멱등성**: 자동 첫 평가는 `chargeFeature`(once, refType=`recorded_interview`) — 워커 자동 재시도 이중과금 방지. 사용자 수동 재평가(PATCH)만 `chargeRepeatable`(`_re{N}`). 첫 회차 키가 동일해 자연스럽게 이어짐.
 - [x] **UI 폴링**: `RecordedInterviewPanel` 이 queued/processing 동안 4초 폴링 → 새로고침/재방문해도 진행상태 그대로, 완료 시 자동 리포트 갱신. tsc 통과 + 큐 SQL 로컬 스모크 + dev 워커 라우트 컴파일(401) 확인. (2026-06-17)
-- [x] 전사/평가 실패 격리(try/catch — `upload-route-no-try-catch-500` 교훈). 영구실패(재업로드 필요) vs 일시실패(재시도) 구분, 상한 `MAX_RECORDED_ATTEMPTS=3`.
+- [x] 전사/평가 실패 격리(try/catch — `upload-route-no-try-catch-500` 교훈). 영구실패(재업로드 필요) vs 일시실패(재시도) 구분, 상한 `MAX_RECORDED_ATTEMPTS=5`(전사·평가 단계 분리로 attempts 공유 → 여유 상향, 2026-06-20). stuck 영구실패는 `cleanupStuckRecorded` 에서 `captureError` 로 Sentry 보고(강제종료라 catch 경로를 못 거치므로). 실패 카드(세그먼트 존재 시)에 "평가 다시 시도" 버튼 — 재업로드(재전사) 없이 평가만 재시도.
 
 ### Phase 3 — 준실시간 모드 (2026-06-17, tsc + dev 런타임 컴파일 검증)
 - [x] 마이크 청크 캡처 — `LiveRecorder`(recorded-interview-live.tsx). MediaRecorder **stop/start 사이클**(timeslice 조각은 첫 조각만 디코딩 가능 → 매 조각 완결 파일) + Wake Lock + beforeunload 이탈 경고. (※ 새로고침 후 진행 중 세션 *복구*는 미구현 — 후속)

@@ -134,7 +134,8 @@ export async function assignSpeakerRoles(
 
   const out = await generateJSON<{ roles?: Record<string, string> }>(
     buildRoleAssignmentPrompt(labeled, labels),
-    { task: "interviewEval", temperature: 0 }
+    // 하드 타임아웃 — 평가 단계가 함수 maxDuration 을 넘겨 강제종료(→"stuck")되지 않도록.
+    { task: "interviewEval", temperature: 0, timeoutMs: 45_000 }
   );
 
   const roles: Record<string, SpeakerRole> = {};
@@ -257,7 +258,9 @@ export async function evaluateRecordedInterview(args: {
       labeledTranscript,
       args.screening
     ),
-    { task: "interviewEval", temperature: 0.2 }
+    // 하드 타임아웃(200s) — 긴 녹취 평가가 함수 maxDuration(300s) 을 넘겨 워커가 강제종료되는
+    // 대신, 상한 도달 시 abort 로 끊겨 호출부에서 정상 실패·재시도로 처리되게 한다.
+    { task: "interviewEval", temperature: 0.2, timeoutMs: 200_000 }
   );
   return normalizeReport(raw, new Set(args.segments.map((s) => s.seq)));
 }
