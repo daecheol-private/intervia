@@ -19,6 +19,7 @@ import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton"
 import { GuideStepList, GuideStripCta } from "./components/tour/guide-steps";
 import {
   buttonClass,
+  cn,
   Container,
   SectionHeading,
   Eyebrow,
@@ -32,18 +33,39 @@ import {
 } from "@/lib/tokens";
 import { BETA, LIST_PRICING } from "@/lib/beta";
 import {
-  ShieldCheck,
-  Building2,
-  Coins,
-  MailCheck,
   ArrowRight,
-  Sparkles,
+  BarChart3,
+  Building2,
+  CalendarClock,
   CheckCircle2,
-  Workflow,
-  Check,
+  ClipboardCheck,
+  ClipboardList,
+  Coins,
+  Columns3,
+  EyeOff,
+  FileSearch,
+  FileText,
+  Fingerprint,
+  KeyRound,
+  LayoutDashboard,
+  ListChecks,
+  Lock,
+  MapPin,
+  MessageSquare,
+  Mic,
+  Paperclip,
+  ScrollText,
+  Send,
+  Server,
+  Share2,
+  ShieldAlert,
+  Sparkles,
+  StickyNote,
+  Target,
+  Upload,
   Users,
   User,
-  FileText,
+  Workflow,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -1243,89 +1265,22 @@ async function Landing() {
         </Container>
       </section>
 
-      <section className="relative bg-card border-y border-border-default overflow-hidden">
-        {/* 배경 장식 — 좌측 forest soft glow */}
-        <div
-          aria-hidden
-          className="absolute -left-32 top-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-primary-soft/40 blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="absolute inset-0 opacity-[0.025]"
-          style={{
-            backgroundImage:
-              "linear-gradient(var(--ink) 1px, transparent 1px), linear-gradient(90deg, var(--ink) 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-          }}
-        />
-        <Container width="lg" className="relative py-20 sm:py-24">
+      <section className="bg-surface border-y border-border-default">
+        <Container width="lg" className="py-20 sm:py-24">
           <Reveal>
             <SectionHeading
-              className="mb-12"
-              eyebrow="한국 채용 특화"
-              eyebrowIcon={CheckCircle2}
-              title="한국 채용 시장에 맞춰 설계했습니다"
+              className="mb-10 sm:mb-12"
+              eyebrow="전체 기능"
+              eyebrowIcon={Sparkles}
+              title="필요한 기능은 전부 들어 있습니다"
+              subtitle="공고 등록부터 합·불 통보까지, Intervia만의 기능을 한눈에 모았습니다."
             />
           </Reveal>
-          <Reveal className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Differ
-              Icon={ShieldCheck}
-              title="PIPA · 채용절차법 준수"
-              body="개인정보 자동 마스킹, 후보자 동의 흐름, 자동화 의사결정 이의제기 채널, 차별 금지 항목 평가 배제 가드까지 한국 법령에 맞춰 기본 탑재."
-              visual={
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    "이름·전화 자동 마스킹",
-                    "PIPA §22의2",
-                    "이의제기 채널",
-                    "차별 금지 가드",
-                  ].map((c) => (
-                    <Chip key={c}>{c}</Chip>
-                  ))}
-                </div>
-              }
-            />
-            <Differ
-              Icon={Building2}
-              title="법인 단위 멀티테넌트"
-              body="법인별 데이터 격리, 도메인 자동 매칭 가입, 관리자 승인제. 시스템관리자의 모든 데이터 접근은 감사 로그로 추적."
-              visual={
-                <div className="space-y-1.5">
-                  <OrgRow name="샘플컴퍼니" domain="sample.co.kr" balance="1,247" />
-                  <OrgRow name="네이버" domain="navercorp.com" balance="8,910" />
-                  <OrgRow name="카카오" domain="kakaocorp.com" balance="3,402" muted />
-                </div>
-              }
-            />
-            <Differ
-              Icon={Coins}
-              title="투명한 토큰 과금"
-              body="공고/이력서/면접 단위 단가가 명확. 진행 중인 평가·면접은 잔액이 부족해도 끝까지 완료. 평가 실패 시 과금 없음."
-              visual={
-                <div className="space-y-1">
-                  <LedgerRow memo="100,000원 충전 (+ 5% 보너스)" delta="+1,050" positive />
-                  <LedgerRow memo="이력서 평가 12건" delta="−60" />
-                  <LedgerRow memo="평가 실패 자동 환불" delta="+5" positive subtle />
-                </div>
-              }
-            />
-            <Differ
-              Icon={MailCheck}
-              title="법인 자체 메일 서버 지원"
-              body="SMTP 등록만 하면 발신자 신뢰도 유지. 면접 안내·합불 통보 모두 자사 도메인으로 발송 가능. SPF/DKIM 정상 적용."
-              visual={
-                <div className="rounded-lg bg-card border border-border-default p-3 font-mono text-[11px]">
-                  <div className="text-ink-soft">
-                    From: <span className="text-ink">recruit@sample.co.kr</span>
-                  </div>
-                  <div className="mt-2 flex gap-1.5 flex-wrap">
-                    <PassChip>SPF · pass</PassChip>
-                    <PassChip>DKIM · pass</PassChip>
-                    <PassChip>DMARC · pass</PassChip>
-                  </div>
-                </div>
-              }
-            />
+          {/* 데스크톱: 9×6 벤토 테셀레이션(빈틈없는 완전팩) / 모바일: 2열 단순 흐름 */}
+          <Reveal className="grid grid-cols-2 gap-3 lg:aspect-[3/2] lg:grid-cols-9 lg:grid-rows-6 lg:gap-3">
+            {FEATURES.map((f) => (
+              <FeatureTile key={f.title} {...f} />
+            ))}
           </Reveal>
         </Container>
       </section>
@@ -1813,112 +1768,132 @@ type LucideIcon = React.ComponentType<{
   strokeWidth?: number;
 }>;
 
-function Differ({
+// 랜딩 "전체 기능" 벤토. 데스크톱(lg)은 12×5 격자에 col/row 명시 배치로 빈틈없이 채우고,
+// 모바일은 위 그리드가 2열 단순 흐름으로 떨어진다. place 문자열은 Tailwind 가 스캔할 수 있게 리터럴로 둔다.
+type FeatureTone = "forest" | "soft" | "beige" | "white";
+type FeatureSize = "big" | "tall" | "wide" | "mini";
+
+const TONE_CLASS: Record<FeatureTone, string> = {
+  forest: "bg-primary border-primary",
+  soft: "bg-primary-soft border-primary/15",
+  beige: "bg-surface-alt border-border-default",
+  white: "bg-card border-border-default",
+};
+
+const FEATURES: {
+  Icon: LucideIcon;
+  title: string;
+  sub?: string;
+  detail: string;
+  badge?: string;
+  tone: FeatureTone;
+  size: FeatureSize;
+  place: string;
+}[] = [
+  // 주요 — 2×2
+  { Icon: ClipboardList, title: "공고 등록", sub: "URL 자동입력", detail: "채용사이트 URL만 붙여넣으면 제목·자격요건·인재상을 AI가 자동으로 채웁니다.", tone: "beige", size: "big", place: "lg:col-start-1 lg:col-span-2 lg:row-start-1 lg:row-span-2" },
+  { Icon: MessageSquare, title: "AI 면접", sub: "인성 · 직무 · 심층채팅", detail: "인성검사 → 직무 객관식 → 꼬리물기 심층 채팅까지 토큰 기반 실시간으로 진행합니다.", tone: "forest", size: "big", place: "lg:col-start-4 lg:col-span-2 lg:row-start-1 lg:row-span-2" },
+  { Icon: FileSearch, title: "이력서 평가", sub: "6축 적합도 · JD · 정성", detail: "직무 적합도를 6축으로 채점하고 JD 충족 여부·자기소개서까지 정성 검토합니다.", tone: "soft", size: "big", place: "lg:col-start-8 lg:col-span-2 lg:row-start-1 lg:row-span-2" },
+  { Icon: Upload, title: "이력서 업로드", sub: "폴더 · ZIP · 지원링크", detail: "지원링크로 받거나 폴더·압축파일을 직접 업로드합니다 (최대 100MB, 개당 10MB).", tone: "white", size: "big", place: "lg:col-start-1 lg:col-span-2 lg:row-start-3 lg:row-span-2" },
+  { Icon: ClipboardCheck, title: "AI 면접 평가", sub: "역량 수치화 + 컬처핏", detail: "기술·실무·커뮤니케이션·직무적합성을 수치화하고 컬처핏·Big Five 성향까지 분석합니다.", tone: "soft", size: "big", place: "lg:col-start-6 lg:col-span-2 lg:row-start-3 lg:row-span-2" },
+  { Icon: Mic, title: "대면 면접 평가", sub: "녹음 · 화자분리", detail: "녹음 업로드·라이브 녹음으로 면접관/지원자 화자분리·전사 후 AI가 평가합니다.", badge: "beta", tone: "forest", size: "big", place: "lg:col-start-4 lg:col-span-2 lg:row-start-5 lg:row-span-2" },
+  // 세로형 — 1×2
+  { Icon: EyeOff, title: "개인정보 마스킹", detail: "이름·전화·주소를 자동 마스킹하고 이미지 이력서는 OCR로 읽어 처리합니다.", tone: "white", size: "tall", place: "lg:col-start-3 lg:row-start-1 lg:row-span-2" },
+  { Icon: Coins, title: "토큰 과금", detail: "공고·이력서·면접 단위로 과금하고 평가 실패 시 토큰을 소모하지 않습니다.", tone: "beige", size: "tall", place: "lg:col-start-8 lg:row-start-4 lg:row-span-2" },
+  { Icon: ShieldAlert, title: "부정행위 감지", detail: "붙여넣기·탭이탈을 집계하고 답변 문체로 대필 가능성을 보조 판단합니다.", tone: "soft", size: "tall", place: "lg:col-start-9 lg:row-start-4 lg:row-span-2" },
+  // 가로형 — 2×1
+  { Icon: CalendarClock, title: "면접 일정 · Zoom", detail: "슬롯을 제안하면 지원자가 확정·역제안하고, Zoom·캘린더가 자동 연동됩니다.", tone: "soft", size: "wide", place: "lg:col-start-6 lg:col-span-2 lg:row-start-1" },
+  { Icon: ListChecks, title: "면접 문제 생성", detail: "이력서·평가 기반으로 1차 실무 / 2차 임원 컬처핏 질문지를 자동 생성합니다.", tone: "white", size: "wide", place: "lg:col-start-6 lg:col-span-2 lg:row-start-2" },
+  { Icon: Building2, title: "법인 분리 · 권한", detail: "이메일 도메인으로 법인을 자동 분리하고, 관리자 승인제 + 3역할로 권한을 나눕니다.", tone: "beige", size: "wide", place: "lg:col-start-3 lg:col-span-2 lg:row-start-3" },
+  { Icon: BarChart3, title: "결과 리포트", detail: "단계별 후보 분포와 평균 점수를 펀널로 보여주고 CSV로 내보냅니다.", tone: "white", size: "wide", place: "lg:col-start-8 lg:col-span-2 lg:row-start-3" },
+  { Icon: Columns3, title: "후보자 비교", detail: "여러 후보의 점수·강점·우려를 한 화면에서 나란히 비교합니다.", tone: "beige", size: "wide", place: "lg:col-start-4 lg:col-span-2 lg:row-start-4" },
+  { Icon: Send, title: "합·불 통보 메일", detail: "합격·불합격·보류 결정을 자사 도메인 메일로 후보자에게 통보합니다.", tone: "forest", size: "wide", place: "lg:col-start-1 lg:col-span-2 lg:row-start-5" },
+  { Icon: LayoutDashboard, title: "채용 대시보드", detail: "진행 중인 공고와 지금 내가 해야 할 일을 한눈에 모아 봅니다.", tone: "white", size: "wide", place: "lg:col-start-6 lg:col-span-2 lg:row-start-5" },
+  // 보조 — 1×1
+  { Icon: Lock, title: "공고 PIN", detail: "공고별 PIN으로 외부 지원 링크를 잠급니다.", tone: "white", size: "mini", place: "lg:col-start-5 lg:row-start-3" },
+  { Icon: Share2, title: "공고 공유", detail: "같은 법인 멤버·이메일로 공고를 공유합니다.", tone: "beige", size: "mini", place: "lg:col-start-3 lg:row-start-4" },
+  { Icon: Paperclip, title: "첨부 분리", detail: "포트폴리오·경력기술서를 자동으로 분리합니다.", tone: "white", size: "mini", place: "lg:col-start-3 lg:row-start-5" },
+  { Icon: Fingerprint, title: "중복 차단", detail: "SHA-256 해시로 중복 이력서를 자동 차단합니다.", tone: "soft", size: "mini", place: "lg:col-start-1 lg:row-start-6" },
+  { Icon: StickyNote, title: "면접관 메모", detail: "면접관별 스코어·메모를 남겨 함께 공유합니다.", tone: "beige", size: "mini", place: "lg:col-start-2 lg:row-start-6" },
+  { Icon: Target, title: "인재상 · NCS", detail: "법인 선호 인재상·NCS 핵심역량을 설정합니다.", tone: "white", size: "mini", place: "lg:col-start-3 lg:row-start-6" },
+  { Icon: Server, title: "메일 서버", detail: "법인 자체 SMTP를 연동해 발송합니다 (SPF/DKIM).", tone: "beige", size: "mini", place: "lg:col-start-6 lg:row-start-6" },
+  { Icon: MapPin, title: "국내 AI", detail: "모든 AI 추론을 서울 리전에서 — 국외이전 없음.", tone: "soft", size: "mini", place: "lg:col-start-7 lg:row-start-6" },
+  { Icon: ScrollText, title: "감사 · 이의제기", detail: "데이터 접근을 로그로 추적하고 이의제기를 받습니다.", tone: "white", size: "mini", place: "lg:col-start-8 lg:row-start-6" },
+  { Icon: KeyRound, title: "계정 보안", detail: "MFA(2단계 인증)와 세션 관리를 지원합니다.", tone: "beige", size: "mini", place: "lg:col-start-9 lg:row-start-6" },
+];
+
+function FeatureTile({
   Icon,
   title,
-  body,
-  visual,
+  sub,
+  detail,
+  badge,
+  tone,
+  size,
+  place,
 }: {
   Icon: LucideIcon;
   title: string;
-  body: string;
-  visual?: React.ReactNode;
+  sub?: string;
+  detail: string;
+  badge?: string;
+  tone: FeatureTone;
+  size: FeatureSize;
+  place: string;
 }) {
-  return (
-    <Card tone="alt" hover>
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-9 h-9 rounded-lg bg-card border border-border-default flex items-center justify-center shrink-0">
-          <Icon className="w-4 h-4 text-primary" strokeWidth={2.25} />
-        </div>
-        <h3 className="text-base font-semibold text-ink">{title}</h3>
-      </div>
-      <p className="text-sm text-ink-soft leading-relaxed">{body}</p>
-      {visual && (
-        <div className="mt-4 pt-4 border-t border-border-default/60">
-          {visual}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-card border border-border-default text-ink-soft">
-      <Check className="w-2.5 h-2.5 text-primary" strokeWidth={3} />
-      {children}
-    </span>
-  );
-}
-
-function PassChip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-primary-soft text-primary font-semibold">
-      <Check className="w-2 h-2" strokeWidth={3} />
-      {children}
-    </span>
-  );
-}
-
-function OrgRow({
-  name,
-  domain,
-  balance,
-  muted,
-}: {
-  name: string;
-  domain: string;
-  balance: string;
-  muted?: boolean;
-}) {
-  return (
+  const forest = tone === "forest";
+  const mini = size === "mini";
+  const iconColor = forest ? "text-surface/85" : "text-primary";
+  const titleColor = forest ? "text-surface" : "text-ink";
+  const Title = (
     <div
-      className={
-        "flex items-center justify-between rounded-md bg-card border border-border-default px-2.5 py-1.5 " +
-        (muted ? "opacity-60" : "")
-      }
+      className={cn(
+        "font-semibold leading-tight",
+        size === "big" ? "text-sm" : mini ? "text-[12px]" : "text-[13px]",
+        titleColor,
+      )}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="w-5 h-5 rounded bg-primary-soft flex items-center justify-center shrink-0">
-          <Building2 className="w-2.5 h-2.5 text-primary" />
-        </div>
-        <span className="text-[11px] font-medium text-ink truncate">{name}</span>
-        <span className="text-[10px] text-ink-muted truncate">@{domain}</span>
-      </div>
-      <span className="text-[10px] font-mono text-primary shrink-0">{balance}</span>
+      {title}
+      {badge && (
+        <span className="ml-1 inline-block rounded-full bg-surface/25 px-1.5 py-px align-middle text-[9px] font-semibold text-surface">
+          {badge}
+        </span>
+      )}
     </div>
   );
-}
-
-function LedgerRow({
-  memo,
-  delta,
-  positive,
-  subtle,
-}: {
-  memo: string;
-  delta: string;
-  positive?: boolean;
-  subtle?: boolean;
-}) {
   return (
     <div
-      className={
-        "flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-md " +
-        (subtle
-          ? "bg-card/60 border border-dashed border-border-default"
-          : "bg-card border border-border-default")
-      }
+      className={cn(
+        "group relative flex min-h-[80px] flex-col rounded-2xl border p-3 transition-all duration-200 hover:z-20 hover:-translate-y-0.5 hover:shadow-lg lg:min-h-0",
+        !forest && "hover:border-border-strong",
+        mini ? "items-center justify-center gap-1.5 text-center" : "justify-between gap-2",
+        TONE_CLASS[tone],
+        place,
+      )}
     >
-      <span className="text-ink-soft truncate">{memo}</span>
-      <span
-        className={
-          "font-mono font-semibold tabular-nums shrink-0 " +
-          (positive ? "text-primary" : "text-ink")
-        }
+      <Icon className={cn(size === "big" ? "h-6 w-6" : mini ? "h-4 w-4" : "h-5 w-5", iconColor)} strokeWidth={2} />
+      <div className={mini ? "" : "min-w-0"}>
+        {Title}
+        {sub && (
+          <p className={cn("mt-0.5 text-[11px] leading-tight", forest ? "text-surface/75" : "text-ink-soft")}>
+            {sub}
+          </p>
+        )}
+      </div>
+      {/* hover 시 셀 위로 펼쳐지는 상세 설명 (모바일·터치는 hover 없음 → 기본 미노출) */}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-0 z-10 hidden min-h-full flex-col gap-1.5 rounded-2xl border p-3 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 lg:flex",
+          mini && "items-center text-center",
+          TONE_CLASS[tone],
+        )}
       >
-        {delta}
-      </span>
+        <Icon className={cn(mini ? "h-4 w-4" : "h-5 w-5", iconColor)} strokeWidth={2} />
+        {Title}
+        <p className={cn("text-[11px] leading-snug", forest ? "text-surface/85" : "text-ink-soft")}>
+          {detail}
+        </p>
+      </div>
     </div>
   );
 }
