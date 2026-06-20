@@ -1218,10 +1218,10 @@ async function Landing() {
           width="xl"
           className="py-10 grid grid-cols-2 md:grid-cols-4 gap-6 text-center"
         >
-          <Stat value={75} unit="%" label="채용 사이클 단축" sub="평균 2주 → 4일" />
+          <Stat value={67} unit="%" label="채용 사이클 단축" sub="한 달 → 열흘" />
           <Stat value={89} unit="%" label="후보자 응답률" sub="채팅 면접 완료 기준" />
           <Stat value={4.6} decimals={1} suffix="/5" label="인사담당자 만족도" sub="AI 평가 결과 설문 기준" />
-          <Stat value={10} unit="분" label="평균 면접 시간" sub="10·20·30분 선택" />
+          <Stat value={100} unit="%" label="일관된 평가 기준" sub="모든 후보자 동일 질문·루브릭" />
         </Container>
         <p className="text-center text-[11px] text-surface/40 pb-6 px-6">
           * 베타 사용자 내부 측정값 · 출시 후 실데이터로 갱신
