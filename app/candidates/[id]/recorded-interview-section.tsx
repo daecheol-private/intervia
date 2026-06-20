@@ -127,8 +127,9 @@ export function RecordedInterviewPanel({
   candidateId: number;
   round: "round1" | "round2";
   canModify: boolean;
-  // 이 라운드 대면 평가 완료(ready/confirmed) 여부를 부모에 통지 — 부모가 "면접 문제 생성" UI를 숨기도록.
-  onCompletedChange?: (done: boolean) => void;
+  // 완료된 대면 평가의 요약 메타(모드·길이·일시) 문자열을 부모에 통지(미완료면 null) —
+  // 부모가 "면접 문제 생성" UI를 숨기고 섹션 요약("대면 평가 완료 · …")에 덧붙인다.
+  onCompletedChange?: (summary: string | null) => void;
 }) {
   const [interviews, setInterviews] = useState<RI[] | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -156,14 +157,22 @@ export function RecordedInterviewPanel({
   // 완료됐으면 업로드/라이브 녹음 영역은 불필요한 클러터라 숨긴다. 성공한 평가는 이미 과금됐으므로
   // 재평가 버튼을 두지 않는다 — 재평가는 '실패' 카드에서만 (정책: 차감 기능은 오류 시에만 재평가,
   // 과금은 실행 후 성공 시 차감). 예외는 이력서평가(서류 스크리닝)뿐.
-  const hasCompletedReport = roundInterviews.some(
-    (i) => i.status === "ready" || i.status === "confirmed"
-  );
+  // 이 라운드의 완료된(ready/confirmed) 대면 평가 — 보통 1건. 메타(모드·길이·일시)는
+  // 카드 헤더 대신 섹션 요약으로 끌어올려 표시하므로 여기서 한 줄로 만들어 부모에 넘긴다.
+  const completedRi =
+    roundInterviews.find(
+      (i) => i.status === "ready" || i.status === "confirmed"
+    ) ?? null;
+  const hasCompletedReport = completedRi !== null;
+  const completedSummary = completedRi
+    ? `${completedRi.mode === "live" ? "준실시간" : "업로드"} ${fmtDuration(completedRi.durationSeconds)} · ${formatKstDateTime(completedRi.createdAt)}`
+    : null;
 
-  // 완료 여부가 바뀌면 부모에 통지 — 부모는 완료 시 "면접 문제 생성"(준비용 질문지) UI를 숨긴다.
+  // 완료 메타(또는 null)를 부모에 통지 — 부모는 완료 시 "면접 문제 생성" UI를 숨기고
+  // 섹션 요약에 이 메타를 덧붙인다.
   useEffect(() => {
-    onCompletedChange?.(hasCompletedReport);
-  }, [hasCompletedReport, onCompletedChange]);
+    onCompletedChange?.(completedSummary);
+  }, [completedSummary, onCompletedChange]);
 
   // 백그라운드 처리 중인 건이 있으면 폴링 — 업로드 후 새로고침/재방문해도 진행상태가
   // 그대로 보이고, 워커가 끝내면 자동으로 리포트로 갱신된다 (사용자가 새로고침할 필요 없음).
@@ -241,15 +250,25 @@ export function RecordedInterviewPanel({
   const roundLabel = round === "round2" ? "2차" : "1차";
 
   return (
-    <div className="space-y-4 pt-4 mt-2 border-t border-border-default">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-ink-soft">
-          대면 면접 평가
-        </span>
-        <span className="text-[11px] text-ink-muted">
-          {roundLabel} 면접 · 녹음 업로드 또는 라이브
-        </span>
-      </div>
+    <div
+      className={
+        hasCompletedReport
+          ? "space-y-4"
+          : "space-y-4 pt-4 mt-2 border-t border-border-default"
+      }
+    >
+      {/* 평가 완료 시엔 섹션 제목·요약("대면 평가 완료")과 카드 헤더(차수·날짜)로 충분 —
+          중복 레이블과 구분선을 숨겨 불필요한 영역을 줄인다. */}
+      {!hasCompletedReport && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-ink-soft">
+            대면 면접 평가
+          </span>
+          <span className="text-[11px] text-ink-muted">
+            {roundLabel} 면접 · 녹음 업로드 또는 라이브
+          </span>
+        </div>
+      )}
       {!hasCompletedReport && (
         <p className="text-sm text-ink-soft leading-relaxed">
           사람이 진행한 <strong>대면 면접</strong>을 녹음 업로드하거나 라이브로
@@ -402,21 +421,31 @@ function RecordedReportCard({
 
   const roundNo = ri.round === "round2" ? "2차" : "1차";
   const report = ri.report;
+  // 완료(ready/confirmed)된 평가는 다른 평가(서류·AI면접)처럼 섹션 직속으로 점수부터 보여준다 —
+  // 카드 테두리·헤더(차수·길이·일시) 없이. 메타는 섹션 요약으로 올라가 있다.
+  const isCompleted =
+    (ri.status === "ready" || ri.status === "confirmed") && !!report;
 
   return (
-    <div className="rounded-xl border border-border-default overflow-hidden">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-surface-alt border-b border-border-default">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="px-2 py-0.5 rounded-md bg-primary-soft text-primary-deep border border-primary/30 font-medium">
-            {roundNo} 대면
-          </span>
-          <span className="text-ink-muted">
-            {ri.mode === "live" ? "준실시간" : "업로드"} · {fmtDuration(ri.durationSeconds)}
-          </span>
-          <span className="text-ink-muted">{formatKstDateTime(ri.createdAt)}</span>
+    <div
+      className={
+        isCompleted ? "" : "rounded-xl border border-border-default overflow-hidden"
+      }
+    >
+      {/* 헤더(차수·길이·일시) — 처리중/실패 등 미완료 카드만. 완료 카드는 메타를 섹션 요약에 넘기고 헤더를 숨긴다. */}
+      {!isCompleted && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-surface-alt border-b border-border-default">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="px-2 py-0.5 rounded-md bg-primary-soft text-primary-deep border border-primary/30 font-medium">
+              {roundNo} 대면
+            </span>
+            <span className="text-ink-muted">
+              {ri.mode === "live" ? "준실시간" : "업로드"} · {fmtDuration(ri.durationSeconds)}
+            </span>
+            <span className="text-ink-muted">{formatKstDateTime(ri.createdAt)}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {ri.status === "queued" ||
       ri.status === "processing" ||
@@ -473,7 +502,11 @@ function RecordedReportCard({
       ) : !report ? (
         <div className="px-4 py-5 text-sm text-ink-muted">리포트 데이터 없음</div>
       ) : (
-        <div className="px-4 py-4 space-y-5 text-sm">
+        <div
+          className={
+            isCompleted ? "space-y-5 text-sm" : "px-4 py-4 space-y-5 text-sm"
+          }
+        >
           {/* ① 결정 요약 */}
           <div className="flex items-baseline gap-3">
             <div

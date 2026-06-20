@@ -54,9 +54,11 @@ export function InterviewQuestionsPanel({
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  // 이 라운드 대면 면접 평가가 완료(리포트 생성/확정)됐는지 — 자식(RecordedInterviewPanel)이 콜백으로 올려준다.
-  // 완료됐으면 면접은 이미 끝나 평가까지 나온 시점이라, 준비용 "면접 문제 생성" UI는 의미가 없으므로 숨긴다.
-  const [recordedDone, setRecordedDone] = useState(false);
+  // 이 라운드 대면 평가 완료 메타(모드·길이·일시) 또는 null — 자식(RecordedInterviewPanel)이 콜백으로
+  // 올려준다. 완료됐으면 면접은 이미 끝나 평가까지 나온 시점이라 준비용 "면접 문제 생성" UI는 숨기고,
+  // 이 메타를 섹션 요약("대면 평가 완료 · …")에 덧붙인다.
+  const [recordedSummary, setRecordedSummary] = useState<string | null>(null);
+  const recordedDone = recordedSummary !== null;
 
   const isExec = round === "round2";
   const roundNo = isExec ? "2차" : "1차";
@@ -116,7 +118,9 @@ export function InterviewQuestionsPanel({
       defaultOpen={false}
       summary={
         recordedDone ? (
-          <span className="text-success">대면 평가 완료</span>
+          <span className="text-success">
+            대면 평가 완료{recordedSummary ? ` · ${recordedSummary}` : ""}
+          </span>
         ) : generating ? (
           <span className="text-primary-deep">⏳ 생성 중</span>
         ) : sheet ? (
@@ -217,7 +221,7 @@ export function InterviewQuestionsPanel({
             candidateId={candidateId}
             round={round}
             canModify={canModify}
-            onCompletedChange={setRecordedDone}
+            onCompletedChange={setRecordedSummary}
           />
         </div>
       )}
