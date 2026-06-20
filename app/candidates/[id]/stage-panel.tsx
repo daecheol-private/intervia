@@ -6,6 +6,7 @@ import { formatKstDateTime } from "@/lib/utils";
 import { STAGE_LABELS as STAGE_LABELS_SHARED } from "@/lib/stage-meta";
 import { confirmDialog } from "@/app/components/Dialog";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
+import { CandidateChat } from "./candidate-chat";
 import { Modal } from "./shared";
 import type { Candidate } from "./types";
 
@@ -490,8 +491,9 @@ export function StagePanel({
             🔒 보존기간 경과로 이력서 원본 폐기됨
           </span>
         )}
-        {!isTerminal && (
-          <div className="flex gap-1.5 sm:gap-2 shrink-0 sm:ml-auto">
+        <div className="flex gap-1.5 sm:gap-2 shrink-0 sm:ml-auto items-center">
+          {!isTerminal && (
+            <>
             {candidate.stage === "ai_evaluated" && (
               <button
                 onClick={() => void move("round1_candidate")}
@@ -536,26 +538,28 @@ export function StagePanel({
             <button
               onClick={() => setOpen("decide")}
               disabled={busy}
-              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink transition-colors"
+              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-warning/40 bg-warning-soft text-warning hover:bg-warning-soft/70 transition-colors"
               title="최종합격·불합격·지원취소로 종결"
             >
               종결 결정
             </button>
-          </div>
-        )}
-        {isTerminal &&
-          (candidate.outcome === "hired" || candidate.outcome === "rejected") &&
-          (candidate.decisionEmailCount ?? 0) === 0 &&
-          candidate.email && (
-            <button
-              onClick={openNotify}
-              disabled={busy}
-              className="ml-auto text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50 transition-colors"
-              title="후보자에게 결과 통보 메일이 아직 발송되지 않았습니다"
-            >
-              📧 결정 통보 보내기
-            </button>
+            </>
           )}
+          {isTerminal &&
+            (candidate.outcome === "hired" || candidate.outcome === "rejected") &&
+            (candidate.decisionEmailCount ?? 0) === 0 &&
+            candidate.email && (
+              <button
+                onClick={openNotify}
+                disabled={busy}
+                className="text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50 transition-colors"
+                title="후보자에게 결과 통보 메일이 아직 발송되지 않았습니다"
+              >
+                📧 결정 통보 보내기
+              </button>
+            )}
+          <CandidateChat candidateId={candidate.id} />
+        </div>
       </div>
 
       {candidate.decisionNote && (

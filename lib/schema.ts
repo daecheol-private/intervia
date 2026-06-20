@@ -691,6 +691,29 @@ export const interviewerNotes = sqliteTable("interviewer_notes", {
 });
 
 /**
+ * 이력서별 면접관 토론 — 한 후보자를 두고 면접관들이 자유롭게 코멘트(채팅).
+ *
+ * 점수 입력이 번거롭다는 피드백으로 스코어카드(interviewer_notes) UI 를 대체한 자유
+ * 코멘트 스레드. 점수 없음 — "괜찮네요" "저는 별로" "합격 쪽" 같은 의견을 그대로 남긴다.
+ * 같은 법인 멤버 누구나 작성·조회. 채팅 의미론이라 수정은 없고 본인 코멘트만 삭제 가능.
+ * 후보자 삭제 시 함께 삭제(cascade) — 종결 +14일 후 후보자 정리될 때 자연 소멸.
+ * (interviewer_notes 테이블/데이터는 보존 — 이 테이블은 순수 추가)
+ */
+export const candidateComments = sqliteTable("candidate_comments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  candidateId: integer("candidate_id")
+    .notNull()
+    .references(() => candidates.id, { onDelete: "cascade" }),
+  authorUserId: integer("author_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/**
  * 공고별 면접관. 한 공고에 여러 면접관 지정.
  *
  * 자동 추가 시점:

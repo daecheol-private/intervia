@@ -22,7 +22,6 @@ import {
   InterviewResult,
   TranscriptModal,
 } from "./interview-section";
-import { InterviewerNotesPanel } from "./notes-panel";
 import { InterviewQuestionsPanel } from "./question-sheet";
 import { ScheduleBox } from "./schedule-box";
 import {
@@ -889,7 +888,6 @@ export default function CandidateDetailPage() {
           !!(candidate.resumeFilePath || candidate.resumeMaskedText)
         }
       />
-      <InterviewerNotesPanel candidateId={candidate.id} currentStage={candidate.stage} />
       <AppealsPanel candidateId={candidate.id} />
 
       {showTranscript && completedSession && (
