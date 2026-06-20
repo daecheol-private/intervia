@@ -1272,8 +1272,8 @@ async function Landing() {
               className="mb-10 sm:mb-12"
               eyebrow="전체 기능"
               eyebrowIcon={Sparkles}
-              title="필요한 기능은 전부 들어 있습니다"
-              subtitle="공고 등록부터 합·불 통보까지, Intervia만의 기능을 한눈에 모았습니다."
+              title="필요한 건 모두 있습니다."
+              subtitle="공고 등록부터 합·불 통보까지, Intervia는 모두 가능합니다."
             />
           </Reveal>
           {/* 데스크톱: 9×6 벤토 테셀레이션(빈틈없는 완전팩) / 모바일: 2열 단순 흐름 */}
@@ -1875,7 +1875,7 @@ function FeatureTile({
       <div className={mini ? "" : "min-w-0"}>
         {Title}
         {sub && (
-          <p className={cn("mt-0.5 text-[11px] leading-tight", forest ? "text-surface/75" : "text-ink-soft")}>
+          <p className={cn("mt-0.5 text-[13px] leading-tight", forest ? "text-surface/75" : "text-ink-soft")}>
             {sub}
           </p>
         )}
@@ -1890,7 +1890,7 @@ function FeatureTile({
       >
         <Icon className={cn(mini ? "h-4 w-4" : "h-5 w-5", iconColor)} strokeWidth={2} />
         {Title}
-        <p className={cn("text-[11px] leading-snug", forest ? "text-surface/85" : "text-ink-soft")}>
+        <p className={cn("text-[13px] leading-snug", forest ? "text-surface/85" : "text-ink-soft")}>
           {detail}
         </p>
       </div>
