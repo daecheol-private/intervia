@@ -1,6 +1,6 @@
 "use client";
 
-import { HL, scoreColor } from "./shared";
+import { HL, scoreColor, withLeadEmphasis } from "./shared";
 import type { Candidate, Confidence } from "./types";
 
 export function LevelMatchBadge({
@@ -516,12 +516,15 @@ export function BulletBlock({
   items,
   color,
   emphasis,
+  emphasizeLead = false,
 }: {
   title: string;
   items: string[];
   color: "emerald" | "amber" | "slate" | "blue";
   /** true 면 카드 배경 강조 (예: 면접에서 확인할 주제는 더 눈에 띄게) */
   emphasis?: boolean;
+  /** true 면 "리드 구절: 상세" 항목의 리드를 자동으로 굵게 (강점·우려). 배경칠은 안 함. */
+  emphasizeLead?: boolean;
 }) {
   if (items.length === 0) return null;
   const palette = {
@@ -563,7 +566,8 @@ export function BulletBlock({
               className={`w-1.5 h-1.5 rounded-full ${palette.dot} mt-2 shrink-0`}
             />
             <span className="leading-relaxed">
-              <HL text={s} />
+              {/* 강점·우려는 리드 구절을 자동으로 굵게 — 노란 배경칠은 안 함(bold 만) */}
+              <HL text={emphasizeLead ? withLeadEmphasis(s) : s} />
             </span>
           </li>
         ))}
@@ -587,48 +591,48 @@ export function QualitativeReviewBlock({
   }>;
 }) {
   if (review.length === 0) return null;
+  // "정성평가 = violet" 시각 정체성 — AI 면접의 정성 블록(CultureFitBlock)과 컨테이너·헤더 색을
+  // 동일하게 맞춰, 이력서/AI면접 어디서든 violet 박스면 "정성평가(무점수 참고)"임을 알 수 있게 한다.
   return (
-    <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
-      <div className="flex items-center gap-2 flex-wrap mb-2">
-        <div className="text-xs font-semibold uppercase tracking-wider text-violet-700">
+    <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="text-xs font-bold uppercase tracking-wider text-violet-700">
           법인 정성 평가 항목 검토
         </div>
-        <span className="text-[10px] px-1.5 py-0.5 rounded border border-violet-200 bg-white text-violet-600">
+        <span className="text-[11px] font-medium px-2 py-0.5 rounded border border-violet-200 bg-card text-violet-600">
           참고 정보 — 점수 미반영
         </span>
       </div>
-      <ul className="space-y-2">
+      <ul className="mt-3 space-y-2">
         {review.map((r, i) => (
           <li
             key={i}
-            className="bg-white border border-violet-100 rounded-lg px-3 py-2"
+            className="bg-card border border-violet-100 rounded-lg px-3 py-2"
           >
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-ink">
-                {r.item}
-              </span>
+              <span className="text-sm font-bold text-ink">{r.item}</span>
               {r.needs_interview ? (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800">
                   면접 확인 필요
                 </span>
               ) : (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-100 text-emerald-800">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded border border-emerald-300 bg-emerald-100 text-emerald-800">
                   서류 근거 있음
                 </span>
               )}
             </div>
-            <div className="text-xs text-ink-soft mt-1 leading-relaxed">
+            <div className="text-sm text-ink-soft mt-1 leading-relaxed">
               <HL text={r.finding} />
             </div>
             {r.evidence && (
-              <div className="text-[11px] text-ink-muted mt-0.5">
+              <div className="text-xs text-ink-muted mt-0.5">
                 근거: {r.evidence}
               </div>
             )}
           </li>
         ))}
       </ul>
-      <div className="text-[11px] text-ink-muted mt-2">
+      <div className="text-xs text-ink-soft mt-2.5 leading-relaxed">
         ※ 자기소개서 등 정성 자료가 없는 이력서는 &quot;면접 확인 필요&quot;로
         분류될 뿐 감점되지 않습니다.
       </div>

@@ -666,19 +666,20 @@ export default function CandidateDetailPage() {
               title="강점"
               items={candidate.screeningReport.strengths}
               color="emerald"
+              emphasizeLead
             />
             <BulletBlock
               title="우려"
               items={candidate.screeningReport.concerns}
               color="amber"
+              emphasizeLead
             />
             {candidate.screeningReport.interview_focus &&
               candidate.screeningReport.interview_focus.length > 0 && (
                 <BulletBlock
-                  title="🎯 면접에서 확인할 주제 (우선순위 1)"
+                  title="다음 단계 확인 질문"
                   items={candidate.screeningReport.interview_focus}
-                  color="blue"
-                  emphasis
+                  color="slate"
                 />
               )}
             {candidate.screeningReport.qualitative_review &&

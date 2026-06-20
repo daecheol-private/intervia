@@ -55,6 +55,22 @@ export function scoreBarColor(score: number): string {
   return "bg-danger";
 }
 
+/**
+ * 강점·우려 등 "리드 구절: 상세" 형식 항목에서, LLM 이 ** 강조를 안 넣었을 때
+ * 리드 구절(첫 콜론 앞)을 자동으로 ** 로 감싼다 — 세 평가(이력서/AI면접/대면)의
+ * 강점·우려 하이라이트를 일관되게 만들기 위함. 이미 ** 가 있으면 LLM 선택을 존중해 그대로.
+ * (이력서 평가는 리드에 ** 가 있으나 AI면접/대면 평가 데이터엔 없는 비일관 보정)
+ */
+export function withLeadEmphasis(text: string): string {
+  if (!text || text.includes("**")) return text;
+  const idx = text.search(/[:：]/);
+  // 리드가 너무 짧거나(콜론이 맨 앞) 너무 길면(문장 전체) 자동 강조하지 않음.
+  if (idx < 2 || idx > 50) return text;
+  const lead = text.slice(0, idx).trim();
+  if (!lead) return text;
+  return `**${lead}**${text.slice(idx)}`;
+}
+
 /** LLM 이 **단어** 로 감싼 토큰을 <strong> 으로 렌더. 마크다운은 bold 만 처리. */
 export function HL({ text, mark = false }: { text: string; mark?: boolean }) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);

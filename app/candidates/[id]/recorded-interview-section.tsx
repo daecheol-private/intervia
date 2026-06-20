@@ -10,6 +10,7 @@ import {
   scoreBarColor,
   scoreColor,
   showRec,
+  withLeadEmphasis,
 } from "./shared";
 import { LiveRecorder } from "./recorded-interview-live";
 
@@ -222,19 +223,6 @@ export function RecordedInterviewPanel({
     }
   };
 
-  const confirmReport = async (riId: number) => {
-    const r = await fetch(`/api/candidates/${candidateId}/recorded-interview`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recordedInterviewId: riId, action: "confirm" }),
-    });
-    if (!r.ok) {
-      notify(await r.text(), { title: "확정 실패", tone: "danger" });
-      return;
-    }
-    await load();
-  };
-
   const reevalReport = async (riId: number) => {
     const r = await fetch(`/api/candidates/${candidateId}/recorded-interview`, {
       method: "PATCH",
@@ -355,7 +343,6 @@ export function RecordedInterviewPanel({
               key={ri.id}
               ri={ri}
               canModify={canModify}
-              onConfirm={() => confirmReport(ri.id)}
               onReevaluate={() => reevalReport(ri.id)}
             />
           ))}
@@ -392,16 +379,13 @@ function EvidenceChips({
 function RecordedReportCard({
   ri,
   canModify,
-  onConfirm,
   onReevaluate,
 }: {
   ri: RI;
   canModify: boolean;
-  onConfirm: () => void;
   onReevaluate: () => void;
 }) {
   const [flash, setFlash] = useState<number | null>(null);
-  const [confirming, setConfirming] = useState(false);
   const [reevaluating, setReevaluating] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
 
@@ -432,11 +416,6 @@ function RecordedReportCard({
           </span>
           <span className="text-ink-muted">{formatKstDateTime(ri.createdAt)}</span>
         </div>
-        {ri.status === "confirmed" && (
-          <span className="text-[11px] px-2 py-0.5 rounded-md bg-success-soft text-success border border-success/30">
-            ✓ 확정됨
-          </span>
-        )}
       </div>
 
       {ri.status === "queued" ||
@@ -560,17 +539,21 @@ function RecordedReportCard({
           </div>
 
           {/* 강점 / 우려 */}
+          {/* 강점/우려 — 이력서·AI면접의 BulletBlock 과 동일한 시각(점 불릿 + 동일 제목색).
+              대면만의 차이는 근거(`근거 #N`) 칩뿐. */}
           {report.strengths.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-success uppercase tracking-wider mb-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-primary-deep">
                 강점
               </div>
               <ul className="space-y-1.5">
                 {report.strengths.map((s, i) => (
-                  <li key={i} className="text-ink-soft leading-relaxed">
-                    <span className="text-success mr-1">+</span>
-                    <HL text={s.text} />
-                    <EvidenceChips seqs={s.evidence_seq} onJump={jumpTo} />
+                  <li key={i} className="flex gap-2 text-ink-soft">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
+                    <span className="leading-relaxed">
+                      <HL text={withLeadEmphasis(s.text)} />
+                      <EvidenceChips seqs={s.evidence_seq} onJump={jumpTo} />
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -578,15 +561,17 @@ function RecordedReportCard({
           )}
           {report.concerns.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-warning uppercase tracking-wider mb-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-warning">
                 우려
               </div>
               <ul className="space-y-1.5">
                 {report.concerns.map((c, i) => (
-                  <li key={i} className="text-ink-soft leading-relaxed">
-                    <span className="text-warning mr-1">!</span>
-                    <HL text={c.text} />
-                    <EvidenceChips seqs={c.evidence_seq} onJump={jumpTo} />
+                  <li key={i} className="flex gap-2 text-ink-soft">
+                    <span className="w-1.5 h-1.5 rounded-full bg-warning mt-2 shrink-0" />
+                    <span className="leading-relaxed">
+                      <HL text={withLeadEmphasis(c.text)} />
+                      <EvidenceChips seqs={c.evidence_seq} onJump={jumpTo} />
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -608,12 +593,15 @@ function RecordedReportCard({
           )}
           {report.followup_questions.length > 0 && (
             <div>
-              <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
-                다음 면접 추천 질문
+              <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-ink-soft">
+                다음 단계 확인 질문
               </div>
-              <ul className="space-y-1 list-disc pl-4 text-ink-soft">
+              <ul className="space-y-1.5">
                 {report.followup_questions.map((q, i) => (
-                  <li key={i}>{q}</li>
+                  <li key={i} className="flex gap-2 text-ink-soft">
+                    <span className="w-1.5 h-1.5 rounded-full bg-ink-muted mt-2 shrink-0" />
+                    <span className="leading-relaxed">{q}</span>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -692,39 +680,6 @@ function RecordedReportCard({
             </div>
           )}
 
-          {/* ⑤ AI 생성 라벨 + 확정 */}
-          <div className="flex items-center justify-between gap-3 pt-1 border-t border-border-default">
-            <span className="text-[11px] text-ink-muted">
-              🤖 AI 생성 평가 — 최종 판단은 면접관이 합니다.
-            </span>
-            {ri.status === "confirmed" ? (
-              <span className="text-xs text-success">
-                {ri.reportConfirmedAt
-                  ? `${formatKstDateTime(ri.reportConfirmedAt)} 확정`
-                  : "확정됨"}
-              </span>
-            ) : (
-              // 성공(ready)한 대면 평가는 이미 과금됐으므로 재평가 버튼을 두지 않는다 — 확정만 가능.
-              // (재평가는 '실패' 카드에서만. AI 면접 평가와 동일 정책.)
-              canModify && (
-                <button
-                  onClick={async () => {
-                    setConfirming(true);
-                    try {
-                      await onConfirm();
-                    } finally {
-                      setConfirming(false);
-                    }
-                  }}
-                  disabled={confirming}
-                  className="px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep hover:bg-primary-soft text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
-                >
-                  {confirming && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  확정
-                </button>
-              )
-            )}
-          </div>
         </div>
       )}
     </div>

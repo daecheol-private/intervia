@@ -428,10 +428,10 @@ export function InterviewResult({
         ))}
       </div>
 
-      <BulletBlock title="강점" items={ev.strengths} color="emerald" />
-      <BulletBlock title="우려" items={ev.concerns} color="amber" />
+      <BulletBlock title="강점" items={ev.strengths} color="emerald" emphasizeLead />
+      <BulletBlock title="우려" items={ev.concerns} color="amber" emphasizeLead />
       <BulletBlock
-        title="다음 단계 추가 검증 질문"
+        title="다음 단계 확인 질문"
         items={ev.followup_questions}
         color="slate"
       />
@@ -744,14 +744,20 @@ function CultureFitBlock({
     불일치: "border-rose-300 bg-rose-100 text-rose-800",
     미검증: "border-slate-300 bg-slate-100 text-slate-600",
   };
+  // 배지만 보고 의미를 알 수 있도록 "무엇과" 일치/불일치인지까지 풀어 씀.
+  const verdictLabel: Record<string, string> = {
+    일치: "면접 발언과 일치",
+    불일치: "면접 발언과 불일치",
+    미검증: "면접서 미확인",
+  };
 
   return (
-    <div className="rounded-xl border border-border-default bg-surface-alt/50 px-4 py-3">
+    <div className="rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="text-xs font-bold uppercase tracking-wider text-ink-soft">
+        <div className="text-xs font-bold uppercase tracking-wider text-violet-700">
           컬처핏 · 정성 검증
         </div>
-        <span className="text-[11px] font-medium px-2 py-0.5 rounded border border-border-default bg-card text-ink-muted">
+        <span className="text-[11px] font-medium px-2 py-0.5 rounded border border-violet-200 bg-card text-violet-600">
           참고 정보 — 점수 미반영
         </span>
       </div>
@@ -798,31 +804,54 @@ function CultureFitBlock({
       )}
 
       {cultureFit?.items && cultureFit.items.length > 0 && (
-        <ul className="mt-3 space-y-2">
-          {cultureFit.items.map((it, i) => (
-            <li
-              key={i}
-              className="bg-card border border-border-default rounded-lg px-3 py-2"
-            >
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold text-ink">
-                  {it.topic}
-                </span>
-                <span
-                  className={`text-[11px] font-bold px-2 py-0.5 rounded border ${verdictStyle[it.verification] ?? verdictStyle["미검증"]}`}
+        <div className="mt-3">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
+            인성검사 자가응답 ↔ 면접 발언 대조
+          </div>
+          <p className="text-xs text-ink-muted mt-0.5 leading-relaxed">
+            면접 직전 인성검사에서 본인이 고른 성향을, 실제 면접 발언과 맞춰본
+            결과입니다. 발언으로 확인된 항목(&quot;면접 발언과 일치&quot;)만
+            신뢰하세요.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {cultureFit.items.map((it, i) => {
+              const notCovered = it.evidence === "면접에서 다루지 못함";
+              return (
+                <li
+                  key={i}
+                  className="bg-card border border-violet-100 rounded-lg px-3 py-2"
                 >
-                  {it.verification}
-                </span>
-              </div>
-              <div className="text-xs text-ink-soft mt-1">
-                자가응답: {it.self_report}
-              </div>
-              <div className="text-sm text-ink-soft mt-0.5 leading-relaxed">
-                <HL text={it.evidence} />
-              </div>
-            </li>
-          ))}
-        </ul>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-ink">
+                      {it.topic}
+                    </span>
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded border ${verdictStyle[it.verification] ?? verdictStyle["미검증"]}`}
+                    >
+                      {verdictLabel[it.verification] ?? it.verification}
+                    </span>
+                  </div>
+                  <div className="text-xs text-ink-muted mt-1">
+                    인성검사 자가응답:{" "}
+                    <span className="font-medium text-ink-soft">
+                      {it.self_report}
+                    </span>
+                  </div>
+                  {notCovered ? (
+                    <div className="text-xs text-ink-muted mt-0.5 italic">
+                      면접에서 다루지 못함 — 다음 면접에서 확인 권장
+                    </div>
+                  ) : (
+                    <div className="text-sm text-ink-soft mt-0.5 leading-relaxed">
+                      <span className="text-ink-muted">면접 근거: </span>
+                      <HL text={it.evidence} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
       {cultureFit?.fit_note && (

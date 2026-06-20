@@ -299,12 +299,15 @@ export function CompetencyBadges({ keys }: { keys?: string[] | null }) {
   if (valid.length === 0) return null;
   return (
     <div>
-      <div className="text-sm font-bold text-violet-800 mb-2.5">
+      <div className="text-sm font-bold text-violet-800">
         회사가 중시하는 역량{" "}
         <span className="text-xs font-normal text-ink-muted">
           (NCS 직업기초능력)
         </span>
       </div>
+      <p className="text-xs text-ink-muted mt-0.5 mb-2.5 leading-relaxed">
+        이 공고에서 중요하게 보는 역량입니다 — 면접 판단의 참고 기준.
+      </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
         {valid.map((k) => {
           const Icon = COMPETENCY_ICON[k];
