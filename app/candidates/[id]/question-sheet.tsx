@@ -54,6 +54,9 @@ export function InterviewQuestionsPanel({
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  // 이 라운드 대면 면접 평가가 완료(리포트 생성/확정)됐는지 — 자식(RecordedInterviewPanel)이 콜백으로 올려준다.
+  // 완료됐으면 면접은 이미 끝나 평가까지 나온 시점이라, 준비용 "면접 문제 생성" UI는 의미가 없으므로 숨긴다.
+  const [recordedDone, setRecordedDone] = useState(false);
 
   const isExec = round === "round2";
   const roundNo = isExec ? "2차" : "1차";
@@ -112,7 +115,9 @@ export function InterviewQuestionsPanel({
       title={isExec ? "2차 면접" : "1차 면접"}
       defaultOpen={false}
       summary={
-        generating ? (
+        recordedDone ? (
+          <span className="text-success">대면 평가 완료</span>
+        ) : generating ? (
           <span className="text-primary-deep">⏳ 생성 중</span>
         ) : sheet ? (
           <span className="text-primary-deep">생성됨 · 클릭하여 열람</span>
@@ -125,7 +130,7 @@ export function InterviewQuestionsPanel({
         )
       }
     >
-      {!confirmed && !hasRow && (
+      {!confirmed && !hasRow && !recordedDone && (
         <div className="text-center py-6">
           <div className="text-3xl mb-3">📝</div>
           <p className="text-sm text-ink-soft mb-1">
@@ -139,74 +144,80 @@ export function InterviewQuestionsPanel({
         </div>
       )}
 
-      {(confirmed || hasRow) && (
+      {(confirmed || hasRow || recordedDone) && (
         <div className="space-y-4">
-          <div className="text-sm font-semibold text-ink-soft">
-            면접 문제 생성
-          </div>
-          <p className="text-sm text-ink-soft">
-            {isExec
-              ? "이력서 · 서류평가 · AI 면접 평가에 법인 인재상·컬쳐핏 기준(설정 시)을 반영해 2차(임원) 면접용 질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다."
-              : "이력서 · 서류평가 · AI 면접 평가를 종합해 1차 대면 면접용 맞춤 질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다."}
-          </p>
+          {/* 면접 문제 생성 (준비용 질문지) — 대면 평가가 완료되면 면접이 이미 끝난 시점이라 숨긴다. */}
+          {!recordedDone && (
+            <div className="space-y-4">
+              <div className="text-sm font-semibold text-ink-soft">
+                면접 문제 생성
+              </div>
+              <p className="text-sm text-ink-soft">
+                {isExec
+                  ? "이력서 · 서류평가 · AI 면접 평가에 법인 인재상·컬쳐핏 기준(설정 시)을 반영해 2차(임원) 면접용 질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다."
+                  : "이력서 · 서류평가 · AI 면접 평가를 종합해 1차 대면 면접용 맞춤 질문지를 생성합니다. 면접관 누구나 생성·열람할 수 있습니다."}
+              </p>
 
-          {sheet && (
-            <div className="flex items-center gap-2 flex-wrap text-[11px]">
-              <span className="px-2 py-0.5 rounded-md border bg-primary-soft text-primary-deep border-primary/30">
-                {sheet.basedOnScreening ? "서류평가 반영" : "서류평가 없음"}
-              </span>
-              <span className="px-2 py-0.5 rounded-md border bg-accent-soft text-accent-deep border-accent/30">
-                {sheet.basedOnInterview ? "AI면접 평가 반영" : "AI면접 평가 없음"}
-              </span>
-              {sheet.basedOnCultureFit && (
-                <span className="px-2 py-0.5 rounded-md border bg-success-soft text-success border-success/30">
-                  컬쳐핏 기준 반영
-                </span>
+              {sheet && (
+                <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                  <span className="px-2 py-0.5 rounded-md border bg-primary-soft text-primary-deep border-primary/30">
+                    {sheet.basedOnScreening ? "서류평가 반영" : "서류평가 없음"}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md border bg-accent-soft text-accent-deep border-accent/30">
+                    {sheet.basedOnInterview ? "AI면접 평가 반영" : "AI면접 평가 없음"}
+                  </span>
+                  {sheet.basedOnCultureFit && (
+                    <span className="px-2 py-0.5 rounded-md border bg-success-soft text-success border-success/30">
+                      컬쳐핏 기준 반영
+                    </span>
+                  )}
+                  <span className="text-ink-muted">
+                    {sheet.generatedByName ? `${sheet.generatedByName} · ` : ""}
+                    {formatKstDateTime(sheet.updatedAt)} 생성
+                  </span>
+                </div>
               )}
-              <span className="text-ink-muted">
-                {sheet.generatedByName ? `${sheet.generatedByName} · ` : ""}
-                {formatKstDateTime(sheet.updatedAt)} 생성
-              </span>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {generating ? (
+                  // 백그라운드 생성 중 — 새로고침/재방문해도 폴링이 이어받아 자동 반영.
+                  <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-surface-alt text-primary-deep text-sm font-medium">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    생성 중... (최대 1분 · 새로고침해도 됩니다)
+                  </span>
+                ) : sheet ? (
+                  <button
+                    onClick={() => setOpen(true)}
+                    className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm"
+                  >
+                    면접 문제 보기
+                  </button>
+                ) : (
+                  // 생성 전이거나 실패 시 노출. 성공(ready) 후에는 "보기" 로 바뀌어
+                  // 재생성 버튼을 숨긴다 (무료 기능 — 불필요한 재생성 비용 방지).
+                  <button
+                    onClick={generate}
+                    disabled={submitting}
+                    className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary-deep text-surface shadow-sm"
+                  >
+                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {submitting ? "요청 중..." : failed || err ? "재생성" : "면접 문제 생성"}
+                  </button>
+                )}
+              </div>
+
+              {(err || (failed && data?.error)) && (
+                <p className="text-sm text-danger">{err ?? data?.error}</p>
+              )}
             </div>
           )}
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {generating ? (
-              // 백그라운드 생성 중 — 새로고침/재방문해도 폴링이 이어받아 자동 반영.
-              <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-surface-alt text-primary-deep text-sm font-medium">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                생성 중... (최대 1분 · 새로고침해도 됩니다)
-              </span>
-            ) : sheet ? (
-              <button
-                onClick={() => setOpen(true)}
-                className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm"
-              >
-                면접 문제 보기
-              </button>
-            ) : (
-              // 생성 전이거나 실패 시 노출. 성공(ready) 후에는 "보기" 로 바뀌어
-              // 재생성 버튼을 숨긴다 (무료 기능 — 불필요한 재생성 비용 방지).
-              <button
-                onClick={generate}
-                disabled={submitting}
-                className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary-deep text-surface shadow-sm"
-              >
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {submitting ? "요청 중..." : failed || err ? "재생성" : "면접 문제 생성"}
-              </button>
-            )}
-          </div>
-
-          {(err || (failed && data?.error)) && (
-            <p className="text-sm text-danger">{err ?? data?.error}</p>
-          )}
-
-          {/* 대면 면접 평가 — 같은 라운드(녹음 업로드 / 라이브 + 평가 결과) */}
+          {/* 대면 면접 평가 — 같은 라운드(녹음 업로드 / 라이브 + 평가 결과). 완료 시 위 "면접 문제 생성"은 숨고 이 평가 리포트만 남는다. */}
           <RecordedInterviewPanel
             candidateId={candidateId}
             round={round}
             canModify={canModify}
+            onCompletedChange={setRecordedDone}
           />
         </div>
       )}

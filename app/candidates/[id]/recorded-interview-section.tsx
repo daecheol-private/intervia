@@ -121,10 +121,13 @@ export function RecordedInterviewPanel({
   candidateId,
   round,
   canModify,
+  onCompletedChange,
 }: {
   candidateId: number;
   round: "round1" | "round2";
   canModify: boolean;
+  // 이 라운드 대면 평가 완료(ready/confirmed) 여부를 부모에 통지 — 부모가 "면접 문제 생성" UI를 숨기도록.
+  onCompletedChange?: (done: boolean) => void;
 }) {
   const [interviews, setInterviews] = useState<RI[] | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -155,6 +158,11 @@ export function RecordedInterviewPanel({
   const hasCompletedReport = roundInterviews.some(
     (i) => i.status === "ready" || i.status === "confirmed"
   );
+
+  // 완료 여부가 바뀌면 부모에 통지 — 부모는 완료 시 "면접 문제 생성"(준비용 질문지) UI를 숨긴다.
+  useEffect(() => {
+    onCompletedChange?.(hasCompletedReport);
+  }, [hasCompletedReport, onCompletedChange]);
 
   // 백그라운드 처리 중인 건이 있으면 폴링 — 업로드 후 새로고침/재방문해도 진행상태가
   // 그대로 보이고, 워커가 끝내면 자동으로 리포트로 갱신된다 (사용자가 새로고침할 필요 없음).
