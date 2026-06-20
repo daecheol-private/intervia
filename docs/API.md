@@ -138,10 +138,13 @@
 | POST | `/api/candidates/bulk-delete` | 🔒 🏢 | `{ids:number[]}` — 타 법인 ID 포함 시 전체 거부 |
 | POST | `/api/candidates/bulk-screen` | 🔒 🏢 | `{ids:number[]}` — 평가/재평가 일괄 (과금은 성공 시 후차감). 완료/미평가→enqueue, `queued`(재시도 대기)→백오프 해제(즉시 재시도), `processing`/`paused`→skip. 응답 `{enqueued, kicked, skipped, details}` |
 | PATCH | `/api/candidates/[id]/stage` | 🔒 🏢 | `{stage, outcome?, outcomeReason?, note?, sendNotification?, customMessage?}` — 단계 변경. 단말(hired/rejected/withdrawn) 도달 시 자동 폐기 + (옵션) 통보 메일. **outcome=rejected 는 `outcomeReason`(목록값) 필수** — 없으면 `400 {code:"reason_required"}` (PIPA §37의2 인적검토 근거 기록). 응답 `{stage, terminal, purged, mail}` |
-| GET | `/api/candidates/[id]/notes` | 🔒 🏢 | 면접관 메모 목록 (같은 법인 누구나 조회) |
+| GET | `/api/candidates/[id]/notes` | 🔒 🏢 | 면접관 메모 목록 (같은 법인 누구나 조회). **UI는 2026-06-21 토론 채팅(아래 `/comments`)으로 대체 — 라우트·데이터 보존** |
 | POST | `/api/candidates/[id]/notes` | 🔒 🏢 | `{scores?, note?, interviewSessionId?}` 메모/스코어카드 작성. 본인 row 생성 |
 | PATCH | `/api/candidates/[id]/notes/[noteId]` | 🔒 🏢 | 본인 작성 메모 수정 |
 | DELETE | `/api/candidates/[id]/notes/[noteId]` | 🔒 🏢 | 본인 작성 메모 삭제 |
+| GET | `/api/candidates/[id]/comments` | 🔒 🏢 | 이력서별 면접관 토론 코멘트 목록(id 오름차순). `?afterId=N` 이면 그 id 이후 새 코멘트만(폴링용). 같은 법인 누구나 조회 |
+| POST | `/api/candidates/[id]/comments` | 🔒 🏢 | `{body}` 코멘트 작성(5000자 이내). 본인 row 생성, 작성자명 포함 반환 |
+| DELETE | `/api/candidates/[id]/comments/[commentId]` | 🔒 🏢 | 본인 작성 코멘트 삭제 (수정 없음) |
 | GET | `/api/jobs/[id]/funnel` | 🔒 🏢 | 공고 채용 깔때기 — `{stages, pendingByStage, hrActions, total, avgScreeningScore, countWithScreeningScore, decisionBreakdown, kpi}`. `hrActions` = 스케줄 row 기반 HR 액션 수(`counterProposed` 역제시 확정 대기, `round1PassedUndecided` 2차 진행 미결정 — "오늘 결정할 일" 용) |
 | GET | `/api/jobs/[id]/candidates/export` | 🔒 🏢 | CSV 다운로드 (UTF-8 BOM, 14컬럼) |
 

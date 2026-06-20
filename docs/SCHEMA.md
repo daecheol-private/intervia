@@ -292,7 +292,7 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 
 ## interviewer_notes
 
-사람 면접관 스코어카드·메모.
+사람 면접관 스코어카드·메모. **UI는 2026-06-21 자유 코멘트 채팅([candidate_comments](#candidate_comments))으로 대체** — 점수 4종 입력이 번거롭다는 피드백. 테이블·기존 데이터·API 라우트(`/api/candidates/[id]/notes*`)는 보존(읽기 가능).
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
@@ -306,6 +306,20 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 | created_at / updated_at | TEXT NOT NULL | |
 
 (후보자별 면접관 배정 `interviewer_assignments` 는 공고 단위 `job_interviewers` 로 대체되어 2026-06-10 테이블째 제거 — migration 0015)
+
+## candidate_comments
+
+이력서별 면접관 토론 — 한 후보자를 두고 면접관들이 자유롭게 남기는 채팅형 코멘트. `interviewer_notes`(스코어카드 UI)를 대체. **점수 없음**. (migration 0043, 2026-06-21)
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| candidate_id | INTEGER NOT NULL FK candidates(id) ON DELETE CASCADE | |
+| author_user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | 본인만 삭제(수정 없음) |
+| body | TEXT NOT NULL | 코멘트 본문 5000자 이내 |
+| created_at | TEXT NOT NULL | |
+
+같은 법인 멤버 누구나 작성·조회. 채팅 의미론이라 수정 없이 본인 코멘트만 삭제. 근사 실시간은 폴링(열림 3s·닫힘 5s). **안읽음 상태는 서버에 두지 않고** 클라이언트 localStorage(`iv:chat-read:{candidateId}:{userId}`, 사용자별)로 관리 — 남의 새 글만 카운트, 기기 바꾸면 리셋.
 
 ## job_interviewers
 
@@ -694,7 +708,8 @@ organizations ─< users (org_id, role)
       │        │             ├─< candidate_attachments
       │        │             ├─< interview_schedules (job_id·org_id 비정규화)
       │        │             ├─< interview_question_sheets (후보자당 라운드별 1건)
-      │        │             └─< interviewer_notes
+      │        │             ├─< interviewer_notes
+      │        │             └─< candidate_comments
       │        └─< job_interviewers >─ users
       └─< (위 모든 자식 CASCADE)
 
