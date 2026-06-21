@@ -7,19 +7,6 @@
  */
 
 import {
-  MessageSquare,
-  Calculator,
-  Lightbulb,
-  Sprout,
-  Boxes,
-  Users,
-  Search,
-  Wrench,
-  Building2,
-  ShieldCheck,
-  type LucideIcon,
-} from "lucide-react";
-import {
   TRAIT_KEYS,
   type TraitKey,
   type BehaviorStyle,
@@ -28,7 +15,6 @@ import {
 import {
   NCS_COMPETENCY_LABELS,
   sanitizeCompetencies,
-  type CompetencyKey,
 } from "@/lib/competencies";
 
 type TraitScores = Record<string, { score: number; answered: number }>;
@@ -280,54 +266,19 @@ export function BehaviorStyleCard({ style }: { style: BehaviorStyle }) {
   );
 }
 
-// ── NCS 핵심 역량 배지 ────────────────────────────────────────
-const COMPETENCY_ICON: Record<CompetencyKey, LucideIcon> = {
-  communication: MessageSquare,
-  numeracy: Calculator,
-  problemSolving: Lightbulb,
-  selfDevelopment: Sprout,
-  resourceManagement: Boxes,
-  interpersonal: Users,
-  information: Search,
-  technical: Wrench,
-  organizationalUnderstanding: Building2,
-  workEthics: ShieldCheck,
-};
-
+// ── NCS 핵심 역량 (AI 평가가 참고한 회사 중점 역량) ──────────────
+// 법인 단위로 한 번 설정되어 모든 후보자 리포트에 동일하게 나타나므로,
+// 풀 카드 대신 "어떤 렌즈로 평가했는가"만 알리는 한 줄로 표시한다.
 export function CompetencyBadges({ keys }: { keys?: string[] | null }) {
   const valid = sanitizeCompetencies(keys);
   if (valid.length === 0) return null;
+  const labels = valid.map((k) => NCS_COMPETENCY_LABELS[k].label);
   return (
-    <div>
-      <div className="text-sm font-bold text-violet-800">
-        회사가 중시하는 역량{" "}
-        <span className="text-xs font-normal text-ink-muted">
-          (NCS 직업기초능력)
-        </span>
-      </div>
-      <p className="text-xs text-ink-muted mt-0.5 mb-2.5 leading-relaxed">
-        이 공고에서 중요하게 보는 역량입니다 — 면접 판단의 참고 기준.
-      </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-        {valid.map((k) => {
-          const Icon = COMPETENCY_ICON[k];
-          const meta = NCS_COMPETENCY_LABELS[k];
-          return (
-            <div
-              key={k}
-              className="flex items-center gap-2.5 rounded-lg border border-violet-200 bg-white px-3 py-2.5"
-              title={meta.short}
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700">
-                <Icon size={19} strokeWidth={2.2} />
-              </span>
-              <span className="text-sm font-bold text-ink truncate">
-                {meta.label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <p className="text-xs leading-relaxed text-ink-soft">
+      <span className="font-bold text-violet-800">평가 시 참고한 역량</span>
+      <span className="text-ink-muted"> (NCS 직업기초능력)</span>
+      {" · "}
+      <span className="font-medium text-ink">{labels.join(" · ")}</span>
+    </p>
   );
 }

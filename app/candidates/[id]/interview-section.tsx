@@ -798,7 +798,7 @@ function CultureFitBlock({
       )}
 
       {hasCompetencies && (
-        <div className="mt-3 rounded-xl border border-border-default bg-card px-4 py-3.5">
+        <div className="mt-3 border-t border-violet-200/60 pt-2.5">
           <CompetencyBadges keys={orgCoreCompetencies} />
         </div>
       )}
