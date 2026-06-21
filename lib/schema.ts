@@ -3,6 +3,10 @@ import { sql } from "drizzle-orm";
 import type { PersonalityResponse, PersonalityProfile } from "./personality";
 import type { McqQuestion, McqAnswerRecord } from "./mcq";
 
+// updated_at 자동 갱신값 — created_at(SQL CURRENT_TIMESTAMP)과 동일한 'YYYY-MM-DD HH:MM:SS'(UTC)
+// 초 단위 형식. 모든 updated_at 을 같은 형식으로 통일해야 변경 감지의 문자열 비교가 정확하다.
+const nowTimestamp = () => new Date().toISOString().replace("T", " ").slice(0, 19);
+
 export const organizations = sqliteTable("organizations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -444,9 +448,16 @@ export const candidates = sqliteTable("candidates", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
+  // 변경 감지 폴링용 — 모든 ORM 쓰기에서 $onUpdate 로 자동 갱신(raw SQL 미사용 확인).
+  // nullable: ADD COLUMN 제약 회피(마이그레이션이 created_at 으로 백필). 런타임은 항상 채워진다.
+  updatedAt: text("updated_at")
+    .$defaultFn(nowTimestamp)
+    .$onUpdate(nowTimestamp),
 }, (t) => ({
   // 공고 상세 후보자 목록 / 법인별 집계 — 가장 빈번한 조회.
   orgIdx: index("idx_candidates_org").on(t.orgId),
+  // 변경 감지: 공고 단위로 "특정 시각 이후 변경" 탐색.
+  jobUpdatedIdx: index("idx_candidates_job_updated").on(t.jobId, t.updatedAt),
   jobIdx: index("idx_candidates_job").on(t.jobId),
   // 워커의 내용 해시 중복 탐지 (같은 공고 내 동일 내용).
   jobContentHashIdx: index("idx_candidates_job_content_hash").on(
@@ -570,7 +581,16 @@ export const screeningJobs = sqliteTable("screening_jobs", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
+  // 변경 감지 폴링용 — $onUpdate 로 자동 갱신.
+  updatedAt: text("updated_at")
+    .$defaultFn(nowTimestamp)
+    .$onUpdate(nowTimestamp),
 }, (t) => ({
+  // 변경 감지: 후보 단위로 "특정 시각 이후 변경" 탐색(프로브가 candidate→job 조인).
+  candidateUpdatedIdx: index("idx_screening_jobs_candidate_updated").on(
+    t.candidateId,
+    t.updatedAt
+  ),
   // 워커 claim 핫패스 — status='queued' AND not_before<=now 스캔 (매분 cron + self-chain).
   statusIdx: index("idx_screening_jobs_status").on(t.status, t.notBefore),
   // enqueue 중복 체크 / 후보자 활성 job 조회.
@@ -699,19 +719,26 @@ export const interviewerNotes = sqliteTable("interviewer_notes", {
  * 후보자 삭제 시 함께 삭제(cascade) — 종결 +14일 후 후보자 정리될 때 자연 소멸.
  * (interviewer_notes 테이블/데이터는 보존 — 이 테이블은 순수 추가)
  */
-export const candidateComments = sqliteTable("candidate_comments", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  candidateId: integer("candidate_id")
-    .notNull()
-    .references(() => candidates.id, { onDelete: "cascade" }),
-  authorUserId: integer("author_user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  body: text("body").notNull(),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(CURRENT_TIMESTAMP)`),
-});
+export const candidateComments = sqliteTable(
+  "candidate_comments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    candidateId: integer("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    authorUserId: integer("author_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    // 이력서 상세의 코멘트 폴링(WHERE candidate_id = ?)이 풀스캔하지 않도록.
+    candidateIdx: index("idx_candidate_comments_candidate").on(t.candidateId),
+  })
+);
 
 /**
  * 공고별 면접관. 한 공고에 여러 면접관 지정.
@@ -876,7 +903,16 @@ export const interviewSessions = sqliteTable("interview_sessions", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
+  // 변경 감지 폴링용 — $onUpdate 로 자동 갱신.
+  updatedAt: text("updated_at")
+    .$defaultFn(nowTimestamp)
+    .$onUpdate(nowTimestamp),
 }, (t) => ({
+  // 변경 감지: 후보 단위로 "특정 시각 이후 변경" 탐색(프로브가 candidate→job 조인).
+  candidateUpdatedIdx: index("idx_interview_sessions_candidate_updated").on(
+    t.candidateId,
+    t.updatedAt
+  ),
   // 후보자 상세에서 세션 조회. (accessToken 은 별도 unique 인덱스.)
   candidateIdx: index("idx_interview_sessions_candidate").on(t.candidateId),
   // 만료 cron 의 WHERE status=? AND expires_at < ? — 테이블 누적 시 풀스캔 방지.
@@ -959,8 +995,14 @@ export const interviewSchedules = sqliteTable("interview_schedules", {
     .default(sql`(CURRENT_TIMESTAMP)`),
   updatedAt: text("updated_at")
     .notNull()
-    .default(sql`(CURRENT_TIMESTAMP)`),
+    .default(sql`(CURRENT_TIMESTAMP)`)
+    .$onUpdate(nowTimestamp),
 }, (t) => ({
+  // 변경 감지: 공고 단위로 "특정 시각 이후 변경" 탐색.
+  jobUpdatedIdx: index("idx_interview_schedules_job_updated").on(
+    t.jobId,
+    t.updatedAt
+  ),
   // 후보자 상세 / 공고 스케쥴 조회.
   candidateIdx: index("idx_interview_schedules_candidate").on(t.candidateId),
   jobIdx: index("idx_interview_schedules_job").on(t.jobId),

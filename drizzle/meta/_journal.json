@@ -309,6 +309,20 @@
       "when": 1781976834177,
       "tag": "0043_mighty_sheva_callister",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1782021215391,
+      "tag": "0044_military_richard_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1782025544548,
+      "tag": "0045_boring_hydra",
+      "breakpoints": true
     }
   ]
 }

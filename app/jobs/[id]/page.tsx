@@ -49,6 +49,12 @@ import { ShareButton } from "./share-button";
 import { UnlockPanel } from "./unlock-panel";
 import type { Candidate, Job, Round1ScheduleItem } from "./types";
 
+// 후보 목록 폴링 (ms) — 가벼운 "변경 버전(rev)" 만 이 주기로 확인하고, rev 가 바뀐 경우에만
+// 전체 목록을 조회한다(변경 감지 후 상세 조회). 트리거가 못 잡는 변화(타 법인 큐 순번 등)
+// 대비로, 변화가 없어도 SAFETY 주기마다 1회는 강제로 전체 조회한다(안전망).
+const CAND_POLL_INTERVAL = 4000;
+const CAND_FULL_SAFETY_MS = 30000;
+
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -160,13 +166,18 @@ export default function JobDetailPage() {
     }
   };
   const [funnelKey, setFunnelKey] = useState(0);
-  // 직전 응답 원문 — 내용이 같으면 setState 를 생략해 4초 폴링이 매번 전체 리렌더
+  // 직전 응답 원문 — 내용이 같으면 setState 를 생략해 전체 리렌더
   // (후보 수백 명 카드 + 파생 계산) + 펀널 refetch 를 유발하지 않게 한다.
   const lastCandidatesJsonRef = useRef("");
+  // 마지막으로 확인한 변경 시그니처(최대 updated_at) 와 마지막 전체 조회 시각 — 폴링 루프가 사용.
+  const lastSigRef = useRef<string | null>(null);
+  const lastFullAtRef = useRef(0);
   const loadCandidates = useCallback(async () => {
     const r = await fetch(`/api/jobs/${jobId}/candidates`);
     if (!r.ok) return;
     const text = await r.text();
+    // 전체 조회를 했으면(직접 호출 포함) 안전망 타이머를 리셋한다.
+    lastFullAtRef.current = Date.now();
     if (text === lastCandidatesJsonRef.current) return;
     lastCandidatesJsonRef.current = text;
     setCandidatesList(JSON.parse(text));
@@ -180,19 +191,46 @@ export default function JobDetailPage() {
 
   useEffect(() => {
     void loadJob();
-    void loadCandidates();
+    // 변경 시그니처(최대 updated_at) 만 가볍게 확인 — 실패하면 null(이번 주기는 보수적으로 전체 조회).
+    const fetchSig = async (): Promise<string | null> => {
+      try {
+        const r = await fetch(`/api/jobs/${jobId}/candidates/version`);
+        if (!r.ok) return null;
+        const d = (await r.json()) as { sig?: string };
+        return typeof d.sig === "string" ? d.sig : null;
+      } catch {
+        return null;
+      }
+    };
+    // 초기 1회: 현재 시그니처를 기록하고 전체 목록을 받는다.
+    void (async () => {
+      lastSigRef.current = await fetchSig();
+      await loadCandidates();
+    })();
+    // 가벼운 시그니처만 주기적으로 확인 — 값이 바뀌었을 때(변화 발생)만 전체 조회.
+    // 같은 초 경계 등으로 못 잡는 변화 대비 안전망: 변화가 없어도 SAFETY 주기마다 1회는 강제 전체 조회.
     // 백그라운드 탭에서는 폴링 중단 — 복귀 시 visibilitychange 가 즉시 1회 갱신.
-    const t = setInterval(() => {
-      if (!locked && document.visibilityState === "visible")
-        void loadCandidates();
-    }, 4000);
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      if (!locked && document.visibilityState === "visible") {
+        const sig = await fetchSig();
+        const changed = sig === null || sig !== lastSigRef.current;
+        const safetyDue =
+          Date.now() - lastFullAtRef.current >= CAND_FULL_SAFETY_MS;
+        if (changed || safetyDue) {
+          lastSigRef.current = sig;
+          await loadCandidates();
+        }
+      }
+      timer = setTimeout(tick, CAND_POLL_INTERVAL);
+    };
+    timer = setTimeout(tick, CAND_POLL_INTERVAL);
     const onVisible = () => {
-      if (!locked && document.visibilityState === "visible")
-        void loadCandidates();
+      if (!locked && document.visibilityState === "visible") void loadCandidates();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      clearInterval(t);
+      clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

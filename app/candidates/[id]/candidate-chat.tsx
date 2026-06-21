@@ -107,7 +107,8 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
     });
   }, [candidateId]);
 
-  // 마운트 중 항상 폴링 — 열려 있으면 3초, 닫혀 있어도 5초(안읽음 배지 라이브 갱신).
+  // 마운트 중 항상 폴링 — 열려 있으면 3초, 닫혀 있으면 10초(안읽음 배지 라이브 갱신).
+  // 닫힌 패널은 실시간성이 덜 중요하므로 간격을 늘려 상시 폴링 부하를 줄인다.
   // 탭이 백그라운드면 건너뜀.
   useEffect(() => {
     if (open) void fetchNew();
@@ -115,7 +116,7 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
       () => {
         if (document.visibilityState === "visible") void fetchNew();
       },
-      open ? 3000 : 5000
+      open ? 3000 : 10000
     );
     return () => clearInterval(t);
   }, [open, fetchNew]);

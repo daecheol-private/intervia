@@ -1,0 +1,1 @@
+CREATE INDEX `idx_candidate_comments_candidate` ON `candidate_comments` (`candidate_id`);
