@@ -611,36 +611,7 @@ function RecordedReportCard({
             </div>
           )}
 
-          {/* ③ 확인 필요 (판단 리스크) */}
-          {report.to_verify.length > 0 && (
-            <div className="rounded-lg border border-warning/40 bg-warning-soft px-4 py-3">
-              <div className="text-xs font-semibold text-warning uppercase tracking-wider mb-1.5">
-                확인 필요 (판단 시 유의)
-              </div>
-              <ul className="space-y-1 list-disc pl-4 text-warning">
-                {report.to_verify.map((t, i) => (
-                  <li key={i}>{t}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {report.followup_questions.length > 0 && (
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-ink-soft">
-                다음 단계 확인 질문
-              </div>
-              <ul className="space-y-1.5">
-                {report.followup_questions.map((q, i) => (
-                  <li key={i} className="flex gap-2 text-ink-soft">
-                    <span className="w-1.5 h-1.5 rounded-full bg-ink-muted mt-2 shrink-0" />
-                    <span className="leading-relaxed">{q}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* ④ 화자 분리 전사 */}
+          {/* ③ 화자 분리 전사 */}
           {ri.segments.length > 0 && (
             <div className="rounded-lg border border-border-default overflow-hidden">
               <button

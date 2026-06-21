@@ -430,11 +430,6 @@ export function InterviewResult({
 
       <BulletBlock title="강점" items={ev.strengths} color="emerald" emphasizeLead />
       <BulletBlock title="우려" items={ev.concerns} color="amber" emphasizeLead />
-      <BulletBlock
-        title="다음 단계 확인 질문"
-        items={ev.followup_questions}
-        color="slate"
-      />
 
       <CultureFitBlock
         cultureFit={ev.culture_fit}
