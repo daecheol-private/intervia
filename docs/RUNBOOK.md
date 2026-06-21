@@ -147,17 +147,21 @@
 
 **정책 (C-2 결정 2026-06-07, 갱신 2026-06-14): Turso PITR(주) + 일간 오프사이트 dump(부, 14일 보존).**
 
-별도 serverless export cron 은 두지 않는다 — Turso 의 PITR(시점 복구)와 공식 `turso db dump` 가
+별도 serverless export cron 은 두지 않는다 — Turso 의 PITR(시점 복구)와 공식 dump(`turso db shell <db> .dump`) 가
 자체 구현보다 견고하고, 서버리스에서의 전체 dump 는 함수 타임아웃·부분실패 위험이 크다.
 
-### 4-1. 1차 — Turso PITR (자동, 무료 티어 7일)
-- Turso 가 시점 복구를 제공. 실수 삭제·손상 시 특정 시각으로 복구.
-- 복구: `turso db shell` 또는 대시보드에서 PITR 으로 새 DB 생성 → 검증 → URL 교체. (정확한 절차는 Turso 문서 — 플랜별 보존기간 확인.)
+### 4-1. 1차 — Turso PITR (자동, 플랜별 보존: Free 24h / Developer 10일 / Scaler 30일 / Pro 90일)
+- Turso 가 시점 복구를 제공. 실수 삭제·손상 시 특정 시각으로 복구. **자기 플랜 보존 한도를 넘은 시점은 PITR 불가 → §4-2 오프사이트 dump 로만 복구.**
+- ⚠️ PITR 은 **CLI/Platform API 전용 — 대시보드 UI 없음** (2026-06 Turso 문서 확인). 기존 DB 를 시점 떠서 *새 DB* 로 생성한다:
+  ```bash
+  turso db create <새DB> --from-db <운영DB> --timestamp 2026-06-21T00:00:00Z   # ISO8601(UTC)
+  ```
+  → 행수·핵심 테이블 검증 → 앱의 `TURSO_DATABASE_URL`/토큰을 새 DB 로 교체·redeploy → 구 DB 폐기. (시점 데이터는 timestamp 직전 최대 15초 갭 가능.)
 
 ### 4-2. 2차 — 일간 오프사이트 dump (자동, GitHub Actions)
 PITR 은 Turso 계정·DB 가 살아있을 때만 유효 → 계정 손실/오삭제 대비 **off-Turso 사본**을 둔다.
 **자동화됨**: [`.github/workflows/db-backup.yml`](../.github/workflows/db-backup.yml) — 매일 03:00 KST(18:00 UTC) +
-`workflow_dispatch` 수동 실행. `turso db dump` → **age 공개키로 암호화** → GitHub 아티팩트(14일 보존).
+`workflow_dispatch` 수동 실행. `turso db shell <db> .dump` → **age 공개키로 암호화** → GitHub 아티팩트(14일 보존).
 읽기 전용(dump)만 하며 운영 DB 에 쓰지 않는다. 덤프는 후보자 PII 포함 → **평문/공개 저장 금지**(워크플로우가 암호화 후 평문 즉시 삭제).
 
 **1회 설정** (GitHub repo → Settings):
