@@ -29,6 +29,29 @@ import { looksLikeKoreanName } from "./file-classify";
 import { log } from "./logger";
 import { logAudit } from "./audit";
 
+// 법인 cultureFit 프로필 — 대량 업로드 시 같은 org 를 후보마다 재조회하지 않도록 짧게 캐시.
+// 값이 같으면 같은 프롬프트→같은 점수라 정확성 무관(screening_cache 와도 정합).
+const cultureFitCache = new Map<number, { profile: CultureFitProfile | null; ts: number }>();
+const CULTUREFIT_TTL = 60_000;
+async function getCultureFitCached(orgId: number): Promise<CultureFitProfile | null> {
+  const hit = cultureFitCache.get(orgId);
+  if (hit && Date.now() - hit.ts < CULTUREFIT_TTL) return hit.profile;
+  const [orgRow] = await db
+    .select({ cultureFitProfile: organizations.cultureFitProfile })
+    .from(organizations)
+    .where(eq(organizations.id, orgId));
+  let profile: CultureFitProfile | null = null;
+  if (orgRow?.cultureFitProfile) {
+    try {
+      profile = JSON.parse(orgRow.cultureFitProfile) as CultureFitProfile;
+    } catch {
+      /* 손상 JSON 무시 */
+    }
+  }
+  cultureFitCache.set(orgId, { profile, ts: Date.now() });
+  return profile;
+}
+
 const TEXT_EXTRACTABLE = new Set(["pdf", "docx", "txt", "md", "html", "htm"]);
 function extOf(name: string): string {
   return (name.split(".").pop() ?? "").toLowerCase();
@@ -829,13 +852,7 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
 
   let cultureFit: CultureFitProfile | null = null;
   if (job.orgId) {
-    const [orgRow] = await db
-      .select({ cultureFitProfile: organizations.cultureFitProfile })
-      .from(organizations)
-      .where(eq(organizations.id, job.orgId));
-    if (orgRow?.cultureFitProfile) {
-      try { cultureFit = JSON.parse(orgRow.cultureFitProfile) as CultureFitProfile; } catch { /* ignore */ }
-    }
+    cultureFit = await getCultureFitCached(job.orgId);
   }
 
   const masked = candidate.resumeMaskedText ?? "";

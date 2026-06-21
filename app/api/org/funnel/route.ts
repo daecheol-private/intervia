@@ -17,7 +17,7 @@
  */
 import { db } from "@/lib/db";
 import { candidates, jobPostings } from "@/lib/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { STAGE_RANK, STAGE_WAITER, type Stage } from "@/lib/stage-meta";
@@ -64,7 +64,8 @@ export async function GET(req: Request) {
       outcome: candidates.outcome,
       decisionFromStage: candidates.decisionFromStage,
       screeningScore: candidates.screeningScore,
-      screeningReport: candidates.screeningReport,
+      // 집계엔 recommendation 한 필드만 쓰므로 리포트 JSON 전체를 끌어오지 않는다(대시보드 페이로드 절감).
+      recommendation: sql<string | null>`json_extract(${candidates.screeningReport}, '$.recommendation')`,
       createdAt: candidates.createdAt,
       decidedAt: candidates.decidedAt,
     })
@@ -153,7 +154,7 @@ export async function GET(req: Request) {
       );
       if (b >= 0) scoreBuckets[b].value++;
     }
-    const rec = c.screeningReport?.recommendation;
+    const rec = c.recommendation;
     if (rec && rec in recommendations) recommendations[rec]++;
   }
 

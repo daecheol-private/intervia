@@ -68,21 +68,33 @@ export function calcTokensForKrw(krw: number): {
   return { base, bonus, total: base + bonus, bonusRatio: tier.bonusRatio };
 }
 
-export async function getPricing(key: FeatureKey): Promise<number> {
-  const [row] = await db
-    .select({ cost: tokenPricing.cost })
-    .from(tokenPricing)
-    .where(eq(tokenPricing.featureKey, key));
-  return row?.cost ?? DEFAULT_PRICING[key];
+// 가격표(소수 행, 정적)는 admin 이 가끔만 바꾼다 — 매 과금마다 DB 왕복하지 않도록 짧게 캐시.
+// 변경 시 admin/pricing 라우트가 invalidatePricingCache() 로 즉시 무효화한다(TTL 은 백스톱).
+// 가격 "조회"만 캐시할 뿐, 차감·멱등 로직은 그대로다.
+let pricingCache: { map: Record<FeatureKey, number>; ts: number } | null = null;
+const PRICING_TTL = 60_000;
+
+export function invalidatePricingCache(): void {
+  pricingCache = null;
 }
 
-export async function getAllPricing(): Promise<Record<FeatureKey, number>> {
+async function getPricingMap(): Promise<Record<FeatureKey, number>> {
+  if (pricingCache && Date.now() - pricingCache.ts < PRICING_TTL) return pricingCache.map;
   const rows = await db.select().from(tokenPricing);
   const map: Record<FeatureKey, number> = { ...DEFAULT_PRICING };
   for (const r of rows) {
     map[r.featureKey as FeatureKey] = r.cost;
   }
+  pricingCache = { map, ts: Date.now() };
   return map;
+}
+
+export async function getPricing(key: FeatureKey): Promise<number> {
+  return (await getPricingMap())[key] ?? DEFAULT_PRICING[key];
+}
+
+export async function getAllPricing(): Promise<Record<FeatureKey, number>> {
+  return { ...(await getPricingMap()) };
 }
 
 /**

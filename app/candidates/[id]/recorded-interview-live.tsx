@@ -284,7 +284,8 @@ export function LiveRecorder({
         }
       }, 1000);
       suggestTimerRef.current = window.setInterval(() => {
-        void pollSuggestion();
+        // 백그라운드 탭에서는 LLM 추천 질문 폴링 스킵.
+        if (document.visibilityState === "visible") void pollSuggestion();
       }, 45_000);
     } catch (e) {
       cleanup();

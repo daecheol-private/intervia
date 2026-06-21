@@ -334,14 +334,11 @@ export async function finalizeRecordedInterview(
     }
 
     // 2) 평가 (JD + 이력서 마스킹본 + 서류평가 + 역할 배정 전사).
-    const [cand] = await db
-      .select()
-      .from(candidates)
-      .where(eq(candidates.id, ri.candidateId));
-    const [job] = await db
-      .select()
-      .from(jobPostings)
-      .where(eq(jobPostings.id, ri.jobId));
+    // 후보자·공고는 서로 독립 조회 — 병렬로 (원격 DB 왕복 2회 직렬 회피).
+    const [[cand], [job]] = await Promise.all([
+      db.select().from(candidates).where(eq(candidates.id, ri.candidateId)),
+      db.select().from(jobPostings).where(eq(jobPostings.id, ri.jobId)),
+    ]);
     if (!cand || !job) throw new Error("후보자 또는 공고를 찾을 수 없습니다.");
 
     const jobInfo: JobInfo = {

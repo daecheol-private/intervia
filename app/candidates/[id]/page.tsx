@@ -116,8 +116,18 @@ export default function CandidateDetailPage() {
   // 평가/재평가가 진행 중(큐 대기 또는 처리중)이면 완료될 때까지 폴링.
   useEffect(() => {
     if (data?.screeningPhase !== "in_queue" && !data?.rescreening) return;
-    const t = setTimeout(() => void load(), 4000);
-    return () => clearTimeout(t);
+    // 백그라운드 탭에서는 폴링 스킵(무거운 응답) — 복귀 시 visibilitychange 가 즉시 재개.
+    const t = setTimeout(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 4000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.screeningPhase, data?.rescreening, data?.candidate]);
 
@@ -126,8 +136,18 @@ export default function CandidateDetailPage() {
   useEffect(() => {
     const cs = data?.sessions?.find((s) => s.status === "completed");
     if (!evalLikelyRunning(cs)) return;
-    const t = setTimeout(() => void load(), 4000);
-    return () => clearTimeout(t);
+    // 백그라운드 탭에서는 폴링 스킵 — 복귀 시 visibilitychange 가 즉시 재개.
+    const t = setTimeout(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 4000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 

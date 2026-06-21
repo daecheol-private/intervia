@@ -73,6 +73,11 @@ export function McqPanel({
     stopPoll();
     pollTimer.current = setTimeout(async () => {
       if (!mounted.current) return;
+      // 백그라운드 탭에서는 조회 스킵하고 다음 tick 만 예약 — 복귀하면 자동 재개.
+      if (document.visibilityState !== "visible") {
+        schedulePoll();
+        return;
+      }
       const s = await fetchState();
       if (!mounted.current) return;
       if (!s) {

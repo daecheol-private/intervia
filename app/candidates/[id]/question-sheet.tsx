@@ -82,8 +82,18 @@ export function InterviewQuestionsPanel({
   // 백그라운드 생성이 끝나면 자동으로 질문지가 반영된다 (사용자가 새로고침할 필요 없음).
   useEffect(() => {
     if (!generating) return;
-    const t = setTimeout(() => void load(), 4000);
-    return () => clearTimeout(t);
+    // 백그라운드 탭에서는 폴링 스킵 — 복귀 시 visibilitychange 가 즉시 재개.
+    const t = setTimeout(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 4000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generating, data]);
 

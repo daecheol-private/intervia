@@ -3,7 +3,7 @@ import { tokenPricing } from "@/lib/schema";
 import { sql, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
-import { getAllPricing } from "@/lib/tokens";
+import { getAllPricing, invalidatePricingCache } from "@/lib/tokens";
 
 export const runtime = "nodejs";
 
@@ -62,6 +62,7 @@ export async function PATCH(req: Request) {
       });
   }
 
+  invalidatePricingCache();
   return Response.json(await getAllPricing());
 }
 
