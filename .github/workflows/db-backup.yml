@@ -51,7 +51,9 @@ jobs:
             echo "::error::TURSO_API_TOKEN secret 이 없습니다."
             exit 1
           fi
-          turso db dump "$DB_NAME" --output dump.sql
+          # turso CLI 에는 db dump 서브커맨드가 없음 — shell 의 .dump 로 SQL 텍스트를 추출한다 (Turso 공식 백업 방식).
+          # (db dump --output 으로 되돌리지 말 것: unknown flag 로 매번 실패함)
+          turso db shell "$DB_NAME" ".dump" > dump.sql
 
       - name: Sanity check (빈/손상 백업 차단)
         run: |
