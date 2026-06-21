@@ -1357,7 +1357,6 @@ export default function JobDetailPage() {
               <Tag>{job.level}</Tag>
               <Tag>{job.employmentType}</Tag>
               <Tag>면접 {job.interviewDurationMinutes ?? 20}분</Tag>
-              <Tag>톤: {job.tone}</Tag>
             </div>
             <div className="text-xs text-ink-muted mt-3">
               등록 {formatKstDateTime(job.createdAt)}
