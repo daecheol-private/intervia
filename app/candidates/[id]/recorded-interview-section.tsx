@@ -69,6 +69,26 @@ function fmtDuration(sec: number): string {
   return m > 0 ? `${m}분 ${s}초` : `${s}초`;
 }
 
+// 이 라운드의 완료된(ready/confirmed) 대면 평가 요약(모드·길이·일시) 또는 null.
+// 부모(InterviewQuestionsPanel)가 섹션을 펼치기 전에 완료 여부를 미리 판정하도록 같은 포맷을 공유한다.
+export function completedRecordedSummary(
+  interviews: Array<{
+    round: "round1" | "round2";
+    mode: "upload" | "live";
+    status: string;
+    durationSeconds: number;
+    createdAt: string;
+  }>,
+  round: "round1" | "round2"
+): string | null {
+  const ri = interviews.find(
+    (i) => i.round === round && (i.status === "ready" || i.status === "confirmed")
+  );
+  return ri
+    ? `${ri.mode === "live" ? "준실시간" : "업로드"} ${fmtDuration(ri.durationSeconds)} · ${formatKstDateTime(ri.createdAt)}`
+    : null;
+}
+
 function fmtMs(ms: number | null): string {
   if (ms == null || ms < 0) return "";
   const total = Math.floor(ms / 1000);
@@ -164,15 +184,15 @@ export function RecordedInterviewPanel({
       (i) => i.status === "ready" || i.status === "confirmed"
     ) ?? null;
   const hasCompletedReport = completedRi !== null;
-  const completedSummary = completedRi
-    ? `${completedRi.mode === "live" ? "준실시간" : "업로드"} ${fmtDuration(completedRi.durationSeconds)} · ${formatKstDateTime(completedRi.createdAt)}`
-    : null;
+  const completedSummary = completedRecordedSummary(interviews ?? [], round);
 
   // 완료 메타(또는 null)를 부모에 통지 — 부모는 완료 시 "면접 문제 생성" UI를 숨기고
   // 섹션 요약에 이 메타를 덧붙인다.
   useEffect(() => {
+    // 아직 로드 전(interviews===null)이면 부모의 사전 완료 판정을 null 로 덮어쓰지 않는다.
+    if (interviews === null) return;
     onCompletedChange?.(completedSummary);
-  }, [completedSummary, onCompletedChange]);
+  }, [interviews, completedSummary, onCompletedChange]);
 
   // 백그라운드 처리 중인 건이 있으면 폴링 — 업로드 후 새로고침/재방문해도 진행상태가
   // 그대로 보이고, 워커가 끝내면 자동으로 리포트로 갱신된다 (사용자가 새로고침할 필요 없음).

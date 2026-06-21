@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { HL, Section } from "./shared";
-import { RecordedInterviewPanel } from "./recorded-interview-section";
+import {
+  RecordedInterviewPanel,
+  completedRecordedSummary,
+} from "./recorded-interview-section";
+import { ScheduleBox } from "./schedule-box";
+import type { Schedule } from "./types";
 
 // ── 대면 면접 질문지 (1차 실무 / 2차 임원) ──────────────────────────
 // 해당 라운드 면접 일정 확정 후 면접관 누구나 생성. 이후 팝업으로 열람.
@@ -44,11 +49,21 @@ export function InterviewQuestionsPanel({
   scheduleConfirmed,
   round = "round1",
   canModify = true,
+  schedule = null,
+  jobId,
+  candidateName,
+  onScheduleChanged,
 }: {
   candidateId: number;
   scheduleConfirmed: boolean;
   round?: "round1" | "round2";
   canModify?: boolean;
+  // 이 라운드의 활성 면접 일정(확정/대기/역제시) — 섹션 안에 표시. 없으면 null.
+  schedule?: Schedule | null;
+  jobId: number;
+  candidateName: string;
+  // 일정 확정·재제안 등으로 일정이 바뀌면 부모(후보자 페이지) 데이터를 다시 불러온다.
+  onScheduleChanged?: () => void;
 }) {
   const [data, setData] = useState<QuestionSheetResp | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -59,6 +74,10 @@ export function InterviewQuestionsPanel({
   // 이 메타를 섹션 요약("대면 평가 완료 · …")에 덧붙인다.
   const [recordedSummary, setRecordedSummary] = useState<string | null>(null);
   const recordedDone = recordedSummary !== null;
+  // 펼치기 전에 대면 평가 완료 여부를 판정했는지. Section 이 접힘 상태에서 자식(RecordedInterviewPanel)을
+  // 언마운트해, 펼치는 순간 자식 fetch 로만 판정하면 일정·문제생성이 잠깐 떴다 사라진다. 일정 미확정
+  // 라운드는 완료가 불가능하므로 곧장 판정 완료(true)로 둔다.
+  const [recordedChecked, setRecordedChecked] = useState(!scheduleConfirmed);
 
   const isExec = round === "round2";
   const roundNo = isExec ? "2차" : "1차";
@@ -72,6 +91,42 @@ export function InterviewQuestionsPanel({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId, round]);
+
+  // 대면 평가 완료 여부 사전 조회 — 이 컴포넌트의 effect 는 Section 접힘과 무관하게 마운트 시 돌아,
+  // 펼치기 전에 recordedSummary 를 채워 깜빡임을 없앤다. (자식 RecordedInterviewPanel 은 펼칠 때
+  // 마운트돼 라이브 갱신만 담당.) 완료가 가능한 '일정 확정' 라운드만 조회.
+  useEffect(() => {
+    if (!scheduleConfirmed) {
+      setRecordedChecked(true);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(
+          `/api/candidates/${candidateId}/recorded-interview`
+        );
+        if (cancelled) return;
+        if (r.ok) {
+          const body = (await r.json()) as {
+            interviews: Array<{
+              round: "round1" | "round2";
+              mode: "upload" | "live";
+              status: string;
+              durationSeconds: number;
+              createdAt: string;
+            }>;
+          };
+          setRecordedSummary(completedRecordedSummary(body.interviews, round));
+        }
+      } finally {
+        if (!cancelled) setRecordedChecked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateId, round, scheduleConfirmed]);
 
   const sheet = data?.sheet ?? null;
   const status = data?.status ?? null;
@@ -131,6 +186,22 @@ export function InterviewQuestionsPanel({
           <span className="text-success">
             대면 평가 완료{recordedSummary ? ` · ${recordedSummary}` : ""}
           </span>
+        ) : schedule?.status === "selected" && schedule.selectedSlot ? (
+          <span className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-primary-soft text-primary-deep border border-primary/30">
+              확정
+            </span>
+            <span className="text-ink-soft">
+              {formatKstDateTime(schedule.selectedSlot.start)}
+            </span>
+            <span className="text-ink-muted">
+              · {schedule.modeOnline ? "온라인" : "오프라인"}
+            </span>
+          </span>
+        ) : schedule?.status === "counter_proposed" ? (
+          <span className="text-warning">🔄 후보자 대안 일정 제안</span>
+        ) : schedule?.status === "pending" ? (
+          <span className="text-warning">⏳ 후보자 응답 대기</span>
         ) : generating ? (
           <span className="text-primary-deep">⏳ 생성 중</span>
         ) : sheet ? (
@@ -144,7 +215,7 @@ export function InterviewQuestionsPanel({
         )
       }
     >
-      {!confirmed && !hasRow && !recordedDone && (
+      {!confirmed && !hasRow && !recordedDone && !schedule && (
         <div className="text-center py-6">
           <div className="text-3xl mb-3">📝</div>
           <p className="text-sm text-ink-soft mb-1">
@@ -158,11 +229,29 @@ export function InterviewQuestionsPanel({
         </div>
       )}
 
-      {(confirmed || hasRow || recordedDone) && (
+      {(confirmed || hasRow || recordedDone || schedule) && (
         <div className="space-y-4">
-          {/* 면접 문제 생성 (준비용 질문지) — 대면 평가가 완료되면 면접이 이미 끝난 시점이라 숨긴다. */}
-          {!recordedDone && (
-            <div className="space-y-4">
+          {/* 면접 일정 — 같은 라운드. 대면 평가가 완료되면(면접 종료) 숨긴다. */}
+          {schedule && recordedChecked && !recordedDone && (
+            <div className="space-y-3">
+              <div className="text-sm font-semibold text-ink-soft">면접 일정</div>
+              <ScheduleBox
+                schedule={schedule}
+                jobId={jobId}
+                candidateId={candidateId}
+                candidateName={candidateName}
+                onChanged={() => onScheduleChanged?.()}
+              />
+            </div>
+          )}
+
+          {/* 면접 문제 생성 (준비용 질문지) — 일정 확정(또는 기존 생성 이력) 후, 대면 평가 완료 전까지. */}
+          {recordedChecked && !recordedDone && (confirmed || hasRow) && (
+            <div
+              className={`space-y-4${
+                schedule ? " pt-4 mt-2 border-t border-border-default" : ""
+              }`}
+            >
               <div className="text-sm font-semibold text-ink-soft">
                 면접 문제 생성
               </div>
@@ -226,13 +315,15 @@ export function InterviewQuestionsPanel({
             </div>
           )}
 
-          {/* 대면 면접 평가 — 같은 라운드(녹음 업로드 / 라이브 + 평가 결과). 완료 시 위 "면접 문제 생성"은 숨고 이 평가 리포트만 남는다. */}
-          <RecordedInterviewPanel
-            candidateId={candidateId}
-            round={round}
-            canModify={canModify}
-            onCompletedChange={setRecordedSummary}
-          />
+          {/* 대면 면접 평가 — 같은 라운드(녹음 업로드 / 라이브 + 평가 결과). 완료 시 위 일정·"면접 문제 생성"은 숨고 이 평가 리포트만 남는다. 일정만 대기(미확정)인 동안엔 업로드 영역을 띄우지 않는다. */}
+          {(confirmed || hasRow || recordedDone) && (
+            <RecordedInterviewPanel
+              candidateId={candidateId}
+              round={round}
+              canModify={canModify}
+              onCompletedChange={setRecordedSummary}
+            />
+          )}
         </div>
       )}
 

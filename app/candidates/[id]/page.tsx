@@ -23,7 +23,6 @@ import {
   TranscriptModal,
 } from "./interview-section";
 import { InterviewQuestionsPanel } from "./question-sheet";
-import { ScheduleBox } from "./schedule-box";
 import {
   BreakdownBlock,
   BulletBlock,
@@ -332,16 +331,20 @@ export default function CandidateDetailPage() {
   const aiStagePassed =
     !!candidate.outcome ||
     STAGE_RANK[candidate.stage as Stage] > STAGE_RANK.ai_evaluated;
-  // active 일정이 여러 개(예: 1차 selected + 2차 pending)면 가장 최근(id 큰) 것을 표시.
-  const activeSchedule =
+  // 라운드별 활성 일정(확정/대기/역제시) — 각 "N차 면접" 섹션 안에서 표시.
+  // 같은 라운드에 여러 건이면 가장 최근(id 큰) 것.
+  const activeScheduleForRound = (round: "round1" | "round2") =>
     (schedules ?? [])
       .filter(
         (s) =>
-          s.status === "selected" ||
-          s.status === "pending" ||
-          s.status === "counter_proposed"
+          s.round === round &&
+          (s.status === "selected" ||
+            s.status === "pending" ||
+            s.status === "counter_proposed")
       )
       .sort((a, b) => b.id - a.id)[0] ?? null;
+  const round1Schedule = activeScheduleForRound("round1");
+  const round2Schedule = activeScheduleForRound("round2");
   // 라운드별 면접 일정 확정 여부 — 면접 문제 생성 게이트.
   // 부모 data 에서 직접 계산해 InterviewQuestionsPanel 에 내려준다.
   // (패널 자체 GET 은 마운트 시점 1회뿐이라, 일정 확정 직후엔 stale → 새로고침 필요해짐)
@@ -847,49 +850,24 @@ export default function CandidateDetailPage() {
           ))}
       </Section>
 
-      {activeSchedule && (
-        <Section
-          title={`${activeSchedule.round === "round2" ? "2차" : "1차"} 면접 일정`}
-          summary={
-            activeSchedule.status === "selected" && activeSchedule.selectedSlot ? (
-              <span className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-primary-soft text-primary-deep border border-primary/30">
-                  확정
-                </span>
-                <span className="text-ink-soft">
-                  {formatKstDateTime(activeSchedule.selectedSlot.start)}
-                </span>
-                <span className="text-ink-muted">
-                  · {activeSchedule.modeOnline ? "온라인" : "오프라인"}
-                </span>
-              </span>
-            ) : activeSchedule.status === "counter_proposed" ? (
-              <span className="text-warning">🔄 후보자 대안 일정 제안</span>
-            ) : (
-              <span className="text-warning">⏳ 후보자 응답 대기</span>
-            )
-          }
-        >
-          <ScheduleBox
-            schedule={activeSchedule}
-            jobId={candidate.jobId}
-            candidateId={candidate.id}
-            candidateName={candidate.name}
-            onChanged={load}
-          />
-        </Section>
-      )}
-
       <InterviewQuestionsPanel
         candidateId={candidate.id}
         round="round1"
         scheduleConfirmed={round1Confirmed}
+        schedule={round1Schedule}
+        jobId={candidate.jobId}
+        candidateName={candidate.name}
+        onScheduleChanged={load}
         canModify={!candidate.outcome}
       />
       <InterviewQuestionsPanel
         candidateId={candidate.id}
         round="round2"
         scheduleConfirmed={round2Confirmed}
+        schedule={round2Schedule}
+        jobId={candidate.jobId}
+        candidateName={candidate.name}
+        onScheduleChanged={load}
         canModify={!candidate.outcome}
       />
       <AttachmentsPanel
