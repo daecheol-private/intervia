@@ -12,6 +12,7 @@
  * - 임시 공고(isDraft)에서는 생성 불가.
  */
 import { useEffect, useRef, useState } from "react";
+import { ListChecks } from "lucide-react";
 import { Modal } from "@/app/components/Modal";
 import { notify } from "@/app/components/Dialog";
 import type { McqQuestion } from "@/lib/mcq";
@@ -36,6 +37,8 @@ export function McqPanel({
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<McqQuestion[] | null>(null);
   const [saving, setSaving] = useState(false);
+  // 헤더 버튼으로 여는 관리 모달. draft(검토) 가 열려 있을 때도 같은 모달을 공유한다.
+  const [open, setOpen] = useState(false);
 
   const mounted = useRef(true);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -149,6 +152,7 @@ export function McqPanel({
   };
 
   const openView = async () => {
+    setOpen(true); // 검토를 닫으면 관리 화면으로 복귀하도록 베이스 모달을 켜 둔다
     setBusy(true);
     try {
       const r = await fetch(`/api/jobs/${jobId}/mcq`);
@@ -219,90 +223,52 @@ export function McqPanel({
   const flaggedCount = draft?.filter((q) => q.verified === false).length ?? 0;
   const blockedDraft = !!isDraft && count === 0;
 
-  const statusText = loading
-    ? "불러오는 중…"
-    : blockedDraft
-      ? "임시 공고에서는 생성할 수 없습니다 — 공고를 정식 저장한 뒤 생성하세요"
-      : generating
-        ? "문제 생성 중… (수십 초 소요 · 새로고침해도 유지됩니다)"
-        : count > 0
-          ? enabled
-            ? `${count}문항 · AI 면접에 적용 중 (점수 참고용)`
-            : `${count}문항 · 적용 안 함 (문항은 보존됨)`
-          : "직무 기본기 4지선다를 AI 면접 시작 전 출제 (선택) · 점수 참고용";
-
   const btn =
     "px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed";
 
+  const reviewing = draft != null;
+  // 적용 여부를 아이콘 색으로 표현: 적용 중=포레스트 강조, 그 외(미적용·미생성)=회색, 생성 중=깜빡임.
+  const active = count > 0 && enabled;
+  const triggerClass = generating
+    ? "border-primary/40 text-primary-deep bg-primary-soft animate-pulse"
+    : active
+      ? "border-primary/40 text-primary-deep bg-primary-soft hover:bg-primary/15"
+      : "border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink";
+
+  // 마우스 오버 툴팁 — 이름 + 적용/미적용 상태를 한 줄로.
+  const tooltip = `역량평가${
+    generating
+      ? " · 생성 중"
+      : count > 0
+        ? enabled
+          ? " · 적용 중"
+          : " · 미적용"
+        : " · 미설정"
+  }`;
+
   return (
-    <div className="flex items-center gap-3 bg-card border border-border-default rounded-2xl px-4 py-2.5 shadow-sm mt-3 mb-1">
-      <span className="text-sm font-bold text-ink whitespace-nowrap">
-        AI 면접 객관식 문제
-      </span>
-      <span className="text-xs text-ink-muted truncate flex-1 min-w-0">
-        {statusText}
-      </span>
-      <div className="flex items-center gap-3 shrink-0">
-        {!loading && generating && (
-          <span className="text-xs font-semibold text-primary-deep px-2">
-            생성 중…
-          </span>
-        )}
-        {!loading && !generating && count > 0 && (
-          <>
-            {/* AI 면접 적용 on/off 토글 */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-ink-muted whitespace-nowrap">
-                AI 면접 적용
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={enabled}
-                aria-label="AI 면접에 객관식 적용"
-                onClick={() => void toggleEnabled()}
-                disabled={busy || disabled}
-                className={`relative w-9 h-5 rounded-full transition-colors disabled:opacity-50 ${
-                  enabled ? "bg-primary" : "bg-border-strong"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-card rounded-full shadow transition-transform ${
-                    enabled ? "translate-x-4" : ""
-                  }`}
-                />
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => void openView()}
-              disabled={busy}
-              className={`${btn} border border-border-default text-ink-soft hover:bg-surface-alt`}
-            >
-              문제 보기
-            </button>
-          </>
-        )}
-        {!loading && !generating && count === 0 && (
-          <button
-            type="button"
-            onClick={() => void generate()}
-            disabled={busy || disabled || blockedDraft}
-            title={blockedDraft ? "임시 공고에서는 생성할 수 없습니다." : undefined}
-            className={`${btn} bg-primary hover:bg-primary-deep text-surface shadow-sm`}
-          >
-            문제 생성
-          </button>
-        )}
-      </div>
+    <>
+      {/* 헤더 아이콘 — 적용 시 색이 켜진다. 클릭 시 모달에서 생성·적용·검토. */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title={tooltip}
+        aria-label={tooltip}
+        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${triggerClass}`}
+      >
+        <ListChecks className="w-4 h-4" />
+      </button>
 
       <Modal
-        open={draft != null}
-        onClose={() => setDraft(null)}
-        title="객관식 문제 검토·수정"
+        open={open || reviewing}
+        onClose={() => {
+          setOpen(false);
+          setDraft(null);
+        }}
+        title={reviewing ? "역량평가 문항 검토·수정" : "역량평가"}
         maxWidth="max-w-2xl"
       >
-        {draft && (
+        {reviewing && draft ? (
           <div>
             <p className="text-xs text-ink-muted leading-relaxed mb-1">
               <strong className="text-ink-soft">{draft.length}문항</strong> · 정답을
@@ -391,7 +357,7 @@ export function McqPanel({
                 disabled={saving}
                 className="px-4 py-2 rounded-lg border border-border-default text-sm font-semibold text-ink-soft hover:bg-surface-alt disabled:opacity-50"
               >
-                닫기
+                ← 뒤로
               </button>
               <button
                 type="button"
@@ -403,8 +369,75 @@ export function McqPanel({
               </button>
             </div>
           </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-ink-soft leading-relaxed">
+              직무 기본기를 묻는 4지선다를 AI 면접 시작 전에 출제합니다. 점수는 합불에
+              반영되지 않는 <strong>참고용</strong>이며, 적용 여부는 토글로 켜고 끌 수
+              있습니다.
+            </p>
+
+            <div className="rounded-xl border border-border-default bg-surface-alt px-4 py-3">
+              <p className="text-sm text-ink leading-relaxed">
+                {loading
+                  ? "불러오는 중…"
+                  : blockedDraft
+                    ? "임시 공고에서는 생성할 수 없습니다 — 공고를 정식 저장한 뒤 생성하세요."
+                    : generating
+                      ? "문제 생성 중… (수십 초 소요 · 닫거나 새로고침해도 계속 유지됩니다)"
+                      : count > 0
+                        ? `${count}문항 생성됨 · ${enabled ? "AI 면접에 적용 중 (점수 참고용)" : "적용 안 함 (문항은 보존됨)"}`
+                        : "아직 생성된 문제가 없습니다."}
+              </p>
+            </div>
+
+            {!loading && !generating && count > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-ink-soft">AI 면접 적용</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={enabled}
+                    aria-label="AI 면접에 객관식 적용"
+                    onClick={() => void toggleEnabled()}
+                    disabled={busy || disabled}
+                    className={`relative w-9 h-5 rounded-full transition-colors disabled:opacity-50 ${
+                      enabled ? "bg-primary" : "bg-border-strong"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-card rounded-full shadow transition-transform ${
+                        enabled ? "translate-x-4" : ""
+                      }`}
+                    />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void openView()}
+                  disabled={busy}
+                  className={`${btn} border border-border-default text-ink-soft hover:bg-surface-alt`}
+                >
+                  문제 보기·수정
+                </button>
+              </div>
+            )}
+
+            {!loading && !generating && count === 0 && (
+              <button
+                type="button"
+                onClick={() => void generate()}
+                disabled={busy || disabled || blockedDraft}
+                title={blockedDraft ? "임시 공고에서는 생성할 수 없습니다." : undefined}
+                className={`${btn} bg-primary hover:bg-primary-deep text-surface shadow-sm`}
+              >
+                문제 생성
+              </button>
+            )}
+          </div>
         )}
       </Modal>
-    </div>
+    </>
   );
 }

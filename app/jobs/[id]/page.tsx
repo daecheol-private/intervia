@@ -16,7 +16,7 @@ import { notify, confirmDialog } from "@/app/components/Dialog";
 import Link from "next/link";
 import { compositeScore, formatKstDateTime } from "@/lib/utils";
 import { isEncryptedZipFile } from "@/lib/zip-encrypted-client";
-import { Loader2 } from "lucide-react";
+import { Loader2, CalendarClock, BarChart3, Pencil, Trash2 } from "lucide-react";
 import {
   STAGE_LABELS,
   STAGE_GROUPS,
@@ -1399,7 +1399,7 @@ export default function JobDetailPage() {
             </div>
           </div>
           <div className="flex gap-2 flex-wrap sm:shrink-0 items-center">
-            <ShareButton jobId={Number(jobId)} jobTitle={job.title} />
+            {/* 면접 일정 — 확정된 면접이 있을 때만 표시하고, 색을 채워 눈에 띄게. */}
             {(() => {
               // 확정 면접 대기 = 1차(stage=round1_waiting) + 2차(round1_passed + round2 확정).
               // 종결(outcome) 후보는 제외 — API 조회 조건과 일치시킴.
@@ -1410,40 +1410,56 @@ export default function JobDetailPage() {
                     (c.stage === "round1_passed" &&
                       c.round2ScheduleStatus === "selected"))
               ).length;
+              if (waitingCount === 0) return null;
               return (
-                <button
-                  onClick={openRound1Schedule}
-                  disabled={waitingCount === 0 || scheduleLoading}
-                  title={
-                    waitingCount === 0
-                      ? "확정된 면접 일정이 있는 대기 후보가 없습니다"
-                      : "확정된 1·2차 면접 일정을 시간순으로 봅니다"
-                  }
-                  className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  🗓 면접 일정{waitingCount > 0 ? ` (${waitingCount})` : ""}
-                </button>
+                <>
+                  <button
+                    onClick={openRound1Schedule}
+                    disabled={scheduleLoading}
+                    title="확정된 1·2차 면접 일정을 시간순으로 봅니다"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-surface hover:bg-primary-deep text-sm font-medium shadow-sm disabled:opacity-50"
+                  >
+                    <CalendarClock className="w-4 h-4" />
+                    면접 일정 ({waitingCount})
+                  </button>
+                  <span
+                    className="hidden sm:block w-px h-5 bg-border-default mx-0.5"
+                    aria-hidden
+                  />
+                </>
               );
             })()}
-            <Link
-              href={`/jobs/${jobId}/report`}
-              className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm font-medium"
-              title="채용 결과 리포트 (인쇄/PDF 가능)"
-            >
-              📊 리포트
-            </Link>
-            <Link
-              href={`/jobs/${jobId}/edit`}
-              className="px-3 py-1.5 rounded-lg border border-border-strong hover:bg-surface-alt text-sm text-ink-soft"
-            >
-              수정
-            </Link>
-            <button
-              onClick={handleDelete}
-              className="px-3 py-1.5 rounded-lg border border-danger/30 text-danger hover:bg-danger-soft text-sm transition-colors"
-            >
-              삭제
-            </button>
+
+            {/* 유틸리티 아이콘 묶음 — 공유 · 리포트 · 역량평가 · 수정 · 삭제. */}
+            <div className="flex items-center gap-1">
+              {/* 역량평가(면접 전 객관식 사전문항) — 적용 시 색이 켜진다. 아이콘 묶음 맨 앞. */}
+              <McqPanel jobId={jobId} disabled={isExpired} isDraft={!!job.isDraft} />
+              <ShareButton jobId={Number(jobId)} jobTitle={job.title} iconOnly />
+              <Link
+                href={`/jobs/${jobId}/report`}
+                title="채용 결과 리포트 (인쇄/PDF)"
+                aria-label="채용 결과 리포트"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+              </Link>
+              <Link
+                href={`/jobs/${jobId}/edit`}
+                title="공고 수정"
+                aria-label="공고 수정"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink transition-colors"
+              >
+                <Pencil className="w-4 h-4" />
+              </Link>
+              <button
+                onClick={handleDelete}
+                title="공고 삭제"
+                aria-label="공고 삭제"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:border-danger/50 hover:text-danger hover:bg-danger-soft transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
         {job.evaluationFocus && job.evaluationFocus.trim() && (
@@ -1467,9 +1483,6 @@ export default function JobDetailPage() {
           rightSlot={<InterviewersInline jobId={Number(jobId)} />}
         />
       </div>
-
-      {/* AI 면접 객관식 사전 문항 — 전형 단계 현황 위, 한 줄 바. 선택 기능(토글로 적용 on/off). */}
-      <McqPanel jobId={jobId} disabled={isExpired} isDraft={!!job.isDraft} />
 
       <FunnelPanel
         jobId={jobId}

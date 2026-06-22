@@ -6,11 +6,14 @@ export function CandidateFavoriteStar({
   candidateId,
   initial,
   size = "sm",
+  framed,
   onToggle,
 }: {
   candidateId: number;
   initial: boolean;
   size?: "sm" | "md";
+  /** 테두리 박스(아이콘 버튼) 형태 — 상세 페이지 액션 줄에서 삭제 버튼과 톤을 맞출 때. */
+  framed?: boolean;
   onToggle?: (favorited: boolean) => void;
 }) {
   const [favorited, setFavorited] = useState(initial);
@@ -36,13 +39,21 @@ export function CandidateFavoriteStar({
   };
 
   const cls = size === "md" ? "text-xl" : "text-base";
+  const className = framed
+    ? // 삭제 버튼과 같은 32px 박스 + 테두리. 즐겨찾기면 별·테두리가 호박색으로 켜진다.
+      `inline-flex items-center justify-center w-8 h-8 rounded-lg border text-lg leading-none transition-colors hover:bg-surface-alt disabled:opacity-50 ${
+        favorited
+          ? "text-amber-400 border-amber-300"
+          : "text-border-strong border-border-strong hover:text-amber-300"
+      }`
+    : `${cls} leading-none transition-transform hover:scale-110 disabled:opacity-50 ${
+        favorited ? "text-amber-400" : "text-border-strong hover:text-amber-300"
+      }`;
   return (
     <button
       onClick={toggle}
       disabled={busy}
-      className={`${cls} leading-none transition-transform hover:scale-110 disabled:opacity-50 ${
-        favorited ? "text-amber-400" : "text-border-strong hover:text-amber-300"
-      }`}
+      className={className}
       title={favorited ? "즐겨찾기 해제" : "즐겨찾기"}
       aria-label={favorited ? "즐겨찾기 해제" : "즐겨찾기"}
     >

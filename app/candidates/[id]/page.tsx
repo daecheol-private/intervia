@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import {
   compositeScore,
   recommendationFromScore,
@@ -431,15 +431,16 @@ export default function CandidateDetailPage() {
               candidateId={candidate.id}
               initial={candidate.favorited ?? false}
               size="md"
+              framed
               onToggle={() => void load()}
             />
             <button
               onClick={handleDelete}
-              className="px-2 py-1.5 rounded-lg text-ink-muted hover:text-danger hover:bg-danger-soft text-xs transition-colors"
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:border-danger/50 hover:text-danger hover:bg-danger-soft transition-colors"
               title="후보자 삭제"
               aria-label="후보자 삭제"
             >
-              🗑 삭제
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Share2 } from "lucide-react";
 
 type MemberResult = {
   userId: number;
@@ -13,9 +14,12 @@ type MemberResult = {
 export function ShareButton({
   jobId,
   jobTitle,
+  iconOnly,
 }: {
   jobId: number;
   jobTitle: string;
+  /** 헤더에서 아이콘 버튼으로 렌더 (라벨 대신 아이콘+툴팁). */
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [emails, setEmails] = useState("");
@@ -153,9 +157,15 @@ export function ShareButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm"
+        title="공고 공유"
+        aria-label="공고 공유"
+        className={
+          iconOnly
+            ? "inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink transition-colors"
+            : "px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm"
+        }
       >
-        공유
+        {iconOnly ? <Share2 className="w-4 h-4" /> : "공유"}
       </button>
       {open && (
         <div
