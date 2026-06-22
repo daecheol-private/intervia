@@ -73,8 +73,6 @@ export default function JobDetailPage() {
   const [dragOver, setDragOver] = useState(false);
   const [locked, setLocked] = useState<{ title: string } | null>(null);
   const [loadError, setLoadError] = useState<"not_found" | "failed" | null>(null);
-  // 지원 링크 발급 여부 — null=확인 중. 발급됐으면 업로드 섹션을 접어 둔다(지원 링크 위주 흐름).
-  const [hasApplyLink, setHasApplyLink] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
   // 만료 결정 모달 — 닫아도 페이지 상단 띠는 유지. 다시 열기 가능.
   const [expiredModalDismissed, setExpiredModalDismissed] = useState(false);
@@ -1488,19 +1486,10 @@ export default function JobDetailPage() {
       {/* 데스크톱: 동의 게이트 + 업로드 영역 (모바일 완전 숨김 — 업로드는 PC 전용)
          접힘 상태는 공고별 localStorage 기억 — 업로드가 끝난 공고에서 목록 스크롤 절약 */}
       <div className="hidden sm:block">
-      {/* 지원 링크로 직접 받기 — 업로드 섹션 위에. 링크가 발급돼 있으면 업로드 섹션은 접어 둔다. */}
-      <div data-tour="apply-link">
-        <ApplyLinkButton
-          jobId={jobId}
-          disabled={isExpired}
-          onActive={setHasApplyLink}
-        />
-      </div>
-      {hasApplyLink !== null && (
+      {/* 이력서를 Intervia 에 올리는 두 경로(지원 링크 / 직접 업로드)를 한 섹션 안에서 나눈다. */}
       <Section
-        title="이력서 직접 업로드"
+        title="이력서 받기"
         storageKey={`job-upload:${jobId}`}
-        defaultOpen={!hasApplyLink}
         summary={
           uploading
             ? `업로드 진행 중… ${uploadProgress?.pct ?? 0}%`
@@ -1509,9 +1498,29 @@ export default function JobDetailPage() {
               : undefined
         }
       >
+      {/* 경로 ① 지원자가 직접 올리게: 공개 지원 링크 */}
+      <div data-tour="apply-link">
+        <p className="text-sm font-semibold text-ink">지원 링크로 직접 받기</p>
+        <div className="mt-2">
+          <ApplyLinkButton jobId={jobId} disabled={isExpired} />
+        </div>
+      </div>
+
+      {/* 두 방법은 순서가 아니라 택일 — '또는'으로 구분 */}
+      <div className="my-5 flex items-center gap-3">
+        <div className="flex-1 border-t border-border-default" />
+        <span className="text-xs font-medium text-ink-muted">또는</span>
+        <div className="flex-1 border-t border-border-default" />
+      </div>
+
+      {/* 경로 ② 보유한 이력서 파일을 직접 올리기 */}
+      <p className="text-sm font-semibold text-ink">이력서 직접 업로드</p>
+      <p className="mt-1 text-xs text-ink-muted">
+        이미 가지고 있는 이력서 파일을 직접 올려 평가합니다.
+      </p>
       {/* 지원자 동의 확인 게이트 — 업로드 전 필수 (PIPA §15·§26·§28의8·§37의2)
          체크 시 모달로 명시 재확인을 요구해 "무심코 체크" 차단. */}
-      <div data-tour="consent-gate">
+      <div data-tour="consent-gate" className="mt-3">
       <ApplicantConsentGate
         confirmed={consentConfirmed}
         busy={consentBusy}
@@ -1705,7 +1714,6 @@ export default function JobDetailPage() {
         )}
       </div>
       </Section>
-      )}
       </div>
       {/* /데스크톱 업로드 영역 */}
 

@@ -80,15 +80,12 @@ export default function ApplyLinkButton({
   }
 
   return (
-    <div className="mt-4 rounded-xl border border-border-default bg-surface-alt p-4">
+    <div>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-ink">지원 링크로 직접 받기</p>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            사람인·잡코리아 등 공고의 지원 방법(홈페이지 지원)에 이 링크를 넣으면, 지원자가
-            직접 이력서를 올리고 자동으로 평가됩니다.
-          </p>
-        </div>
+        <p className="text-xs text-ink-muted">
+          사람인·잡코리아 등 공고의 지원 방법(홈페이지 지원)에 이 링크를 넣으면, 지원자가
+          직접 이력서를 올리고 자동으로 평가됩니다.
+        </p>
         {!url && (
           <button
             onClick={generate}
