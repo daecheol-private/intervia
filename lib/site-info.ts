@@ -11,20 +11,24 @@ export const SITE_INFO = {
   baseUrl: process.env.APP_BASE_URL ?? "http://localhost:3003",
 } as const;
 
-// 사업장 미보유(재택). 사업자 등록 시 가상오피스 주소·사업용 번호 확보 후 기재 예정.
-// 그 전까지 개인 거주지·개인 휴대폰을 공개 페이지에 노출하지 않는다.
-// 전자상거래법 §10 사업자정보 표시의무는 통신판매(유료 판매) 개시 시점에 발생 — 그때 채운다.
+// 사업자(법적 주체) 정보 — 처리방침/약관/AI공개 하단 §10 표시 + 푸터 공통 사용.
+//   name = 사업자 상호(법적 회사명, 본문의 '이하 "회사"'). 서비스 브랜드명은 serviceName.
+//   구조: "아임인(대표 박은숙)이 운영하는 Intervia 서비스" (사업자등록 2026-06, 개인·일반과세).
+//   address/phone 가 빈 문자열이면 화면에서 그 줄을 숨긴다(미확정 표기 노출 방지).
+//   전자상거래법 §10 표시의무는 통신판매(유료 판매) 개시 시점에 발생 — 주소·전화는 그때까지 정비.
 export const COMPANY_INFO = {
-  name: "Intervia",
-  representative: "강대철",
-  bizRegistrationNo: "추후 등록 예정",
-  address: "사업자 등록 후 기재 예정",
-  phone: "", // 미공개 — 등록 후 050/070 등 사업용 번호로 기재
+  name: "아임인", // 사업자 상호(법적 회사명)
+  serviceName: "Intervia", // 운영 서비스 브랜드명
+  representative: "박은숙",
+  bizRegistrationNo: "496-57-01198",
+  openDate: "2026-06-22", // 개업연월일 — 국세청 진위확인 API·org 레코드용(비공개 표시)
+  address: "서울특별시 강서구 양천로28길 29, 101동 110호", // 사업장(자택) 주소 — 공개 표시 결정(자택 전체)
+  phone: "010-7496-2696", // 대표 연락처(운영자 본인 번호, 임시) — 추후 050/070 안심번호로 교체 예정(명의위장 리스크 완화)
   email: "admin.intervia@gmail.com",
 } as const;
 
 export const DPO_INFO = {
-  name: "강대철",
+  name: "박은숙",
   title: "대표 (개인정보보호책임자 겸직)",
   email: "admin.intervia@gmail.com",
   phone: "", // 처리방침상 연락처는 이메일로 충분 — 개인 휴대폰 미노출
@@ -109,9 +113,9 @@ export const PROCESSORS: readonly Processor[] = [
 ] as const;
 
 /** 정책 본문 versioning — 본문 변경 시 effective date 올림. */
-export const PRIVACY_EFFECTIVE_DATE = "2026-06-10";
-export const TERMS_EFFECTIVE_DATE = "2026-06-17";
+export const PRIVACY_EFFECTIVE_DATE = "2026-06-22";
+export const TERMS_EFFECTIVE_DATE = "2026-06-22";
 
 /** 가입 시 동의 시점 기록용 버전 식별자. 본문 개정 시 함께 갱신. */
-export const PRIVACY_VERSION = "1.4.0-2026-06-10"; // 합격자 보유 예외·파기 절차·쿠키 조항·수탁자 지위·영업양도·수탁자 연락처(§28의8)·OCR 원본 전달 고지 추가
-export const TERMS_VERSION = "1.2.2-2026-06-17"; // §5-1 헤더 표현 정밀화: 4개 항목을 일괄 '동의 취득'으로 묶던 것을 '고지 + (동의 필요 사항) 동의 취득'으로 분리(§37의2는 고지·거부권 보장이 요건이라 '동의' 아님). 권리 변경 없는 경미한 정정이라 기존 가입자 재동의 불요. (이전: 1.2.1 — §5 동의 취득 방법 명확화: 공고 상세 내용 본문 게시 또는 자체 지원폼)
+export const PRIVACY_VERSION = "1.4.1-2026-06-22"; // 사업자정보 확정 기재(상호 아임인·대표 박은숙·사업자번호 496-57-01198) + 개인정보보호책임자 강대철→박은숙(대표 겸직). 권리·처리내용 변경 없는 경미한 정정(식별정보 보정) → 기존 가입자 재동의 불요. (이전: 1.4.0 — 합격자 보유 예외·파기 절차·쿠키 조항·수탁자 지위·영업양도·수탁자 연락처(§28의8)·OCR 원본 전달 고지 추가)
+export const TERMS_VERSION = "1.2.3-2026-06-22"; // 사업자정보 확정 기재(상호 아임인·대표 박은숙·사업자번호) — 식별정보 보정, 권리 변경 없음 → 재동의 불요. (이전: 1.2.2 — §5-1 헤더 고지/동의 구분 정밀화)

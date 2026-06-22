@@ -267,10 +267,14 @@ export default function TermsPage() {
       <hr className="my-8 border-border-default" />
       <div className="text-xs text-ink-muted space-y-1">
         <div>
-          <strong>{COMPANY_INFO.name}</strong> · 대표 {COMPANY_INFO.representative}
+          <strong>{COMPANY_INFO.name}</strong> ({COMPANY_INFO.serviceName} 운영) ·
+          대표 {COMPANY_INFO.representative}
         </div>
-        <div>{COMPANY_INFO.address}</div>
-        <div>{COMPANY_INFO.email}</div>
+        {COMPANY_INFO.address && <div>{COMPANY_INFO.address}</div>}
+        <div>
+          사업자등록번호 {COMPANY_INFO.bizRegistrationNo} · {COMPANY_INFO.email}
+        </div>
+        {COMPANY_INFO.phone && <div>{COMPANY_INFO.phone}</div>}
       </div>
     </main>
   );

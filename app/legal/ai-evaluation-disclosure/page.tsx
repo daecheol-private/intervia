@@ -376,10 +376,12 @@ export default function AiEvaluationDisclosurePage() {
       <hr className="my-8 border-border-default" />
       <div className="text-xs text-ink-muted space-y-1">
         <div>
-          <strong>{COMPANY_INFO.name}</strong> · 대표 {COMPANY_INFO.representative}
+          <strong>{COMPANY_INFO.name}</strong> ({COMPANY_INFO.serviceName} 운영) ·
+          대표 {COMPANY_INFO.representative}
         </div>
         <div>
-          개인정보 보호책임자: {COMPANY_INFO.email}
+          사업자등록번호 {COMPANY_INFO.bizRegistrationNo} · 개인정보 보호책임자:{" "}
+          {COMPANY_INFO.email}
         </div>
         <div className="mt-2">
           관련 문서:{" "}

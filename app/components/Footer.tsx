@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { COMPANY_INFO } from "@/lib/site-info";
 
 export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   const pathname = usePathname() ?? "";
@@ -16,7 +17,11 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   return (
     <footer className="border-t border-border-default bg-surface-alt mt-auto">
       <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-ink-soft">
-        <div>© {new Date().getFullYear()} Intervia · 대표 강대철</div>
+        <div>
+          © {new Date().getFullYear()} {COMPANY_INFO.serviceName} · 상호{" "}
+          {COMPANY_INFO.name} · 대표 {COMPANY_INFO.representative} · 사업자등록번호{" "}
+          {COMPANY_INFO.bizRegistrationNo}
+        </div>
         <div className="flex gap-4">
           {loggedIn && (
             <Link href="/support" className="hover:text-ink hover:underline">
