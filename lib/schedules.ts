@@ -109,16 +109,23 @@ export function buildScheduleProposalEmail(opts: {
   modeOnline: boolean;
   address?: string | null;
   round?: ScheduleRound;
+  // 기존 확정 일정을 변경하기 위해 새 시간을 다시 제안하는 경우 — "변경" 맥락 문구.
+  isReschedule?: boolean;
 }): { subject: string; html: string; text: string } {
-  const { candidateName, jobTitle, orgName, url, expiresAt, slots, modeOnline, address } =
+  const { candidateName, jobTitle, orgName, url, expiresAt, slots, modeOnline, address, isReschedule } =
     opts;
   const rl = roundLabel(opts.round);
   const expDate = formatLocalDate(expiresAt);
   const slotLines = slots.map((s) => `· ${formatSlotKst(s)}`).join("\n");
-  const subject = `[Intervia] ${jobTitle} ${rl} 면접 일정 안내 — 시간 선택 부탁드립니다`;
+  const subject = isReschedule
+    ? `[Intervia] ${jobTitle} ${rl} 면접 일정 변경 — 시간을 다시 선택해 주세요`
+    : `[Intervia] ${jobTitle} ${rl} 면접 일정 안내 — 시간 선택 부탁드립니다`;
+  const introText = isReschedule
+    ? `${orgName}의 ${jobTitle} 포지션 ${rl} 면접 일정을 변경하고자 새로운 시간을 안내드립니다.`
+    : `${orgName}의 ${jobTitle} 포지션 ${rl} 면접 일정 안내드립니다.`;
   const text = `${candidateName}님,
 
-${orgName}의 ${jobTitle} 포지션 ${rl} 면접 일정 안내드립니다.
+${introText}
 
 다음 시간 중 가능하신 시간을 선택해 주세요:
 ${slotLines}
@@ -137,11 +144,14 @@ Intervia 채용팀`;
   const slotsHtml = slots
     .map((s) => `<li style="padding:4px 0;">${esc(formatSlotKst(s))}</li>`)
     .join("");
+  const introHtml = isReschedule
+    ? `${esc(candidateName)}님, <strong style="color:#0f172a;">${esc(orgName)}</strong>의 <strong style="color:#0f172a;">${esc(jobTitle)}</strong> 포지션 ${rl} 면접 일정을 변경하고자 새로운 시간을 안내드립니다.`
+    : `${esc(candidateName)}님, <strong style="color:#0f172a;">${esc(orgName)}</strong>의 <strong style="color:#0f172a;">${esc(jobTitle)}</strong> 포지션 ${rl} 면접 일정 안내드립니다.`;
   const html = wrapEmailCard({
     innerHtml: `
-      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${rl} 면접 일정 안내</h1>
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${rl} 면접 일정 ${isReschedule ? "변경" : "안내"}</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">
-        ${esc(candidateName)}님, <strong style="color:#0f172a;">${esc(orgName)}</strong>의 <strong style="color:#0f172a;">${esc(jobTitle)}</strong> 포지션 ${rl} 면접 일정 안내드립니다.<br>
+        ${introHtml}<br>
         아래 후보 시간 중 가능한 시간을 선택해 주세요.
       </p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:0 0 20px;">
@@ -295,27 +305,42 @@ export function buildScheduleConfirmedEmail(opts: {
   address?: string | null;
   forInterviewer?: boolean;
   round?: ScheduleRound;
+  // 기존 확정 일정을 변경(재조정)하는 경우 — 제목·헤더·문구를 "확정"→"변경" 으로.
+  isReschedule?: boolean;
 }): { subject: string; html: string; text: string } {
-  const { candidateName, jobTitle, orgName, slot, modeOnline, address, forInterviewer } = opts;
+  const { candidateName, jobTitle, orgName, slot, modeOnline, address, forInterviewer, isReschedule } = opts;
   const rl = roundLabel(opts.round);
   const slotStr = formatSlotKst(slot);
+  const action = isReschedule ? "변경" : "확정";
   const subject = forInterviewer
-    ? `[Intervia] ${candidateName} 후보자 ${rl} 면접 시간 확정`
-    : `[Intervia] ${jobTitle} ${rl} 면접 시간 확정`;
+    ? `[Intervia] ${candidateName} 후보자 ${rl} 면접 시간 ${action}`
+    : `[Intervia] ${jobTitle} ${rl} 면접 시간 ${action}`;
   const greeting = forInterviewer
-    ? `${candidateName} 후보자가 ${jobTitle} ${rl} 면접 시간을 다음과 같이 선택했습니다.`
-    : `${candidateName}님, ${orgName}의 ${jobTitle} 포지션 ${rl} 면접 시간이 확정되었습니다.`;
+    ? isReschedule
+      ? `${candidateName} 후보자의 ${jobTitle} ${rl} 면접 시간이 다음과 같이 변경되었습니다.`
+      : `${candidateName} 후보자가 ${jobTitle} ${rl} 면접 시간을 다음과 같이 선택했습니다.`
+    : isReschedule
+      ? `${candidateName}님, ${orgName}의 ${jobTitle} 포지션 ${rl} 면접 시간이 변경되었습니다. 아래 변경된 일시를 확인해 주세요.`
+      : `${candidateName}님, ${orgName}의 ${jobTitle} 포지션 ${rl} 면접 시간이 확정되었습니다.`;
+  // 온라인 + 변경 시: 기존 미팅 링크는 무효이므로 별도 재안내 예정임을 알림.
+  const onlineRescheduleNote =
+    isReschedule && modeOnline
+      ? "온라인 미팅 링크는 별도 메일로 다시 안내드립니다."
+      : "";
   const text = `${greeting}
 
 · 일시: ${slotStr}
-· 방식: ${modeOnline ? "온라인" : `오프라인 (${address ?? "주소 별도 안내"})`}
+· 방식: ${modeOnline ? "온라인" : `오프라인 (${address ?? "주소 별도 안내"})`}${onlineRescheduleNote ? `\n\n※ ${onlineRescheduleNote}` : ""}
 
 Intervia 채용팀`;
   const esc = (s: string) =>
     s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
+  const heading = isReschedule
+    ? `🔄 ${rl} 면접 시간 변경`
+    : `✅ ${rl} 면접 시간 확정`;
   const html = wrapEmailCard({
     innerHtml: `
-      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">✅ ${rl} 면접 시간 확정</h1>
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${heading}</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">${esc(greeting)}</p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:0 0 8px;">
         <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">일시</p>
@@ -326,6 +351,7 @@ Intervia 채용팀`;
           ${!modeOnline && address ? `<br><span style="font-size:13px;color:#475569;">${esc(address)}</span>` : ""}
         </p>
       </div>
+      ${onlineRescheduleNote ? `<p style="font-size:12px;color:#64748b;margin:12px 0 0;line-height:1.6;">※ ${esc(onlineRescheduleNote)}</p>` : ""}
     `,
     footer: "본 메일은 Intervia 채용 플랫폼에서 발송되었습니다.",
   });

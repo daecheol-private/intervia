@@ -27,7 +27,7 @@ function formatSlot(s: { start: string; end: string }): string {
     timeZone: "Asia/Seoul",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    hour12: true,
   });
   return `${start} ~ ${endTime}`;
 }
@@ -38,12 +38,15 @@ export function ScheduleBox({
   candidateId,
   candidateName,
   onChanged,
+  canModify = true,
 }: {
   schedule: Schedule;
   jobId: number;
   candidateId: number;
   candidateName: string;
   onChanged: () => void;
+  // 후보 종결(합격·불합격·지원취소) 여부 — false 면 일정 확정·변경 액션을 숨긴다.
+  canModify?: boolean;
 }) {
   const selected = schedule.selectedSlot;
   const [confirming, setConfirming] = useState<string | null>(null); // 진행 중인 slot 의 start
@@ -77,12 +80,20 @@ export function ScheduleBox({
     }
   };
 
-  const canConfirm =
+  const isConfirmed = schedule.status === "selected";
+  const isPendingOrCounter =
     schedule.status === "counter_proposed" || schedule.status === "pending";
+  // 종결(합격·불합격·지원취소)된 후보는 일정 확정·변경 액션을 숨긴다. 단 "시간이 지났다"는
+  // 이유만으로는 막지 않는다 — 당일 급하게 일정이 바뀌는 경우가 있어, 전형이 끝나기 전까지는
+  // 변경을 허용한다. (대면 평가가 완료되면 상위에서 일정 섹션 자체가 숨겨진다.)
+  const canConfirm = canModify && isPendingOrCounter;
+  // 대기/역제시뿐 아니라 확정(selected) 상태에서도 일정을 다시 잡을 수 있다.
+  // 확정 상태의 변경 = 재조정: 기존 확정이 취소되고 후보자·면접관에게 변경 안내 메일이 발송된다.
+  const canReschedule = canModify && (isPendingOrCounter || isConfirmed);
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span
           className={`text-xs px-2 py-0.5 rounded-full border ${SCHEDULE_STATUS_COLOR[schedule.status]}`}
         >
@@ -91,18 +102,14 @@ export function ScheduleBox({
         <span className="text-xs text-ink-muted">
           {schedule.round === "round1" ? "1차" : "2차"} 면접
         </span>
+        {selected && (
+          <span className="text-sm font-semibold text-ink">
+            · {formatSlot(selected)}
+          </span>
+        )}
       </div>
 
-      {selected ? (
-        <div className="bg-primary-soft/50 border border-primary/20 rounded-xl p-4">
-          <div className="text-xs text-primary-deep font-semibold mb-1">
-            확정 일시
-          </div>
-          <div className="text-base font-semibold text-ink">
-            {formatSlot(selected)}
-          </div>
-        </div>
-      ) : (
+      {!selected && (
         <div>
           <div className="text-xs font-semibold text-ink-muted mb-2">
             제시된 시간
@@ -159,17 +166,18 @@ export function ScheduleBox({
         </div>
       )}
 
-      {canConfirm && (
+      {canReschedule && (
         <div className="flex items-center gap-2 pt-1">
           <button
             onClick={() => setProposeOpen(true)}
             className="text-xs px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep font-medium hover:bg-primary-soft"
           >
-            🔄 일정 다시 잡기
+            {isConfirmed ? "📅 일정 변경" : "🔄 일정 다시 잡기"}
           </button>
           <span className="text-[11px] text-ink-muted">
-            새 시간을 다시 제안하거나, 협의된 시간을 직접 확정할 수 있습니다.
-            기존 제안은 취소됩니다.
+            {isConfirmed
+              ? "확정된 일정을 변경하면 기존 확정이 취소되고, 후보자·면접관에게 변경 안내 메일이 발송됩니다. 온라인 미팅 링크는 다시 등록해야 합니다."
+              : "새 시간을 다시 제안하거나, 협의된 시간을 직접 확정할 수 있습니다. 기존 제안은 취소됩니다."}
           </span>
         </div>
       )}

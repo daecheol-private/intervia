@@ -126,7 +126,22 @@ export async function POST(
 
   const now = new Date().toISOString();
 
-  // 같은 차수의 이전 active 스케쥴 cancel (다른 차수는 건드리지 않음)
+  // 기존 확정(selected) 일정이 있으면 이번 등록은 "재조정(변경)" — 메일을 변경형 문구로.
+  const priorSelected = await db
+    .select({ id: interviewSchedules.id })
+    .from(interviewSchedules)
+    .where(
+      and(
+        eq(interviewSchedules.candidateId, cid),
+        eq(interviewSchedules.round, round),
+        eq(interviewSchedules.status, "selected")
+      )
+    );
+  const isReschedule = priorSelected.length > 0;
+
+  // 같은 차수의 이전 active 스케쥴 cancel — 확정(selected) 포함.
+  // 확정 후 재조정 시 옛 확정 row 가 남아 selected 가 중복되거나 리마인더가 옛 시간으로
+  // 발송되는 것을 방지한다. cancelled 는 감사용으로 보존.
   await db
     .update(interviewSchedules)
     .set({ status: "cancelled", updatedAt: now })
@@ -136,7 +151,8 @@ export async function POST(
         eq(interviewSchedules.round, round),
         or(
           eq(interviewSchedules.status, "pending"),
-          eq(interviewSchedules.status, "counter_proposed")
+          eq(interviewSchedules.status, "counter_proposed"),
+          eq(interviewSchedules.status, "selected")
         )
       )
     );
@@ -192,6 +208,7 @@ export async function POST(
           address,
           forInterviewer: false,
           round,
+          isReschedule,
         });
         await sendMail({
           to: candidate.email,

@@ -240,6 +240,7 @@ export function InterviewQuestionsPanel({
                 jobId={jobId}
                 candidateId={candidateId}
                 candidateName={candidateName}
+                canModify={canModify}
                 onChanged={() => onScheduleChanged?.()}
               />
             </div>
