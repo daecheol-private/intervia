@@ -31,9 +31,6 @@ export default function AdminOrgsPage() {
   const [err, setErr] = useState("");
   const [grantId, setGrantId] = useState<number | null>(null);
   const [grantAmount, setGrantAmount] = useState("");
-  const [refundId, setRefundId] = useState<number | null>(null);
-  const [refundAmount, setRefundAmount] = useState("");
-  const [refundReason, setRefundReason] = useState("");
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editBizno, setEditBizno] = useState("");
@@ -46,7 +43,6 @@ export default function AdminOrgsPage() {
     setEditBizno(o.bizRegistrationNo ?? "");
     setEditDomain(o.emailDomain ?? "");
     setGrantId(null);
-    setRefundId(null);
   };
 
   const suspend = async (orgId: number, orgName: string) => {
@@ -269,34 +265,6 @@ export default function AdminOrgsPage() {
     void load();
   };
 
-  const refund = async (orgId: number) => {
-    const delta = parseInt(refundAmount, 10);
-    if (!Number.isInteger(delta) || delta === 0) {
-      setErr("0이 아닌 정수를 입력하세요. (양수=적립, 음수=회수)");
-      return;
-    }
-    if (refundReason.trim().length < 5) {
-      setErr("환불 사유는 5자 이상 입력하세요.");
-      return;
-    }
-    setBusy(true);
-    setErr("");
-    const res = await fetch(`/api/admin/orgs/${orgId}/refund`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ delta, reason: refundReason.trim() }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      setErr(await res.text());
-      return;
-    }
-    setRefundId(null);
-    setRefundAmount("");
-    setRefundReason("");
-    void load();
-  };
-
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {stepUpModal}
@@ -395,43 +363,6 @@ export default function AdminOrgsPage() {
                     </button>
                   </div>
                 </div>
-              ) : refundId === o.id ? (
-                <div className="flex flex-col gap-2">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    className="w-full border border-warning/40 rounded-lg px-3 py-2 text-sm text-right font-mono"
-                    placeholder="±수량"
-                    value={refundAmount}
-                    onChange={(e) => setRefundAmount(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    className="w-full border border-warning/40 rounded-lg px-3 py-2 text-sm"
-                    placeholder="환불 사유 (5자+, 필수)"
-                    value={refundReason}
-                    onChange={(e) => setRefundReason(e.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => refund(o.id)}
-                      disabled={busy}
-                      className="flex-1 px-3 py-2 text-sm bg-warning hover:bg-warning text-white rounded-lg disabled:opacity-50 font-medium"
-                    >
-                      환불
-                    </button>
-                    <button
-                      onClick={() => {
-                        setRefundId(null);
-                        setRefundAmount("");
-                        setRefundReason("");
-                      }}
-                      className="px-4 py-2 text-sm bg-card border border-border-strong hover:bg-surface-alt rounded-lg"
-                    >
-                      취소
-                    </button>
-                  </div>
-                </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -439,12 +370,6 @@ export default function AdminOrgsPage() {
                     className="px-3 py-2 text-sm bg-primary hover:bg-primary-deep text-surface rounded-lg font-medium"
                   >
                     충전 / 조정
-                  </button>
-                  <button
-                    onClick={() => setRefundId(o.id)}
-                    className="px-3 py-2 text-sm bg-card border border-warning/40 hover:bg-warning-soft text-warning rounded-lg"
-                  >
-                    환불
                   </button>
                   {o.suspendedAt ? (
                     <button
@@ -622,42 +547,6 @@ export default function AdminOrgsPage() {
                         취소
                       </button>
                     </div>
-                  ) : refundId === o.id ? (
-                    <div className="flex flex-col gap-1 items-end">
-                      <div className="flex gap-1">
-                        <input
-                          type="number"
-                          className="w-24 border border-warning/40 rounded px-2 py-1 text-xs text-right font-mono"
-                          placeholder="±수량"
-                          value={refundAmount}
-                          onChange={(e) => setRefundAmount(e.target.value)}
-                        />
-                        <button
-                          onClick={() => refund(o.id)}
-                          disabled={busy}
-                          className="px-2 py-1 text-xs bg-warning hover:bg-warning text-white rounded disabled:opacity-50"
-                        >
-                          환불
-                        </button>
-                        <button
-                          onClick={() => {
-                            setRefundId(null);
-                            setRefundAmount("");
-                            setRefundReason("");
-                          }}
-                          className="px-2 py-1 text-xs bg-card border border-border-strong hover:bg-surface-alt rounded"
-                        >
-                          취소
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        className="w-64 border border-warning/40 rounded px-2 py-1 text-xs"
-                        placeholder="환불 사유 (5자+, 필수)"
-                        value={refundReason}
-                        onChange={(e) => setRefundReason(e.target.value)}
-                      />
-                    </div>
                   ) : (
                     <div className="flex gap-1 justify-end flex-wrap">
                       <button
@@ -672,17 +561,17 @@ export default function AdminOrgsPage() {
                       >
                         관리자 이전
                       </Link>
+                      <Link
+                        href={`/admin/orgs/${o.id}/payments`}
+                        className="px-2 py-1 text-xs bg-card border border-border-strong hover:bg-surface-alt text-ink-soft rounded"
+                      >
+                        결제내역
+                      </Link>
                       <button
                         onClick={() => setGrantId(o.id)}
                         className="px-2 py-1 text-xs bg-card border border-border-strong hover:bg-surface-alt text-ink-soft rounded"
                       >
                         충전/조정
-                      </button>
-                      <button
-                        onClick={() => setRefundId(o.id)}
-                        className="px-2 py-1 text-xs bg-card border border-warning/40 hover:bg-warning-soft text-warning rounded"
-                      >
-                        환불
                       </button>
                       {o.suspendedAt ? (
                         <button

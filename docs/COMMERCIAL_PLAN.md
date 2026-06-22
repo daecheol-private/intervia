@@ -632,3 +632,16 @@
     - **베타 종료 = 2단계**: ① `/admin/pricing` 에서 AI 면접·대면 면접 평가를 **30** 으로 저장(가격·취소선 복귀) ② `lib/beta.ts` `BETA.active=false` 재배포(배지 제거).
     - (1단계 토글로 끝내고 싶으면 운영 `token_pricing` 의 interview·offline override 행을 삭제 → 이후 가격이 `lib/beta.ts` 단일 제어.)
   - 검증: `npx tsc --noEmit` 통과. 운영 배포(`e6fd5b1`) 후 intervia.kr 에서 "오픈베타"·정가 취소선(`>3,000<`)·베타가(`>1,000<`/`>10<`) 렌더 확인. 코드 DB 변경 없음(운영 단가는 관리자 UI 로 조정).
+- 2026-06-22 — **토큰 충전 결제 연동 (토스페이먼츠, 카드 단건결제)** — 사업자등록 완료 후 자가결제 도입. 그동안 system_admin 수동 충전(`grant-tokens`)만 가능하던 것을 org_admin 자가결제로 확장. **DB 스키마 변경 없음** — 기존 `payment_orders` 테이블 + `applyChargePayment()`(멱등) 재사용. 토스 `orderId = IV-{payment_orders.id}`(PK 가 곧 전역 유니크 주문번호, 마이그레이션 회피), paymentKey 는 기존 `provider_ref` 컬럼에 저장.
+  - **플로우**: `/org/tokens` 카드 클릭 → `POST /checkout`(pending 주문) → 토스 v2 결제창(CDN `js.tosspayments.com/v2/standard`, npm 의존 없음) → successUrl `/org/tokens/success` → `POST /confirm`(토스 승인 + 토큰지급) / failUrl `/org/tokens/fail`.
+  - **보안 2중**: ① checkout 은 허용 금액(`CHARGE_PACKAGES` = 5만~100만원)만 주문 생성 ② confirm 은 클라이언트 금액 불신, **DB `amount_krw`** 로 토스 승인(토스가 실제 결제액 대조). 지급은 `applyChargePayment(paymentOrderId)` 멱등이라 새로고침·재호출·동시요청 이중지급 0.
+  - **신규**: `lib/toss.ts`(승인 REST + orderId 인코딩), `app/api/orgs/tokens/checkout`·`confirm/route.ts`, `app/org/tokens/ChargePanel.tsx`·`success`·`fail/page.tsx`. `lib/beta.ts` 에 `CHARGE_PACKAGES`(단일 소스, UI 하드코딩 제거). env: `NEXT_PUBLIC_TOSS_CLIENT_KEY`·`TOSS_SECRET_KEY`(미설정 시 "준비 중" 표시).
+  - **범위 제외**(사용자 확정): 정기결제·간편결제·계좌이체/가상계좌·세금계산서/현금영수증. 권한 org_admin 만(멤버는 기존 충전요청 메일 유지).
+  - **검증**: `tsc` 통과 + 로컬 dev 인증세션으로 — checkout(50,000→`IV-00000001` 발급) / 비허용금액(400) / confirm 가드 5종(금액위변조 400·orderId형식 400·미존재 404·키미설정 402+failed전이·failed재확인 400) 전부 통과. **토스 실승인(DONE) 경로는 토스 테스트 키 필요 — 미검증.**
+  - **⚠️ 미배포(게이트)**: 돈 관련 위험변경이라 로컬까지만. 라이브: ① 토스 가맹점 계약·심사 ② Vercel env 에 라이브 `TOSS_SECRET_KEY`/`NEXT_PUBLIC_TOSS_CLIENT_KEY` 등록 ③ 승인 후 배포. 코드 DB 변경 없음.
+  - **충전 DONE 경로 실검증 완료**(로컬, 사용자 토스 테스트키): 100,000원 결제 → `payment_orders` #7 `paid`(실 paymentKey 저장) + 토큰 1,050 지급 확인.
+- 2026-06-22 — **결제 취소(전액 환불) 추가** — 결제의 짝. **system_admin 전용 + step-up**, 전액만(부분환불 추후). 토스 결제취소 API(`POST /v1/payments/{paymentKey}/cancel`, 멱등키 `cancel-IV-{id}`) → 카드사 실환불 + 지급 토큰 회수. **DB 변경 없음**.
+  - **상태머신**(이중환불 차단): `paid` 만 환불 → `paid→cancelled` 조건부 claim(`returning` 1건만 통과)으로 토스 취소 1회만 호출 → 토큰 회수(`reverseChargePayment`, refType=`payment_cancel` 멱등). 토스 실패 시 `paid` 복구, `ALREADY_CANCELED_PAYMENT` 는 성공으로 간주, 이미 취소건은 멱등 성공. 토큰 회수로 잔액 음수 가능(후불 정책).
+  - **신규**: `lib/toss.ts` `cancelTossPayment`, `lib/tokens.ts` `reverseChargePayment`, `GET /api/admin/orgs/[id]/payments`, `POST /api/admin/payments/[id]/cancel`, `app/admin/orgs/[id]/payments/page.tsx`(결제내역+환불, step-up), orgs 목록에 "결제내역" 링크.
+  - **검증**: `tsc` 통과 + 가드(sysadmin step-up 미완 403 `step_up_required` / org_admin 403 / 결제내역 조회 동작). 실 토스 취소+회수는 step-up(비번 재입력) 뒤라 UI 수동 검증 몫. 미배포(결제와 동일 게이트).
+  - **중복 "환불" 버튼 제거**(같은 날, 사용자 지적): `/admin/orgs` 의 기존 "환불" 버튼은 돈을 안 움직이고 토큰만 가감(=충전/조정과 중복)인데 이름이 오해를 부름 → **버튼·`/api/admin/orgs/[id]/refund` 라우트·`refundTokens()` 전부 제거**. 토큰 수동 +/− 는 충전/조정(`grant-tokens`), 카드 실환불은 결제취소(`payment.cancel`)로 일원화. (6-A-1 의 standalone refund 는 이로써 폐지.) `refundFeature`(기능 실패 자동환불)는 별개 — 유지.

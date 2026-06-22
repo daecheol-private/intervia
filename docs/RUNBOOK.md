@@ -32,7 +32,8 @@
 | 전체 강제 로그아웃 | `POST /api/admin/sessions/all` | body `confirm:"FORCE-LOGOUT-ALL"` + 사유. 세션 탈취·키 유출 시 |
 | 특정 사용자 로그아웃 | `DELETE /api/admin/users/[id]/sessions` | |
 | 법인 정지/재개 | `POST`/`DELETE /api/admin/orgs/[id]/suspend` | 정지 시 해당 법인 전 세션 즉시 만료 + 로그인 차단 (system_admin 우회) |
-| 토큰 환불/조정 | `/api/admin/orgs/[id]/refund`, grant-tokens | 사유 필수 + 감사 로그 |
+| 토큰 가감(충전/조정) | `POST /api/admin/orgs/[id]/grant-tokens` (step-up) | 수동 +/− 조정, 감사 로그 |
+| 결제 취소(카드 환불) | `POST /api/admin/payments/[id]/cancel` (step-up) | 토스 결제취소 + 지급 토큰 회수, `paid`만, 감사 로그. 조회: `GET /api/admin/orgs/[id]/payments` 또는 `/admin/orgs/[id]/payments` |
 | 계정 잠금 해제 | `/admin/locks` → `POST /api/admin/locks/unlock` | 락아웃 DoS 대응 |
 | 큐 수동 가동 | `POST /api/cron/process-screenings` (Bearer CRON_SECRET) | 큐 멈춤 시 강제 1회 |
 | 비밀번호 리셋 메일 | `POST /api/admin/users/[id]/password-reset` | |

@@ -186,6 +186,53 @@ export async function applyChargePayment(args: {
   return { alreadyApplied: false, base, bonus, balance };
 }
 
+/**
+ * 결제 취소 — applyChargePayment 의 대칭. 충전으로 지급했던 토큰을 회수(음수 적재).
+ * 멱등: 같은 paymentOrderId 로 두 번 호출해도 한 번만 회수 (charge 와 별도 키 refType="payment_cancel").
+ * 이미 토큰을 써서 잔액이 모자라면 음수로 떨어진다(후불 정책 — 신규 유료요청은 차단됨).
+ */
+export async function reverseChargePayment(args: {
+  orgId: number;
+  paymentOrderId: number;
+  tokens: number; // 회수할 토큰 (충전 시 지급분 = payment_orders.tokens)
+  amountKrw: number;
+  userId?: number | null;
+}): Promise<{ alreadyReversed: boolean; reversed: number; balance: number }> {
+  const [existing] = await db
+    .select({ id: tokenLedger.id })
+    .from(tokenLedger)
+    .where(
+      and(
+        eq(tokenLedger.orgId, args.orgId),
+        eq(tokenLedger.reason, "refund"),
+        eq(tokenLedger.refType, "payment_cancel"),
+        eq(tokenLedger.refId, args.paymentOrderId)
+      )
+    );
+  if (existing) {
+    const b = await getBalance(args.orgId);
+    return { alreadyReversed: true, reversed: 0, balance: b };
+  }
+  if (args.tokens <= 0) {
+    const b = await getBalance(args.orgId);
+    return { alreadyReversed: false, reversed: 0, balance: b };
+  }
+  const { balance, applied } = await writeLedgerIdempotent({
+    orgId: args.orgId,
+    delta: -args.tokens,
+    reason: "refund",
+    refType: "payment_cancel",
+    refId: args.paymentOrderId,
+    userId: args.userId,
+    memo: `결제 취소 — ${args.amountKrw.toLocaleString()}원 환불 (주문 #${args.paymentOrderId}, ${args.tokens} 토큰 회수)`,
+  });
+  if (!applied) {
+    // 동시 호출이 먼저 회수함
+    return { alreadyReversed: true, reversed: 0, balance };
+  }
+  return { alreadyReversed: false, reversed: args.tokens, balance };
+}
+
 export async function ensureWallet(orgId: number): Promise<number> {
   const [row] = await db
     .select({ balance: tokenWallets.balance })
@@ -512,56 +559,6 @@ export async function adjustTokens(args: {
     memo: args.memo ?? null,
   });
   return { balance };
-}
-
-/**
- * 시스템 관리자 수동 환불. `adjustTokens` 와 다른 점:
- *   - ledger reason 이 명확히 `refund` (집계·감사 시 일반 조정과 구분)
- *   - 사유 (reason) 필수. 5자 이상.
- *   - 원본 ledger id 옵션 — 어떤 거래 환불인지 추적 (refType="manual_refund", refId=원본 ledger.id)
- *   - delta 는 부호 자유:
- *     + 양수: 토큰을 다시 적립 (예: 호의 환불, 서비스 장애 보상)
- *     - 음수: 토큰을 회수 (예: 결제 취소 → 외부로 환불해줬으니 토큰 회수)
- *
- * 멱등 X — 같은 사용자가 같은 이유로 두 번 호출하면 두 번 적용됨.
- * 운영 가드: API 라우트에서 sysadmin role 확인 + 감사 로그 작성 필수.
- */
-export async function refundTokens(args: {
-  orgId: number;
-  delta: number;
-  reason: string;
-  userId: number;
-  sourceLedgerId?: number | null;
-}): Promise<{ balance: number; ledgerId: number }> {
-  const reason = args.reason.trim();
-  if (reason.length < 5) {
-    throw new Error("환불 사유는 5자 이상이어야 합니다.");
-  }
-  if (!Number.isSafeInteger(args.delta) || args.delta === 0) {
-    throw new Error("환불 수량은 0이 아닌 안전한 정수여야 합니다.");
-  }
-  const current = await ensureWallet(args.orgId);
-  const next = current + args.delta;
-  return await db.transaction(async (tx) => {
-    await tx
-      .update(tokenWallets)
-      .set({ balance: next, updatedAt: sql`CURRENT_TIMESTAMP` })
-      .where(eq(tokenWallets.orgId, args.orgId));
-    const inserted = await tx
-      .insert(tokenLedger)
-      .values({
-        orgId: args.orgId,
-        delta: args.delta,
-        reason: "refund",
-        refType: "manual_refund",
-        refId: args.sourceLedgerId ?? null,
-        balanceAfter: next,
-        createdByUserId: args.userId,
-        memo: reason,
-      })
-      .returning({ id: tokenLedger.id });
-    return { balance: next, ledgerId: inserted[0].id };
-  });
 }
 
 export async function listLedger(

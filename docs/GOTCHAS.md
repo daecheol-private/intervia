@@ -174,10 +174,11 @@ TOTP 코드 검증은 `verifyCode` 직접 호출 금지. `import { verifyAndCons
 사용 — 검증 성공한 timestep 을 `users.last_totp_counter` 에 기록하고 같은/과거 코드 재사용을 거부.
 
 ### (e) 토큰 차감/적립 멱등성
-`chargeFeature`/`refundFeature`/`grantWelcomeBonus`/`applyChargePayment` 는 `writeLedgerIdempotent`
-(INSERT 먼저 → `token_ledger_idem_uq` 부분 유니크 인덱스 위반 시 지갑 미변경)로 동시 중복 요청의
-이중 차감/적립을 차단. 새 멱등 차감 추가 시 동일 패턴(non-null refType + refId) 사용. 반복 허용
-항목(admin_adjust refType=null, manual_refund)은 인덱스 예외라 `writeLedger`/`refundTokens` 그대로.
+`chargeFeature`/`refundFeature`/`grantWelcomeBonus`/`applyChargePayment`/`reverseChargePayment`(결제취소
+토큰회수, refType=`payment_cancel`) 는 `writeLedgerIdempotent`(INSERT 먼저 → `token_ledger_idem_uq`
+부분 유니크 인덱스 위반 시 지갑 미변경)로 동시 중복 요청의 이중 차감/적립을 차단. 새 멱등 차감 추가 시
+동일 패턴(non-null refType + refId) 사용. 반복 허용 항목(admin_adjust refType=null)은 인덱스 예외라
+`writeLedger`(adjustTokens) 그대로. (manual_refund 는 옛 refundTokens 잔재 — 2026-06-22 제거됨.)
 
 ### (f) 비밀번호 변경 → 세션 회전
 `change-password` 는 변경 후 **다른 기기 세션 전체 무효화 + 현재 토큰 회전**(탈취 세션 차단).

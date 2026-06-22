@@ -917,8 +917,7 @@
   > ✅ DELETE suspend → 200, admin-b 로그인 → 200.
 - [x] **TC-18.1.5** 법인 영구삭제 → **정지 상태만**, reason(5자+)+confirm=법인명, step-up, system_admin 멤버는 분리, 감사로그 보존
   > ✅ 임시법인 C: 미정지→400, 정지 후 wrong confirm→400, step-up+confirm=법인명→204, org/멤버 삭제, audit org.delete 1건. (system_admin 멤버 분리는 코드 — C엔 없음)
-- [x] **TC-18.1.6** refund → refundTokens(멱등 아님, reason 5자+), 감사 `tokens.refund`
-  > ✅ refund +50 → balance, ledger reason=refund. 짧은 사유 → 400.
+- [x] **TC-18.1.6** ~~refund → refundTokens~~ **제거됨(2026-06-22)** — 별도 "환불" 버튼/`/api/admin/orgs/[id]/refund` 라우트/`refundTokens()` 삭제(충전/조정과 중복, 돈 안 움직이는데 "환불" 이름이 오해). 토큰 수동 +/− 는 grant-tokens(충전/조정), 카드 실환불은 결제취소(payment.cancel)로 일원화.
 
 ### 18.2 사용자 관리 (`/api/admin/users`, `/api/users/[id]`)
 - [x] **TC-18.2.1** GET → 전 사용자 검색, **SYSTEM_ADMIN_EMAIL 보호계정 목록 제외**

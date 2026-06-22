@@ -158,6 +158,14 @@ body {
     color: var(--ink);
     font-weight: 700;
   }
+
+  /* Tailwind v4 는 Preflight 에서 button 의 기본 cursor:pointer 를 뺐다 → 클릭 가능한
+     버튼에 손모양이 안 떠 눌러야 하는지 안 보인다. 전역 복원(비활성 버튼은 제외 —
+     disabled:cursor-not-allowed 유틸이 그대로 우선). <a> 링크는 브라우저 기본이라 무관. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 /* 모바일 input 줌 방지 */

@@ -49,6 +49,8 @@
 | PATCH | `/api/orgs/join-requests/[id]` | 🛡️ | `{action: 'approve'|'reject'}` |
 | GET | `/api/orgs/members?orgId?` | 🛡️ | 자기 법인 멤버 (system_admin은 orgId 지정 가능) |
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
+| POST | `/api/orgs/tokens/checkout` | 🏢 (admin) | 토스 결제 시작 — `{amountKrw}`(허용 패키지만, `CHARGE_PACKAGES`). pending `payment_orders` 생성 후 `{orderId(=IV-{id}), amount, orderName, customerEmail, customerName}` 반환. 토큰 지급은 confirm 에서 |
+| POST | `/api/orgs/tokens/confirm` | 🏢 (admin) | 결제 성공 리다이렉트 후 승인 — `{paymentKey, orderId, amount}`. 금액은 **DB값(권위)** 으로 토스 승인 → `applyChargePayment`(멱등) 로 토큰 지급. 금액 위변조 400 / 미존재·타법인 404 / 승인실패 402(주문 failed) / 이미 paid 면 멱등 성공 |
 | GET | `/api/orgs/me/setup-progress` | 🔒 | 첫 실행 가이드 진행 상태 `{show, step1~4, firstJobId}` — 플로팅 위젯(`SetupGuideWidget`)용. 단계 판정은 대시보드 setup1~4 와 동일. `show`는 완료 여부와 무관 — 본인의 `users.setup_guide_dismissed_at` NULL 인 동안 true. system_admin/무소속은 `{show:false}` |
 | POST | `/api/orgs/me/setup-progress` | 🔒 | 가이드 숨기기 — 본인 `users.setup_guide_dismissed_at` 기록 (**개인 단위** — 본인 화면의 hero/strip/플로팅만 사라짐, 다른 구성원엔 영향 없음. 멤버도 가능) |
 | GET | `/api/orgs/me/tour-targets` | 🔒 | 인터랙티브 가이드(둘러보기) 대상 `{firstJobId, screenedCandidateId}` — 시작 가이드 단계(`guide-steps`) 런처용. 이력서 업로드 시나리오가 이동할 최신 공고 + AI 면접 시나리오 대상(`stage='screened'` 미종결 후보). 없으면 해당 시나리오 비활성. system_admin/무소속은 둘 다 null. **멤버는 접근 가능한 공고(PIN 없거나 본인이 면접관)로 한정** — 접근 불가 대상으로 안내해 따라하기→403→무한 리다이렉트 나던 것 방지 (`isAdmin`은 전체) |
@@ -175,6 +177,8 @@
 | GET | `/api/admin/pricing` | 🔒 | 단가 조회 (전 로그인 사용자) |
 | PATCH | `/api/admin/pricing` | 👑 | `{job_post?, resume_upload?, interview?, interview_question_gen?}` 0 이상 정수 |
 | POST | `/api/admin/orgs/[id]/grant-tokens` | 👑 | `{delta, memo?}` 수동 충전/조정 (admin_adjust ledger) |
+| GET | `/api/admin/orgs/[id]/payments` | 👑 | 법인 결제(충전) 주문 내역 — 환불 대상 식별용 |
+| POST | `/api/admin/payments/[id]/cancel` | 👑 🔐 | 결제 취소(전액 환불) — 토스 결제취소 API + 지급 토큰 회수(`reverseChargePayment`, 멱등). `paid` 만 가능(paid→cancelled 조건부 claim), `{reason(5자+)}`. 토스 실패 시 paid 복구, 이미 취소면 멱등 성공 |
 | DELETE | `/api/admin/orgs/[id]` | 👑 🔐 | 법인 영구 삭제. **정지(suspended) 상태만**. `{reason(5자+), confirm=법인명}`. 멤버 계정도 함께 삭제(system_admin 멤버는 분리). 후보자 파일 폐기 + cascade. 감사 로그 보존 |
 | DELETE | `/api/admin/candidates/[id]` | 👑 🔐 | 후보자 영구 삭제 (PIPA 권리요청). `{reason(5자+), confirm=이메일/이름}`. cross-org |
 | DELETE | `/api/users/[id]` | 👑 🔐 | 계정 영구 삭제. 기본은 **비활성(disabled) 상태만**. `{reason(5자+), confirm=이메일, force?}` — **`force:true` 면 활성/대기 계정도 즉시 삭제**(사용자 관리 "강제 삭제" 버튼; 마지막 org_admin 정리용). 본인·system_admin·**`SYSTEM_ADMIN_EMAIL` 보호 계정** 불가 |
