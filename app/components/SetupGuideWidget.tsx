@@ -111,6 +111,10 @@ export function SetupGuideWidget() {
   const total = steps.length;
   const doneCount = steps.filter((s) => s.done).length;
   const active = steps.find((s) => !s.done) ?? null;
+  // 모든 단계 완료 = 셋업이 끝난 법인. 이 시점엔 위젯 역할이 "셋업 안내"에서
+  // "사용법 복습/학습"으로 바뀐다 — 뒤늦게 합류한 법인담당자도 따라하기로 기능을
+  // 익히도록 진행 카운트(4/4) 대신 학습 톤으로 전환. (강조점: 체크리스트 → 따라하기)
+  const allDone = active == null;
 
   // 대시보드는 미완료 시 자체 가이드(hero/strip)가 있어 중복 방지 —
   // 모든 단계 완료 후엔 자체 가이드가 사라지므로 플로팅이 이어받는다.
@@ -188,11 +192,15 @@ export function SetupGuideWidget() {
         onClick={toggle}
         onPointerDown={startDrag}
         style={posStyle}
-        aria-label="시작 가이드 펼치기 (드래그로 이동)"
+        aria-label={
+          allDone
+            ? "사용법 둘러보기 펼치기 (드래그로 이동)"
+            : "시작 가이드 펼치기 (드래그로 이동)"
+        }
         className={`fixed ${posClass} z-30 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary text-surface text-xs font-semibold shadow-lg hover:bg-primary-deep transition-colors touch-none select-none cursor-grab active:cursor-grabbing`}
       >
         <Sparkles className="w-3.5 h-3.5" />
-        시작 가이드 {doneCount}/{total}
+        {allDone ? "사용법 둘러보기" : `시작 가이드 ${doneCount}/${total}`}
       </button>
     );
   }
@@ -213,7 +221,7 @@ export function SetupGuideWidget() {
       >
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-deep">
           <Sparkles className="w-3.5 h-3.5" />
-          시작 가이드 · {doneCount}/{total} 완료
+          {allDone ? "사용법 둘러보기" : `시작 가이드 · ${doneCount}/${total} 완료`}
         </span>
         <button
           type="button"
@@ -230,9 +238,9 @@ export function SetupGuideWidget() {
         variant="widget"
       />
       <footer className="px-4 pb-3 pt-1 border-t border-border-default">
-        {active == null && (
+        {allDone && (
           <p className="text-[11px] text-primary-deep font-medium pt-2">
-            🎉 모든 단계가 완료된 상태예요. 각 단계를 눌러 사용법을 다시 볼 수 있어요.
+            설정은 모두 완료된 법인이에요. 각 단계를 눌러 기능 사용법을 익히거나 다시 볼 수 있어요.
           </p>
         )}
         {confirmHide ? (
