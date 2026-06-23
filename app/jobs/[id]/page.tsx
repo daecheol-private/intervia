@@ -1484,18 +1484,6 @@ export default function JobDetailPage() {
         />
       </div>
 
-      <FunnelPanel
-        jobId={jobId}
-        refreshKey={funnelKey}
-        activeStage={filter}
-        onStageSelect={(s) => {
-          setFilter(s as FilterValue);
-          // 목록이 펀널보다 한참 아래라 클릭 효과가 보이도록 스크롤.
-          if (s !== "all")
-            listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }}
-      />
-
       {/* 데스크톱: 동의 게이트 + 업로드 영역 (모바일 완전 숨김 — 업로드는 PC 전용)
          접힘 상태는 공고별 localStorage 기억 — 업로드가 끝난 공고에서 목록 스크롤 절약 */}
       <div className="hidden sm:block">
@@ -1729,6 +1717,18 @@ export default function JobDetailPage() {
       </Section>
       </div>
       {/* /데스크톱 업로드 영역 */}
+
+      <FunnelPanel
+        jobId={jobId}
+        refreshKey={funnelKey}
+        activeStage={filter}
+        onStageSelect={(s) => {
+          setFilter(s as FilterValue);
+          // 목록이 펀널보다 한참 아래라 클릭 효과가 보이도록 스크롤.
+          if (s !== "all")
+            listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+      />
 
       {/* 필터 — 단일 선택. 칩(대기주체)과 드롭다운(단계·결과 상세)이 같은 상태를 공유하며,
          어디서든 새로 고르면 이전 필터를 대체한다 (조합 없음 → 리셋 불필요). */}
