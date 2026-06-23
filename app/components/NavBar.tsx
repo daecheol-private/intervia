@@ -116,8 +116,10 @@ export function NavBar({
     pathname.startsWith("/schedule/") ||
     pathname.startsWith("/apply/") ||
     pathname.startsWith("/unsubscribe/") ||
-    // 후보자 상세는 좌측 레일 셸(AppShell)을 쓰므로 전역 상단바 숨김 (중복 방지).
-    pathname.startsWith("/candidates/")
+    // 후보자 상세·공고 상세는 좌측 레일 셸(AppShell)을 쓰므로 전역 상단바 숨김 (중복 방지).
+    // 공고는 /jobs/<숫자> (상세·edit·report·compare) 만 — /jobs/new 는 전역 네비 유지.
+    pathname.startsWith("/candidates/") ||
+    /^\/jobs\/\d+(\/|$)/.test(pathname)
   ) {
     return null;
   }

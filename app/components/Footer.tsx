@@ -11,8 +11,9 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
     pathname.startsWith("/interview/") ||
     pathname.startsWith("/schedule/") ||
     pathname.startsWith("/apply/") ||
-    // 후보자 상세는 AppShell 을 쓰므로 전역 푸터 숨김.
-    pathname.startsWith("/candidates/")
+    // 후보자 상세·공고 상세(/jobs/<숫자>)는 AppShell 을 쓰므로 전역 푸터 숨김.
+    pathname.startsWith("/candidates/") ||
+    /^\/jobs\/\d+(\/|$)/.test(pathname)
   ) {
     return null;
   }

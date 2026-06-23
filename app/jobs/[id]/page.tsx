@@ -16,7 +16,15 @@ import { notify, confirmDialog } from "@/app/components/Dialog";
 import Link from "next/link";
 import { compositeScore, formatKstDateTime } from "@/lib/utils";
 import { isEncryptedZipFile } from "@/lib/zip-encrypted-client";
-import { Loader2, CalendarClock, BarChart3, Pencil, Trash2 } from "lucide-react";
+import {
+  Loader2,
+  CalendarClock,
+  BarChart3,
+  Pencil,
+  Trash2,
+  Inbox,
+  X,
+} from "lucide-react";
 import {
   STAGE_LABELS,
   STAGE_GROUPS,
@@ -40,7 +48,6 @@ import ApplyIntakeBanner from "./ApplyIntakeBanner";
 import { McqPanel } from "./mcq-panel";
 import { BulkDecisionModal, SchedulePropose } from "./bulk-actions";
 import { candidateSearchExtras } from "./candidate-scores";
-import { Section } from "@/app/candidates/[id]/shared";
 import { ApplicantConsentGate } from "./consent-gate";
 import { FunnelPanel } from "./funnel-panel";
 import { InterviewersInline, LifecyclePanel } from "./lifecycle-panel";
@@ -62,6 +69,10 @@ export default function JobDetailPage() {
   const jobId = params.id;
   const [job, setJob] = useState<Job | null>(null);
   const [candidatesList, setCandidatesList] = useState<Candidate[]>([]);
+  // 후보 목록 첫 로드 완료 여부 — "아직 로딩 중(0)" 과 "정말 0명" 을 구분(빈 상태 히어로 게이트).
+  const [candidatesLoaded, setCandidatesLoaded] = useState(false);
+  // 이력서 받기 드로어 열림 상태 — 후보 1명 이상일 때 헤더 버튼으로 연다. 0명이면 인라인 히어로로 대체.
+  const [intakeOpen, setIntakeOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   // 업로드 진행 상태 — null=비활성. phase: 'uploading'(파일 전송) → 'processing'(서버 등록).
   const [uploadProgress, setUploadProgress] = useState<{
@@ -173,6 +184,7 @@ export default function JobDetailPage() {
   const loadCandidates = useCallback(async () => {
     const r = await fetch(`/api/jobs/${jobId}/candidates`);
     if (!r.ok) return;
+    setCandidatesLoaded(true);
     const text = await r.text();
     // 전체 조회를 했으면(직접 호출 포함) 안전망 타이머를 리셋한다.
     lastFullAtRef.current = Date.now();
@@ -1329,6 +1341,11 @@ export default function JobDetailPage() {
     );
   };
 
+  // 후보 0명(빈 상태 히어로) vs 1명+(작업대: 펀널·목록·드로어) 분기.
+  // isEmpty 는 첫 로드 완료 후에만 true — 로딩 중 0 과 진짜 0 을 구분한다.
+  const hasCands = candidatesList.length > 0;
+  const isEmpty = candidatesLoaded && candidatesList.length === 0;
+
   return (
     <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {/* 만료 결정 모달 — closesAt 지났는데 아직 active 면 노출. 사용자가 닫을 수 있음. */}
@@ -1399,6 +1416,17 @@ export default function JobDetailPage() {
             </div>
           </div>
           <div className="flex gap-2 flex-wrap sm:shrink-0 items-center">
+            {/* 이력서 받기 — 후보가 1명+ 일 때 헤더 1차 버튼(클릭 시 드로어).
+               0명이면 헤더 버튼 대신 아래 인라인 히어로로 받는다. */}
+            {hasCands && (
+              <button
+                onClick={() => setIntakeOpen(true)}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-surface hover:bg-primary-deep text-sm font-medium shadow-sm"
+              >
+                <Inbox className="w-4 h-4" />
+                이력서 받기
+              </button>
+            )}
             {/* 면접 일정 — 확정된 면접이 있을 때만 표시하고, 색을 채워 눈에 띄게. */}
             {(() => {
               // 확정 면접 대기 = 1차(stage=round1_waiting) + 2차(round1_passed + round2 확정).
@@ -1484,21 +1512,49 @@ export default function JobDetailPage() {
         />
       </div>
 
-      {/* 데스크톱: 동의 게이트 + 업로드 영역 (모바일 완전 숨김 — 업로드는 PC 전용)
-         접힘 상태는 공고별 localStorage 기억 — 업로드가 끝난 공고에서 목록 스크롤 절약 */}
-      <div className="hidden sm:block">
-      {/* 이력서를 Intervia 에 올리는 두 경로(지원 링크 / 직접 업로드)를 한 섹션 안에서 나눈다. */}
-      <Section
-        title="이력서 받기"
-        storageKey={`job-upload:${jobId}`}
-        summary={
-          uploading
-            ? `업로드 진행 중… ${uploadProgress?.pct ?? 0}%`
-            : !canUpload
-              ? "AI 평가 적용 고지 확인 필요"
-              : undefined
-        }
-      >
+      {/* 이력서 받기 — 데스크톱 전용. 0명: 헤더 아래 인라인 히어로 / 1명+: 헤더 버튼으로 여는
+         우측 슬라이드 패널. 업로드 영역(드롭존 ref)은 단일 인스턴스라 두 모드가 같은 본문을
+         공유한다. 업로드 진행 중에는(uploading) 빈 상태가 풀려도 진행률이 사라지지 않게 계속 표시.
+         두 경로(지원 링크 / 직접 업로드)는 순서가 아니라 택일 — 본문에서 '또는'으로 구분. */}
+      {(isEmpty || intakeOpen || uploading) && (
+        <div
+          className={
+            intakeOpen
+              ? "fixed inset-0 z-50 hidden sm:flex justify-end"
+              : "hidden sm:block mt-3"
+          }
+        >
+          {intakeOpen && (
+            <div
+              className="absolute inset-0 bg-ink/40"
+              onClick={() => setIntakeOpen(false)}
+              aria-hidden
+            />
+          )}
+          <div
+            className={
+              intakeOpen
+                ? "relative w-full max-w-xl h-full bg-card shadow-2xl overflow-y-auto p-6"
+                : "bg-card border border-border-default rounded-2xl shadow-sm p-6"
+            }
+          >
+            <div className="flex items-start justify-between gap-3 mb-5">
+              <div>
+                <h2 className="text-lg font-bold text-ink">이력서 받기</h2>
+                <p className="text-sm text-ink-muted mt-1">
+                  지원 링크를 공유하거나, 보유한 이력서 파일을 직접 올려 평가를 시작하세요.
+                </p>
+              </div>
+              {intakeOpen && (
+                <button
+                  onClick={() => setIntakeOpen(false)}
+                  aria-label="이력서 받기 닫기"
+                  className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
       {/* 경로 ① 지원자가 직접 올리게: 공개 지원 링크 */}
       <div data-tour="apply-link">
         <p className="text-sm font-semibold text-ink">지원 링크로 직접 받기</p>
@@ -1714,10 +1770,22 @@ export default function JobDetailPage() {
           </div>
         )}
       </div>
-      </Section>
-      </div>
-      {/* /데스크톱 업로드 영역 */}
+          </div>
+        </div>
+      )}
+      {/* 모바일 빈 상태 — 업로드는 PC 전용이라 안내만 노출 */}
+      {isEmpty && (
+        <div className="sm:hidden mt-3 rounded-2xl border border-border-default bg-card p-6 text-center text-sm text-ink-muted">
+          아직 후보자가 없습니다.
+          <br />
+          이력서 업로드는 PC 에서 가능합니다.
+        </div>
+      )}
 
+      {/* 작업대 — 후보 1명+ 일 때만: 전형 단계 현황(펀널=필터) → 필터 → 이력서 목록.
+         0명이면 위 인라인 히어로(이력서 받기)가 이 자리를 대신한다. */}
+      {hasCands && (
+        <>
       <FunnelPanel
         jobId={jobId}
         refreshKey={funnelKey}
@@ -2013,6 +2081,8 @@ export default function JobDetailPage() {
               </div>
             );
           })}
+        </>
+      )}
         </>
       )}
       {decideIds && decideIds.length > 0 && (

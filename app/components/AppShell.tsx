@@ -339,8 +339,8 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-surface">
-      {/* 데스크톱 좌측 레일 */}
-      <aside className="hidden lg:flex sticky top-0 h-screen w-[228px] shrink-0 flex-col bg-card border-r border-border-default">
+      {/* 데스크톱 좌측 레일 — 인쇄 시 숨김(공고 리포트 PDF 가 셸 없이 출력되도록) */}
+      <aside className="hidden lg:flex print:hidden sticky top-0 h-screen w-[228px] shrink-0 flex-col bg-card border-r border-border-default">
         <SidebarInner
           role={role}
           userName={userName}
@@ -374,7 +374,7 @@ export function AppShell({
       {/* 본문 영역 */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* 모바일 전용 상단바 — 햄버거 + 로고 (데스크톱은 좌측 레일이 상시 노출이라 불필요) */}
-        <header className="lg:hidden sticky top-0 z-30 flex items-center gap-2 px-4 h-14 bg-card/90 backdrop-blur border-b border-border-default">
+        <header className="lg:hidden print:hidden sticky top-0 z-30 flex items-center gap-2 px-4 h-14 bg-card/90 backdrop-blur border-b border-border-default">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
