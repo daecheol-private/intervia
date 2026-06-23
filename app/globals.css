@@ -2,7 +2,7 @@
 /* Pretendard 가변폰트는 app/layout.tsx 의 <link rel="stylesheet"> 로 로드 (CSS @import 는 tailwindcss 인라인 전개 뒤로 밀려서 빌드 에러) */
 
 /*
- * Intervia 디자인 토큰 — Option B (Deep Forest + Ivory)
+ * Intervia 디자인 토큰 — Graphite + Signal (Electric Indigo)
  *
  * 컬러 사용 가이드:
  *   --primary       : 브랜드 액션 (CTA 버튼, 강조 텍스트, active state)
@@ -19,49 +19,49 @@
  *   success / warning / danger / info
  */
 :root {
-  /* Brand — Forest + Ivory */
-  --primary: #0d4f3c;
-  --primary-deep: #073529;
-  --primary-soft: #e3ece8; /* tag/badge bg */
-  --accent: #e8a87c;
-  --accent-deep: #c98a5b;
-  --accent-soft: #faead9;
+  /* Brand — Graphite + Signal (Electric Indigo) */
+  --primary: #4f46e5;
+  --primary-deep: #4338ca;
+  --primary-soft: #eef0ff; /* tag/badge bg */
+  --accent: #06b6d4;
+  --accent-deep: #0891b2;
+  --accent-soft: #d8f6fb;
 
-  --surface: #fbf9f5;
-  --surface-alt: #f1ede4;
+  --surface: #f7f8fa;
+  --surface-alt: #eef1f5;
   --card: #ffffff;
-  --ink: #0f1a14;
-  --ink-soft: #2f3d36; /* 보조 텍스트 — 가독성 위해 진하게 (이전 #4a5a52) */
-  --ink-muted: #5b6862; /* 흐린 텍스트 — 진하게 (이전 #8a9690) */
-  --border: #e3ddd0;
-  --border-strong: #cfc7b5;
+  --ink: #0c1116;
+  --ink-soft: #2c3540; /* 보조 텍스트 — 쿨 그래파이트, 가독성 위해 진하게 */
+  --ink-muted: #5a6573; /* 흐린 텍스트 */
+  --border: #e4e7ec;
+  --border-strong: #cdd2da;
 
   /* Semantic */
-  --success: #0d4f3c; /* = primary (의도적) */
-  --success-soft: #e3ece8;
-  --warning: #b07424;
+  --success: #157a54; /* 합격·완료 — primary(인디고)와 구분되는 그린 */
+  --success-soft: #e1f3ea;
+  --warning: #b45309;
   --warning-soft: #fbeede;
-  --warning-deep: #8a5a18; /* hover/pressed */
-  --danger: #a72b3a;
-  --danger-soft: #fbe5e8;
-  --danger-deep: #861f2c; /* hover/pressed */
-  --info: #1f5b8c;
-  --info-soft: #e2eaf2;
+  --warning-deep: #92400e; /* hover/pressed */
+  --danger: #dc2626;
+  --danger-soft: #fde7e7;
+  --danger-deep: #b91c1c; /* hover/pressed */
+  --info: #0369a1;
+  --info-soft: #e2eefa;
 
-  /* Elevation — forest(ink) 틴트 그림자(실값). @theme 의 --shadow-* 가 var 로 참조 →
+  /* Elevation — graphite(ink) 틴트 그림자(실값). @theme 의 --shadow-* 가 var 로 참조 →
      Tailwind shadow-xs/sm/md/lg/xl 유틸 + .card-hover 가 공유. 2-레이어로 부드럽게. */
-  --elev-2xs: 0 1px 1px 0 rgba(15, 26, 20, 0.04);
-  --elev-xs: 0 1px 2px 0 rgba(15, 26, 20, 0.05);
-  --elev-sm: 0 1px 2px -1px rgba(15, 26, 20, 0.06),
-    0 2px 4px -1px rgba(15, 26, 20, 0.05);
-  --elev-md: 0 2px 4px -2px rgba(15, 26, 20, 0.05),
-    0 8px 16px -4px rgba(15, 26, 20, 0.09);
-  --elev-lg: 0 4px 8px -3px rgba(15, 26, 20, 0.06),
-    0 16px 32px -8px rgba(15, 26, 20, 0.12);
-  --elev-xl: 0 8px 16px -6px rgba(15, 26, 20, 0.08),
-    0 28px 56px -12px rgba(15, 26, 20, 0.16);
-  --elev-2xl: 0 12px 24px -8px rgba(15, 26, 20, 0.1),
-    0 40px 72px -16px rgba(15, 26, 20, 0.22);
+  --elev-2xs: 0 1px 1px 0 rgba(12, 17, 22, 0.04);
+  --elev-xs: 0 1px 2px 0 rgba(12, 17, 22, 0.05);
+  --elev-sm: 0 1px 2px -1px rgba(12, 17, 22, 0.06),
+    0 2px 4px -1px rgba(12, 17, 22, 0.05);
+  --elev-md: 0 2px 4px -2px rgba(12, 17, 22, 0.05),
+    0 8px 16px -4px rgba(12, 17, 22, 0.09);
+  --elev-lg: 0 4px 8px -3px rgba(12, 17, 22, 0.06),
+    0 16px 32px -8px rgba(12, 17, 22, 0.12);
+  --elev-xl: 0 8px 16px -6px rgba(12, 17, 22, 0.08),
+    0 28px 56px -12px rgba(12, 17, 22, 0.16);
+  --elev-2xl: 0 12px 24px -8px rgba(12, 17, 22, 0.1),
+    0 40px 72px -16px rgba(12, 17, 22, 0.22);
 
   /* Radius scale — 실값은 @theme(Tailwind rounded-* 유틸과 연결).
      절제·각진 톤: 카드 8px / 버튼·입력 6px. rounded-full(알약·아바타)은 유지. */
@@ -240,12 +240,12 @@ body {
 @keyframes tour-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 2px rgba(13, 79, 60, 0.9),
-      0 0 0 6px rgba(13, 79, 60, 0.25), 0 0 18px 2px rgba(13, 79, 60, 0.4);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.9),
+      0 0 0 6px rgba(79, 70, 229, 0.25), 0 0 18px 2px rgba(79, 70, 229, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 3px rgba(13, 79, 60, 1),
-      0 0 0 11px rgba(13, 79, 60, 0), 0 0 26px 6px rgba(13, 79, 60, 0.55);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 1),
+      0 0 0 11px rgba(79, 70, 229, 0), 0 0 26px 6px rgba(79, 70, 229, 0.55);
   }
 }
 .tour-glow-ring {

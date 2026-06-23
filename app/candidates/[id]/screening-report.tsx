@@ -285,7 +285,7 @@ const SCREENING_AXES = [
 
 type BreakdownKey = (typeof SCREENING_AXES)[number]["key"];
 
-function FitHexagon({
+export function FitHexagon({
   breakdown,
 }: {
   breakdown: NonNullable<NonNullable<Candidate["screeningReport"]>["breakdown"]>;
@@ -360,9 +360,9 @@ function FitHexagon({
       {hasAnyScore && (
         <polygon
           points={scoresPoly}
-          fill="rgb(16, 185, 129)"
+          fill="rgb(79, 70, 229)"
           fillOpacity={0.2}
-          stroke="rgb(16, 185, 129)"
+          stroke="rgb(79, 70, 229)"
           strokeWidth={2}
         />
       )}
@@ -378,7 +378,7 @@ function FitHexagon({
             cx={p.x}
             cy={p.y}
             r={3}
-            fill="rgb(16, 185, 129)"
+            fill="rgb(79, 70, 229)"
           />
         );
       })}
@@ -500,6 +500,67 @@ export function BreakdownBlock({
             );
           })}
         </div>
+      </div>
+      {!hasNewAxes && (
+        <div className="text-[11px] text-ink-muted text-center">
+          구버전 평가 데이터 — 성과 임팩트 / 재직 안정성 축은 재평가 후
+          채워집니다.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 6축 항목별 바 + 사유 (육각형 차트 제외) — 개요엔 차트만, 상세엔 이 바를 둔다. */
+export function BreakdownBars({
+  breakdown,
+}: {
+  breakdown: NonNullable<NonNullable<Candidate["screeningReport"]>["breakdown"]>;
+}) {
+  const hasNewAxes =
+    breakdown.achievement != null || breakdown.stability != null;
+  return (
+    <div className="space-y-3">
+      <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
+        공고 적합도 (6축)
+      </div>
+      <div className="divide-y divide-border-default">
+        {SCREENING_AXES.map(({ key, label, weight }) => {
+          const d = breakdown[key as BreakdownKey];
+          return (
+            <div key={key} className="py-2 first:pt-0 last:pb-0">
+              <div className="flex items-baseline justify-between gap-2 mb-1">
+                <span className="text-sm font-medium text-ink">
+                  {label}
+                  <span className="text-[10px] text-ink-muted ml-1.5 font-normal">
+                    {weight}
+                  </span>
+                </span>
+                <span
+                  className={`text-base font-bold tabular-nums ${
+                    d ? scoreColor(d.score) : "text-ink-muted"
+                  }`}
+                >
+                  {d ? d.score : "—"}
+                </span>
+              </div>
+              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{
+                    width: `${d ? Math.max(0, Math.min(100, d.score)) : 0}%`,
+                  }}
+                />
+              </div>
+              {d?.reason && (
+                <p className="text-[11px] text-ink-muted mt-1 leading-snug flex items-start gap-1.5">
+                  <span className="flex-1">{d.reason}</span>
+                  <ConfidenceChip c={d.confidence} />
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
       {!hasNewAxes && (
         <div className="text-[11px] text-ink-muted text-center">

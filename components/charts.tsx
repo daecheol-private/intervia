@@ -11,10 +11,10 @@
  * 모든 컴포넌트는 상호작용 없음. 툴팁은 <title> 로만.
  */
 
-// 딥그린(#0d4f3c) 테마와 조화되는 팔레트.
+// 인디고(#4f46e5) 브랜드와 조화되는 팔레트.
 export const C = {
-  primary: "#0d4f3c", // 합격/긍정 강조
-  primarySoft: "#cfe0d8",
+  primary: "#4f46e5", // 합격/긍정 강조 (브랜드 인디고)
+  primarySoft: "#c7cbf5",
   good: "#2f8f6f",
   danger: "#d24d6a", // 불합격
   warn: "#d9930a", // 만료/주의
@@ -22,8 +22,8 @@ export const C = {
   mutedSoft: "#e2e8f0",
   blue: "#3b6ea5",
   blueSoft: "#9db8d6", // 히스토그램 기본 막대(전체)
-  indigo: "#6366f1",
-  indigoSoft: "#c7c9f7",
+  indigo: "#7c3aed", // 다계열 보조 — 브랜드 인디고와 구분되는 바이올렛
+  indigoSoft: "#d6c8f7",
   teal: "#0e9384", // 보조 강조
   amber: "#d9930a",
   ink: "#0f172a",

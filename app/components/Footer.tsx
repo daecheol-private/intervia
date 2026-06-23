@@ -10,7 +10,9 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   if (
     pathname.startsWith("/interview/") ||
     pathname.startsWith("/schedule/") ||
-    pathname.startsWith("/apply/")
+    pathname.startsWith("/apply/") ||
+    // 후보자 상세는 AppShell 을 쓰므로 전역 푸터 숨김.
+    pathname.startsWith("/candidates/")
   ) {
     return null;
   }

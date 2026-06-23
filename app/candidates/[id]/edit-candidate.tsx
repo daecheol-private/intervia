@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { Pencil } from "lucide-react";
 import type { Candidate } from "./types";
 
 export function EditCandidateButton({
   candidate,
   onSaved,
+  variant = "text",
 }: {
   candidate: Candidate;
   onSaved: () => void | Promise<void>;
+  /** text = "✎ 정보 수정" 칩 / icon = 아이콘만(헤더 우측 액션용) */
+  variant?: "text" | "icon";
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(candidate.name);
@@ -46,13 +50,24 @@ export function EditCandidateButton({
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="text-[11px] px-2 py-0.5 rounded-md border border-border-strong hover:bg-surface-alt text-ink-soft"
-        title="이름·이메일·연락처·최종학력 수정"
-      >
-        ✎ 정보 수정
-      </button>
+      {variant === "icon" ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt transition-colors"
+          title="정보 수정"
+          aria-label="정보 수정 (이름·이메일·연락처·최종학력)"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="text-[11px] px-2 py-0.5 rounded-md border border-border-strong hover:bg-surface-alt text-ink-soft"
+          title="이름·이메일·연락처·최종학력 수정"
+        >
+          ✎ 정보 수정
+        </button>
+      )}
       {open && (
         <div
           className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"

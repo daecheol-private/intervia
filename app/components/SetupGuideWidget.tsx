@@ -43,7 +43,9 @@ export function SetupGuideWidget() {
     pathname.startsWith("/interview/") ||
     pathname.startsWith("/schedule/") ||
     pathname.startsWith("/unsubscribe/") ||
-    pathname.startsWith("/admin");
+    pathname.startsWith("/admin") ||
+    // 후보자 상세는 좌측 레일 셸을 쓰므로 플로팅 가이드가 사이드바와 겹친다 → 숨김.
+    pathname.startsWith("/candidates/");
 
   // 접힘 상태·위치 복원 — 모바일은 화면을 가리지 않게 기본 접힘.
   useEffect(() => {

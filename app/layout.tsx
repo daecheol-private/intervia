@@ -18,7 +18,7 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5, // 시각 보조 사용자를 위한 확대 허용
-  themeColor: "#0d4f3c", // brand primary (forest)
+  themeColor: "#4f46e5", // brand primary (electric indigo)
 } as const;
 
 export default async function RootLayout({

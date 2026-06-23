@@ -1,15 +1,26 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Trash2 } from "lucide-react";
+import {
+  Brain,
+  FileText,
+  Flag,
+  Gauge,
+  Loader2,
+  type LucideIcon,
+  Paperclip,
+  Trash2,
+  User,
+  Users,
+} from "lucide-react";
 import {
   compositeScore,
   recommendationFromScore,
   formatKstDateTime,
 } from "@/lib/utils";
-import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
+import { STAGE_RANK, STAGE_WAITER, type Stage } from "@/lib/stage-meta";
 import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
 import { confirmDialog, notify } from "@/app/components/Dialog";
 import { AppealsPanel } from "./appeals-panel";
@@ -24,8 +35,9 @@ import {
 } from "./interview-section";
 import { InterviewQuestionsPanel } from "./question-sheet";
 import {
-  BreakdownBlock,
+  BreakdownBars,
   BulletBlock,
+  FitHexagon,
   LevelMatchBadge,
   QualitativeReviewBlock,
   RequirementCoverageBlock,
@@ -43,7 +55,7 @@ import {
   scoreColor,
   showRec,
 } from "./shared";
-import { OutcomeBadge, StageBadge, StagePanel } from "./stage-panel";
+import { OutcomeBadge, StagePanel } from "./stage-panel";
 import type { Candidate, Job, Schedule, Session } from "./types";
 
 // 면접 종료 후 평가는 complete 요청 안에서 inline 생성된다(실측 약 1분, 최대 1~2분).
@@ -81,6 +93,9 @@ export default function CandidateDetailPage() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [screening, setScreening] = useState(false);
   const [screenErr, setScreenErr] = useState("");
+  const [tab, setTab] = useState<
+    "overview" | "screening" | "ai" | "round1" | "round2" | "files"
+  >("overview");
 
   const load = async () => {
     try {
@@ -359,74 +374,124 @@ export default function CandidateDetailPage() {
   const composite = compositeScore(candidate.screeningScore, interviewScore);
   const rec = composite != null ? recommendationFromScore(composite) : null;
 
+  // 탭 활성화 — 해당 전형이 진행돼야 콘텐츠가 생긴다(안 되면 disable).
+  const candidateRank = STAGE_RANK[candidate.stage as Stage] ?? 0;
+  const hasAiInterview = sessions.length > 0;
+  const hasRound1 =
+    candidateRank >= STAGE_RANK.round1_candidate || !!round1Schedule;
+  const hasRound2 =
+    candidateRank >= STAGE_RANK.round1_passed || !!round2Schedule;
+
+  // 진행단계 스테퍼 — 후보자의 현재 위치를 5단계로. 종결(불합격/취소)도 반영.
+  const isHired = candidate.outcome === "hired";
+  const isTerminated =
+    candidate.outcome === "rejected" || candidate.outcome === "withdrawn";
+  const effRank = isHired ? 100 : candidateRank;
+  const STEPS: {
+    label: string;
+    min: number;
+    max: number;
+    Icon: LucideIcon;
+  }[] = [
+    { label: "서류평가", min: 10, max: 20, Icon: FileText },
+    { label: "AI 면접", min: 30, max: 40, Icon: Brain },
+    { label: "1차 면접", min: 50, max: 70, Icon: User },
+    { label: "2차 면접", min: 80, max: 80, Icon: Users },
+    { label: "종결", min: 100, max: 100, Icon: Flag },
+  ];
+  const waiterLabel = STAGE_WAITER[candidate.stage as Stage]?.label ?? null;
+
+  // 개요 종합 소견 — 전형이 진행될수록 가장 최근(상위) 평가 요약으로 갱신.
+  // (서류 → AI 면접 → … 순으로 더 최신 소견이 전체 인상을 대표)
+  const overviewSummary =
+    completedSession?.evaluation?.summary ??
+    (screeningPhase === "done"
+      ? candidate.screeningReport?.summary ?? null
+      : null);
+
   return (
-    <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+    <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6">
       <Link
         href={`/jobs/${job.id}`}
-        className="text-sm text-ink-muted hover:text-ink"
+        className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
       >
-        ← {job.title}
+        <span aria-hidden>←</span> {job.title}
       </Link>
 
-      {/* Header — 정보 영역. 아래 액션 바와 시각적으로 한 카드처럼 보이도록
-          아래 모서리는 각지게(rounded-t-2xl) + 아래 테두리는 제거(border-b-0).
-          둘 사이 경계선은 액션 바의 위쪽 테두리가 담당한다. */}
-      <div className="bg-card border border-border-default border-b-0 rounded-t-2xl p-6 mt-3 shadow-sm">
+      {/* Header — 프로필 카드 (정보 + 진행단계). 액션 바는 아래 sticky 로 분리. */}
+      <div className="bg-card border border-border-default rounded-t-2xl border-b-0 shadow-sm mt-3">
+        <div className="p-6">
         <div className="flex justify-between items-start gap-4">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold text-ink">
-                {displayCandidateName(candidate.name)}
-              </h1>
-              {candidate.outcome !== "hired" && <StageBadge stage={candidate.stage} />}
-              {candidate.outcome && <OutcomeBadge outcome={candidate.outcome} reason={candidate.outcomeReason} />}
-              <EmailSentBadge sentAt={candidate.lastInterviewEmailSentAt} />
-              <EditCandidateButton candidate={candidate} onSaved={load} />
+          <div className="flex items-start gap-4 min-w-0 flex-1">
+            <div
+              className="w-14 h-14 shrink-0 rounded-2xl bg-surface-alt text-ink-soft flex items-center justify-center text-xl font-bold"
+              aria-hidden
+            >
+              {displayCandidateName(candidate.name).trim().charAt(0).toUpperCase() || "?"}
             </div>
-            {/* 이메일은 길어 잘리기 쉬워 2배 폭 할당. 나이·경력은 짧은 텍스트라 auto.
-                모바일은 2열로 wrap. */}
-            <div className="grid grid-cols-2 sm:grid-cols-[1fr_2fr_auto_auto] gap-x-4 gap-y-3 mt-4">
-              <InfoCell label="연락처" value={formatPhoneKr(candidate.phone)} />
-              <InfoCell label="이메일" value={candidate.email} />
-              <InfoCell
-                label="나이"
-                value={candidate.age != null ? `${candidate.age}세` : null}
-              />
-              <InfoCell
-                label="경력"
-                value={
-                  candidate.careerYears != null
-                    ? `${candidate.careerYears}년`
-                    : null
-                }
-              />
-              <InfoCell
-                label="최종학력"
-                value={
-                  candidate.educationLevel ||
-                  candidate.educationSchool ||
-                  candidate.educationMajor
-                    ? [
-                        candidate.educationSchool,
-                        candidate.educationMajor,
-                        candidate.educationLevel,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : null
-                }
-              />
-            </div>
-            {candidate.careerSummary && (
-              <div className="mt-3 text-sm text-ink-soft border-l-2 border-border-default pl-3">
-                {candidate.careerSummary}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold text-ink">
+                  {displayCandidateName(candidate.name)}
+                </h1>
+                {candidate.outcome && (
+                  <OutcomeBadge outcome={candidate.outcome} reason={candidate.outcomeReason} />
+                )}
+                {candidate.screeningReport?.recommendation &&
+                  showRec(candidate.screeningReport.recommendation) && (
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${recColor[candidate.screeningReport.recommendation]}`}
+                    >
+                      AI {candidate.screeningReport.recommendation}
+                    </span>
+                  )}
+                <EmailSentBadge sentAt={candidate.lastInterviewEmailSentAt} />
               </div>
-            )}
-            <div className="text-xs text-ink-muted mt-4">
-              {formatKstDateTime(candidate.createdAt)} 업로드
+              {candidate.careerSummary && (
+                <p className="mt-1.5 text-sm text-ink-soft leading-snug">
+                  {candidate.careerSummary}
+                </p>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 mt-4">
+                <InfoCell label="연락처" value={formatPhoneKr(candidate.phone)} />
+                <InfoCell label="이메일" value={candidate.email} />
+                <InfoCell
+                  label="경력"
+                  value={candidate.careerYears != null ? `${candidate.careerYears}년` : null}
+                />
+                <InfoCell
+                  label="나이"
+                  value={candidate.age != null ? `${candidate.age}세` : null}
+                />
+                <InfoCell
+                  label="최종학력"
+                  value={
+                    candidate.educationLevel ||
+                    candidate.educationSchool ||
+                    candidate.educationMajor
+                      ? [
+                          candidate.educationSchool,
+                          candidate.educationMajor,
+                          candidate.educationLevel,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : null
+                  }
+                />
+                <InfoCell
+                  label="지원일"
+                  value={formatKstDateTime(candidate.createdAt)}
+                />
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <EditCandidateButton
+              candidate={candidate}
+              onSaved={load}
+              variant="icon"
+            />
             <CandidateFavoriteStar
               candidateId={candidate.id}
               initial={candidate.favorited ?? false}
@@ -444,13 +509,60 @@ export default function CandidateDetailPage() {
             </button>
           </div>
         </div>
+        </div>
+        {/* 진행 단계 (컴팩트) — 액션 버튼 영역 위 */}
+        <div className="border-t border-border-default px-6 py-3 flex items-center gap-x-3 gap-y-2 text-[11px] flex-wrap">
+          <div className="flex items-center gap-1.5">
+            {STEPS.map((s, i) => {
+              const done = effRank > s.max;
+              const current =
+                !isTerminated && effRank >= s.min && effRank <= s.max;
+              return (
+                <Fragment key={s.label}>
+                  {i > 0 && (
+                    <span
+                      className={`h-0.5 w-4 sm:w-7 rounded-full ${effRank >= s.min ? "bg-primary" : "bg-border-default"}`}
+                      aria-hidden
+                    />
+                  )}
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={`grid place-items-center w-6 h-6 rounded-full shrink-0 ${
+                        done
+                          ? "bg-primary text-white"
+                          : current
+                            ? "bg-primary text-white ring-2 ring-primary/30 ring-offset-2 ring-offset-card"
+                            : "bg-surface-alt text-ink-muted"
+                      }`}
+                    >
+                      <s.Icon className="w-3.5 h-3.5" strokeWidth={2.4} />
+                    </span>
+                    <span
+                      className={`whitespace-nowrap ${current ? "font-semibold text-primary-deep" : done ? "text-ink-soft" : "text-ink-muted"}`}
+                    >
+                      {s.label}
+                    </span>
+                  </span>
+                </Fragment>
+              );
+            })}
+          </div>
+          {!isTerminated && waiterLabel && (
+            <span className="sm:ml-auto shrink-0 text-[10px] text-primary-deep bg-primary-soft rounded-full px-2 py-0.5">
+              {waiterLabel}
+            </span>
+          )}
+          {isTerminated && (
+            <span className="sm:ml-auto shrink-0 text-[10px] font-medium text-danger">
+              종결 — {candidate.outcome === "rejected" ? "불합격" : "지원취소"}
+            </span>
+          )}
+        </div>
       </div>
-
-      {/* 액션 바 — 평소엔 위 정보 카드에 바로 붙어 하나의 카드처럼 보이고(위 모서리만
-          각지게 rounded-b-2xl), 스크롤하면 네비 바(h-14) 아래로 떨어져 고정된다.
-          그래서 하단 평가 내용을 보다가 맨 위로 올리지 않고 단계 변경·종결을 처리할 수 있다.
-          마스킹 전체보기를 펼치면 영역이 길어져 고정이 어색해지므로 그때만 sticky 를 해제한다. */}
-      <div className={showFullResume ? "" : "sticky top-14 z-30"}>
+      {/* 액션 바 — sticky: 스크롤해도 상단 고정돼 언제든 단계 변경·종결 가능.
+          위 헤더 카드(border-b-0 rounded-t)와 시각적으로 한 카드처럼 붙는다.
+          마스킹 전체보기를 펼치면 길어져 고정을 해제한다. */}
+      <div className={showFullResume ? "" : "sticky top-14 lg:top-0 z-30"}>
         <div className="bg-card border border-border-default rounded-b-2xl shadow-sm px-6 py-3">
           <StagePanel
             candidate={candidate}
@@ -466,93 +578,146 @@ export default function CandidateDetailPage() {
         </div>
       </div>
 
-      {/* Composite */}
-      <Section
-        title="종합 점수"
-        collapsible={false}
-        summary={
-          composite != null ? (
-            <span className="flex items-center gap-2">
-              <span className={`font-bold tabular-nums ${scoreColor(composite)}`}>
-                {composite}
-              </span>
-              <span className="text-ink-muted">/100</span>
-              {rec && showRec(rec) && (
-                <span
-                  className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${recColor[rec]}`}
-                >
-                  {rec}
-                </span>
-              )}
-              <span className="text-ink-muted">
-                · 서류 {candidate.screeningScore ?? "-"} / 면접 {interviewScore ?? "-"}
-              </span>
-            </span>
-          ) : (
-            <span className="text-ink-muted">평가 미완료</span>
-          )
-        }
-      >
-        <div className="flex items-center gap-6 flex-wrap">
-          <div>
-            <div className="text-xs text-ink-muted">종합</div>
-            <div className="flex items-baseline gap-2 mt-0.5">
-              <span className="text-4xl font-bold text-ink">
-                {composite != null ? composite : "-"}
-              </span>
-              <span className="text-sm text-ink-muted">/ 100</span>
+      {/* Tabs — 안 된 전형 탭은 disable. overflow-x-auto 는 (overflow-y 도 auto 가 돼)
+          활성탭 밑줄 1px 가 세로 스크롤바를 유발하므로 제거. 좁은 화면은 wrap 으로 처리. */}
+      <div className="mt-5 border-b border-border-default flex flex-wrap gap-1">
+        {[
+          { key: "overview" as const, label: "개요", Icon: Gauge, on: true, hint: "" },
+          {
+            key: "screening" as const,
+            label: "서류평가",
+            Icon: FileText,
+            on: true,
+            hint: "",
+          },
+          {
+            key: "ai" as const,
+            label: "AI 면접",
+            Icon: Brain,
+            on: hasAiInterview,
+            hint: "AI 면접 진행 후 활성화됩니다",
+          },
+          {
+            key: "round1" as const,
+            label: "1차 면접",
+            Icon: User,
+            on: hasRound1,
+            hint: "1차 면접 단계부터 활성화됩니다",
+          },
+          {
+            key: "round2" as const,
+            label: "2차 면접",
+            Icon: Users,
+            on: hasRound2,
+            hint: "1차 합격 후 활성화됩니다",
+          },
+          {
+            key: "files" as const,
+            label: "첨부파일",
+            Icon: Paperclip,
+            on: true,
+            hint: "",
+          },
+        ].map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            disabled={!t.on}
+            onClick={() => t.on && setTab(t.key)}
+            aria-current={tab === t.key ? "page" : undefined}
+            title={!t.on ? t.hint : undefined}
+            className={
+              "inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors " +
+              (!t.on
+                ? "border-transparent text-ink-muted/40 cursor-not-allowed"
+                : tab === t.key
+                  ? "border-primary text-primary-deep font-semibold"
+                  : "border-transparent text-ink-soft hover:text-ink")
+            }
+          >
+            <t.Icon className="w-4 h-4 shrink-0" />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── 개요 — 스코어카드 + 진행단계 + 6축 차트 ── */}
+      {tab === "overview" && (
+        <div className="mt-4 space-y-4">
+          <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* 좌: 종합 스코어(+서류/면접 우측 인라인) + 종합 소견 */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start gap-6 flex-wrap">
+                  <div>
+                    <div className="text-[11px] font-bold text-ink-muted uppercase tracking-wider">
+                      종합 평가
+                    </div>
+                    <div className="flex items-baseline gap-1.5 mt-1">
+                      <span
+                        className={`text-5xl font-bold tabular-nums ${composite != null ? scoreColor(composite) : "text-ink-muted"}`}
+                      >
+                        {composite != null ? composite : "-"}
+                      </span>
+                      <span className="text-sm text-ink-muted">/100</span>
+                      {rec && showRec(rec) && (
+                        <span
+                          className={`ml-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${recColor[rec]}`}
+                        >
+                          {rec}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-[180px] max-w-xs space-y-2 pt-2">
+                    <ScoreBar label="서류" score={candidate.screeningScore} />
+                    <ScoreBar label="면접" score={interviewScore} />
+                  </div>
+                </div>
+
+                {/* 종합 소견 — 전형 진행에 따라 최신 평가 기준으로 갱신 */}
+                <div className="mt-5">
+                  {overviewSummary ? (
+                    <p className="text-sm text-ink-soft leading-relaxed">
+                      <HL text={overviewSummary} />
+                    </p>
+                  ) : (
+                    <p className="text-sm text-ink-soft leading-relaxed">
+                      {screeningPhase === "in_queue"
+                        ? "⏳ 서류 평가가 진행 중입니다."
+                        : screeningPhase === "failed"
+                          ? "서류 평가에 실패했습니다. 이력서 평가 탭에서 재시도할 수 있습니다."
+                          : "평가가 진행되면 종합 소견이 여기에 표시됩니다."}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* 우: 6축 적합도 차트 — 중앙 정렬 */}
+              {candidate.screeningReport?.breakdown &&
+                screeningPhase === "done" && (
+                  <div className="lg:w-[330px] shrink-0 lg:border-l lg:border-border-default lg:pl-6 flex flex-col">
+                    <div className="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-1">
+                      공고 적합도 (6축)
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <FitHexagon
+                        breakdown={candidate.screeningReport.breakdown}
+                      />
+                    </div>
+                  </div>
+                )}
             </div>
-            {rec && showRec(rec) && (
-              <span
-                className={`inline-block mt-2 text-xs font-medium px-2 py-0.5 rounded-md border ${recColor[rec]}`}
-              >
-                {rec}
-              </span>
-            )}
-          </div>
-          <div className="flex-1 space-y-2 min-w-[240px]">
-            <ScoreBar label="서류" score={candidate.screeningScore} />
-            <ScoreBar label="면접" score={interviewScore} />
           </div>
         </div>
-      </Section>
+      )}
 
-      {/* Screening */}
-      <Section
-        title="서류 평가"
-        defaultOpen={false}
-        summary={
-          candidate.screeningScore != null ? (
-            <span className="flex items-center gap-2">
-              <span className={`font-bold tabular-nums ${scoreColor(candidate.screeningScore)}`}>
-                {candidate.screeningScore}
-              </span>
-              <span className="text-ink-muted">/100</span>
-              {candidate.screeningReport?.recommendation &&
-                showRec(candidate.screeningReport.recommendation) && (
-                  <span
-                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${recColor[candidate.screeningReport.recommendation]}`}
-                  >
-                    {candidate.screeningReport.recommendation}
-                  </span>
-                )}
-              {candidate.screeningReport?.summary && (
-                <span className="text-ink-muted truncate">
-                  · {candidate.screeningReport.summary}
-                </span>
-              )}
-            </span>
-          ) : screeningPhase === "in_queue" ? (
-            <span className="text-primary">⏳ 평가 진행 중</span>
-          ) : screeningPhase === "failed" ? (
-            <span className="text-danger">평가 실패</span>
-          ) : screeningPhase === "skipped" ? (
-            <span className="text-ink-muted">AI 평가 안 함 · 동의 미확보</span>
-          ) : (
-            <span className="text-ink-muted">평가 전</span>
-          )
-        }
-      >
+      {/* ── 이력서 평가 ── */}
+      {tab === "screening" && (
+        <div className="mt-4 space-y-4">
+
+      {/* Screening — 타이틀 없이 본문만 (점수+요약으로 시작) */}
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
         {screeningPhase === "skipped" ? (
           <div className="space-y-4">
             <div className="text-sm bg-surface-alt border border-border-default text-ink-soft rounded-lg p-3 leading-relaxed">
@@ -650,7 +815,7 @@ export default function CandidateDetailPage() {
             <div className="flex items-baseline gap-3">
               <div
                 className={`text-5xl font-bold tabular-nums ${scoreColor(
-                  candidate.screeningReport.score
+                  candidate.screeningReport.score,
                 )}`}
               >
                 {candidate.screeningReport.score}
@@ -667,6 +832,9 @@ export default function CandidateDetailPage() {
             <blockquote className="border-l-4 border-primary/40 bg-primary-soft/30 px-4 py-3 rounded-r-lg text-ink leading-relaxed">
               <HL text={candidate.screeningReport.summary} />
             </blockquote>
+            {candidate.screeningReport.breakdown && (
+              <BreakdownBars breakdown={candidate.screeningReport.breakdown} />
+            )}
             {candidate.screeningReport.requirement_gate && (
               <RequirementGateBadge
                 gate={candidate.screeningReport.requirement_gate}
@@ -676,27 +844,28 @@ export default function CandidateDetailPage() {
               candidate.screeningReport.level_match.fit !== "fit" && (
                 <LevelMatchBadge match={candidate.screeningReport.level_match} />
               )}
-            {candidate.screeningReport.breakdown && (
-              <BreakdownBlock breakdown={candidate.screeningReport.breakdown} />
-            )}
             {candidate.screeningReport.requirement_coverage &&
               candidate.screeningReport.requirement_coverage.length > 0 && (
                 <RequirementCoverageBlock
                   coverage={candidate.screeningReport.requirement_coverage}
                 />
               )}
-            <BulletBlock
-              title="강점"
-              items={candidate.screeningReport.strengths}
-              color="emerald"
-              emphasizeLead
-            />
-            <BulletBlock
-              title="우려"
-              items={candidate.screeningReport.concerns}
-              color="amber"
-              emphasizeLead
-            />
+            <div className="grid md:grid-cols-2 gap-4">
+              <BulletBlock
+                title="강점"
+                items={candidate.screeningReport.strengths}
+                color="emerald"
+                emphasizeLead
+                emphasis
+              />
+              <BulletBlock
+                title="우려"
+                items={candidate.screeningReport.concerns}
+                color="amber"
+                emphasizeLead
+                emphasis
+              />
+            </div>
             {candidate.screeningReport.qualitative_review &&
               candidate.screeningReport.qualitative_review.length > 0 && (
                 <QualitativeReviewBlock
@@ -722,12 +891,16 @@ export default function CandidateDetailPage() {
         ) : (
           <div className="text-sm text-ink-muted">평가 데이터 없음</div>
         )}
-      </Section>
+      </div>
+        </div>
+      )}
 
-      {/* Interview */}
+      {/* ── AI 면접 ── */}
+      {tab === "ai" && (
+        <div className="mt-4 space-y-4">
       <Section
         title="AI 면접"
-        defaultOpen={false}
+        collapsible={false}
         summary={(() => {
           const latest = sessions[0];
           if (!latest) return <span className="text-ink-muted">세션 없음</span>;
@@ -850,27 +1023,44 @@ export default function CandidateDetailPage() {
             />
           ))}
       </Section>
+        </div>
+      )}
 
-      <InterviewQuestionsPanel
-        candidateId={candidate.id}
-        round="round1"
-        scheduleConfirmed={round1Confirmed}
-        schedule={round1Schedule}
-        jobId={candidate.jobId}
-        candidateName={candidate.name}
-        onScheduleChanged={load}
-        canModify={!candidate.outcome}
-      />
-      <InterviewQuestionsPanel
-        candidateId={candidate.id}
-        round="round2"
-        scheduleConfirmed={round2Confirmed}
-        schedule={round2Schedule}
-        jobId={candidate.jobId}
-        candidateName={candidate.name}
-        onScheduleChanged={load}
-        canModify={!candidate.outcome}
-      />
+      {/* ── 1차 면접 — 스케줄·문제·녹음 평가 ── */}
+      {tab === "round1" && (
+        <div className="mt-4 space-y-4">
+          <InterviewQuestionsPanel
+            candidateId={candidate.id}
+            round="round1"
+            scheduleConfirmed={round1Confirmed}
+            schedule={round1Schedule}
+            jobId={candidate.jobId}
+            candidateName={candidate.name}
+            onScheduleChanged={load}
+            canModify={!candidate.outcome}
+          />
+        </div>
+      )}
+
+      {/* ── 2차 면접 — 스케줄·문제·녹음 평가 ── */}
+      {tab === "round2" && (
+        <div className="mt-4 space-y-4">
+          <InterviewQuestionsPanel
+            candidateId={candidate.id}
+            round="round2"
+            scheduleConfirmed={round2Confirmed}
+            schedule={round2Schedule}
+            jobId={candidate.jobId}
+            candidateName={candidate.name}
+            onScheduleChanged={load}
+            canModify={!candidate.outcome}
+          />
+        </div>
+      )}
+
+      {/* ── 첨부·이의 ── */}
+      {tab === "files" && (
+        <div className="mt-4 space-y-4">
       <AttachmentsPanel
         candidateId={candidate.id}
         screeningDone={screeningPhase === "done"}
@@ -880,6 +1070,8 @@ export default function CandidateDetailPage() {
         }
       />
       <AppealsPanel candidateId={candidate.id} />
+        </div>
+      )}
 
       {showTranscript && completedSession && (
         <TranscriptModal

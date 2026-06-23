@@ -20,7 +20,7 @@ export async function POST() {
     errorCorrectionLevel: "M",
     margin: 1,
     width: 240,
-    color: { dark: "#0d4f3c", light: "#ffffff" },
+    color: { dark: "#4f46e5", light: "#ffffff" },
   });
   return Response.json({ secret, otpauthUrl: url, qrDataUrl });
 }
