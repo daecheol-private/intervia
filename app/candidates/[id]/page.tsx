@@ -10,7 +10,9 @@ import {
   Gauge,
   Loader2,
   type LucideIcon,
+  Mail,
   Paperclip,
+  Phone,
   Trash2,
   User,
   Users,
@@ -48,7 +50,6 @@ import {
   HL,
   InfoCell,
   ScoreBar,
-  Section,
   displayCandidateName,
   formatPhoneKr,
   recColor,
@@ -452,17 +453,27 @@ export default function CandidateDetailPage() {
                   {candidate.careerSummary}
                 </p>
               )}
+              {/* 연락처·이메일 — 아이콘 + 값 (라벨 없이). 이메일이 길어도 줄 전체를
+                  쓰도록 라벨 그리드에서 분리. 좁은 화면에선 이메일이 다음 줄로 래핑. */}
+              {(formatPhoneKr(candidate.phone) || candidate.email) && (
+                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-ink-soft">
+                  {formatPhoneKr(candidate.phone) && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Phone className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden />
+                      <span>{formatPhoneKr(candidate.phone)}</span>
+                    </span>
+                  )}
+                  {candidate.email && (
+                    <span className="inline-flex items-center gap-1.5 min-w-0">
+                      <Mail className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden />
+                      <span className="truncate" title={candidate.email}>
+                        {candidate.email}
+                      </span>
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 mt-4">
-                <InfoCell label="연락처" value={formatPhoneKr(candidate.phone)} />
-                <InfoCell label="이메일" value={candidate.email} />
-                <InfoCell
-                  label="경력"
-                  value={candidate.careerYears != null ? `${candidate.careerYears}년` : null}
-                />
-                <InfoCell
-                  label="나이"
-                  value={candidate.age != null ? `${candidate.age}세` : null}
-                />
                 <InfoCell
                   label="최종학력"
                   value={
@@ -478,6 +489,14 @@ export default function CandidateDetailPage() {
                           .join(" · ")
                       : null
                   }
+                />
+                <InfoCell
+                  label="경력"
+                  value={candidate.careerYears != null ? `${candidate.careerYears}년` : null}
+                />
+                <InfoCell
+                  label="나이"
+                  value={candidate.age != null ? `${candidate.age}세` : null}
                 />
                 <InfoCell
                   label="지원일"
@@ -895,54 +914,10 @@ export default function CandidateDetailPage() {
         </div>
       )}
 
-      {/* ── AI 면접 ── */}
+      {/* ── AI 면접 — 타이틀·구분선 없이 본문만 (서류평가 탭과 동일 구조) ── */}
       {tab === "ai" && (
         <div className="mt-4 space-y-4">
-      <Section
-        title="AI 면접"
-        collapsible={false}
-        summary={(() => {
-          const latest = sessions[0];
-          if (!latest) return <span className="text-ink-muted">세션 없음</span>;
-          if (latest.status === "completed") {
-            const score = latest.evaluation?.overall_score;
-            const rec = latest.evaluation?.recommendation;
-            return (
-              <span className="flex items-center gap-2">
-                {score != null ? (
-                  <>
-                    <span className={`font-bold tabular-nums ${scoreColor(score)}`}>
-                      {score}
-                    </span>
-                    <span className="text-ink-muted">/100</span>
-                  </>
-                ) : (
-                  <span className="text-ink-muted">완료</span>
-                )}
-                {rec && showRec(rec) && (
-                  <span
-                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${recColor[rec]}`}
-                  >
-                    {rec}
-                  </span>
-                )}
-                {latest.evaluation?.summary && (
-                  <span className="text-ink-muted truncate">
-                    · {latest.evaluation.summary}
-                  </span>
-                )}
-              </span>
-            );
-          }
-          if (latest.status === "in_progress")
-            return <span className="text-primary">🟢 면접 진행 중</span>;
-          if (latest.status === "pending")
-            return <span className="text-warning">⏳ 후보자 응답 대기</span>;
-          if (latest.status === "expired")
-            return <span className="text-ink-muted">만료</span>;
-          return null;
-        })()}
-      >
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
         {!activeSession && (
           <div className="text-center py-8">
             <div className="text-3xl mb-3">💬</div>
@@ -1022,7 +997,7 @@ export default function CandidateDetailPage() {
               onSuccess={load}
             />
           ))}
-      </Section>
+      </div>
         </div>
       )}
 
