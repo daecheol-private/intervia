@@ -5,8 +5,9 @@
  *
  * "문제 생성" → 서버가 백그라운드(after)로 LLM 생성·자가검증 후 곧바로 저장(비동기, 기본 적용 ON).
  * 클라이언트는 폴링으로 진행을 추적하고, 완료되면 "문제 보기" + "AI 면접 적용" 토글이 보인다.
- * 새로고침해도 진행/결과가 유지된다(상태는 공고에 저장). "문제 보기" → 모달에서 정답 확인·불필요
- * 문항 삭제 후 "확정" 저장. 적용 여부는 토글로만 바꾼다(문항은 보존). 점수는 합불 미반영.
+ * 새로고침해도 진행/결과가 유지된다(상태는 공고에 저장). "문제 보기" → 모달에서 정답 확인·수정
+ * (보기 클릭으로 정답 변경)·불필요 문항 삭제 후 "확정" 저장. 적용 여부는 토글로만 바꾼다(문항은
+ * 보존). 점수는 합불 미반영.
  *
  * - 재생성 버튼 없음: 한 번 성공하면 재생성 불가. 생성 실패 시엔 세트가 없어(count=0) "문제 생성"으로 재시도.
  * - 임시 공고(isDraft)에서는 생성 불가.
@@ -220,6 +221,12 @@ export function McqPanel({
   const deleteQ = (id: string) =>
     setDraft((d) => (d ? d.filter((q) => q.id !== id) : d));
 
+  // 정답 변경 — 보기를 눌러 정답 인덱스를 바꾼다. HR 이 직접 확인한 셈이라 불일치 경고(verified)도 해제.
+  const setAnswer = (id: string, answer: number) =>
+    setDraft((d) =>
+      d ? d.map((q) => (q.id === id ? { ...q, answer, verified: true } : q)) : d
+    );
+
   const flaggedCount = draft?.filter((q) => q.verified === false).length ?? 0;
   const blockedDraft = !!isDraft && count === 0;
 
@@ -272,13 +279,14 @@ export function McqPanel({
           <div>
             <p className="text-xs text-ink-muted leading-relaxed mb-1">
               <strong className="text-ink-soft">{draft.length}문항</strong> · 정답을
-              확인하고 불필요한 문항은 삭제한 뒤 <strong>확정</strong>하세요. 닫기(X)는
-              저장하지 않으며 기존 문제가 그대로 유지됩니다.
+              확인하고, 틀린 정답은 <strong>올바른 보기를 눌러</strong> 바꾸거나 불필요한
+              문항은 삭제한 뒤 <strong>확정</strong>하세요. 닫기(X)는 저장하지 않으며 기존
+              문제가 그대로 유지됩니다.
             </p>
             {flaggedCount > 0 && (
               <p className="text-xs text-warning bg-warning-soft border border-warning/30 rounded-lg px-3 py-2 mb-2">
                 ⚠ {flaggedCount}문항은 자동 정답 검증에서 불일치가 감지됐습니다 —
-                정답·보기를 한 번 더 확인하거나 삭제하세요.
+                올바른 보기를 눌러 정답을 바로잡거나 문항을 삭제하세요.
               </p>
             )}
 
@@ -319,29 +327,34 @@ export function McqPanel({
                     {q.options.map((opt, oi) => {
                       const isAnswer = oi === q.answer;
                       return (
-                        <li
-                          key={oi}
-                          className={`text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-2 ${
-                            isAnswer
-                              ? "bg-success-soft text-success font-medium"
-                              : "text-ink-soft"
-                          }`}
-                        >
-                          <span
-                            className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] font-bold ${
+                        <li key={oi}>
+                          <button
+                            type="button"
+                            onClick={() => setAnswer(q.id, oi)}
+                            aria-pressed={isAnswer}
+                            title={isAnswer ? "현재 정답" : "이 보기를 정답으로 지정"}
+                            className={`w-full text-left text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-2 transition-colors ${
                               isAnswer
-                                ? "border-success text-success"
-                                : "border-border-strong text-ink-muted"
+                                ? "bg-success-soft text-success font-medium"
+                                : "text-ink-soft hover:bg-surface-alt"
                             }`}
                           >
-                            {oi + 1}
-                          </span>
-                          {opt}
-                          {isAnswer && (
-                            <span className="ml-auto text-[10px] font-bold text-success">
-                              정답
+                            <span
+                              className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center text-[9px] font-bold ${
+                                isAnswer
+                                  ? "border-success text-success"
+                                  : "border-border-strong text-ink-muted"
+                              }`}
+                            >
+                              {oi + 1}
                             </span>
-                          )}
+                            {opt}
+                            {isAnswer && (
+                              <span className="ml-auto text-[10px] font-bold text-success">
+                                정답
+                              </span>
+                            )}
+                          </button>
                         </li>
                       );
                     })}
