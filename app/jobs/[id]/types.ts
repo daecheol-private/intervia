@@ -30,6 +30,8 @@ export type Candidate = {
   educationSchool: string | null;
   educationMajor: string | null;
   resumeFilePath: string;
+  // 이력서에서 추출한 증명사진 경로(있을 때만). 카드 표시 전용.
+  photoFilePath?: string | null;
   screeningScore: number | null;
   screeningReport: {
     score: number;

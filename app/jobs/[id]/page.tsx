@@ -194,11 +194,6 @@ export default function JobDetailPage() {
     // 후보자 목록이 갱신되면 깔때기도 갱신 (stage 변경·삭제·신규 업로드 모두 커버)
     setFunnelKey((k) => k + 1);
   }, [jobId]);
-  // 카드의 즐겨찾기 토글 콜백 — stable 참조라야 CandidateCard memo 가 유지된다.
-  const handleFavoriteToggle = useCallback(() => {
-    void loadCandidates();
-  }, [loadCandidates]);
-
   useEffect(() => {
     void loadJob();
     // 변경 시그니처(최대 updated_at) 만 가볍게 확인 — 실패하면 null(이번 주기는 보수적으로 전체 조회).
@@ -1979,7 +1974,6 @@ export default function JobDetailPage() {
                     variant="favorite"
                     selected={selected.has(c.id)}
                     onToggleSelect={toggleOne}
-                    onFavoriteToggle={handleFavoriteToggle}
                   />
                 ))}
               </ul>
@@ -2022,7 +2016,6 @@ export default function JobDetailPage() {
                     variant="round1"
                     selected={selected.has(c.id)}
                     onToggleSelect={toggleOne}
-                    onFavoriteToggle={handleFavoriteToggle}
                   />
                 ))}
               </ul>
@@ -2074,7 +2067,6 @@ export default function JobDetailPage() {
                       c={c}
                       selected={selected.has(c.id)}
                       onToggleSelect={toggleOne}
-                      onFavoriteToggle={handleFavoriteToggle}
                     />
                   ))}
                 </ul>

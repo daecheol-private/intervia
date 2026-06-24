@@ -1,0 +1,1 @@
+ALTER TABLE `candidates` ADD `photo_file_path` text;

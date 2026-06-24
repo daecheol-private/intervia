@@ -83,6 +83,7 @@ export async function GET(
       educationSchool: candidates.educationSchool,
       educationMajor: candidates.educationMajor,
       resumeFilePath: candidates.resumeFilePath,
+      photoFilePath: candidates.photoFilePath,
       // 파싱 완료 여부 판별용 — 마스킹 텍스트 길이 (본문은 전송 안 함).
       maskedLen: sql<number>`COALESCE(LENGTH(${candidates.resumeMaskedText}), 0)`,
       screeningScore: candidates.screeningScore,

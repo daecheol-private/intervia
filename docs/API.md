@@ -123,6 +123,7 @@
 |---|---|---|---|
 | POST | `/api/interview-sessions/[id]/send-email` | 🔒 🏢 | 면접 링크 발송 — 후보자 법인의 SMTP 설정 우선, 없으면 환경변수 SMTP |
 | GET | `/api/uploads/candidate/[id]` | 🔒 🏢 | **권장 다운로드 경로** — 세션 + ownsOrg + 부모 공고 PIN 잠금 검증 후 stream proxy. Blob URL 도 우리 함수가 fetch 해서 외부 직접 노출 X |
+| GET | `/api/uploads/candidate/[id]/photo` | 🔒 🏢 | 이력서에서 추출한 증명사진(표시 전용) inline 서빙. 위 다운로드 경로와 동일한 인증·SSRF 모델. 사진 없으면 404(UI 는 이니셜 아바타로 폴백) |
 | GET | `/api/uploads/[file]` | 🔒 | (deprecated) 로컬 파일 서빙. 로그인 필수, Blob URL 거부 |
 
 ## 법인 SMTP

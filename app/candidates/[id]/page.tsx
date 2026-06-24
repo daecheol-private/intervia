@@ -424,8 +424,21 @@ export default function CandidateDetailPage() {
         <div className="p-6">
         <div className="flex justify-between items-start gap-4">
           <div className="flex items-start gap-4 min-w-0 flex-1">
+            {candidate.photoFilePath ? (
+              // 이력서에서 추출한 증명사진(표시 전용). 깨지면 onError 로 이니셜 폴백.
+              <img
+                src={`/api/uploads/candidate/${candidate.id}/photo`}
+                alt=""
+                aria-hidden
+                className="w-20 h-20 shrink-0 rounded-full object-cover bg-surface-alt"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                  e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                }}
+              />
+            ) : null}
             <div
-              className="w-14 h-14 shrink-0 rounded-2xl bg-surface-alt text-ink-soft flex items-center justify-center text-xl font-bold"
+              className={`w-20 h-20 shrink-0 rounded-full bg-surface-alt text-ink-soft flex items-center justify-center text-2xl font-bold ${candidate.photoFilePath ? "hidden" : ""}`}
               aria-hidden
             >
               {displayCandidateName(candidate.name).trim().charAt(0).toUpperCase() || "?"}
@@ -473,36 +486,6 @@ export default function CandidateDetailPage() {
                   )}
                 </div>
               )}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 mt-4">
-                <InfoCell
-                  label="최종학력"
-                  value={
-                    candidate.educationLevel ||
-                    candidate.educationSchool ||
-                    candidate.educationMajor
-                      ? [
-                          candidate.educationSchool,
-                          candidate.educationMajor,
-                          candidate.educationLevel,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")
-                      : null
-                  }
-                />
-                <InfoCell
-                  label="경력"
-                  value={candidate.careerYears != null ? `${candidate.careerYears}년` : null}
-                />
-                <InfoCell
-                  label="나이"
-                  value={candidate.age != null ? `${candidate.age}세` : null}
-                />
-                <InfoCell
-                  label="지원일"
-                  value={formatKstDateTime(candidate.createdAt)}
-                />
-              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -527,6 +510,37 @@ export default function CandidateDetailPage() {
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
+        </div>
+        {/* 기본 정보 — 사진 컬럼 아래 전체 너비로 빼, 진행바·버튼과 좌측 시작점 정렬 */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 mt-4">
+          <InfoCell
+            label="최종학력"
+            value={
+              candidate.educationLevel ||
+              candidate.educationSchool ||
+              candidate.educationMajor
+                ? [
+                    candidate.educationSchool,
+                    candidate.educationMajor,
+                    candidate.educationLevel,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : null
+            }
+          />
+          <InfoCell
+            label="경력"
+            value={candidate.careerYears != null ? `${candidate.careerYears}년` : null}
+          />
+          <InfoCell
+            label="나이"
+            value={candidate.age != null ? `${candidate.age}세` : null}
+          />
+          <InfoCell
+            label="지원일"
+            value={formatKstDateTime(candidate.createdAt)}
+          />
         </div>
         </div>
         {/* 진행 단계 (컴팩트) — 액션 버튼 영역 위 */}

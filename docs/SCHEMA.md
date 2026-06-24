@@ -178,6 +178,7 @@
 | resume_file_path | TEXT NOT NULL | 로컬 파일명 또는 Blob URL. 폐기 시 빈 문자열 |
 | resume_text | TEXT NOT NULL | **항상 빈 문자열** — 원본은 DB 에 저장 안 함 (PIPA). 컬럼은 호환성 위해 유지 |
 | resume_masked_text | TEXT NULL | 마스킹된 텍스트. **LLM 에 전달되는 유일한 본문**. UI 미리보기도 이 값. 폐기 시 NULL |
+| photo_file_path | TEXT NULL | 이력서에서 추출한 증명사진 경로(로컬 파일명 또는 Blob URL). **표시 전용** — `/api/uploads/candidate/[id]/photo` 로 서빙. **AI 평가 입력엔 절대 미포함**(편향 회피). DOCX(word/media)·PDF(JPEG/DCTDecode)에서 best-effort 추출, 없으면 NULL. 사진=PII → resume_file_path 와 동일 보유정책으로 폐기 |
 | screening_score | INTEGER NULL | 0~100 |
 | screening_report | JSON NULL | 평가 리포트 (`ScreeningResult` — `lib/screening.ts`). 6축 `breakdown`(각 축 score/reason/**confidence**) + `level_match`(연차 보정) + `focus_match`(HR 가이드 가감) + **`requirement_gate`**(JD 필수요건 미충족 시 종합점수 캡 — severity `hard`=40 결격/`soft`=84 학력 등 경력상쇄 가능) + **`requirement_coverage`**(JD 요건별 direct/indirect/none 매트릭스) + **`evidence_quality`**(specific/mixed/generic — 나열형 이력서 캡 60) + **`domain_fit`**(JD 전문 도메인 경험 none 시 캡 50) + `career_info` 등. 종합 점수는 LLM 출력이 아니라 **6축 가중평균 → spread(60기준 1.4배 확대) → 보너스/캡(confidence·focus·구체성·도메인·약한핵심축·필수요건) → 맨 마지막에 직급/연차 페널티(오버스펙 −5/언더스펙 −10, fit 으로 코드가 산출)** 으로 코드가 재계산 (`recomputeScore`). 페널티를 최후에 둬 만점·보너스에 가려지지 않게 함(오버스펙 종합 ≤95). 6축 가중치: tech_fit .20 / experience_depth .20 / role_match .25 / achievement .15 / stability .10 / growth_attitude .10 |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |

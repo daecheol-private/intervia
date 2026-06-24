@@ -477,6 +477,7 @@ export async function purgePdfsAfterClose(): Promise<{
     .select({
       id: candidates.id,
       filePath: candidates.resumeFilePath,
+      photoPath: candidates.photoFilePath,
       outcome: candidates.outcome,
     })
     .from(candidates)
@@ -500,6 +501,15 @@ export async function purgePdfsAfterClose(): Promise<{
         purgedFiles++;
       } catch (e) {
         console.error(`purgePdfs: file delete failed (cid=${t.id})`, e);
+        failedFiles++;
+      }
+    }
+    if (t.photoPath) {
+      try {
+        await deleteFile(t.photoPath);
+        purgedFiles++;
+      } catch (e) {
+        console.error(`purgePdfs: photo delete failed (cid=${t.id})`, e);
         failedFiles++;
       }
     }
@@ -527,6 +537,7 @@ export async function purgePdfsAfterClose(): Promise<{
         resumeFilePath: "",
         resumeText: "",
         resumeMaskedText: null,
+        photoFilePath: null,
       })
       .where(eq(candidates.id, t.id));
   }

@@ -13,6 +13,8 @@ export type Candidate = {
   educationSchool: string | null;
   educationMajor: string | null;
   resumeFilePath: string;
+  // 이력서에서 추출한 증명사진 경로(있을 때만). 표시 전용 — /api/uploads/candidate/[id]/photo 로 서빙.
+  photoFilePath?: string | null;
   resumeMaskedText: string | null;
   screeningScore: number | null;
   screeningReport: {

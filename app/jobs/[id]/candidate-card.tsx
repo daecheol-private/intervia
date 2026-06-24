@@ -4,7 +4,6 @@ import { memo } from "react";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 
-import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
 import { formatKstDateTime } from "@/lib/utils";
 import { CandidateScores } from "./candidate-scores";
 import {
@@ -66,7 +65,6 @@ type Props = {
   variant?: keyof typeof VARIANT_CLASS;
   selected: boolean;
   onToggleSelect: (id: number) => void;
-  onFavoriteToggle: () => void;
 };
 
 function CandidateCardImpl({
@@ -74,7 +72,6 @@ function CandidateCardImpl({
   variant = "default",
   selected,
   onToggleSelect,
-  onFavoriteToggle,
 }: Props) {
   return (
     <li className="relative group">
@@ -95,13 +92,30 @@ function CandidateCardImpl({
         className={`card-hover ${VARIANT_CLASS[variant]} rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
       >
         <div className="flex justify-between items-start gap-2 sm:gap-4 w-full">
-          <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            {/* 이력서에서 추출한 증명사진(표시 전용). 없으면 이니셜 아바타로 폴백해 정렬 유지. */}
+            <div className="shrink-0">
+              {c.photoFilePath ? (
+                <img
+                  src={`/api/uploads/candidate/${c.id}/photo`}
+                  alt=""
+                  aria-hidden
+                  className="w-14 h-14 rounded-full object-cover bg-surface-alt"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                  }}
+                />
+              ) : null}
+              <div
+                className={`w-14 h-14 rounded-full bg-surface-alt text-ink-soft flex items-center justify-center text-lg font-bold ${c.photoFilePath ? "hidden" : ""}`}
+                aria-hidden
+              >
+                {c.name.trim().charAt(0).toUpperCase() || "?"}
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <CandidateFavoriteStar
-                candidateId={c.id}
-                initial={c.favorited}
-                onToggle={onFavoriteToggle}
-              />
               <span className="font-semibold text-ink">{c.name}</span>
               {c.outcome !== "hired" && <StageBadge stage={c.stage} />}
               {c.outcome ? (
@@ -136,6 +150,7 @@ function CandidateCardImpl({
             {c.careerSummary && (
               <p className="text-xs text-ink-soft mt-1">{c.careerSummary}</p>
             )}
+            </div>
           </div>
           <CandidateScores c={c} />
         </div>

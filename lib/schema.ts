@@ -379,6 +379,11 @@ export const candidates = sqliteTable("candidates", {
   resumeFilePath: text("resume_file_path").notNull(),
   resumeText: text("resume_text").notNull(),
   resumeMaskedText: text("resume_masked_text"),
+  // 이력서에서 추출한 증명사진 파일 경로 (storage key — 로컬 파일명 또는 Blob URL).
+  // 표시 전용(후보자 상세). AI 평가 입력에는 절대 포함하지 않는다(채용 편향 회피).
+  // 사진=PII → 본문(resume_file_path)과 동일한 보유기간 정책으로 폐기(+30일/결정 시/삭제 시).
+  // nullable: 추출 실패·미지원 형식·사진 없는 이력서가 정상 케이스.
+  photoFilePath: text("photo_file_path"),
   screeningScore: integer("screening_score"),
   screeningReport: text("screening_report", { mode: "json" }).$type<{
     score: number;

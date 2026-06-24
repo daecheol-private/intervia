@@ -180,13 +180,14 @@ export async function purgeOnDecision(candidateId: number): Promise<void> {
   const [c] = await db
     .select({
       resumeFilePath: candidates.resumeFilePath,
+      photoFilePath: candidates.photoFilePath,
       outcome: candidates.outcome,
     })
     .from(candidates)
     .where(eq(candidates.id, candidateId));
   if (!c) return;
   if (c.outcome === "hired") {
-    // 합격자는 이력서·첨부 그대로 보존
+    // 합격자는 이력서·첨부·사진 그대로 보존
     return;
   }
   const atts = await db
@@ -200,6 +201,11 @@ export async function purgeOnDecision(candidateId: number): Promise<void> {
     c.resumeFilePath
       ? deleteFile(c.resumeFilePath).catch((e) =>
           console.error(`purgeOnDecision: file delete failed (cid=${candidateId})`, e)
+        )
+      : Promise.resolve(),
+    c.photoFilePath
+      ? deleteFile(c.photoFilePath).catch((e) =>
+          console.error(`purgeOnDecision: photo delete failed (cid=${candidateId})`, e)
         )
       : Promise.resolve(),
     ...atts.map((a) =>
@@ -217,6 +223,7 @@ export async function purgeOnDecision(candidateId: number): Promise<void> {
       resumeText: "",
       resumeMaskedText: null,
       resumeFilePath: "",
+      photoFilePath: null,
     })
     .where(eq(candidates.id, candidateId));
 }

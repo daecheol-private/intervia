@@ -24,7 +24,8 @@ import { extractPII } from "./pii-extract";
 import { extractEducation } from "./education-extract";
 import { maskText } from "./mask";
 import { sanitizeResumeText } from "./prompt-safety";
-import { readStoredFile } from "./storage";
+import { readStoredFile, saveFile } from "./storage";
+import { extractPhotoFromBuffer } from "./photo-extract";
 import { looksLikeKoreanName } from "./file-classify";
 import { log } from "./logger";
 import { logAudit } from "./audit";
@@ -261,6 +262,24 @@ export async function ensureParsed(candidateId: number): Promise<void> {
       resumeContentHash: contentHashOf(resumeText),
     })
     .where(eq(candidates.id, candidateId));
+
+  // 증명사진 추출 — best-effort, 표시 전용. 실패해도 파싱은 성공으로 둔다(절대 throw 금지).
+  // 사진은 AI 평가에 넣지 않는다(편향 회피). PII 라 본문과 동일 보유정책으로 폐기됨.
+  try {
+    const photo = await extractPhotoFromBuffer(buf, originalName);
+    if (photo) {
+      const photoPath = await saveFile(`photo.${photo.ext}`, photo.data);
+      await db
+        .update(candidates)
+        .set({ photoFilePath: photoPath })
+        .where(eq(candidates.id, candidateId));
+    }
+  } catch (e) {
+    log.warn("resume_photo_extract_failed", {
+      candidateId,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
 
   // 첨부(포트폴리오·자소서 등) 파싱+마스킹 — 텍스트 추출 가능 + 아직 미마스킹만.
   const atts = await db

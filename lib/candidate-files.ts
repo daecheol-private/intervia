@@ -18,9 +18,13 @@ export async function deleteCandidateFiles(
 ): Promise<{ deletedFiles: number; errors: number }> {
   if (candidateIds.length === 0) return { deletedFiles: 0, errors: 0 };
 
-  // 메인 이력서 경로
+  // 메인 이력서 경로 + 증명사진 경로
   const resumeRows = await db
-    .select({ id: candidates.id, filePath: candidates.resumeFilePath })
+    .select({
+      id: candidates.id,
+      filePath: candidates.resumeFilePath,
+      photoPath: candidates.photoFilePath,
+    })
     .from(candidates)
     .where(inArray(candidates.id, candidateIds));
 
@@ -34,6 +38,7 @@ export async function deleteCandidateFiles(
   const paths = new Set<string>();
   for (const r of resumeRows) {
     if (r.filePath) paths.add(r.filePath);
+    if (r.photoPath) paths.add(r.photoPath);
   }
   for (const r of attRows) {
     if (r.filePath) paths.add(r.filePath);

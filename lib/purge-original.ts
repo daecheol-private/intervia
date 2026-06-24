@@ -40,6 +40,7 @@ export async function purgeExpiredOriginals(
     .select({
       id: candidates.id,
       filePath: candidates.resumeFilePath,
+      photoPath: candidates.photoFilePath,
     })
     .from(candidates)
     .where(
@@ -61,6 +62,15 @@ export async function purgeExpiredOriginals(
         failedFiles++;
       }
     }
+    // 증명사진도 PII → 본문과 같은 시점에 폐기.
+    if (t.photoPath) {
+      try {
+        await deleteFile(t.photoPath);
+      } catch (e) {
+        console.error(`purge: photo delete failed (cid=${t.id})`, e);
+        failedFiles++;
+      }
+    }
     // 첨부(포트폴리오·자소서 등) 원본 파일·행도 폐기 — 메인 이력서만 지우면 첨부 PII 가
     // 공고 종결(+7/+14일) 전까지 남아 "+30일 원본 폐기" 최소보유 원칙이 깨진다.
     await deleteAttachmentsForCandidate(t.id).catch(() => {});
@@ -69,7 +79,12 @@ export async function purgeExpiredOriginals(
       .where(eq(candidateAttachments.candidateId, t.id));
     await db
       .update(candidates)
-      .set({ resumeText: "", resumeMaskedText: null, resumeFilePath: "" })
+      .set({
+        resumeText: "",
+        resumeMaskedText: null,
+        resumeFilePath: "",
+        photoFilePath: null,
+      })
       .where(eq(candidates.id, t.id));
   }
 
