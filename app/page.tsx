@@ -14,6 +14,7 @@ import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { getUnlockChecker } from "@/lib/job-lock";
 import { AppShell } from "./components/AppShell";
 import { ChatPreview } from "./components/ChatPreview";
+import { ProductTour } from "./components/ProductTour";
 import { CountUp } from "./components/CountUp";
 import { HowItWorksCarousel } from "./components/HowItWorksCarousel";
 import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
@@ -1258,6 +1259,8 @@ async function Landing() {
       </section>
       </div>
 
+      <ProductTour />
+
       <WhyNotJobBoard />
 
       <section className="relative overflow-hidden">
@@ -1283,7 +1286,7 @@ async function Landing() {
               eyebrow="How it works"
               eyebrowIcon={Workflow}
               title="채용 사이클의 80%를 자동화합니다"
-              subtitle="공고 등록부터 합·불 통보까지, 사람이 매번 할 필요 없는 일을 AI가 처리합니다."
+              subtitle="실제 사용 순서를 7단계로 — 공고 등록부터 합·불 통보까지, 사람이 매번 할 필요 없는 일을 AI가 처리합니다."
             />
           </Reveal>
 
