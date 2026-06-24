@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
-import { HL, Section } from "./shared";
+import { HL } from "./shared";
 import {
   RecordedInterviewPanel,
   completedRecordedSummary,
@@ -178,43 +178,9 @@ export function InterviewQuestionsPanel({
   const hasRow = status !== null;
 
   return (
-    <Section
-      title={isExec ? "2차 면접" : "1차 면접"}
-      defaultOpen={false}
-      summary={
-        recordedDone ? (
-          <span className="text-success">
-            대면 평가 완료{recordedSummary ? ` · ${recordedSummary}` : ""}
-          </span>
-        ) : schedule?.status === "selected" && schedule.selectedSlot ? (
-          <span className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-primary-soft text-primary-deep border border-primary/30">
-              확정
-            </span>
-            <span className="text-ink-soft">
-              {formatKstDateTime(schedule.selectedSlot.start)}
-            </span>
-            <span className="text-ink-muted">
-              · {schedule.modeOnline ? "온라인" : "오프라인"}
-            </span>
-          </span>
-        ) : schedule?.status === "counter_proposed" ? (
-          <span className="text-warning">🔄 후보자 대안 일정 제안</span>
-        ) : schedule?.status === "pending" ? (
-          <span className="text-warning">⏳ 후보자 응답 대기</span>
-        ) : generating ? (
-          <span className="text-primary-deep">⏳ 생성 중</span>
-        ) : sheet ? (
-          <span className="text-primary-deep">생성됨 · 클릭하여 열람</span>
-        ) : failed ? (
-          <span className="text-danger">생성 실패 · 재시도</span>
-        ) : confirmed ? (
-          <span className="text-ink-muted">생성 가능</span>
-        ) : (
-          <span className="text-ink-muted">{roundNo} 일정 확정 후 활성화</span>
-        )
-      }
-    >
+    <>
+      {/* 서류평가·AI면접 탭처럼 접기 헤더 없이 카드에 내용을 바로 노출(타이틀은 상단 탭이 대신함). */}
+      <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
       {!confirmed && !hasRow && !recordedDone && !schedule && (
         <div className="text-center py-6">
           <div className="text-3xl mb-3">📝</div>
@@ -328,6 +294,7 @@ export function InterviewQuestionsPanel({
         </div>
       )}
 
+      </div>
       {open && sheet && (
         <QuestionSheetModal
           title={isExec ? "2차(임원) 면접 질문지" : "1차 면접 질문지"}
@@ -336,7 +303,7 @@ export function InterviewQuestionsPanel({
           onClose={() => setOpen(false)}
         />
       )}
-    </Section>
+    </>
   );
 }
 

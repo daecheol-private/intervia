@@ -527,19 +527,26 @@ function RecordedReportCard({
             isCompleted ? "space-y-5 text-sm" : "px-4 py-4 space-y-5 text-sm"
           }
         >
-          {/* ① 결정 요약 */}
-          <div className="flex items-baseline gap-3">
+          {/* ① 결정 요약 — AI 면접 평가와 동일한 헤더 구조(점수·추천 좌측, 메타는 우측). */}
+          <div className="flex items-baseline gap-3 flex-wrap">
             <div
-              className={`text-4xl font-bold tabular-nums ${scoreColor(report.overall_score)}`}
+              className={`text-5xl font-bold tabular-nums ${scoreColor(report.overall_score)}`}
             >
               {report.overall_score}
             </div>
-            <span className="text-sm text-ink-muted font-medium">/ 100</span>
+            <span className="text-base text-ink-muted font-medium">/ 100</span>
             {showRec(report.recommendation) && (
               <span
-                className={`ml-auto text-xs font-semibold px-2.5 py-1 rounded-md border ${recColor[report.recommendation]}`}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-md border ${recColor[report.recommendation]}`}
               >
                 {report.recommendation}
+              </span>
+            )}
+            {isCompleted && (
+              <span className="ml-auto text-xs text-ink-muted">
+                대면 · {ri.mode === "live" ? "준실시간" : "업로드"}{" "}
+                {fmtDuration(ri.durationSeconds)} ·{" "}
+                {formatKstDateTime(ri.createdAt)}
               </span>
             )}
           </div>
@@ -591,43 +598,45 @@ function RecordedReportCard({
             )}
           </div>
 
-          {/* 강점 / 우려 */}
-          {/* 강점/우려 — 이력서·AI면접의 BulletBlock 과 동일한 시각(점 불릿 + 동일 제목색).
-              대면만의 차이는 근거(`근거 #N`) 칩뿐. */}
-          {report.strengths.length > 0 && (
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-primary-deep">
-                강점
-              </div>
-              <ul className="space-y-1.5">
-                {report.strengths.map((s, i) => (
-                  <li key={i} className="flex gap-2 text-ink-soft">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
-                    <span className="leading-relaxed">
-                      <HL text={withLeadEmphasis(s.text)} />
-                      <EvidenceChips seqs={s.evidence_seq} onJump={jumpTo} />
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {report.concerns.length > 0 && (
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-warning">
-                우려
-              </div>
-              <ul className="space-y-1.5">
-                {report.concerns.map((c, i) => (
-                  <li key={i} className="flex gap-2 text-ink-soft">
-                    <span className="w-1.5 h-1.5 rounded-full bg-warning mt-2 shrink-0" />
-                    <span className="leading-relaxed">
-                      <HL text={withLeadEmphasis(c.text)} />
-                      <EvidenceChips seqs={c.evidence_seq} onJump={jumpTo} />
-                    </span>
-                  </li>
-                ))}
-              </ul>
+          {/* 강점 / 우려 — 서류평가·AI면접과 동일하게 좌우 2열 카드. 대면만의 차이는 근거(`근거 #N`) 칩. */}
+          {(report.strengths.length > 0 || report.concerns.length > 0) && (
+            <div className="grid md:grid-cols-2 gap-4">
+              {report.strengths.length > 0 && (
+                <div className="rounded-xl border p-3.5 bg-primary-soft/60 border-primary/30">
+                  <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-primary-deep">
+                    강점
+                  </div>
+                  <ul className="space-y-1.5">
+                    {report.strengths.map((s, i) => (
+                      <li key={i} className="flex gap-2 text-ink-soft">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
+                        <span className="leading-relaxed">
+                          <HL text={withLeadEmphasis(s.text)} />
+                          <EvidenceChips seqs={s.evidence_seq} onJump={jumpTo} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {report.concerns.length > 0 && (
+                <div className="rounded-xl border p-3.5 bg-warning-soft/70 border-warning/30">
+                  <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-warning">
+                    우려
+                  </div>
+                  <ul className="space-y-1.5">
+                    {report.concerns.map((c, i) => (
+                      <li key={i} className="flex gap-2 text-ink-soft">
+                        <span className="w-1.5 h-1.5 rounded-full bg-warning mt-2 shrink-0" />
+                        <span className="leading-relaxed">
+                          <HL text={withLeadEmphasis(c.text)} />
+                          <EvidenceChips seqs={c.evidence_seq} onJump={jumpTo} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

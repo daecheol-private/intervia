@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { confirmDialog } from "@/app/components/Dialog";
-import { Section } from "./shared";
 
 type Attachment = {
   id: number;
@@ -125,7 +124,8 @@ export function AttachmentsPanel({
   };
 
   return (
-    <Section title="첨부 파일" collapsible={false}>
+    // 서류평가·AI면접 등 다른 탭과 동일하게 접기/타이틀 헤더 없이 카드에 바로 노출(타이틀은 탭이 대신).
+    <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
       <p className="text-xs text-ink-muted mb-3">
         경력기술서·자기소개서·포트폴리오 등. 텍스트 추출이 가능한 문서(PDF·DOCX·TXT 등)는
         AI 서류평가에 함께 반영되며, 이미지 등 추출 불가 파일은 사람 면접관 참고용입니다.
@@ -217,7 +217,7 @@ export function AttachmentsPanel({
           {err && <p className="text-xs text-danger mt-1.5 whitespace-pre-wrap">{err}</p>}
         </div>
       )}
-    </Section>
+    </div>
   );
 }
 

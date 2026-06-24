@@ -428,8 +428,22 @@ export function InterviewResult({
         ))}
       </div>
 
-      <BulletBlock title="강점" items={ev.strengths} color="emerald" emphasizeLead />
-      <BulletBlock title="우려" items={ev.concerns} color="amber" emphasizeLead />
+      <div className="grid md:grid-cols-2 gap-4">
+        <BulletBlock
+          title="강점"
+          items={ev.strengths}
+          color="emerald"
+          emphasizeLead
+          emphasis
+        />
+        <BulletBlock
+          title="우려"
+          items={ev.concerns}
+          color="amber"
+          emphasizeLead
+          emphasis
+        />
+      </div>
 
       <CultureFitBlock
         cultureFit={ev.culture_fit}

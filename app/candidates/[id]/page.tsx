@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Brain,
@@ -57,6 +57,7 @@ import {
   showRec,
 } from "./shared";
 import { OutcomeBadge, StagePanel } from "./stage-panel";
+import { CandidateTabRail, type TabItem, type TabKey } from "./tab-rail";
 import type { Candidate, Job, Schedule, Session } from "./types";
 
 // 면접 종료 후 평가는 complete 요청 안에서 inline 생성된다(실측 약 1분, 최대 1~2분).
@@ -94,9 +95,40 @@ export default function CandidateDetailPage() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [screening, setScreening] = useState(false);
   const [screenErr, setScreenErr] = useState("");
-  const [tab, setTab] = useState<
-    "overview" | "screening" | "ai" | "round1" | "round2" | "files"
-  >("overview");
+  const [tab, setTab] = useState<TabKey>("overview");
+  // 세로 탭 레일 — 상단 탭바가 사라졌는지 감지(sentinel)해 노출 여부 판정.
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  // 비동기 fetch 탭(1차/2차/첨부)은 한 번 열면 언마운트하지 않고 숨겨 유지 —
+  // 재방문 시 재fetch·빈화면 깜빡임 없음(스크롤 위치도 보존).
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabKey>>(
+    () => new Set<TabKey>()
+  );
+  useEffect(() => {
+    setVisitedTabs((v) => (v.has(tab) ? v : new Set(v).add(tab)));
+  }, [tab]);
+  // 탭 전환 시 항상 "점수 상단 + 세로레일 보이는" 위치로 정렬(초기 진입 제외).
+  // 콘텐츠 경계(sentinel)를 고정 헤더(액션바, 모바일은 +상단바) 바로 아래로 스크롤 →
+  // 가로 탭바가 액션바 뒤로 완전히 숨고 세로 레일이 노출됨. 액션바 높이는 실측.
+  const tabAnchorRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  // 세로 레일로 탭을 바꿀 때만 초기 위치로 정렬한다(상단 가로 탭 클릭은 스크롤 이동 없음).
+  const scrollOnTabChange = useRef(false);
+  useEffect(() => {
+    if (!scrollOnTabChange.current) return;
+    scrollOnTabChange.current = false;
+    const anchor = tabAnchorRef.current;
+    if (!anchor) return;
+    const isLg = window.matchMedia("(min-width: 1024px)").matches;
+    const stickyTop = isLg ? 0 : 56; // 모바일 상단바(h-14)
+    const abH = actionBarRef.current?.getBoundingClientRect().height ?? 56;
+    // 고정 헤더 바로 아래에서 20px 더 내려 가로 탭바를 완전히 숨기고 세로 레일을 노출.
+    const target =
+      window.scrollY +
+      anchor.getBoundingClientRect().top -
+      (stickyTop + abH) +
+      20;
+    window.scrollTo({ top: Math.max(0, target) });
+  }, [tab]);
 
   const load = async () => {
     try {
@@ -383,6 +415,34 @@ export default function CandidateDetailPage() {
   const hasRound2 =
     candidateRank >= STAGE_RANK.round1_passed || !!round2Schedule;
 
+  // 상단 가로 탭 + 좌측 세로 레일이 공유하는 단일 탭 정의(불일치 방지).
+  const tabItems: TabItem[] = [
+    { key: "overview", label: "개요", Icon: Gauge, on: true, hint: "" },
+    { key: "screening", label: "서류평가", Icon: FileText, on: true, hint: "" },
+    {
+      key: "ai",
+      label: "AI 면접",
+      Icon: Brain,
+      on: hasAiInterview,
+      hint: "AI 면접 진행 후 활성화됩니다",
+    },
+    {
+      key: "round1",
+      label: "1차 면접",
+      Icon: User,
+      on: hasRound1,
+      hint: "1차 면접 단계부터 활성화됩니다",
+    },
+    {
+      key: "round2",
+      label: "2차 면접",
+      Icon: Users,
+      on: hasRound2,
+      hint: "1차 합격 후 활성화됩니다",
+    },
+    { key: "files", label: "첨부파일", Icon: Paperclip, on: true, hint: "" },
+  ];
+
   // 진행단계 스테퍼 — 후보자의 현재 위치를 5단계로. 종결(불합격/취소)도 반영.
   const isHired = candidate.outcome === "hired";
   const isTerminated =
@@ -595,7 +655,10 @@ export default function CandidateDetailPage() {
       {/* 액션 바 — sticky: 스크롤해도 상단 고정돼 언제든 단계 변경·종결 가능.
           위 헤더 카드(border-b-0 rounded-t)와 시각적으로 한 카드처럼 붙는다.
           마스킹 전체보기를 펼치면 길어져 고정을 해제한다. */}
-      <div className={showFullResume ? "" : "sticky top-14 lg:top-0 z-30"}>
+      <div
+        ref={actionBarRef}
+        className={showFullResume ? "" : "sticky top-14 lg:top-0 z-30"}
+      >
         <div className="bg-card border border-border-default rounded-b-2xl shadow-sm px-6 py-3">
           <StagePanel
             candidate={candidate}
@@ -613,45 +676,11 @@ export default function CandidateDetailPage() {
 
       {/* Tabs — 안 된 전형 탭은 disable. overflow-x-auto 는 (overflow-y 도 auto 가 돼)
           활성탭 밑줄 1px 가 세로 스크롤바를 유발하므로 제거. 좁은 화면은 wrap 으로 처리. */}
-      <div className="mt-5 border-b border-border-default flex flex-wrap gap-1">
-        {[
-          { key: "overview" as const, label: "개요", Icon: Gauge, on: true, hint: "" },
-          {
-            key: "screening" as const,
-            label: "서류평가",
-            Icon: FileText,
-            on: true,
-            hint: "",
-          },
-          {
-            key: "ai" as const,
-            label: "AI 면접",
-            Icon: Brain,
-            on: hasAiInterview,
-            hint: "AI 면접 진행 후 활성화됩니다",
-          },
-          {
-            key: "round1" as const,
-            label: "1차 면접",
-            Icon: User,
-            on: hasRound1,
-            hint: "1차 면접 단계부터 활성화됩니다",
-          },
-          {
-            key: "round2" as const,
-            label: "2차 면접",
-            Icon: Users,
-            on: hasRound2,
-            hint: "1차 합격 후 활성화됩니다",
-          },
-          {
-            key: "files" as const,
-            label: "첨부파일",
-            Icon: Paperclip,
-            on: true,
-            hint: "",
-          },
-        ].map((t) => (
+      <div
+        ref={tabBarRef}
+        className="mt-5 border-b border-border-default flex flex-wrap gap-1"
+      >
+        {tabItems.map((t) => (
           <button
             key={t.key}
             type="button"
@@ -674,9 +703,24 @@ export default function CandidateDetailPage() {
         ))}
       </div>
 
+      {/* 스크롤로 상단 탭이 사라지면 좌측 거터에 뜨는 세로 탭 레일(데스크톱·여백 충분할 때만) */}
+      <CandidateTabRail
+        items={tabItems}
+        current={tab}
+        onSelect={(k) => {
+          if (k === tab) return;
+          scrollOnTabChange.current = true;
+          setTab(k);
+        }}
+        sentinelRef={tabBarRef}
+      />
+
+      {/* 탭 전환 스크롤 기준점 — 탭바와 콘텐츠 경계(위 effect 가 여기로 스크롤). */}
+      <div ref={tabAnchorRef} aria-hidden />
+
       {/* ── 개요 — 스코어카드 + 진행단계 + 6축 차트 ── */}
       {tab === "overview" && (
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-4 min-h-[calc(100vh-2rem)]">
           <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
             <div className="flex flex-col lg:flex-row gap-6">
               {/* 좌: 종합 스코어(+서류/면접 우측 인라인) + 종합 소견 */}
@@ -1016,8 +1060,10 @@ export default function CandidateDetailPage() {
       )}
 
       {/* ── 1차 면접 — 스케줄·문제·녹음 평가 ── */}
-      {tab === "round1" && (
-        <div className="mt-4 space-y-4">
+      {(tab === "round1" || visitedTabs.has("round1")) && (
+        <div
+          className={`mt-4 space-y-4 min-h-[calc(100vh-2rem)] ${tab === "round1" ? "" : "hidden"}`}
+        >
           <InterviewQuestionsPanel
             candidateId={candidate.id}
             round="round1"
@@ -1032,8 +1078,10 @@ export default function CandidateDetailPage() {
       )}
 
       {/* ── 2차 면접 — 스케줄·문제·녹음 평가 ── */}
-      {tab === "round2" && (
-        <div className="mt-4 space-y-4">
+      {(tab === "round2" || visitedTabs.has("round2")) && (
+        <div
+          className={`mt-4 space-y-4 min-h-[calc(100vh-2rem)] ${tab === "round2" ? "" : "hidden"}`}
+        >
           <InterviewQuestionsPanel
             candidateId={candidate.id}
             round="round2"
@@ -1048,8 +1096,10 @@ export default function CandidateDetailPage() {
       )}
 
       {/* ── 첨부·이의 ── */}
-      {tab === "files" && (
-        <div className="mt-4 space-y-4">
+      {(tab === "files" || visitedTabs.has("files")) && (
+        <div
+          className={`mt-4 space-y-4 min-h-[calc(100vh-2rem)] ${tab === "files" ? "" : "hidden"}`}
+        >
       <AttachmentsPanel
         candidateId={candidate.id}
         screeningDone={screeningPhase === "done"}
