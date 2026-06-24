@@ -61,11 +61,11 @@ export function FunnelPanel({
   if (!data || data.total === 0) return null;
 
   // 전형 단계 — 버킷 5개 (서류 → AI 면접 → 1차 → 2차 → 최종 합격).
-  // 색: 화이트(#FFFFFF) → 브랜드 primary(#1C3478) 를 RGB 선형보간한 5단계를 solid 채움.
-  //   #FFFFFF → #C6CCDD → #8E9ABC → #55679A → #1C3478(=primary). 흰색에서 시작해
-  //   깊어질수록 파랑·네이비로 — 밝고 산뜻하게 진행 순서를 색으로 읽는다.
-  //   밝은 1~2칸은 진한 글씨, 3~5칸은 흰 글씨. 서류칸(흰 배경)은 옅은 테두리로 구분.
-  //   후보자 카드 좌측 색띠(stageGroupBorder)는 같은 ramp(서류는 띠 가시성 위해 옅은 회색).
+  // 색: 랜딩페이지 '전체 기능' 카드 톤(TONE_CLASS)을 그대로 차용 — 브랜드 일관성.
+  //   1 서류=white(bg-card) · 2 AI=beige(surface-alt) · 3 1차=soft(primary-soft) ·
+  //   4 2차=primary/70(3↔5 잇는 중간 블루) · 5 합격=forest(primary).
+  //   1~3 진한 글씨(text-ink), 4~5 흰 글씨. 서류칸(흰 배경)은 옅은 테두리로 카드와 구분.
+  //   후보자 카드 좌측 색띠는 thin 4px strip 가시성상 primary 농도 ramp 로 표현(stageGroupBorder).
   // active: 값이 있는 셀(solid), empty: 값 0인 셀(dimCell 로 옅게).
   const s = (k: string) => Number(data.stages[k] ?? 0);
   type PipelineCell = {
@@ -93,8 +93,8 @@ export function FunnelPanel({
         { label: "평가전", n: s("applied") },
         { label: "평가완료", n: s("screened") },
       ],
-      fill: "border-[#D7DBE3] bg-white text-[#1f2937]",
-      ring: "ring-[#1C3478]/45",
+      fill: "border-border-default bg-card text-ink",
+      ring: "ring-primary/40",
     },
     {
       stage: "bucket_ai",
@@ -105,8 +105,8 @@ export function FunnelPanel({
         { label: "응시대기", n: s("ai_pending") },
         { label: "면접완료", n: s("ai_evaluated") },
       ],
-      fill: "border-[#C6CCDD] bg-[#C6CCDD] text-[#1f2937]",
-      ring: "ring-[#1C3478]/45",
+      fill: "border-border-default bg-surface-alt text-ink",
+      ring: "ring-primary/40",
     },
     {
       stage: "bucket_round1",
@@ -118,8 +118,8 @@ export function FunnelPanel({
         { label: "일정조율", n: s("round1_scheduling") },
         { label: "면접확정", n: s("round1_waiting") },
       ],
-      fill: "border-[#8E9ABC] bg-[#8E9ABC] text-white",
-      ring: "ring-[#1C3478]/45",
+      fill: "border-primary/15 bg-primary-soft text-ink",
+      ring: "ring-primary/40",
     },
     {
       stage: "bucket_round2",
@@ -130,8 +130,8 @@ export function FunnelPanel({
         { label: "진행·일정", n: s("round1_passed") },
         { label: "최종결정", n: s("round2_passed") },
       ],
-      fill: "border-[#55679A] bg-[#55679A] text-white",
-      ring: "ring-[#1C3478]/45",
+      fill: "border-primary/60 bg-primary/70 text-white",
+      ring: "ring-primary/50",
     },
     {
       stage: "hired",

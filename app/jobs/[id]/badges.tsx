@@ -40,10 +40,10 @@ export function Tag({ children }: { children: React.ReactNode }) {
 
 /**
  * 후보자 카드의 stage 그룹 색 — 깔때기(FunnelPanel) 그룹과 동일.
- * 진행 그라데이션: 화이트(#FFFFFF) → 브랜드 primary(#1C3478) RGB 선형보간 5단계.
- *   G1 서류(흰 띠는 안 보이니 옅은 회색 #DCE0E8) → G2 AI면접 #C6CCDD → G3 1차 #8E9ABC →
- *   G4 2차 #55679A → G5 최종합격 primary(#1C3478) / 종결(danger).
- *   흰색에서 단계가 깊어질수록 브랜드 네이비로. FunnelPanel 셀과 동일 ramp(거기선 solid 채움).
+ * 진행 표시: 브랜드 네이비 농도 ramp (thin 4px strip 은 옅은 색이 안 보여 농도로 구분).
+ *   G1 서류 primary/25 → G2 AI primary/45 → G3 1차 primary/65 → G4 2차 primary/80 →
+ *   G5 최종합격 primary / 종결(danger). FunnelPanel 셀은 랜딩 카드 톤(white→surface-alt→
+ *   primary-soft→primary/70→primary)을 쓰고, 띠는 같은 네이비를 농도로 표현.
  *
  * 좌측 4px border 로 표시 → 어떤 단계 그룹인지 한눈에. 즐겨찾기 amber 외곽과 직교.
  */
@@ -65,18 +65,18 @@ export function stageGroupBorder(
     return "border-l-4 border-l-danger/60";
   if (stage === "hired" || outcome === "hired")
     return "border-l-4 border-l-primary";
-  if (stage === "round2_passed") return "border-l-4 border-l-[#55679A]";
+  if (stage === "round2_passed") return "border-l-4 border-l-primary/80";
   if (
     stage === "round1_candidate" ||
     stage === "round1_scheduling" ||
     stage === "round1_waiting" ||
     stage === "round1_passed"
   )
-    return "border-l-4 border-l-[#8E9ABC]";
+    return "border-l-4 border-l-primary/65";
   if (stage === "ai_pending" || stage === "ai_evaluated")
-    return "border-l-4 border-l-[#C6CCDD]";
+    return "border-l-4 border-l-primary/45";
   // applied · screened
-  return "border-l-4 border-l-[#DCE0E8]";
+  return "border-l-4 border-l-primary/25";
 }
 
 const STAGE_META = STAGE_META_SHARED as Record<
