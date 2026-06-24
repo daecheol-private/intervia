@@ -558,26 +558,16 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       isDev={process.env.NODE_ENV !== "production"}
     >
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      {/* 환영 헤더 — 인사 + 1차 액션(새 공고). 공고 0개 빈 상태에서는 가이드가 대신하므로 버튼 숨김. */}
-      <header className="mb-8 flex items-start justify-between gap-4 flex-wrap">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-ink">
-            안녕하세요, {orgName ? `${orgName} ` : ""}{me.name} 님
-          </h1>
-          <p className="text-sm text-ink-soft mt-1">
-            {totalJobs === 0
-              ? "Intervia 에 오신 걸 환영합니다. 아래 4단계로 첫 채용을 시작해 보세요."
-              : "오늘의 채용 현황을 한눈에 확인하세요."}
-          </p>
-        </div>
-        {totalJobs > 0 && (
-          <Link
-            href="/jobs/new"
-            className="hidden sm:inline-flex items-center gap-1.5 shrink-0 text-sm px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface font-medium transition-colors shadow-sm"
-          >
-            + 새 공고
-          </Link>
-        )}
+      {/* 환영 헤더 — 인사만. '새 공고' 1차 액션은 아래 공고 목록 섹션 헤더에 둔다(중복 제거). */}
+      <header className="mb-8">
+        <h1 className="text-2xl font-bold text-ink">
+          안녕하세요, {orgName ? `${orgName} ` : ""}{me.name} 님
+        </h1>
+        <p className="text-sm text-ink-soft mt-1">
+          {totalJobs === 0
+            ? "Intervia 에 오신 걸 환영합니다. 아래 4단계로 첫 채용을 시작해 보세요."
+            : "오늘의 채용 현황을 한눈에 확인하세요."}
+        </p>
       </header>
 
       {/* 공고가 하나도 없으면 KPI/목록 대신 시작 가이드만 — 첫 화면 단순화 */}
