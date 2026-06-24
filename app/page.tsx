@@ -270,6 +270,13 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         round1Candidates: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
         round1Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = ${candidates.id} AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
         round2Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+        // 서류평가 완료 → 면접 진행 결정 (stage=screened). 공고 상세 "서류평가 후 면접 진행 결정"과 동일 집계.
+        screenedDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'screened' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
+        // 서류 평가 조치 필요(실패·충전대기·미실행) — funnel route resumeActionNeeded 와 동일 판정.
+        resumeActionNeeded: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('applied','screened') AND ${candidates.outcome} IS NULL AND (
+          (SELECT s.status FROM screening_jobs s WHERE s.candidate_id = ${candidates.id} ORDER BY s.id DESC LIMIT 1) IN ('failed','paused')
+          OR ((SELECT s.status FROM screening_jobs s WHERE s.candidate_id = ${candidates.id} ORDER BY s.id DESC LIMIT 1) IS NULL AND ${candidates.screeningReport} IS NULL)
+        ) THEN 1 ELSE 0 END)`,
       })
       .from(jobInterviewers)
       .innerJoin(jobPostings, eq(jobPostings.id, jobInterviewers.jobId))
@@ -399,6 +406,29 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   for (const j of myInterviewerJobs) {
     const locked = j.passwordHash != null && !unlocked(j.jobId);
     const displayTitle = locked ? "🔒 비공개" : j.title;
+    // 파이프라인 순서 — 서류 평가 조치 → 서류평가 후 진행 결정 → (이하 AI/면접 단계)
+    const resumeAction = Number(j.resumeActionNeeded);
+    if (resumeAction > 0) {
+      notifications.push({
+        id: `resumeaction-${j.jobId}`,
+        icon: "⚠️",
+        title: `[${displayTitle}] 서류 평가 조치 · 실패·미실행`,
+        count: resumeAction,
+        href: `/jobs/${j.jobId}?stage=resume_action`,
+        tone: "amber",
+      });
+    }
+    const screened = Number(j.screenedDecision);
+    if (screened > 0) {
+      notifications.push({
+        id: `screened-${j.jobId}`,
+        icon: "📄",
+        title: `[${displayTitle}] 서류평가 후 면접 진행 결정`,
+        count: screened,
+        href: `/jobs/${j.jobId}?stage=screened`,
+        tone: "indigo",
+      });
+    }
     const decision = Number(j.pendingDecision);
     const round1Cand = Number(j.round1Candidates);
     if (decision > 0) {
