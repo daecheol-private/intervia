@@ -13,7 +13,9 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
     pathname.startsWith("/apply/") ||
     // 후보자 상세·공고 상세(/jobs/<숫자>)는 AppShell 을 쓰므로 전역 푸터 숨김.
     pathname.startsWith("/candidates/") ||
-    /^\/jobs\/\d+(\/|$)/.test(pathname)
+    /^\/jobs\/\d+(\/|$)/.test(pathname) ||
+    // 로그인 홈(/)은 대시보드 AppShell 을 쓰므로 전역 푸터 숨김(비로그인 랜딩은 유지).
+    (loggedIn && pathname === "/")
   ) {
     return null;
   }

@@ -12,6 +12,7 @@ import {
 import { desc, eq, count, sql, and } from "drizzle-orm";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { getUnlockChecker } from "@/lib/job-lock";
+import { AppShell } from "./components/AppShell";
 import { ChatPreview } from "./components/ChatPreview";
 import { CountUp } from "./components/CountUp";
 import { HowItWorksCarousel } from "./components/HowItWorksCarousel";
@@ -499,17 +500,33 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const firstJobId = jobsWithActions[0]?.id ?? null;
 
   return (
+    <AppShell
+      userName={me.name}
+      role={me.role}
+      isAdmin={me.isAdmin}
+      isDev={process.env.NODE_ENV !== "production"}
+    >
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      {/* 환영 헤더 */}
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold text-ink">
-          안녕하세요, {orgName ? `${orgName} ` : ""}{me.name} 님
-        </h1>
-        <p className="text-sm text-ink-soft mt-1">
-          {totalJobs === 0
-            ? "Intervia 에 오신 걸 환영합니다. 아래 4단계로 첫 채용을 시작해 보세요."
-            : "오늘의 채용 현황을 한눈에 확인하세요."}
-        </p>
+      {/* 환영 헤더 — 인사 + 1차 액션(새 공고). 공고 0개 빈 상태에서는 가이드가 대신하므로 버튼 숨김. */}
+      <header className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-ink">
+            안녕하세요, {orgName ? `${orgName} ` : ""}{me.name} 님
+          </h1>
+          <p className="text-sm text-ink-soft mt-1">
+            {totalJobs === 0
+              ? "Intervia 에 오신 걸 환영합니다. 아래 4단계로 첫 채용을 시작해 보세요."
+              : "오늘의 채용 현황을 한눈에 확인하세요."}
+          </p>
+        </div>
+        {totalJobs > 0 && (
+          <Link
+            href="/jobs/new"
+            className="hidden sm:inline-flex items-center gap-1.5 shrink-0 text-sm px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface font-medium transition-colors shadow-sm"
+          >
+            + 새 공고
+          </Link>
+        )}
       </header>
 
       {/* 공고가 하나도 없으면 KPI/목록 대신 시작 가이드만 — 첫 화면 단순화 */}
@@ -592,17 +609,21 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </KpiCard>
       </div>
 
-      {/* 알림 — 면접관으로 지정된 공고에서 처리 대기 중인 항목 */}
-      {notifications.length > 0 && (
-        <section className="bg-card border border-border-default rounded-2xl p-5 shadow-sm mb-8">
-          <header className="flex items-baseline justify-between mb-3">
-            <h2 className="text-sm font-semibold text-ink">
-              🔔 처리 대기 알림{" "}
-              <span className="text-xs text-ink-soft font-normal">
-                ({notifications.length}건)
-              </span>
+      {/* 오늘 할 일 — 액션 우선 대시보드의 핵심 패널. 처리 대기 항목을 한곳에 모아 격상.
+         항목이 없어도(공고가 있으면) 패널을 유지하고 "처리할 일 없음" 을 보여준다. */}
+      {(notifications.length > 0 || totalJobs > 0) && (
+        <section className="bg-card border border-primary/20 rounded-2xl p-5 shadow-sm mb-8">
+          <header className="flex items-baseline gap-2 mb-3 flex-wrap">
+            <h2 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+              🔔 오늘 할 일
             </h2>
+            <span className="text-xs text-ink-soft font-normal">
+              {notifications.length > 0
+                ? `처리 대기 ${notifications.length}건 · 누르면 해당 후보 목록으로 이동`
+                : "지금 바로 처리할 일이 없습니다"}
+            </span>
           </header>
+          {notifications.length > 0 ? (
           <ul className="space-y-2">
             {notifications.slice(0, 10).map((n) => (
               <li key={n.id}>
@@ -646,6 +667,11 @@ async function Dashboard({ me }: { me: CurrentUser }) {
               </li>
             )}
           </ul>
+          ) : (
+            <div className="rounded-xl bg-surface-alt/60 border border-border-default px-4 py-5 text-center text-sm text-ink-soft">
+              ✓ 지금 바로 처리할 일이 없습니다. 새 단계가 생기면 여기에 모입니다.
+            </div>
+          )}
         </section>
       )}
 
@@ -708,6 +734,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </>
       )}
     </main>
+    </AppShell>
   );
 }
 

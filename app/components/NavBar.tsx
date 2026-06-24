@@ -119,7 +119,10 @@ export function NavBar({
     // 후보자 상세·공고 상세는 좌측 레일 셸(AppShell)을 쓰므로 전역 상단바 숨김 (중복 방지).
     // 공고는 /jobs/<숫자> (상세·edit·report·compare) 만 — /jobs/new 는 전역 네비 유지.
     pathname.startsWith("/candidates/") ||
-    /^\/jobs\/\d+(\/|$)/.test(pathname)
+    /^\/jobs\/\d+(\/|$)/.test(pathname) ||
+    // 로그인 상태의 홈(/)은 대시보드가 AppShell 좌측 레일을 쓰므로 전역 상단바 숨김.
+    // 비로그인(role=null)이면 공개 랜딩이라 상단바 유지.
+    (role !== null && pathname === "/")
   ) {
     return null;
   }
