@@ -32,6 +32,7 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
   const [lastReadId, setLastReadId] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null); // 슬라이드 패널 — 폭 실측용
   const lastIdRef = useRef(0); // 폴링 커서 — 마지막으로 받은 코멘트 id
   // 읽음 기준선은 "후보자 × 사용자" 단위로 저장 — 같은 브라우저에서 계정을 바꿔도
   // 사용자별로 분리된다. (me 가 아직 없으면 키 null → 저장 보류)
@@ -144,6 +145,46 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // 패널이 열리면 본문([data-iv-shiftable])을 "가려지는 만큼" 왼쪽으로 민다 — 단, 본문
+  // 좌우 중앙정렬로 생긴 왼쪽 여백 한도 내에서만(레일 침범 X). 채팅창은 우측 고정이라 넓은
+  // 화면에서 본문 오른쪽을 덮는데, 그 여백을 활용해 가림을 줄인다. 이동량은 실측으로 계산.
+  // 본문의 relative+left 로 밀므로(transform X) 측정은 transform 비의존인 offsetWidth +
+  // 비이동 부모(parent) 기준으로 해 피드백 루프가 없다. 화면 리사이즈 시 재계산.
+  useEffect(() => {
+    const root = document.documentElement;
+    const reset = () => root.style.setProperty("--iv-chat-shift", "0px");
+    if (!open) {
+      reset();
+      return;
+    }
+    const apply = () => {
+      const content = document.querySelector<HTMLElement>("[data-iv-shiftable]");
+      const parent = content?.parentElement ?? null;
+      const drawer = drawerRef.current;
+      if (!content || !parent || !drawer) return reset();
+      const viewportW = root.clientWidth;
+      const drawerW = drawer.offsetWidth;
+      // 드로어가 화면 대부분을 덮으면(모바일 전체화면) 밀어도 의미 없음.
+      if (drawerW >= viewportW * 0.7) return reset();
+      const parentRect = parent.getBoundingClientRect();
+      const contentW = content.offsetWidth; // 레이아웃 폭(상대이동 영향 X)
+      const leftRoom = Math.max(0, (parentRect.width - contentW) / 2);
+      const contentRight = parentRect.left + (parentRect.width + contentW) / 2;
+      const overlap = contentRight - (viewportW - drawerW);
+      const shift = Math.max(0, Math.min(overlap, leftRoom));
+      root.style.setProperty(
+        "--iv-chat-shift",
+        shift > 1 ? `-${Math.round(shift)}px` : "0px"
+      );
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      reset();
+    };
+  }, [open]);
+
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -214,6 +255,7 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
         aria-hidden={!open}
       >
         <div
+          ref={drawerRef}
           className={`bg-card w-full sm:max-w-[420px] h-full flex flex-col border-l border-border-default shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none ${
             open
               ? "translate-x-0 pointer-events-auto"

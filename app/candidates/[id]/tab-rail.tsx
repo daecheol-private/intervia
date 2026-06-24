@@ -57,8 +57,11 @@ export function CandidateTabRail({
   return (
     <nav
       aria-label="후보자 상세 탭 (빠른 이동)"
-      style={{ left: 507, top: 58 }}
-      className="hidden lg:flex fixed z-30 flex-col gap-1 rounded-l-2xl border-y border-l border-border-default bg-card p-1.5 shadow-[-3px_2px_10px_rgba(15,23,42,0.06)]"
+      // 토론 패널이 열리면 본문이 --iv-chat-shift(음수 px)만큼 왼쪽으로 밀린다.
+      // fixed 레일은 본문 relative 이동의 영향을 받지 않으므로, 같은 값을 left 에 더해
+      // 본문과 lockstep 으로 움직여 정렬을 유지한다(닫히면 0px → 507 원위치).
+      style={{ left: "calc(507px + var(--iv-chat-shift, 0px))", top: 58 }}
+      className="hidden lg:flex fixed z-30 flex-col gap-1 rounded-l-2xl border-y border-l border-border-default bg-card p-1.5 shadow-[-3px_2px_10px_rgba(15,23,42,0.06)] transition-[left] duration-300 ease-out motion-reduce:transition-none"
     >
       {items.map((t) => {
         const active = current === t.key;

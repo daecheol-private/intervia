@@ -471,7 +471,14 @@ export default function CandidateDetailPage() {
       : null);
 
   return (
-    <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6">
+    // 토론 채팅 패널이 열리면 CandidateChat 이 --iv-chat-shift 를 음수 px 로 설정해
+    // 본문을 왼쪽 여백만큼 민다(채팅창 가림 완화). transform 이 아니라 relative+left 로 미는 건
+    // transform 이 자손 fixed(드로어·모달)의 기준을 viewport→본문으로 바꿔 깨뜨리기 때문.
+    <main
+      data-iv-shiftable
+      style={{ left: "var(--iv-chat-shift, 0px)" }}
+      className="relative max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 transition-[left] duration-300 ease-out motion-reduce:transition-none"
+    >
       <Link
         href={`/jobs/${job.id}`}
         className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
