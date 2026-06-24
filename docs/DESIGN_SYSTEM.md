@@ -15,7 +15,7 @@
 
 > v2(Forest + Ivory)에서 전환됨. primary 포레스트 그린 → 일렉트릭 인디고 → **네이비(v3.1, 톤다운)**, surface 아이보리 → **쿨 그래파이트**,
 > success 는 primary 와 **분리된 그린**(primary 가 "합격"을 뜻하지 않도록).
-> 보조 포인트: **amber/gold(`accent`)** 보색 + **하늘색(`azure`)** 히어로 채팅 데모.
+> 보조 포인트: **코랄(`accent`)** 따뜻한 대비 + **하늘색(`azure`)** 히어로 채팅 데모.
 
 ---
 
@@ -46,9 +46,9 @@
 | **브랜드** | `primary` | `#1c3478` (Navy) | CTA·강조·active — **유일한 포인트 컬러** |
 | | `primary-deep` | `#13234f` | hover/pressed |
 | | `primary-soft` | `#e7eaf3` | 태그·배지·active 네비 배경 |
-| | `accent` | `#f59e0b` (amber/gold) | 보조 강조 — 네이비의 **보색 포인트**. 절제 있게(통계 숫자·배지·아이콘 점). 밝은 배경 텍스트엔 `accent-deep` 사용 |
-| | `accent-deep` | `#d97706` | hover/pressed·밝은 배경 위 텍스트 |
-| | `accent-soft` | `#fef3c7` | accent 배경 |
+| | `accent` | `#fb7185` (coral) | 보조 강조 — 네이비와 **따뜻한 대비 포인트**. 절제 있게(통계 숫자·배지·아이콘 점). 밝은 배경 텍스트엔 `accent-deep` 사용 |
+| | `accent-deep` | `#e11d48` | hover/pressed·밝은 배경 위 텍스트 |
+| | `accent-soft` | `#ffe4e6` | accent 배경 |
 | **하늘(데모)** | `azure` | `#7dd3fc` (하늘색) | 히어로 채팅 데모 보조 — 글로우·강조 점 |
 | | `azure-soft` | `#e0f2fe` | 채팅 말풍선 배경 |
 | | `azure-ink` | `#0c4a6e` | azure-soft 위 텍스트 |
