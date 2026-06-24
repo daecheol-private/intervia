@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { AppShell } from "./AppShell";
 
@@ -16,12 +17,18 @@ export default async function AppShellLayout({
   const user = await getCurrentUser();
   if (!user) return <>{children}</>;
 
+  // 좌측 레일 접힘 상태는 쿠키로 보관 — 서버에서 읽어 초기값으로 넘겨야
+  // 섹션 간 이동(셸 리마운트) 시 펼침→접힘 깜빡임이 생기지 않는다.
+  const jar = await cookies();
+  const railCollapsed = jar.get("iv_rail_collapsed")?.value === "1";
+
   return (
     <AppShell
       userName={user.name}
       role={user.role}
       isAdmin={user.isAdmin}
       isDev={process.env.NODE_ENV !== "production"}
+      defaultCollapsed={railCollapsed}
     >
       {children}
     </AppShell>

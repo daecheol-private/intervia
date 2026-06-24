@@ -10,6 +10,7 @@ import {
   interviewSchedules,
 } from "@/lib/schema";
 import { desc, eq, count, sql, and } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { getUnlockChecker } from "@/lib/job-lock";
 import { AppShell } from "./components/AppShell";
@@ -617,12 +618,18 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const guideDismissed = me.setupGuideDismissedAt != null;
   const firstJobId = jobsWithActions[0]?.id ?? null;
 
+  // 좌측 레일 접힘 상태(쿠키) — 이 페이지는 AppShellLayout 을 거치지 않고 셸을
+  // 직접 렌더하므로 여기서도 동일하게 읽어 넘겨야 깜빡임이 없다.
+  const railCollapsed =
+    (await cookies()).get("iv_rail_collapsed")?.value === "1";
+
   return (
     <AppShell
       userName={me.name}
       role={me.role}
       isAdmin={me.isAdmin}
       isDev={process.env.NODE_ENV !== "production"}
+      defaultCollapsed={railCollapsed}
     >
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {/* 환영 헤더 — 인사만. '새 공고' 1차 액션은 아래 공고 목록 섹션 헤더에 둔다(중복 제거). */}

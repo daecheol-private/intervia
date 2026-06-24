@@ -21,6 +21,7 @@ import {
   Lock,
   Bell,
   Menu,
+  ChevronLeft,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 
@@ -86,8 +87,9 @@ function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
-const navItemClass = (active: boolean) =>
-  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors " +
+const navItemClass = (active: boolean, collapsed = false) =>
+  "flex items-center rounded-lg text-sm transition-colors " +
+  (collapsed ? "justify-center px-0 py-2 " : "gap-2.5 px-3 py-2 ") +
   (active
     ? "bg-primary-soft text-primary-deep font-semibold"
     : "text-ink-soft hover:bg-surface-alt hover:text-ink");
@@ -96,9 +98,11 @@ const navItemClass = (active: boolean) =>
 function NavNotifications({
   pathname,
   onNavigate,
+  collapsed = false,
 }: {
   pathname: string;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }) {
   const [unread, setUnread] = useState(0);
   useEffect(() => {
@@ -131,14 +135,28 @@ function NavNotifications({
     <Link
       href="/notifications"
       onClick={onNavigate}
-      className={navItemClass(isActive(pathname, "/notifications"))}
+      title={collapsed ? "알림" : undefined}
+      className={
+        navItemClass(isActive(pathname, "/notifications"), collapsed) +
+        (collapsed ? " relative" : "")
+      }
     >
       <Bell className="w-[18px] h-[18px] shrink-0" />
-      <span className="flex-1">알림</span>
-      {unread > 0 && (
-        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center tabular-nums leading-none">
-          {unread > 99 ? "99+" : unread}
-        </span>
+      {collapsed ? (
+        unread > 0 && (
+          <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-danger text-white text-[9px] font-bold flex items-center justify-center tabular-nums leading-none">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )
+      ) : (
+        <>
+          <span className="flex-1">알림</span>
+          {unread > 0 && (
+            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center tabular-nums leading-none">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
+        </>
       )}
     </Link>
   );
@@ -150,11 +168,13 @@ function UserMenu({
   role,
   isAdmin,
   onNavigate,
+  collapsed = false,
 }: {
   userName: string;
   role: Role;
   isAdmin: boolean;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }) {
   const initial = userName.trim().charAt(0).toUpperCase() || "?";
   const roleLabel = isAdmin
@@ -166,19 +186,26 @@ function UserMenu({
     <Link
       href="/account"
       onClick={onNavigate}
-      title="계정 설정"
-      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-alt transition-colors"
+      title={collapsed ? `${userName} · 계정 설정` : "계정 설정"}
+      className={
+        "w-full flex items-center rounded-lg hover:bg-surface-alt transition-colors " +
+        (collapsed ? "justify-center px-0 py-2" : "gap-2.5 px-3 py-2")
+      }
     >
       <span className="w-7 h-7 rounded-full bg-primary-soft text-primary-deep flex items-center justify-center text-[11px] font-bold shrink-0">
         {initial}
       </span>
-      <span className="min-w-0 flex-1 text-left leading-tight">
-        <span className="block text-[13px] font-medium text-ink truncate">
-          {userName}
-        </span>
-        <span className="block text-[10px] text-ink-muted">{roleLabel}</span>
-      </span>
-      <Settings className="w-4 h-4 text-ink-muted shrink-0" />
+      {!collapsed && (
+        <>
+          <span className="min-w-0 flex-1 text-left leading-tight">
+            <span className="block text-[13px] font-medium text-ink truncate">
+              {userName}
+            </span>
+            <span className="block text-[10px] text-ink-muted">{roleLabel}</span>
+          </span>
+          <Settings className="w-4 h-4 text-ink-muted shrink-0" />
+        </>
+      )}
     </Link>
   );
 }
@@ -190,6 +217,7 @@ function SidebarInner({
   isDev,
   pathname,
   onNavigate,
+  collapsed = false,
 }: {
   role: Role;
   userName: string;
@@ -197,11 +225,17 @@ function SidebarInner({
   isDev: boolean;
   pathname: string;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }) {
   const sections = buildSections(role);
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-3 py-4">
+      <div
+        className={
+          "flex items-center py-4 " +
+          (collapsed ? "justify-center px-0" : "gap-2 px-3")
+        }
+      >
         <Link
           href="/"
           onClick={onNavigate}
@@ -209,9 +243,11 @@ function SidebarInner({
           aria-label="Intervia 대시보드"
         >
           <LogoMark size={28} />
-          <span className="font-bold text-ink tracking-tight">Intervia</span>
+          {!collapsed && (
+            <span className="font-bold text-ink tracking-tight">Intervia</span>
+          )}
         </Link>
-        {isDev && (
+        {isDev && !collapsed && (
           <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-warning-soft text-warning border border-warning/20 uppercase tracking-wide">
             DEV
           </span>
@@ -222,34 +258,43 @@ function SidebarInner({
         <nav className="flex flex-col gap-1">
           {sections.map((section, i) => (
             <div key={i} className="flex flex-col gap-0.5">
-              {section.label && (
-                <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-                  {section.label}
-                </div>
-              )}
+              {section.label &&
+                (collapsed ? (
+                  i > 0 && <div className="mx-2 my-1 border-t border-border-default" />
+                ) : (
+                  <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+                    {section.label}
+                  </div>
+                ))}
               {section.items.map((it) => (
                 <Link
                   key={it.href}
                   href={it.href}
                   onClick={onNavigate}
+                  title={collapsed ? it.label : undefined}
                   aria-current={isActive(pathname, it.href) ? "page" : undefined}
-                  className={navItemClass(isActive(pathname, it.href))}
+                  className={navItemClass(isActive(pathname, it.href), collapsed)}
                 >
                   <it.Icon className="w-[18px] h-[18px] shrink-0" />
-                  <span className="truncate">{it.label}</span>
+                  {!collapsed && <span className="truncate">{it.label}</span>}
                 </Link>
               ))}
             </div>
           ))}
           <div className="flex flex-col gap-0.5 mt-1 pt-1 border-t border-border-default">
-            <NavNotifications pathname={pathname} onNavigate={onNavigate} />
+            <NavNotifications
+              pathname={pathname}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+            />
             <Link
               href="/support"
               onClick={onNavigate}
-              className={navItemClass(isActive(pathname, "/support"))}
+              title={collapsed ? "고객센터" : undefined}
+              className={navItemClass(isActive(pathname, "/support"), collapsed)}
             >
               <LifeBuoy className="w-[18px] h-[18px] shrink-0" />
-              <span>고객센터</span>
+              {!collapsed && <span>고객센터</span>}
             </Link>
           </div>
         </nav>
@@ -261,6 +306,7 @@ function SidebarInner({
           role={role}
           isAdmin={isAdmin}
           onNavigate={onNavigate}
+          collapsed={collapsed}
         />
       </div>
     </div>
@@ -277,32 +323,66 @@ export function AppShell({
   role,
   isAdmin,
   isDev,
+  defaultCollapsed = false,
   children,
 }: {
   userName: string;
   role: Role;
   isAdmin: boolean;
   isDev: boolean;
+  defaultCollapsed?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
   const [mobileOpen, setMobileOpen] = useState(false);
+  // 초기값은 서버가 쿠키로 넘겨준다 — 첫 렌더부터 올바른 너비라 깜빡임 없음.
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
+  // 접힘 상태는 쿠키로 유지 — 서버가 다음 렌더에서 같은 값을 읽어 넘긴다.
+  const toggleCollapsed = () =>
+    setCollapsed((prev) => {
+      const next = !prev;
+      document.cookie = `iv_rail_collapsed=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+      return next;
+    });
+
   return (
     <div className="flex min-h-screen bg-surface">
       {/* 데스크톱 좌측 레일 — 인쇄 시 숨김(공고 리포트 PDF 가 셸 없이 출력되도록) */}
-      <aside className="hidden lg:flex print:hidden sticky top-0 h-screen w-[228px] shrink-0 flex-col bg-card border-r border-border-default">
+      <aside
+        className={
+          "hidden lg:flex print:hidden sticky top-0 h-screen shrink-0 flex-col bg-card border-r border-border-default transition-[width] duration-200 ease-in-out " +
+          (collapsed ? "w-[64px]" : "w-[228px]")
+        }
+      >
         <SidebarInner
           role={role}
           userName={userName}
           isAdmin={isAdmin}
           isDev={isDev}
           pathname={pathname}
+          collapsed={collapsed}
         />
+        {/* 세로 구분자에 살짝 튀어나온 토글 손잡이 — 클릭 시 아이콘만 남기고 접기/펼치기 */}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+          className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 flex items-center justify-center w-3 h-14 rounded-r-md bg-card border border-l-0 border-border-default text-ink-muted shadow-sm hover:text-ink hover:bg-surface-alt transition-colors"
+        >
+          <ChevronLeft
+            className={
+              "w-3 h-3 transition-transform duration-200 " +
+              (collapsed ? "rotate-180" : "")
+            }
+          />
+        </button>
       </aside>
 
       {/* 모바일 드로어 */}
