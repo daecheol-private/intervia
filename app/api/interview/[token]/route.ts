@@ -14,6 +14,7 @@ import {
   toPublicItems,
 } from "@/lib/personality";
 import { hasMcqQuestions, toPublicMcq } from "@/lib/mcq";
+import { isAiInterviewSuperseded } from "@/lib/stage-meta";
 
 export const runtime = "nodejs";
 
@@ -49,6 +50,15 @@ export async function GET(
         terminated: true,
         expired: false,
       },
+      { status: 200 }
+    );
+  }
+
+  // 종결은 아니지만 후보자가 AI 단계를 지나 다음 전형으로 진행됨 → 이 AI 면접 링크 무효화.
+  // (수동 단계 전진은 pending 세션을 정리하지 않으므로 파생 판정으로 차단 — 불필요한 응시·과금 방지.)
+  if (isAiInterviewSuperseded({ stage: candidate.stage, outcome: candidate.outcome })) {
+    return Response.json(
+      { session, superseded: true, expired: false },
       { status: 200 }
     );
   }

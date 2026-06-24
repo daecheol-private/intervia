@@ -31,6 +31,7 @@ import {
 import { getJobInterviewerEmails } from "./notifications";
 import { sendCandidateAlimtalk } from "./alimtalk";
 import { formatKstDateTime } from "./utils";
+import { isAiInterviewSuperseded, isScheduleSuperseded } from "./stage-meta";
 
 const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 const H24_MS = 24 * 60 * 60 * 1000;
@@ -107,6 +108,8 @@ export async function sendScheduleReminders(): Promise<{
       candidateName: candidates.name,
       candidateEmail: candidates.email,
       candidatePhone: candidates.phone,
+      candidateStage: candidates.stage,
+      candidateOutcome: candidates.outcome,
       jobTitle: jobPostings.title,
       orgName: organizations.name,
     })
@@ -126,6 +129,16 @@ export async function sendScheduleReminders(): Promise<{
 
   // 시간 윈도우(지금~24시간 이내, 미래) 필터 — selectedSlot 은 JSON 이라 JS 에서 거른다.
   const due = rows.filter((r) => {
+    // 종결됐거나 해당 차수를 이미 지난 후보자에겐 D-1 리마인드를 보내지 않는다.
+    // (수동 종결·전진은 스케줄 status 를 selected 로 둔 채라 파생 판정으로 차단.)
+    if (
+      isScheduleSuperseded({
+        stage: r.candidateStage,
+        outcome: r.candidateOutcome,
+        round: r.round,
+      })
+    )
+      return false;
     const start = r.selectedSlot?.start ? new Date(r.selectedSlot.start).getTime() : NaN;
     return Number.isFinite(start) && start > now && start <= windowEnd;
   });
@@ -285,6 +298,8 @@ export async function sendAiInterviewReminders(): Promise<{
       candidateEmail: candidates.email,
       candidatePhone: candidates.phone,
       orgId: candidates.orgId,
+      candidateStage: candidates.stage,
+      candidateOutcome: candidates.outcome,
       jobTitle: jobPostings.title,
       orgName: organizations.name,
     })
@@ -307,6 +322,13 @@ export async function sendAiInterviewReminders(): Promise<{
   let sessionsProcessed = 0;
 
   for (const r of rows) {
+    // 후보자가 AI 단계를 지났거나 종결됨 → 더 이상 AI 면접 넛지를 보내지 않는다.
+    // (수동 단계 전진/종결은 pending 세션을 정리하지 않으므로 파생 판정으로 차단.
+    //  링크가 무효화된 종결 후보에게 "응시하세요" 넛지가 나가는 모순도 함께 닫힌다.)
+    if (
+      isAiInterviewSuperseded({ stage: r.candidateStage, outcome: r.candidateOutcome })
+    )
+      continue;
     const createdMs = parseDbTimeMs(r.createdAt);
     const expiresMs = parseDbTimeMs(r.expiresAt);
     if (!Number.isFinite(createdMs)) continue;

@@ -14,6 +14,7 @@ import { hasValidConsent } from "@/lib/consent";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { chargeRepeatable } from "@/lib/tokens";
 import { computeTranscriptStats } from "@/lib/interview-signals";
+import { isAiInterviewSuperseded } from "@/lib/stage-meta";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,16 @@ export async function POST(
     .select()
     .from(candidates)
     .where(eq(candidates.id, session.candidateId));
+  // 후보자가 AI 단계를 지났거나 종결됨 → 뒤늦은 제출로 평가·과금이 생성되는 것을 차단.
+  // (페이지를 미리 열어둔 채 단계 전진/종결된 뒤 제출하는 유령 응시·더블차감 방지.)
+  if (
+    candidate &&
+    isAiInterviewSuperseded({ stage: candidate.stage, outcome: candidate.outcome })
+  )
+    return new Response(
+      "이미 다음 전형으로 진행되어 이 면접은 더 이상 제출할 수 없습니다.",
+      { status: 409 }
+    );
   const [job] = await db
     .select()
     .from(jobPostings)

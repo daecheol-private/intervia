@@ -40,6 +40,41 @@ export const STAGE_RANK: Record<Stage, number> = Object.fromEntries(
   Object.entries(STAGE_META).map(([k, v]) => [k, v.rank])
 ) as Record<Stage, number>;
 
+/**
+ * 이 후보자의 AI 면접(pending/in_progress 세션·링크)이 더 이상 유효한지 판정.
+ * true = 무효 → 링크 접속·완료 제출·리마인드 넛지를 모두 차단해야 한다.
+ *
+ * 수동 단계 전진(ai_pending→round1 등)이나 종결(outcome)은 세션을 정리하지 않으므로,
+ * 세션 status 대신 "후보자가 AI 평가 단계를 지났는가"를 파생 판정해 일관되게 막는다.
+ * 기준: 종결됨(outcome) OR 단계가 ai_evaluated 를 지남 — 새 링크 발급 차단과 동일 기준.
+ */
+export function isAiInterviewSuperseded(c: {
+  stage: Stage;
+  outcome: string | null | undefined;
+}): boolean {
+  return c.outcome != null || STAGE_RANK[c.stage] > STAGE_RANK.ai_evaluated;
+}
+
+/**
+ * 확정된 대면 면접(D-1 리마인드 대상)이 더 이상 유효한지 판정.
+ * true = 무효 → 면접관·후보자 D-1 리마인드를 보내지 않는다.
+ *
+ * 종결(outcome)됐거나, 해당 차수를 이미 지난 단계로 전진했으면 이 면접은 무의미:
+ *  - round1: 단계가 round1_waiting 를 지남(= round1_passed 이상) → 1차 결과 이미 결정
+ *  - round2: 단계가 round1_passed 를 지남(= round2_passed 이상) → 2차 결과 이미 결정
+ * (수동 종결·전진은 스케줄 status 를 selected 로 둔 채라, AI 세션과 같은 빈틈을 파생 판정으로 닫는다.)
+ */
+export function isScheduleSuperseded(c: {
+  stage: Stage;
+  outcome: string | null | undefined;
+  round: "round1" | "round2";
+}): boolean {
+  if (c.outcome != null) return true;
+  const threshold =
+    c.round === "round2" ? STAGE_RANK.round1_passed : STAGE_RANK.round1_waiting;
+  return STAGE_RANK[c.stage] > threshold;
+}
+
 export const STAGE_LABELS: Record<Stage, string> = {
   applied: "지원",
   screened: "서류평가",

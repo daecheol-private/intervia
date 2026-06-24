@@ -220,6 +220,9 @@ export default function SchedulePage() {
               </div>
             )}
           </div>
+          <p className="mt-5 text-xs text-ink-muted leading-relaxed">
+            일정 변경이나 취소가 필요하시면 채용 담당자에게 문의해 주세요.
+          </p>
         </div>
       </main>
     );

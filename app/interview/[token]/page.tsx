@@ -58,6 +58,7 @@ type SessionInfo = {
   expired: boolean;
   withdrawn?: boolean;
   terminated?: boolean;
+  superseded?: boolean;
   consentRequired?: boolean;
   consentVersion?: string;
   consentItems?: ConsentItem[];
@@ -340,6 +341,20 @@ export default function InterviewPage() {
         <h1 className="text-xl font-bold text-ink">종료된 전형입니다</h1>
         <p className="text-ink-soft mt-2 leading-relaxed">
           이 전형은 이미 종결되어 면접을 진행할 수 없습니다.
+        </p>
+      </CenteredCard>
+    );
+  }
+
+  // 종결은 아니지만 다음 전형으로 진행되어 이 AI 면접 링크가 무효화된 경우.
+  if (info.superseded) {
+    return (
+      <CenteredCard>
+        <div className="text-3xl mb-3">➡️</div>
+        <h1 className="text-xl font-bold text-ink">다음 전형으로 진행되었습니다</h1>
+        <p className="text-ink-soft mt-2 leading-relaxed">
+          이 AI 면접은 더 이상 진행하지 않습니다. 다음 절차는 채용 담당자가
+          별도로 안내해 드립니다.
         </p>
       </CenteredCard>
     );
