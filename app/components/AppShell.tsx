@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Home,
   BarChart3,
@@ -20,11 +20,9 @@ import {
   Scale,
   Lock,
   Bell,
-  ChevronUp,
   Menu,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
-import LogoutButton from "../logout-button";
 
 type Role = "system_admin" | "org_admin" | "member" | null;
 
@@ -146,7 +144,7 @@ function NavNotifications({
   );
 }
 
-/** 하단 사용자 메뉴 — 아바타·이름·역할 + 위로 펼쳐지는 팝오버(계정 설정 / 로그아웃). */
+/** 하단 사용자 메뉴 — 아바타·이름·역할. 클릭하면 계정 설정(로그아웃 포함)으로 이동. */
 function UserMenu({
   userName,
   role,
@@ -158,23 +156,6 @@ function UserMenu({
   isAdmin: boolean;
   onNavigate?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
   const initial = userName.trim().charAt(0).toUpperCase() || "?";
   const roleLabel = isAdmin
     ? "system_admin"
@@ -182,49 +163,23 @@ function UserMenu({
       ? "org_admin"
       : "member";
   return (
-    <div ref={ref} className="relative">
-      {open && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-card border border-border-default rounded-xl shadow-lg py-1 overflow-hidden">
-          <Link
-            href="/account"
-            onClick={() => {
-              setOpen(false);
-              onNavigate?.();
-            }}
-            className="flex items-center gap-2.5 px-3 py-2 text-sm text-ink-soft hover:bg-surface-alt hover:text-ink"
-          >
-            <Settings className="w-4 h-4 shrink-0" />
-            계정 설정
-          </Link>
-          <div className="px-2 py-1 border-t border-border-default">
-            <LogoutButton variant="full" />
-          </div>
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-alt transition-colors"
-      >
-        <span className="w-7 h-7 rounded-full bg-primary-soft text-primary-deep flex items-center justify-center text-[11px] font-bold shrink-0">
-          {initial}
+    <Link
+      href="/account"
+      onClick={onNavigate}
+      title="계정 설정"
+      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-alt transition-colors"
+    >
+      <span className="w-7 h-7 rounded-full bg-primary-soft text-primary-deep flex items-center justify-center text-[11px] font-bold shrink-0">
+        {initial}
+      </span>
+      <span className="min-w-0 flex-1 text-left leading-tight">
+        <span className="block text-[13px] font-medium text-ink truncate">
+          {userName}
         </span>
-        <span className="min-w-0 flex-1 text-left leading-tight">
-          <span className="block text-[13px] font-medium text-ink truncate">
-            {userName}
-          </span>
-          <span className="block text-[10px] text-ink-muted">{roleLabel}</span>
-        </span>
-        <ChevronUp
-          className={
-            "w-4 h-4 text-ink-muted shrink-0 transition-transform " +
-            (open ? "" : "rotate-180")
-          }
-        />
-      </button>
-    </div>
+        <span className="block text-[10px] text-ink-muted">{roleLabel}</span>
+      </span>
+      <Settings className="w-4 h-4 text-ink-muted shrink-0" />
+    </Link>
   );
 }
 
