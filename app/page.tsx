@@ -1452,7 +1452,7 @@ async function Landing() {
       <section className="bg-surface">
         <Container width="xl" className="py-16 sm:py-24">
           <div className="relative overflow-hidden rounded-3xl bg-cta-gradient px-7 py-12 text-surface shadow-xl reveal sm:px-14 sm:py-16">
-            {/* eslint-disable-next-line @next/next/no-img-element -- 장식용 일러스트(고정 에셋), next/image 불필요 */}
+            {/* 장식용 일러스트(고정 에셋) — next/image 불필요 */}
             <img
               src="/landing.png"
               alt=""
