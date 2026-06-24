@@ -63,11 +63,13 @@ import {
   Sparkles,
   StickyNote,
   Target,
+  TrendingUp,
   Upload,
   Users,
   User,
   Workflow,
 } from "lucide-react";
+import { Donut } from "@/components/charts";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { buildSetupSteps } from "@/lib/setup-steps";
@@ -94,6 +96,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const orgFilter = orgScope == null ? undefined : eq(jobPostings.orgId, orgScope);
   const candFilter = orgScope == null ? undefined : eq(candidates.orgId, orgScope);
   const nowIso = new Date().toISOString();
+  // 최근 7일 기준선 — KPI 트렌드("최근 7일 신규")용. createdAt 비교로 실제 신규만 집계.
+  const cutoff7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
   // 상호 독립 쿼리 전부 병렬 — 순차 await 는 원격 DB(Turso) RTT × 쿼리 수가
   // 첫 화면 TTFB 에 그대로 더해진다.
@@ -139,6 +143,16 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         decided: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NOT NULL THEN 1 ELSE 0 END)`,
         // 첫 실행 가이드용 — AI 면접 단계(발송 후 응시 대기) 이상에 도달한 후보 수.
         interviewReached: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('ai_pending','ai_evaluated','round1_candidate','round1_scheduling','round1_waiting','round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
+        // KPI/파이프라인용 집계 (전부 실데이터 — 추정·생성값 없음).
+        hired: sql<number>`SUM(CASE WHEN ${candidates.outcome} = 'hired' THEN 1 ELSE 0 END)`,
+        evaluated: sql<number>`SUM(CASE WHEN ${candidates.screeningScore} IS NOT NULL THEN 1 ELSE 0 END)`,
+        avgScore: sql<number | null>`AVG(CASE WHEN ${candidates.screeningScore} IS NOT NULL THEN ${candidates.screeningScore} END)`,
+        newWeek: sql<number>`SUM(CASE WHEN ${candidates.createdAt} >= ${cutoff7d} THEN 1 ELSE 0 END)`,
+        // 진행 중(outcome IS NULL) 후보를 파이프라인 버킷으로 (lib/candidate-state STAGE_BUCKET 과 동일).
+        pipeResume: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NULL AND ${candidates.stage} IN ('applied','screened') THEN 1 ELSE 0 END)`,
+        pipeAi: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NULL AND ${candidates.stage} IN ('ai_pending','ai_evaluated') THEN 1 ELSE 0 END)`,
+        pipeR1: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NULL AND ${candidates.stage} IN ('round1_candidate','round1_scheduling','round1_waiting') THEN 1 ELSE 0 END)`,
+        pipeR2: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NULL AND ${candidates.stage} IN ('round1_passed','round2_passed') THEN 1 ELSE 0 END)`,
       })
       .from(candidates)
       .where(candFilter ?? sql`1=1`)
@@ -222,6 +236,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         extensionCount: jobPostings.extensionCount,
         passwordHash: jobPostings.passwordHash,
         candidateCount: count(candidates.id),
+        // 공고별 평균 AI 서류 점수 — 최근 공고 표의 'AI 서류' 열(평가된 후보만 평균).
+        avgScore: sql<number | null>`AVG(CASE WHEN ${candidates.screeningScore} IS NOT NULL THEN ${candidates.screeningScore} END)`,
         // 평가 대기 = 아직 stage=applied (서류 평가 안 마침). 진행 중인 후보 수.
         screeningCount: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'applied' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
         decidedCount: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NOT NULL THEN 1 ELSE 0 END)`,
@@ -478,6 +494,18 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     }
   }
 
+  // 법인 합류 요청 승인 대기 — org_admin 의 할 일. KPI 에서 빼고 '오늘 할 일' 로 합류.
+  if (me.role === "org_admin" && joinRequestCount > 0) {
+    notifications.push({
+      id: "join-requests",
+      icon: "👥",
+      title: "법인 합류 요청 승인 대기",
+      count: joinRequestCount,
+      href: "/org/members",
+      tone: "amber",
+    });
+  }
+
   // 우선순위: count 큰 순
   notifications.sort((a, b) => b.count - a.count);
   void orgCount; // system_admin 은 /admin/dashboard 로 리다이렉트 — 참고용 유지
@@ -485,6 +513,29 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const totalCand = Number(candAgg?.total ?? 0);
   const decidedCount = Number(candAgg?.decided ?? 0);
   const interviewReached = Number(candAgg?.interviewReached ?? 0);
+
+  // -- KPI / 파이프라인 파생값 (전부 실집계) ----------------------------------
+  const inProgressCand = totalCand - decidedCount;
+  const hiredCount = Number(candAgg?.hired ?? 0);
+  const evaluatedCount = Number(candAgg?.evaluated ?? 0);
+  const avgScoreNum =
+    candAgg?.avgScore != null ? Math.round(Number(candAgg.avgScore)) : null;
+  const newCandWeek = Number(candAgg?.newWeek ?? 0);
+  const activeJobsCount = jobsWithActions.filter(
+    (j) => j.status === "active"
+  ).length;
+  const newJobsWeek = jobsWithActions.filter(
+    (j) => (j.createdAt ?? "") >= cutoff7d
+  ).length;
+  // 채용 파이프라인 도넛 — 진행 중 단계 분포 + 합격. 색은 charts.tsx 팔레트와 동일 계열.
+  const pipeline = [
+    { label: "서류", value: Number(candAgg?.pipeResume ?? 0), color: "#94a3b8" },
+    { label: "AI 면접", value: Number(candAgg?.pipeAi ?? 0), color: "#7c3aed" },
+    { label: "1차 면접", value: Number(candAgg?.pipeR1 ?? 0), color: "#4f46e5" },
+    { label: "2차 면접", value: Number(candAgg?.pipeR2 ?? 0), color: "#3b6ea5" },
+    { label: "합격", value: hiredCount, color: "#2f8f6f" },
+  ];
+  const pipelineTotal = pipeline.reduce((s, p) => s + p.value, 0);
 
   // -- 첫 실행 가이드 (신규 법인 온보딩) ----------------------------------
   // 멤버는 공고 등록 권한이 없을 수 있으나, 첫 사이클 안내 자체는 동일하게 노출.
@@ -553,40 +604,43 @@ async function Dashboard({ me }: { me: CurrentUser }) {
             />
           )}
 
-      {/* 상단 KPI 카드 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        {me.role === "system_admin" ? (
-          <KpiCard
-            label="전체 공고"
-            value={totalJobs}
-            href="/jobs"
-            accent="blue"
-          />
-        ) : (
-          <KpiCard
-            label="내가 면접관인 공고"
-            value={interviewerSet.size}
-            sub={`전체 ${totalJobs}건 중`}
-            href="/jobs?mine=1"
-            accent="blue"
-          />
-        )}
+      {/* 상단 KPI 카드 — 진행 공고 · 총 후보자 · AI 서류 평가 · 토큰 잔액 (전부 실집계).
+         트렌드는 신뢰 가능한 것만(최근 7일 신규). 합류 요청은 '오늘 할 일' 로 이동. */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <KpiCard
-          label="후보자"
+          label="진행 공고"
+          value={activeJobsCount}
+          Icon={ClipboardList}
+          trend={newJobsWeek > 0 ? `+${newJobsWeek} 최근 7일` : undefined}
+          sub={`전체 ${totalJobs}건`}
+          href="/jobs"
+          accent="blue"
+        />
+        <KpiCard
+          label="총 후보자"
           value={totalCand}
-          sub={`진행 중 ${totalCand - decidedCount} · 결정 ${decidedCount}`}
+          Icon={Users}
+          trend={newCandWeek > 0 ? `+${newCandWeek} 최근 7일` : undefined}
+          sub={`진행 ${inProgressCand} · 결정 ${decidedCount}`}
           accent="indigo"
         />
         <KpiCard
-          label="합류 요청"
-          value={joinRequestCount}
-          sub={joinRequestCount > 0 ? "승인 대기 중" : "처리할 요청 없음"}
-          href={me.role === "org_admin" ? "/org/members" : me.role === "system_admin" ? "/admin/orgs" : undefined}
-          accent={joinRequestCount > 0 ? "amber" : "slate"}
+          label="AI 서류 평가"
+          value={evaluatedCount}
+          Icon={Sparkles}
+          sub={
+            avgScoreNum != null
+              ? `평균 ${avgScoreNum}점`
+              : queueCount > 0
+                ? `평가 대기 ${queueCount}건`
+                : "아직 평가 없음"
+          }
+          accent="indigo"
         />
         <KpiCard
-          label={me.role === "system_admin" ? "전체 토큰 잔액" : "토큰 잔액"}
+          label="토큰 잔액"
           value={tokenBalance != null ? tokenBalance.toLocaleString() : "-"}
+          Icon={Coins}
           sub={
             tokenBalance != null && tokenBalance < 0
               ? "마이너스 — 충전 필요"
@@ -594,13 +648,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
                 ? `이력서 ${tokenEquivResumes.toLocaleString()}건 · 면접 ${tokenEquivInterviews.toLocaleString()}회 가능`
                 : undefined
           }
-          href={
-            me.role === "system_admin"
-              ? "/admin/orgs"
-              : me.role === "org_admin"
-                ? "/org/tokens"
-                : undefined
-          }
+          href={me.role === "org_admin" ? "/org/tokens" : undefined}
           accent={tokenBalance != null && tokenBalance < 0 ? "rose" : "emerald"}
         >
           {me.role === "member" &&
@@ -608,72 +656,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
             tokenBalance <= LOW_BALANCE_THRESHOLD && <TokenChargeRequestButton />}
         </KpiCard>
       </div>
-
-      {/* 오늘 할 일 — 액션 우선 대시보드의 핵심 패널. 처리 대기 항목을 한곳에 모아 격상.
-         항목이 없어도(공고가 있으면) 패널을 유지하고 "처리할 일 없음" 을 보여준다. */}
-      {(notifications.length > 0 || totalJobs > 0) && (
-        <section className="bg-card border border-primary/20 rounded-2xl p-5 shadow-sm mb-8">
-          <header className="flex items-baseline gap-2 mb-3 flex-wrap">
-            <h2 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
-              🔔 오늘 할 일
-            </h2>
-            <span className="text-xs text-ink-soft font-normal">
-              {notifications.length > 0
-                ? `처리 대기 ${notifications.length}건 · 누르면 해당 후보 목록으로 이동`
-                : "지금 바로 처리할 일이 없습니다"}
-            </span>
-          </header>
-          {notifications.length > 0 ? (
-          <ul className="space-y-2">
-            {notifications.slice(0, 10).map((n) => (
-              <li key={n.id}>
-                <Link
-                  href={n.href}
-                  className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
-                    n.tone === "amber"
-                      ? "bg-warning-soft border-warning/30 hover:bg-warning-soft/70"
-                      : n.tone === "blue"
-                        ? "bg-primary-soft border-primary/30 hover:bg-primary-soft/70"
-                        : n.tone === "rose"
-                          ? "bg-danger-soft border-danger/30 hover:bg-danger-soft/70"
-                          : "bg-accent-soft border-accent/40 hover:bg-accent-soft/70"
-                  }`}
-                >
-                  <span className="min-w-0 flex items-center gap-2">
-                    <span className="text-lg">{n.icon}</span>
-                    <span className="text-sm text-ink truncate">
-                      {n.title}
-                    </span>
-                  </span>
-                  <span
-                    className={`shrink-0 text-sm font-bold tabular-nums ${
-                      n.tone === "amber"
-                        ? "text-warning"
-                        : n.tone === "blue"
-                          ? "text-primary-deep"
-                          : n.tone === "rose"
-                            ? "text-danger"
-                            : "text-accent-deep"
-                    }`}
-                  >
-                    {n.count}
-                  </span>
-                </Link>
-              </li>
-            ))}
-            {notifications.length > 10 && (
-              <li className="text-[11px] text-ink-soft text-center pt-1">
-                + {notifications.length - 10}건 더보기
-              </li>
-            )}
-          </ul>
-          ) : (
-            <div className="rounded-xl bg-surface-alt/60 border border-border-default px-4 py-5 text-center text-sm text-ink-soft">
-              ✓ 지금 바로 처리할 일이 없습니다. 새 단계가 생기면 여기에 모입니다.
-            </div>
-          )}
-        </section>
-      )}
 
       {/* AI 서류 평가 큐 알림 — 진행/대기 중일 때만 작게 표시 */}
       {queueCount > 0 && (
@@ -687,15 +669,98 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </div>
       )}
 
-      {/* 공고 카드 그리드 — 각 공고의 상태·진행·액션을 한눈에 */}
+      {/* 2단 — 좌: 채용 파이프라인(단계 분포 도넛) / 우: 오늘 할 일(처리 대기 항목) */}
+      <div className="grid lg:grid-cols-3 gap-4 mb-6">
+        {/* 채용 파이프라인 — 진행 중 후보의 단계 분포 + 합격. 전부 실집계. */}
+        <section className="lg:col-span-2 bg-card border border-border-default rounded-2xl p-5 shadow-sm">
+          <header className="flex items-baseline gap-2 mb-4 flex-wrap">
+            <h2 className="text-sm font-semibold text-ink">채용 파이프라인</h2>
+            <span className="text-xs text-ink-soft">진행 중 단계 분포 + 합격</span>
+          </header>
+          {pipelineTotal > 0 ? (
+            <Donut
+              data={pipeline}
+              size={152}
+              thickness={22}
+              centerTop={String(pipelineTotal)}
+              centerSub="명"
+            />
+          ) : (
+            <div className="py-10 text-center text-sm text-ink-soft">
+              아직 파이프라인에 진행 중인 후보가 없습니다.
+            </div>
+          )}
+        </section>
+
+        {/* 오늘 할 일 — 액션 우선 패널(시안의 우측 패널 자리). 처리 대기 항목을 한곳에. */}
+        <section className="lg:col-span-1 bg-card border border-primary/20 rounded-2xl p-5 shadow-sm">
+          <header className="mb-3">
+            <h2 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+              🔔 오늘 할 일
+            </h2>
+            <p className="text-xs text-ink-soft mt-0.5">
+              {notifications.length > 0
+                ? `처리 대기 ${notifications.length}건 · 누르면 이동`
+                : "지금 바로 처리할 일 없음"}
+            </p>
+          </header>
+          {notifications.length > 0 ? (
+            <ul className="space-y-2">
+              {notifications.slice(0, 8).map((n) => (
+                <li key={n.id}>
+                  <Link
+                    href={n.href}
+                    className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border transition-colors ${
+                      n.tone === "amber"
+                        ? "bg-warning-soft border-warning/30 hover:bg-warning-soft/70"
+                        : n.tone === "blue"
+                          ? "bg-primary-soft border-primary/30 hover:bg-primary-soft/70"
+                          : n.tone === "rose"
+                            ? "bg-danger-soft border-danger/30 hover:bg-danger-soft/70"
+                            : "bg-accent-soft border-accent/40 hover:bg-accent-soft/70"
+                    }`}
+                  >
+                    <span className="min-w-0 flex items-center gap-2">
+                      <span className="text-base shrink-0">{n.icon}</span>
+                      <span className="text-[13px] text-ink truncate">
+                        {n.title}
+                      </span>
+                    </span>
+                    <span
+                      className={`shrink-0 text-sm font-bold tabular-nums ${
+                        n.tone === "amber"
+                          ? "text-warning"
+                          : n.tone === "blue"
+                            ? "text-primary-deep"
+                            : n.tone === "rose"
+                              ? "text-danger"
+                              : "text-accent-deep"
+                      }`}
+                    >
+                      {n.count}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+              {notifications.length > 8 && (
+                <li className="text-[11px] text-ink-soft text-center pt-1">
+                  + {notifications.length - 8}건 더
+                </li>
+              )}
+            </ul>
+          ) : (
+            <div className="rounded-xl bg-surface-alt/60 border border-border-default px-4 py-8 text-center text-sm text-ink-soft">
+              ✓ 처리할 일이 없습니다.
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* 공고 목록 — 표(시안). 행 클릭 시 공고 상세로. 단계별 액션은 상세·'오늘 할 일'에서.
+         AI 서류 = 그 공고 평가된 후보의 평균 AI 서류 점수(실집계). 등록 = createdAt 경과. */}
       <section className="mb-8">
         <header className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-sm font-semibold text-ink">공고 목록</h2>
-            <p className="text-[11px] text-ink-soft mt-0.5">
-              각 단계 숫자를 클릭하면 해당 단계로 필터된 후보자 목록이 열립니다.
-            </p>
-          </div>
+          <h2 className="text-sm font-semibold text-ink">공고 목록</h2>
           <Link
             href="/jobs/new"
             className="hidden sm:inline-block text-xs px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface font-medium transition-colors"
@@ -705,9 +770,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </header>
         {jobsWithActions.length === 0 ? (
           <div className="bg-card border border-dashed border-border-strong rounded-2xl py-12 text-center">
-            <p className="text-sm text-ink-soft">
-              아직 등록된 공고가 없습니다.
-            </p>
+            <p className="text-sm text-ink-soft">아직 등록된 공고가 없습니다.</p>
             {/* 공고 등록은 입력 항목이 많아 PC에서만 지원 — 모바일은 안내 문구로 대체 */}
             <Link
               href="/jobs/new"
@@ -720,14 +783,84 @@ async function Dashboard({ me }: { me: CurrentUser }) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {jobsWithActions.map((j) => (
-              <JobCard
-                key={j.id}
-                job={j}
-                isLocked={lockedJobIdsAtJobs.has(j.id)}
-              />
-            ))}
+          <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
+            {/* 열 헤더 (데스크톱) — 행과 동일한 flex gap-3 구조라 열이 정렬된다 */}
+            <div className="hidden sm:flex items-center gap-3 px-4 py-2.5 border-b border-border-default text-[11px] font-medium text-ink-muted uppercase tracking-wider">
+              <span className="flex-1">공고</span>
+              <span className="w-12 text-right">후보</span>
+              <span className="w-12 text-right">AI 서류</span>
+              <span className="w-14 text-right">등록</span>
+              <span className="w-4" aria-hidden />
+            </div>
+            {jobsWithActions.map((j) => {
+              const locked = lockedJobIdsAtJobs.has(j.id);
+              const isClosed = j.status === "closed";
+              const cnt = Number(j.candidateCount);
+              const sc =
+                j.avgScore != null ? Math.round(Number(j.avgScore)) : null;
+              const scCls =
+                sc == null
+                  ? "text-ink-muted"
+                  : sc >= 85
+                    ? "text-success"
+                    : sc >= 70
+                      ? "text-primary-deep"
+                      : sc >= 55
+                        ? "text-warning"
+                        : "text-ink-soft";
+              const days = Math.floor(
+                (Date.now() - new Date(j.createdAt).getTime()) / 86_400_000
+              );
+              const reg = days <= 0 ? "오늘" : `${days}일 전`;
+              return (
+                <Link
+                  key={j.id}
+                  href={`/jobs/${j.id}`}
+                  className="flex items-center gap-3 px-4 py-3 border-b border-border-default last:border-0 hover:bg-surface-alt/50 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      {locked && (
+                        <Lock className="w-3.5 h-3.5 text-ink-muted shrink-0" />
+                      )}
+                      <span className="font-medium text-ink truncate">
+                        {j.title}
+                      </span>
+                      <span
+                        className={`shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
+                          isClosed
+                            ? "bg-surface-alt text-ink-soft"
+                            : "bg-success-soft text-success"
+                        }`}
+                      >
+                        {!isClosed && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                        )}
+                        {isClosed ? "종결" : "진행 중"}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-ink-muted mt-0.5 truncate">
+                      {j.position} · {j.level} · {j.employmentType}
+                      <span className="sm:hidden">
+                        {" · "}후보 {locked ? "—" : cnt} · {reg}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="hidden sm:block w-12 text-right text-sm font-semibold text-ink tabular-nums">
+                    {locked ? "—" : cnt}
+                  </div>
+                  <div
+                    className={`hidden sm:block w-12 text-right text-sm font-semibold tabular-nums ${scCls}`}
+                  >
+                    {locked || sc == null ? "—" : sc}
+                  </div>
+                  <div className="hidden sm:block w-14 text-right text-xs text-ink-soft">
+                    {reg}
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-ink-muted shrink-0" />
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>
@@ -819,6 +952,8 @@ function KpiCard({
   sub,
   href,
   accent,
+  trend,
+  Icon,
   children,
 }: {
   label: string;
@@ -826,6 +961,10 @@ function KpiCard({
   sub?: string;
   href?: string;
   accent: "blue" | "indigo" | "amber" | "emerald" | "rose" | "slate";
+  /** 초록 상승 추이 한 줄 (예: "+5 최근 7일"). 실집계만 — 없으면 미표시. */
+  trend?: string;
+  /** 우상단 아이콘 (소프트 원형 배지). */
+  Icon?: React.ComponentType<{ className?: string }>;
   children?: React.ReactNode;
 }) {
   // v2 절제 — 장식 색(blue/indigo/emerald)은 중립. 진짜 상태(amber=대기, rose=음수)만 색 유지.
@@ -839,313 +978,32 @@ function KpiCard({
   };
   const inner = (
     <div className={`group bg-card border rounded-2xl p-4 shadow-sm h-full transition-all ${accentMap[accent]} ${href ? "hover:shadow-md hover:-translate-y-0.5 hover:border-primary/40" : ""}`}>
-      <div className="flex items-center justify-between gap-1">
+      <div className="flex items-center justify-between gap-2">
         <div className="text-xs text-ink-soft font-medium">{label}</div>
-        {href && (
+        {Icon ? (
+          <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary-deep flex items-center justify-center shrink-0">
+            <Icon className="w-4 h-4" />
+          </span>
+        ) : href ? (
           <ArrowRight
             className="w-3.5 h-3.5 text-ink-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all"
             strokeWidth={2.5}
           />
-        )}
+        ) : null}
       </div>
-      <div className="mt-2 text-2xl font-bold text-ink tabular-nums">{value}</div>
+      <div className="mt-3 text-2xl font-bold text-ink tabular-nums">{value}</div>
+      {trend && (
+        <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-success">
+          <TrendingUp className="w-3.5 h-3.5" strokeWidth={2.5} />
+          {trend}
+        </div>
+      )}
       {sub && <div className="text-[11px] text-ink-soft mt-1">{sub}</div>}
       {children}
     </div>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;
 }
-
-function JobCard({
-  job,
-  isLocked,
-}: {
-  job: {
-    id: number;
-    title: string;
-    position: string;
-    level: string;
-    employmentType: string;
-    interviewDurationMinutes: number;
-    status: "active" | "closed";
-    publishedAt: string;
-    closesAt: string;
-    extensionCount: number;
-    passwordHash: string | null;
-    candidateCount: number;
-    screeningCount: number;
-    decidedCount: number;
-    needsInterviewDecision: number;
-    awaitingInterview: number;
-    needsFinalDecision: number;
-    needsRound1Schedule: number;
-    needsRound2Decision: number;
-    needsFinalOffer: number;
-  };
-  isLocked: boolean;
-}) {
-  const isClosed = job.status === "closed";
-  const total = Number(job.candidateCount);
-  const screeningC = Number(job.screeningCount);
-  const decidedC = Number(job.decidedCount);
-  const inProgress = total - decidedC;
-
-  // D-day 계산 (종결 공고는 종결일자 표시)
-  const dLeft = isClosed
-    ? null
-    : Math.ceil(
-        (new Date(job.closesAt).getTime() - Date.now()) / 86_400_000
-      );
-  // v2 절제 — 여유(>14일)는 중립. 임박(<=14 경고)·긴급(<=3 위험)만 색.
-  const dTone =
-    dLeft == null
-      ? "bg-surface-alt text-ink-soft"
-      : dLeft <= 3
-        ? "bg-danger-soft text-danger border border-danger/30"
-        : dLeft <= 14
-          ? "bg-warning-soft text-warning border border-warning/30"
-          : "bg-surface-alt text-ink-soft border border-border-default";
-
-  const needsInterviewDecision = Number(job.needsInterviewDecision);
-  const awaitingInterview = Number(job.awaitingInterview);
-  const needsFinalDecision = Number(job.needsFinalDecision);
-  const needsRound1Schedule = Number(job.needsRound1Schedule);
-  const needsRound2Decision = Number(job.needsRound2Decision);
-  const needsFinalOffer = Number(job.needsFinalOffer);
-
-  const actionTotal =
-    needsInterviewDecision +
-    needsFinalDecision +
-    needsRound1Schedule +
-    needsRound2Decision +
-    needsFinalOffer;
-
-  return (
-    <div
-      className={`relative rounded-2xl border bg-card shadow-sm overflow-hidden ${
-        isClosed ? "opacity-75" : ""
-      } ${actionTotal > 0 ? "border-primary/30 ring-1 ring-primary/20" : "border-border-default"}`}
-    >
-      {/* 헤더 영역 */}
-      <Link
-        href={`/jobs/${job.id}`}
-        className="block px-5 pt-5 pb-3 hover:bg-surface-alt/40 transition-colors"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {isLocked && (
-                <span className="text-ink-muted" title="비밀번호 보호">
-                  🔒
-                </span>
-              )}
-              <h3 className="text-base font-bold text-ink truncate">
-                {job.title}
-              </h3>
-              {isClosed && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-alt text-ink-soft font-medium">
-                  종결
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              <Tag>{job.position}</Tag>
-              <Tag>{job.level}</Tag>
-              <Tag>{job.employmentType}</Tag>
-              <Tag>면접 {job.interviewDurationMinutes}분</Tag>
-            </div>
-          </div>
-          {!isClosed && dLeft != null && (
-            <span
-              className={`shrink-0 text-[11px] px-2 py-1 rounded-md font-medium tabular-nums ${dTone}`}
-            >
-              {dLeft <= 0 ? "오늘 만료" : `D-${dLeft}`}
-            </span>
-          )}
-        </div>
-      </Link>
-
-      {/* 후보자 요약 라인 */}
-      <div className="px-5 py-2 bg-surface-alt/50 border-y border-border-default/70 flex items-center gap-4 text-xs">
-        <span>
-          <strong className="text-ink tabular-nums">{total}</strong>
-          <span className="text-ink-soft"> 명</span>
-        </span>
-        {!isLocked && total > 0 && (
-          <>
-            <span className="text-ink-muted">·</span>
-            <span className="text-ink-soft">
-              진행 <strong className="tabular-nums">{inProgress}</strong>
-              {screeningC > 0 && (
-                <span className="text-ink-muted ml-1">
-                  (평가 중 {screeningC})
-                </span>
-              )}
-            </span>
-            <span className="text-ink-muted">·</span>
-            <span className="text-ink-soft">
-              결정 <strong className="tabular-nums">{decidedC}</strong>
-            </span>
-          </>
-        )}
-        {(job.extensionCount ?? 0) > 0 && (
-          <>
-            <span className="text-ink-muted">·</span>
-            <span className="text-ink-soft">
-              연장 {job.extensionCount}회
-            </span>
-          </>
-        )}
-      </div>
-
-      {/* 액션 카운터 */}
-      <div className="p-3">
-        {isLocked ? (
-          <div className="text-center text-xs text-ink-soft italic py-4">
-            🔒 비밀번호 입력 후 액션 카운트 확인
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="grid grid-cols-3 gap-2">
-              <ActionCount
-                jobId={job.id}
-                stage="screened"
-                value={needsInterviewDecision}
-                title="서류평가 완료"
-                subtitle="면접 결정 대기"
-                tone="blue"
-                actor="인사담당"
-              />
-              <ActionCount
-                jobId={job.id}
-                stage="ai_pending"
-                value={awaitingInterview}
-                title="AI 면접 대기"
-                subtitle="응시 대기"
-                tone="sky"
-                actor="지원자"
-              />
-              <ActionCount
-                jobId={job.id}
-                stage="ai_evaluated"
-                value={needsFinalDecision}
-                title="AI 면접 완료"
-                subtitle="합·불 결정 대기"
-                tone="indigo"
-                actor="인사담당"
-              />
-            </div>
-            {(needsRound1Schedule > 0 ||
-              needsRound2Decision > 0 ||
-              needsFinalOffer > 0) && (
-              <div className="grid grid-cols-3 gap-2">
-                {needsRound1Schedule > 0 && (
-                  <ActionCount
-                    jobId={job.id}
-                    stage="round1_candidate"
-                    value={needsRound1Schedule}
-                    title="1차 면접"
-                    subtitle="스케쥴 제시 대기"
-                    tone="blue"
-                    actor="인사담당"
-                  />
-                )}
-                {needsRound2Decision > 0 && (
-                  <ActionCount
-                    jobId={job.id}
-                    stage="round1_passed"
-                    value={needsRound2Decision}
-                    title="1차 합격"
-                    subtitle="2차 진행 결정 대기"
-                    tone="indigo"
-                    actor="인사담당"
-                  />
-                )}
-                {needsFinalOffer > 0 && (
-                  <ActionCount
-                    jobId={job.id}
-                    stage="round2_passed"
-                    value={needsFinalOffer}
-                    title="2차 합격"
-                    subtitle="최종합격 결정 대기"
-                    tone="indigo"
-                    actor="인사담당"
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Tag({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-alt text-ink-soft">
-      {children}
-    </span>
-  );
-}
-
-function ActionCount({
-  jobId,
-  stage,
-  value,
-  title,
-  subtitle,
-  tone,
-  actor,
-}: {
-  jobId: number;
-  stage: string;
-  value: number;
-  title: string;
-  subtitle: string;
-  tone: "blue" | "sky" | "indigo";
-  actor: "인사담당" | "지원자";
-}) {
-  // v2 절제 — 단계별 색 구분(blue/sky/indigo) 폐기. 활성=포레스트, 비활성=중립 하나로 통일.
-  // 단계 구분은 색이 아니라 제목·위치로. (tone 인자는 호출부 호환 위해 유지하되 무시)
-  void tone;
-  const active =
-    "bg-primary-soft border-primary/30 text-primary-deep hover:bg-primary-soft/70";
-  const muted = "bg-surface-alt border-border-default text-ink-muted";
-  const cls = value > 0 ? active : muted;
-  // 액터: "인사담당(=내가 할 일)"은 포레스트 포인트, "지원자"는 중립.
-  const actorTone =
-    actor === "인사담당"
-      ? "bg-primary-soft text-primary-deep"
-      : "bg-surface-alt text-ink-soft";
-  const inner = (
-    <div
-      className={`block px-3 py-2.5 border rounded-lg transition-colors ${cls}`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium opacity-80 truncate">
-          {title}
-        </span>
-        <span
-          className={`text-[9px] px-1.5 py-px rounded-sm font-medium shrink-0 ${actorTone}`}
-        >
-          {actor}
-        </span>
-      </div>
-      <div className="flex items-baseline justify-between mt-1">
-        <span className="text-[10px] opacity-70 truncate">{subtitle}</span>
-        <span className="text-xl font-bold tabular-nums">{value}</span>
-      </div>
-    </div>
-  );
-  if (value === 0) return inner;
-  return (
-    <Link href={`/jobs/${jobId}?stage=${stage}`} title={`${title} ${value}건 보기`}>
-      {inner}
-    </Link>
-  );
-}
-
 
 // ---------------------------------------------------------------------------
 // 비로그인 랜딩 페이지 (이전과 동일)
