@@ -511,7 +511,7 @@ export function BreakdownBlock({
   );
 }
 
-/** 6축 항목별 바 + 사유 (육각형 차트 제외) — 개요엔 차트만, 상세엔 이 바를 둔다. */
+/** 6축 항목별 바 + 사유 (육각형 차트 제외) — 종합평가엔 차트만, 상세엔 이 바를 둔다. */
 export function BreakdownBars({
   breakdown,
 }: {

@@ -417,7 +417,7 @@ export default function CandidateDetailPage() {
 
   // 상단 가로 탭 + 좌측 세로 레일이 공유하는 단일 탭 정의(불일치 방지).
   const tabItems: TabItem[] = [
-    { key: "overview", label: "개요", Icon: Gauge, on: true, hint: "" },
+    { key: "overview", label: "종합평가", Icon: Gauge, on: true, hint: "" },
     { key: "screening", label: "서류평가", Icon: FileText, on: true, hint: "" },
     {
       key: "ai",
@@ -462,7 +462,7 @@ export default function CandidateDetailPage() {
   ];
   const waiterLabel = STAGE_WAITER[candidate.stage as Stage]?.label ?? null;
 
-  // 개요 종합 소견 — 전형이 진행될수록 가장 최근(상위) 평가 요약으로 갱신.
+  // 종합평가 종합 소견 — 전형이 진행될수록 가장 최근(상위) 평가 요약으로 갱신.
   // (서류 → AI 면접 → … 순으로 더 최신 소견이 전체 인상을 대표)
   const overviewSummary =
     completedSession?.evaluation?.summary ??
@@ -725,7 +725,7 @@ export default function CandidateDetailPage() {
       {/* 탭 전환 스크롤 기준점 — 탭바와 콘텐츠 경계(위 effect 가 여기로 스크롤). */}
       <div ref={tabAnchorRef} aria-hidden />
 
-      {/* ── 개요 — 스코어카드 + 진행단계 + 6축 차트 ── */}
+      {/* ── 종합평가 — 스코어카드 + 진행단계 + 6축 차트 ── */}
       {tab === "overview" && (
         <div className="mt-4 space-y-4 min-h-[calc(100vh-2rem)]">
           <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">

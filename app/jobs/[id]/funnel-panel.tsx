@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  Brain,
+  FileText,
+  Trophy,
+  User,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 type Funnel = {
   stages: Record<string, number>;
@@ -53,17 +61,21 @@ export function FunnelPanel({
   if (!data || data.total === 0) return null;
 
   // 전형 단계 — 버킷 5개 (서류 → AI 면접 → 1차 → 2차 → 최종 합격).
-  // 각 박스 안에 서브상태 요약 1줄. 색상 토큰은 후보자 카드 좌측 색띠와 동일.
-  // active: 값이 있는 셀(테두리 진하고 배경 살짝), empty: 값 0인 셀(테두리만 옅게).
+  // 색: 화이트(#FFFFFF) → 브랜드 primary(#1C3478) 를 RGB 선형보간한 5단계를 solid 채움.
+  //   #FFFFFF → #C6CCDD → #8E9ABC → #55679A → #1C3478(=primary). 흰색에서 시작해
+  //   깊어질수록 파랑·네이비로 — 밝고 산뜻하게 진행 순서를 색으로 읽는다.
+  //   밝은 1~2칸은 진한 글씨, 3~5칸은 흰 글씨. 서류칸(흰 배경)은 옅은 테두리로 구분.
+  //   후보자 카드 좌측 색띠(stageGroupBorder)는 같은 ramp(서류는 띠 가시성 위해 옅은 회색).
+  // active: 값이 있는 셀(solid), empty: 값 0인 셀(dimCell 로 옅게).
   const s = (k: string) => Number(data.stages[k] ?? 0);
   type PipelineCell = {
     stage: string; // 클릭 시 목록 필터 키 (bucket_* pseudo 또는 hired)
     label: string;
+    /** 상세보기 탭과 동일한 아이콘 — currentColor 상속으로 단계 색을 그대로 입는다 */
+    Icon: LucideIcon;
     n: number;
     /** 서브상태 요약 — "라벨 n" 중 n>0 만 표시 */
     subs: Array<{ label: string; n: number }>;
-    /** 색 점 인디케이터 (값이 있을 때) */
-    dot: string;
     /** n>0 카드 스타일 (테두리·배경·텍스트) */
     fill: string;
     /** 필터 선택 시 강조 ring */
@@ -74,60 +86,60 @@ export function FunnelPanel({
   const pipelineCells: PipelineCell[] = [
     {
       stage: "bucket_resume",
-      label: "서류",
+      label: "서류평가",
+      Icon: FileText,
       n: s("applied") + s("screened"),
       subs: [
         { label: "평가전", n: s("applied") },
         { label: "평가완료", n: s("screened") },
       ],
-      dot: "bg-slate-400",
-      fill: "border-slate-200 bg-white text-slate-700",
-      ring: "ring-slate-300",
+      fill: "border-[#D7DBE3] bg-white text-[#1f2937]",
+      ring: "ring-[#1C3478]/45",
     },
     {
       stage: "bucket_ai",
       label: "AI 면접",
+      Icon: Brain,
       n: s("ai_pending") + s("ai_evaluated"),
       subs: [
         { label: "응시대기", n: s("ai_pending") },
         { label: "면접완료", n: s("ai_evaluated") },
       ],
-      dot: "bg-info",
-      fill: "border-info/25 bg-info-soft/50 text-info",
-      ring: "ring-info/40",
+      fill: "border-[#C6CCDD] bg-[#C6CCDD] text-[#1f2937]",
+      ring: "ring-[#1C3478]/45",
     },
     {
       stage: "bucket_round1",
       label: "1차 면접",
+      Icon: User,
       n: s("round1_candidate") + s("round1_scheduling") + s("round1_waiting"),
       subs: [
         { label: "후보", n: s("round1_candidate") },
         { label: "일정조율", n: s("round1_scheduling") },
         { label: "면접확정", n: s("round1_waiting") },
       ],
-      dot: "bg-accent",
-      fill: "border-accent/30 bg-accent-soft/50 text-accent-deep",
-      ring: "ring-accent/50",
+      fill: "border-[#8E9ABC] bg-[#8E9ABC] text-white",
+      ring: "ring-[#1C3478]/45",
     },
     {
       stage: "bucket_round2",
       label: "2차 면접",
+      Icon: Users,
       n: s("round1_passed") + s("round2_passed"),
       subs: [
         { label: "진행·일정", n: s("round1_passed") },
         { label: "최종결정", n: s("round2_passed") },
       ],
-      dot: "bg-primary",
-      fill: "border-primary/25 bg-primary-soft/60 text-primary-deep",
-      ring: "ring-primary/40",
+      fill: "border-[#55679A] bg-[#55679A] text-white",
+      ring: "ring-[#1C3478]/45",
     },
     {
       stage: "hired",
       label: "최종 합격",
+      Icon: Trophy,
       n: s("hired"),
       subs: [],
-      dot: "bg-surface/80",
-      fill: "border-primary bg-primary text-surface shadow-[var(--shadow-sm)]",
+      fill: "border-primary bg-primary text-white shadow-[var(--shadow-sm)]",
       ring: "ring-primary/50",
       solid: true,
     },
@@ -293,10 +305,8 @@ export function FunnelPanel({
                 }`}
               >
                 <div className="flex items-center gap-1.5">
-                  <span
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                      filled ? cell.dot : "bg-ink-muted/30"
-                    }`}
+                  <cell.Icon
+                    className={`h-3.5 w-3.5 shrink-0 ${filled ? "opacity-90" : "opacity-50"}`}
                   />
                   <span className="text-[11px] font-medium opacity-90 truncate">
                     {cell.label}
