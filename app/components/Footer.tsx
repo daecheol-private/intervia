@@ -11,12 +11,22 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
     pathname.startsWith("/interview/") ||
     pathname.startsWith("/schedule/") ||
     pathname.startsWith("/apply/") ||
-    // 후보자 상세·공고 상세(/jobs/<숫자>)는 AppShell 을 쓰므로 전역 푸터 숨김.
-    pathname.startsWith("/candidates/") ||
-    /^\/jobs\/\d+(\/|$)/.test(pathname) ||
-    // 로그인 홈(/)은 대시보드 AppShell 을 쓰므로 전역 푸터 숨김(비로그인 랜딩은 유지).
-    (loggedIn && pathname === "/")
+    pathname.startsWith("/invite/")
   ) {
+    return null;
+  }
+  // AppShell(좌측 레일)을 쓰는 인증 영역에서는 전역 푸터 숨김. 로그인 상태에서만
+  // (비로그인이면 공개 랜딩/리다이렉트 대상이라 푸터 유지).
+  const usesAppShell =
+    pathname === "/" ||
+    pathname.startsWith("/candidates/") ||
+    pathname.startsWith("/jobs") ||
+    pathname.startsWith("/org") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/account") ||
+    pathname.startsWith("/notifications") ||
+    pathname.startsWith("/support");
+  if (loggedIn && usesAppShell) {
     return null;
   }
   return (
