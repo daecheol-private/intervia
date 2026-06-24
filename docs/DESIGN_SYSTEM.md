@@ -1,4 +1,4 @@
-# 디자인 시스템 (v3 — Graphite & Signal / Electric Indigo)
+# 디자인 시스템 (v3.1 — Graphite & Signal / Navy)
 
 > **디자인·UI 작업 전 필독.** 새 화면·컴포넌트·색/간격/모서리 변경은 이 문서의 규칙을 따른다.
 > - 토큰의 **진실의 원천**: [app/globals.css](../app/globals.css)
@@ -10,11 +10,12 @@
 
 ## 한 줄 철학
 
-**쿨 그래파이트 표면 + 일렉트릭 인디고 시그널 하나.** 거의 모노톤, 절제된 톤, 작은 radius.
-**색으로 떠들지 않는다.** 구분은 색이 아니라 **굵기·간격·회색조**로 만든다. 인디고는 *액션·강조·active* 에만.
+**쿨 그래파이트 표면 + 네이비 시그널 하나.** 거의 모노톤, 절제된 톤, 작은 radius.
+**색으로 떠들지 않는다.** 구분은 색이 아니라 **굵기·간격·회색조**로 만든다. 네이비는 *액션·강조·active* 에만.
 
-> v2(Forest + Ivory)에서 전환됨. primary 포레스트 그린 → **일렉트릭 인디고**, surface 아이보리 → **쿨 그래파이트**,
-> success 는 primary 와 **분리된 그린**(인디고가 "합격"을 뜻하지 않도록).
+> v2(Forest + Ivory)에서 전환됨. primary 포레스트 그린 → 일렉트릭 인디고 → **네이비(v3.1, 톤다운)**, surface 아이보리 → **쿨 그래파이트**,
+> success 는 primary 와 **분리된 그린**(primary 가 "합격"을 뜻하지 않도록).
+> 보조 포인트: **amber/gold(`accent`)** 보색 + **하늘색(`azure`)** 히어로 채팅 데모.
 
 ---
 
@@ -42,11 +43,15 @@
 
 | 그룹 | 토큰 | 값 | 용도 |
 |---|---|---|---|
-| **브랜드** | `primary` | `#4f46e5` (Electric Indigo) | CTA·강조·active — **유일한 포인트 컬러** |
-| | `primary-deep` | `#4338ca` | hover/pressed |
-| | `primary-soft` | `#eef0ff` | 태그·배지·active 네비 배경 |
-| | `accent` | `#06b6d4` (cyan) | 보조 강조 — 절제 있게(배지·아이콘 점). 밝은 배경엔 텍스트로 남용 금지 |
-| | `accent-soft` | `#d8f6fb` | accent 배경 |
+| **브랜드** | `primary` | `#1c3478` (Navy) | CTA·강조·active — **유일한 포인트 컬러** |
+| | `primary-deep` | `#13234f` | hover/pressed |
+| | `primary-soft` | `#e7eaf3` | 태그·배지·active 네비 배경 |
+| | `accent` | `#f59e0b` (amber/gold) | 보조 강조 — 네이비의 **보색 포인트**. 절제 있게(통계 숫자·배지·아이콘 점). 밝은 배경 텍스트엔 `accent-deep` 사용 |
+| | `accent-deep` | `#d97706` | hover/pressed·밝은 배경 위 텍스트 |
+| | `accent-soft` | `#fef3c7` | accent 배경 |
+| **하늘(데모)** | `azure` | `#7dd3fc` (하늘색) | 히어로 채팅 데모 보조 — 글로우·강조 점 |
+| | `azure-soft` | `#e0f2fe` | 채팅 말풍선 배경 |
+| | `azure-ink` | `#0c4a6e` | azure-soft 위 텍스트 |
 | **표면** | `surface` | `#f7f8fa` (cool graphite) | 페이지 배경 |
 | | `surface-alt` | `#eef1f5` | 섹션 구분·테이블 헤더·비활성 |
 | | `card` | `#ffffff` | 카드·모달 등 떠 있는 표면 |
@@ -61,6 +66,8 @@
 | | `info` | `#0369a1` | 안내 |
 
 각 상태색은 `-soft`(배경) 변형이 있고, warning/danger 는 `-deep`(hover)도 있다. 전체는 globals.css 참조.
+
+> **그라데이션**(인라인 hex 금지 — globals.css 토큰만 수정): 히어로 헤딩 반사 = `.text-reflect`(`var(--grad-reflect)`), GET STARTED 배너 = `.bg-cta-gradient`(`var(--grad-cta)`).
 
 ### 모서리 (radius) — **절제·각진 톤** (Tailwind 기본보다 작게 매핑)
 

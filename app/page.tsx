@@ -1198,7 +1198,7 @@ async function Landing() {
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-ink leading-[1.1]">
               지원자와의 첫 대화를,
               <br />
-              <span className="text-primary">AI 면접관에게 맡기세요.</span>
+              <span className="text-reflect">AI 면접관에게 맡기세요.</span>
             </h1>
             <p className="mt-6 text-base sm:text-lg text-ink-soft max-w-xl leading-relaxed">
               공고 '지원하기' 링크로 모은 이력서 자동 평가부터, 채팅 기반 AI 면접, 면접 일정 조율,
@@ -1439,31 +1439,43 @@ async function Landing() {
         </Container>
       </section>
 
-      <section className="bg-ink text-surface">
-        <Container width="sm" className="py-16 sm:py-24 text-center reveal">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md border border-accent/25 text-[11px] uppercase tracking-widest text-accent/80 mb-6">
-            <span className="w-1 h-1 rounded-full bg-accent" />
-            Get Started
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-surface">
-            지금 시작해 보세요
-          </h2>
-          <p className="mt-4 opacity-75 leading-relaxed">
-            법인 계정 등록 후 몇 분 내에 첫 공고를 띄울 수 있습니다.
-          </p>
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link
-              href="/signup"
-              className="w-full sm:w-auto h-12 px-6 rounded-lg bg-surface hover:bg-surface-alt text-ink font-semibold shadow-md transition-[color,background-color,box-shadow,transform] active:translate-y-px inline-flex items-center justify-center border border-surface"
-            >
-              무료로 시작하기
-            </Link>
-            <Link
-              href="/login"
-              className="w-full sm:w-auto h-12 px-6 rounded-lg bg-transparent hover:bg-white/10 text-surface font-semibold border border-white/30 transition-colors inline-flex items-center justify-center"
-            >
-              이미 계정이 있어요
-            </Link>
+      <section className="bg-surface">
+        <Container width="xl" className="py-16 sm:py-24">
+          <div className="relative overflow-hidden rounded-3xl bg-cta-gradient px-7 py-12 text-surface shadow-xl reveal sm:px-14 sm:py-16">
+            {/* eslint-disable-next-line @next/next/no-img-element -- 장식용 일러스트(고정 에셋), next/image 불필요 */}
+            <img
+              src="/landing.png"
+              alt=""
+              aria-hidden
+              className="pointer-events-none absolute right-0 top-1/2 hidden w-[560px] max-w-[52%] -translate-y-1/2 select-none lg:block"
+            />
+            <div className="relative z-10 max-w-lg">
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md border border-accent/25 text-[11px] uppercase tracking-widest text-accent/80 mb-6">
+                <span className="w-1 h-1 rounded-full bg-accent" />
+                Get Started
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-surface">
+                지금 바로 Intervia를 시작하세요
+              </h2>
+              <p className="mt-4 opacity-75 leading-relaxed">
+                법인 계정 등록 후 몇 분 내에 첫 공고를 띄울 수 있습니다.
+              </p>
+              <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <Link
+                  href="/signup"
+                  className="h-12 px-6 rounded-lg bg-surface hover:bg-surface-alt text-ink font-semibold shadow-md transition-[color,background-color,box-shadow,transform] active:translate-y-px inline-flex items-center justify-center gap-1.5 border border-surface"
+                >
+                  무료로 시작하기
+                  <span aria-hidden>→</span>
+                </Link>
+                <Link
+                  href="/login"
+                  className="h-12 px-6 rounded-lg bg-transparent hover:bg-white/10 text-surface font-semibold border border-white/30 transition-colors inline-flex items-center justify-center"
+                >
+                  이미 계정이 있어요
+                </Link>
+              </div>
+            </div>
           </div>
         </Container>
       </section>

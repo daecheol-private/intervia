@@ -143,7 +143,7 @@ export function ChatPreview() {
       {/* glow */}
       <div
         aria-hidden
-        className="absolute -inset-6 -z-10 rounded-3xl bg-accent/30 blur-2xl opacity-60"
+        className="absolute -inset-6 -z-10 rounded-3xl bg-azure/30 blur-2xl opacity-60"
       />
 
       <div className="rounded-2xl bg-card border border-border-default shadow-lg overflow-hidden">
@@ -229,7 +229,7 @@ function Bubble({
   }
   return (
     <div className={`flex items-end gap-2 justify-end ${cls}`}>
-      <div className="max-w-[80%] px-3 py-2 rounded-2xl rounded-br-md bg-primary text-surface">
+      <div className="max-w-[80%] px-3 py-2 rounded-2xl rounded-br-md bg-azure-soft text-azure-ink">
         <p className="text-xs leading-relaxed">{children}</p>
       </div>
       <div className="w-6 h-6 rounded-full bg-surface-alt border border-border-default flex items-center justify-center shrink-0">

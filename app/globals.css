@@ -20,12 +20,27 @@
  */
 :root {
   /* Brand — Graphite + Signal (Electric Indigo) */
-  --primary: #4f46e5;
-  --primary-deep: #4338ca;
-  --primary-soft: #eef0ff; /* tag/badge bg */
-  --accent: #06b6d4;
-  --accent-deep: #0891b2;
-  --accent-soft: #d8f6fb;
+  --primary: #1c3478; /* deep navy, toned down (구 electric indigo #4f46e5) */
+  --primary-deep: #13234f;
+  --primary-soft: #e7eaf3; /* tag/badge bg */
+  --accent: #f59e0b; /* amber/gold — 네이비의 보색 포인트 (구 cyan #06b6d4) */
+  --accent-deep: #d97706;
+  --accent-soft: #fef3c7;
+
+  /* Azure — 하늘색 보조 (히어로 채팅 데모·말풍선) */
+  --azure: #7dd3fc; /* 글로우·강조 점 */
+  --azure-soft: #e0f2fe; /* 말풍선 배경 */
+  --azure-ink: #0c4a6e; /* azure-soft 위 텍스트 */
+
+  /* 브랜드 그라데이션 — 인라인 하드코딩 대신 한 곳에서 관리.
+     히어로 헤딩 반사(.text-reflect) + GET STARTED 배너(.bg-cta-gradient) */
+  --grad-reflect: linear-gradient(180deg, #4f7be0 0%, #1c3478 60%, #294693 100%);
+  --grad-cta: radial-gradient(
+      circle at 80% 90%,
+      rgba(122, 92, 255, 0.4),
+      transparent 20%
+    ),
+    linear-gradient(90deg, #07102f, #121c56, #3f2cff);
 
   --surface: #f7f8fa;
   --surface-alt: #eef1f5;
@@ -89,6 +104,9 @@
   --color-accent: var(--accent);
   --color-accent-deep: var(--accent-deep);
   --color-accent-soft: var(--accent-soft);
+  --color-azure: var(--azure);
+  --color-azure-soft: var(--azure-soft);
+  --color-azure-ink: var(--azure-ink);
   --color-surface: var(--surface);
   --color-surface-alt: var(--surface-alt);
   --color-card: var(--card);
@@ -207,6 +225,19 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ink-muted);
+}
+
+/* 히어로 헤딩 반사 효과 — 텍스트에 브랜드 그라데이션 클립 (var(--grad-reflect)) */
+.text-reflect {
+  background-image: var(--grad-reflect);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* GET STARTED 배너 배경 그라데이션 (var(--grad-cta)) */
+.bg-cta-gradient {
+  background: var(--grad-cta);
 }
 
 /* 카드 hover 트랜지션 */

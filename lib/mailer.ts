@@ -263,10 +263,10 @@ export async function verifySmtpConfig(cfg: {
   }
 }
 
-/** 모든 발송 메일 공통 — 인디고 로고(호스팅 PNG) + Intervia 워드마크. 인라인 CSS만 사용 (메일 클라이언트 호환). */
+/** 모든 발송 메일 공통 — 브랜드 로고(호스팅 PNG) + Intervia 워드마크. 인라인 CSS만 사용 (메일 클라이언트 호환). */
 export const EMAIL_BRAND = {
-  primary: "#4f46e5",
-  primaryDeep: "#4338ca",
+  primary: "#1c3478",
+  primaryDeep: "#13234f",
   ink: "#0c1116",
 };
 
