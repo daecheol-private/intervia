@@ -263,11 +263,11 @@ export async function verifySmtpConfig(cfg: {
   }
 }
 
-/** 모든 발송 메일 공통 — 녹색 IV 배지 + Intervia 워드마크. 인라인 CSS만 사용 (메일 클라이언트 호환). */
+/** 모든 발송 메일 공통 — 인디고 로고(호스팅 PNG) + Intervia 워드마크. 인라인 CSS만 사용 (메일 클라이언트 호환). */
 export const EMAIL_BRAND = {
-  primary: "#0d4f3c",
-  primaryDeep: "#073529",
-  ink: "#0f1a14",
+  primary: "#4f46e5",
+  primaryDeep: "#4338ca",
+  ink: "#0c1116",
 };
 
 /**
@@ -292,7 +292,7 @@ export function escapeHtml(s: string): string {
 export function emailBrandHeader(): string {
   return `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
     <td width="36" valign="middle" style="width:36px;padding:0;">
-      <div style="width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,${EMAIL_BRAND.primary},${EMAIL_BRAND.primaryDeep});color:#fff;font-weight:700;text-align:center;line-height:36px;font-size:15px;letter-spacing:-1px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">IV<span style="color:#e8a87c">.</span></div>
+      <img src="${SITE_INFO.baseUrl}/email-logo.png" width="36" height="36" alt="Intervia" style="display:block;width:36px;height:36px;border-radius:8px;border:0;" />
     </td>
     <td valign="middle" style="padding:0 0 0 10px;font-weight:700;color:${EMAIL_BRAND.ink};font-size:18px;letter-spacing:-0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1;">Intervia</td>
   </tr></table>`;

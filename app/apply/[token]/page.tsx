@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { jobPostings, organizations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { isJobExpired } from "@/lib/job-lifecycle";
+import { LogoMark } from "@/app/components/Logo";
 import ApplyForm from "./ApplyForm";
 
 export const runtime = "nodejs";
@@ -15,9 +16,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="w-full max-w-xl">{children}</div>
       {/* Intervia 는 회사 노출을 가리지 않도록 폼 하단에 로고만 작게 */}
       <div className="mt-4 mb-2 flex items-center justify-center gap-1.5 text-ink-muted">
-        <span className="inline-flex h-5 items-center rounded-md bg-ink px-1 text-[10px] font-bold text-surface">
-          IV.
-        </span>
+        <LogoMark size={18} />
         <span className="text-xs">Intervia 로 진행되는 채용 지원</span>
       </div>
     </div>
