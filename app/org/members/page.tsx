@@ -172,7 +172,7 @@ export default function OrgMembersPage() {
       <div className="mb-4 rounded-lg border border-border-default bg-surface-alt/60 px-4 py-3 text-xs text-ink-soft leading-relaxed">
         <div className="font-semibold text-ink mb-1">동료를 합류시키려면?</div>
         <ol className="list-decimal list-inside space-y-0.5">
-          <li>동료가 회사 이메일로 <Link href="/signup" className="text-primary underline">회원가입</Link></li>
+          <li>동료가 회사 이메일로 <strong>회원가입</strong></li>
           <li>같은 도메인이면 자동으로 본 법인에 합류 요청이 생성됩니다</li>
           <li>아래 목록 상단의 <strong>승인대기</strong> 항목에서 승인</li>
         </ol>
