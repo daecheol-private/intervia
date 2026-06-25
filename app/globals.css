@@ -23,9 +23,9 @@
   --primary: #1c3478; /* deep navy, toned down (구 electric indigo #4f46e5) */
   --primary-deep: #13234f;
   --primary-soft: #e7eaf3; /* tag/badge bg */
-  --accent: #fb7185; /* coral — 네이비와 따뜻한 대비 포인트 (구 amber #f59e0b) */
-  --accent-deep: #e11d48;
-  --accent-soft: #ffe4e6;
+  --accent: #ffb59a; /* soft peach-coral — 네이비와 따뜻한 대비 포인트 (구 rose #fb7185 → 톤다운, 마케팅과 통일) */
+  --accent-deep: #c2622f;
+  --accent-soft: #ffead9;
 
   /* Azure — 하늘색 보조 (히어로 채팅 데모·말풍선) */
   --azure: #7dd3fc; /* 글로우·강조 점 */
