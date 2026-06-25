@@ -22,7 +22,12 @@ import {
   recommendationFromScore,
   formatKstDateTime,
 } from "@/lib/utils";
-import { STAGE_RANK, STAGE_WAITER, type Stage } from "@/lib/stage-meta";
+import {
+  STAGE_RANK,
+  STAGE_WAITER,
+  type Stage,
+  type StageWaiter,
+} from "@/lib/stage-meta";
 import { CandidateFavoriteStar } from "@/app/components/CandidateFavoriteStar";
 import { confirmDialog, notify } from "@/app/components/Dialog";
 import { AppealsPanel } from "./appeals-panel";
@@ -69,6 +74,53 @@ function evalLikelyRunning(s: Session | undefined): boolean {
   if (!s || s.status !== "completed" || s.evaluation || !s.completedAt)
     return false;
   return Date.now() - Date.parse(s.completedAt) < EVAL_GRACE_MS;
+}
+
+// 대기 주체(who)별 표시 톤 — 목록 WaitBadge(jobs/[id]/badges.tsx WAITER_META)와 같은
+// 색 언어를 공유한다: 인사(주의=warning) / 지원자(정보=info) / 시스템(중립) / 면접관(accent).
+const WAITER_TONE: Record<
+  Exclude<StageWaiter, "none">,
+  { dot: string; box: string }
+> = {
+  hr:          { dot: "bg-warning",     box: "text-warning bg-warning-soft border-warning/40" },
+  candidate:   { dot: "bg-info",        box: "text-info bg-info-soft border-info/40" },
+  system:      { dot: "bg-ink-muted",   box: "text-ink-soft bg-surface-alt border-border-default" },
+  interviewer: { dot: "bg-accent-deep", box: "text-accent-deep bg-accent-soft border-accent/40" },
+};
+
+/**
+ * 후보자 현재 단계에서 "지금 누가 무엇을 해야 하는지"를 한눈에 보여주는 콜아웃.
+ * hr(=인사담당자가 직접 결정·조치해야 하는 단계)일 때는 펄스 점 + 큰 글씨로 강조해
+ * 면접관의 시선을 끈다. 그 외(지원자 응답·AI 처리·면접 진행 대기)는 "기다리는 중"이므로
+ * 차분한 톤으로 표시해 액션이 필요한 상태와 구분한다. 라벨은 STAGE_WAITER 의 "~대기"
+ * 문구를 그대로 쓴다(별도 "지금 할 일" 류 안내 prefix 없이 라벨 자체로 의미 전달).
+ */
+function WaiterCallout({ who, label }: { who: StageWaiter; label: string }) {
+  if (who === "none") return null;
+  const t = WAITER_TONE[who];
+  const isAction = who === "hr";
+  return (
+    <span
+      className={`sm:ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 shadow-sm ${t.box} ${
+        isAction ? "text-xs sm:text-sm font-semibold" : "text-[11px] sm:text-xs font-medium"
+      }`}
+      title={
+        isAction
+          ? "인사담당자의 조치가 필요한 단계입니다"
+          : "외부 응답·진행을 기다리는 중입니다"
+      }
+    >
+      <span className="relative flex h-2 w-2" aria-hidden>
+        {isAction && (
+          <span
+            className={`absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping motion-reduce:hidden ${t.dot}`}
+          />
+        )}
+        <span className={`relative inline-flex h-2 w-2 rounded-full ${t.dot}`} />
+      </span>
+      <span>{label}</span>
+    </span>
+  );
 }
 
 export default function CandidateDetailPage() {
@@ -460,7 +512,7 @@ export default function CandidateDetailPage() {
     { label: "2차 면접", min: 80, max: 80, Icon: Users },
     { label: "종결", min: 100, max: 100, Icon: Flag },
   ];
-  const waiterLabel = STAGE_WAITER[candidate.stage as Stage]?.label ?? null;
+  const waiter = STAGE_WAITER[candidate.stage as Stage] ?? null;
 
   // 종합평가 종합 소견 — 전형이 진행될수록 가장 최근(상위) 평가 요약으로 갱신.
   // (서류 → AI 면접 → … 순으로 더 최신 소견이 전체 인상을 대표)
@@ -647,13 +699,11 @@ export default function CandidateDetailPage() {
               );
             })}
           </div>
-          {!isTerminated && waiterLabel && (
-            <span className="sm:ml-auto shrink-0 text-[10px] text-primary-deep bg-primary-soft rounded-full px-2 py-0.5">
-              {waiterLabel}
-            </span>
+          {!isTerminated && waiter && (
+            <WaiterCallout who={waiter.who} label={waiter.label} />
           )}
           {isTerminated && (
-            <span className="sm:ml-auto shrink-0 text-[10px] font-medium text-danger">
+            <span className="sm:ml-auto shrink-0 inline-flex items-center text-[11px] sm:text-xs font-semibold text-danger bg-danger-soft border border-danger/30 rounded-full px-3 py-1">
               종결 — {candidate.outcome === "rejected" ? "불합격" : "지원취소"}
             </span>
           )}
