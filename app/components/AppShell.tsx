@@ -406,8 +406,9 @@ export function AppShell({
         </div>
       )}
 
-      {/* 본문 영역 */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* 본문 영역 — data-iv-content-area: 사이드바 접힘 시 폭이 변하는 컨테이너. 본문이 max-w
+          에 걸려 재중앙정렬만 될 때 위치 변화를 감지하려는 자손(예: 후보자 세로 탭 레일)이 관찰한다. */}
+      <div data-iv-content-area className="flex-1 flex flex-col min-w-0">
         {/* 모바일 전용 상단바 — 햄버거 + 로고 (데스크톱은 좌측 레일이 상시 노출이라 불필요) */}
         <header className="lg:hidden print:hidden sticky top-0 z-30 flex items-center gap-2 px-4 h-14 bg-card/90 backdrop-blur border-b border-border-default">
           <button

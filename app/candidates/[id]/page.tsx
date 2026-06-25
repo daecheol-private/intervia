@@ -720,6 +720,7 @@ export default function CandidateDetailPage() {
           setTab(k);
         }}
         sentinelRef={tabBarRef}
+        anchorRef={tabAnchorRef}
       />
 
       {/* 탭 전환 스크롤 기준점 — 탭바와 콘텐츠 경계(위 effect 가 여기로 스크롤). */}
