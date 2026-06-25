@@ -51,6 +51,7 @@
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
 | POST | `/api/orgs/tokens/checkout` | 🏢 (admin) | 토스 결제 시작 — `{amountKrw}`(허용 패키지만, `CHARGE_PACKAGES`). pending `payment_orders` 생성 후 `{orderId(=IV-{id}), amount, orderName, customerEmail, customerName}` 반환. 토큰 지급은 confirm 에서 |
 | POST | `/api/orgs/tokens/confirm` | 🏢 (admin) | 결제 성공 리다이렉트 후 승인 — `{paymentKey, orderId, amount}`. 금액은 **DB값(권위)** 으로 토스 승인 → `applyChargePayment`(멱등) 로 토큰 지급. 금액 위변조 400 / 미존재·타법인 404 / 승인실패 402(주문 failed) / 이미 paid 면 멱등 성공 |
+| POST | `/api/orgs/coupons/redeem` | 🏢 (admin) | 쿠폰 등록 — `{code}`(16자리, 대시 무관). `redeemCoupon`(원자적·멱등) 으로 토큰 지급. 성공 `{granted, balance, groupName}`. 실패 400 `{error, code}` (`invalid`/`expired`/`group_redeemed`). **법인당 한 그룹 1개**(DB 유니크 강제). 멤버 불가(org_admin only). rate-limit 10회/10분 |
 | GET | `/api/orgs/me/member-guides` | 🔒 | 끈(다시 보지 않기) 페이지 가이드 키 `{seen: string[]}` — **법인담당자·면접관 공통**. 공고/후보 페이지 첫 진입 시 자동 가이드, 끄기 전엔 매번. system_admin 은 가이드 미마운트라 사실상 빈 배열 |
 | POST | `/api/orgs/me/member-guides` | 🔒 | 가이드 끄기 기록 — `{key}`(`job_page`/`candidate_page`)를 `users.seen_member_guides`에 누적(멱등). 가이드 끝 '다시 보지 않기' 체크 후 종료 시에만 호출(키별=페이지별) |
 | GET/PUT | `/api/orgs/me/culture-fit` | 🔒 / 🛡️ | 컬처핏 프로필 조회·저장 (`CultureFitProfile` — 인재상 + 정성 항목 6종). Big Five 선호 특성은 공고 단위로 이동 (`job_postings.trait_profile`) — 법인 JSON 의 `traitProfile` 은 레거시·미사용 |
@@ -84,7 +85,6 @@
 | GET | `/api/jobs/[id]/round1-schedule` | 🔑 확정 면접 일정(1·2차 통합) — `status=selected` + `outcome IS NULL` + (round1·`stage=round1_waiting` OR round2·`stage=round1_passed`) 조인 → 후보자별 `round`·선택 슬롯·온오프라인·주소, 시간 빠른 순. "면접 일정" 팝업용 (라우트 경로는 호환 위해 유지) |
 | POST | `/api/jobs/[id]/schedule-propose` | 🔑 후보자 다수에게 면접 슬롯 제시 + 메일. `round`(round1/round2, 기본 round1) — **round2 는 `round1_passed` 후보만** 가드, stage 변경 없음(round1 은 round1_scheduling 으로 전환). 같은 시간대 다수 후보 확정 허용 — 더블부킹 검사 없음 (2026-06-12) |
 | POST | `/api/candidates/[id]/schedule-manual` | 🔑 전화 등으로 협의된 1·2차 면접 시간을 제시 절차 없이 **즉시 확정 등록**(`status=selected`). body `{round?, slot, modeOnline?, address?, notifyCandidate?}`. round2 는 `round1_passed` 후보만, round1 은 stage→round1_waiting. `notifyCandidate` 시 후보자 확정 메일(줌 연동 시 자동 생성), 면접관 인앱 알림 fanout. 🪙 잔액 0 이하 402 |
-| GET | `/api/org/funnel` | 🔒 🏢 (admin) 법인 채용 퍼널 — 진행 stage 분포(outcome NULL) + 결정 outcome 분포 + 총계·최근 N일·활성공고·진행중 평균 서류점수. `pending`(지금 처리할 일)은 `deriveCandidateState`(lib/candidate-state.ts) 로 파생 — waiter별 버킷(`hr`=처리 대기 / `interviewer`=면접 예정(확정·면접일 전) / `candidate` / `system`) + 액션 단위 `items[]`. **확정 면접은 종료 시각 경과 시 `interviewer`→`hr`(결과 입력)로 자동 이동** (세션/큐/스케줄 조인, 후보 목록과 동일 SSOT). `/org/dashboard` 용 |
 | POST | `/api/jobs/[id]/candidates` | 🔑 multipart 또는 JSON manifest 업로드. **`applicantConsentConfirmed=true` 필수** — 미체크 시 400 + `{code:"applicant_consent_required"}`. 채용기업이 지원자 동의 취득 책임 확인. 업로드 후 자동 큐 enqueue (과금은 평가 성공 시 후차감). 감사 로그 `candidate.upload_with_consent` |
 | POST | `/api/candidates/[id]/screen` | 수동 트리거 (신규 평가 + **재평가** + **재시도 대기 즉시 재시도** 공용). 백그라운드 LLM 평가. **과금은 평가 성공 시 후차감** (오류면 과금 X). 동작: `processing`→409, `queued`(백오프 포함)→새 job 안 만들고 백오프 해제 후 즉시 재시도, 그 외(done/failed/미시작)→새 job enqueue. **지원자 동의 확인 누락(2026-05-22 이후 row) 시 400** |
 | GET | `/api/candidates/[id]` | 🔑 |
@@ -177,6 +177,10 @@
 | POST | `/api/admin/orgs/[id]/grant-tokens` | 👑 | `{delta, memo?}` 수동 충전/조정 (admin_adjust ledger) |
 | GET | `/api/admin/orgs/[id]/payments` | 👑 | 법인 결제(충전) 주문 내역 — 환불 대상 식별용 |
 | POST | `/api/admin/payments/[id]/cancel` | 👑 🔐 | 결제 취소(전액 환불) — 토스 결제취소 API + 지급 토큰 회수(`reverseChargePayment`, 멱등). `paid` 만 가능(paid→cancelled 조건부 claim), `{reason(5자+)}`. 토스 실패 시 paid 복구, 이미 취소면 멱등 성공 |
+| GET | `/api/admin/coupons` | 👑 | 쿠폰 그룹 목록 + 사용 통계 `{groups:[{id,name,tokenAmount,validFrom,validUntil,status,total,used}]}` |
+| POST | `/api/admin/coupons` | 👑 🔐 | 쿠폰 그룹+코드 일괄 생성 — `{name, tokenAmount, count, validFrom?, validUntil?}`(날짜 `YYYY-MM-DD`). 토큰가치 발행이라 step-up. 상한 count≤1만·tokenAmount≤100만. crypto 난수 16자리, code UNIQUE 충돌 재생성 |
+| GET | `/api/admin/coupons/[id]` | 👑 | 그룹 상세 + 코드 목록(`{display(4-4-4-4), status, redeemedOrgName, redeemedAt}`) |
+| PATCH | `/api/admin/coupons/[id]` | 👑 | `{action:'disable'}` 그룹 비활성화 — 미등록 코드 신규 등록만 차단(이미 지급분 불변) |
 | DELETE | `/api/admin/orgs/[id]` | 👑 🔐 | 법인 영구 삭제. **정지(suspended) 상태만**. `{reason(5자+), confirm=법인명}`. 멤버 계정도 함께 삭제(system_admin 멤버는 분리). 후보자 파일 폐기 + cascade. 감사 로그 보존 |
 | DELETE | `/api/admin/candidates/[id]` | 👑 🔐 | 후보자 영구 삭제 (PIPA 권리요청). `{reason(5자+), confirm=이메일/이름}`. cross-org |
 | DELETE | `/api/users/[id]` | 👑 🔐 | 계정 영구 삭제. 기본은 **비활성(disabled) 상태만**. `{reason(5자+), confirm=이메일, force?}` — **`force:true` 면 활성/대기 계정도 즉시 삭제**(사용자 관리 "강제 삭제" 버튼; 마지막 org_admin 정리용). 본인·system_admin·**`SYSTEM_ADMIN_EMAIL` 보호 계정** 불가 |

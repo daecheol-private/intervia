@@ -1256,6 +1256,73 @@ export const paymentOrders = sqliteTable("payment_orders", {
 });
 
 /**
+ * 쿠폰 그룹 — 시스템 관리자가 1회 발급하는 프로모션 단위.
+ * 같은 그룹의 코드는 모두 동일한 토큰 수(tokenAmount)·유효기간을 공유한다.
+ * 한 법인은 한 그룹에서 코드를 단 1개만 등록할 수 있다(coupons 의 부분 유니크 인덱스로 강제).
+ * status='disabled' 면 미등록 코드의 신규 등록만 차단 — 이미 등록·지급된 토큰엔 영향 없음.
+ * 운영 데이터 보호상 그룹·코드는 hard-delete 하지 않고 disable 만 한다.
+ */
+export const couponGroups = sqliteTable("coupon_groups", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  // 코드 1개 등록 시 지급되는 토큰 수.
+  tokenAmount: integer("token_amount").notNull(),
+  // 등록(redeem) 가능 기간 — 'YYYY-MM-DD'(KST, 둘 다 포함) 또는 null(=무제한).
+  // 받은 토큰의 만료가 아니라 "등록 마감"이다.
+  validFrom: text("valid_from"),
+  validUntil: text("valid_until"),
+  status: text("status", { enum: ["active", "disabled"] })
+    .notNull()
+    .default("active"),
+  createdByUserId: integer("created_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/**
+ * 개별 쿠폰 코드. code 는 4-4-4-4 형식의 16자리 숫자를 대시 없이 저장(정규화).
+ * 등록 시 status='used' + redeemedBy* 가 원자적으로 채워진다(lib/coupons.redeemCoupon).
+ * groupRedeemUq: 한 법인은 한 그룹에서 1개만 — 동시 등록 race 의 최종 방어선(DB 레벨).
+ */
+export const coupons = sqliteTable(
+  "coupons",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => couponGroups.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    status: text("status", { enum: ["unused", "used", "revoked"] })
+      .notNull()
+      .default("unused"),
+    redeemedByOrgId: integer("redeemed_by_org_id").references(
+      () => organizations.id,
+      { onDelete: "set null" }
+    ),
+    redeemedByUserId: integer("redeemed_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" }
+    ),
+    redeemedAt: text("redeemed_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    codeUq: uniqueIndex("coupon_code_uq").on(t.code),
+    // 한 법인은 한 그룹에서 1개만 등록 가능 — 등록된 행에만 적용(부분 인덱스).
+    groupRedeemUq: uniqueIndex("coupon_group_org_uq")
+      .on(t.groupId, t.redeemedByOrgId)
+      .where(sql`${t.redeemedByOrgId} is not null`),
+    // 그룹별 코드 목록·사용 통계 집계.
+    groupStatusIdx: index("idx_coupon_group_status").on(t.groupId, t.status),
+  })
+);
+
+/**
  * 사용자별 인앱 알림. 헤더 종 아이콘 + 드롭다운에서 표시.
  *
  * type 값:
@@ -1367,6 +1434,10 @@ export type TokenWallet = typeof tokenWallets.$inferSelect;
 export type TokenLedger = typeof tokenLedger.$inferSelect;
 export type TokenPricing = typeof tokenPricing.$inferSelect;
 export type PaymentOrder = typeof paymentOrders.$inferSelect;
+export type CouponGroup = typeof couponGroups.$inferSelect;
+export type NewCouponGroup = typeof couponGroups.$inferInsert;
+export type Coupon = typeof coupons.$inferSelect;
+export type NewCoupon = typeof coupons.$inferInsert;
 export type OrgSmtpConfig = typeof orgSmtpConfigs.$inferSelect;
 export type NewOrgSmtpConfig = typeof orgSmtpConfigs.$inferInsert;
 export type OrgZoomConfig = typeof orgZoomConfigs.$inferSelect;

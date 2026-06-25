@@ -330,6 +330,13 @@
       "when": 1782301376857,
       "tag": "0046_bumpy_marrow",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1782409209079,
+      "tag": "0047_plain_juggernaut",
+      "breakpoints": true
     }
   ]
 }

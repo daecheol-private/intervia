@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatLocalDateTime } from "@/lib/utils";
 import { BETA, LIST_PRICING } from "@/lib/beta";
 import ChargePanel from "./ChargePanel";
+import RedeemCoupon from "./RedeemCoupon";
 
 type Pricing = {
   job_post: number;
@@ -46,15 +47,17 @@ export default function TokensPage() {
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState("");
 
+  const load = async () => {
+    const res = await fetch("/api/orgs/tokens");
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    setData(await res.json());
+  };
+
   useEffect(() => {
-    void (async () => {
-      const res = await fetch("/api/orgs/tokens");
-      if (!res.ok) {
-        setErr(await res.text());
-        return;
-      }
-      setData(await res.json());
-    })();
+    void load();
   }, []);
 
   if (err)
@@ -215,6 +218,9 @@ export default function TokensPage() {
       {/* 충전 — 토스페이먼츠 카드 결제 */}
       <ChargePanel />
 
+      {/* 쿠폰 등록 */}
+      <RedeemCoupon onRedeemed={load} />
+
       <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-border-default text-sm font-semibold">
           최근 사용 내역
@@ -244,7 +250,9 @@ export default function TokensPage() {
                 <td className="px-4 py-2 text-xs text-ink-muted">
                   {formatLocalDateTime(r.createdAt, { format: { second: "2-digit" } })}
                 </td>
-                <td className="px-4 py-2 text-xs">{reasonLabel(r.reason)}</td>
+                <td className="px-4 py-2 text-xs">
+                  {r.refType === "coupon" ? "쿠폰 등록" : reasonLabel(r.reason)}
+                </td>
                 <td
                   className="px-4 py-2 text-xs text-ink-soft"
                   title={r.byEmail ?? undefined}

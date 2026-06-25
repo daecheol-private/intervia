@@ -647,6 +647,37 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 |---|---|---|
 | id / org_id / amount_krw / tokens / status / provider / provider_ref / created_by_user_id / created_at | … | status: pending/paid/failed/cancelled |
 
+## coupon_groups
+
+시스템 관리자가 1회 발급하는 프로모션 단위. 같은 그룹의 코드는 동일한 `token_amount`·유효기간 공유.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| name | TEXT NOT NULL | 그룹 이름 |
+| token_amount | INTEGER NOT NULL | 코드 1개 등록 시 지급 토큰 |
+| valid_from / valid_until | TEXT NULL | 등록(redeem) 가능 기간 `YYYY-MM-DD`(KST, 양끝 포함) / null=무제한. **받은 토큰의 만료가 아니라 "등록 마감"** |
+| status | TEXT NOT NULL DEFAULT `active` | `active` / `disabled`. disabled = 미등록 코드 신규 등록만 차단(이미 지급분 불변) |
+| created_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+## coupons
+
+개별 쿠폰 코드. `code` 는 4-4-4-4 16자리 숫자를 **대시 없이** 저장(정규화). 등록 시 `lib/coupons.redeemCoupon` 이 단일 트랜잭션에서 조건부 `status='used'` + 토큰 지급(원장 `admin_adjust`/`ref_type='coupon'`/`ref_id=coupon.id`)을 원자 처리.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| group_id | INTEGER NOT NULL FK coupon_groups(id) ON DELETE CASCADE | |
+| code | TEXT NOT NULL | 16자리 숫자(대시 제거). UNIQUE |
+| status | TEXT NOT NULL DEFAULT `unused` | `unused` / `used` / `revoked` |
+| redeemed_by_org_id | INTEGER NULL FK organizations(id) ON DELETE SET NULL | |
+| redeemed_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
+| redeemed_at | TEXT NULL | |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+인덱스: `coupon_code_uq`(code UNIQUE) · **`coupon_group_org_uq`(group_id, redeemed_by_org_id) WHERE redeemed_by_org_id is not null** = "한 법인은 한 그룹에서 1개만" DB 강제(동시 등록 race 최종 방어선) · `idx_coupon_group_status`(group_id, status) 집계용. 토큰 지급 멱등은 `token_ledger_idem_uq`(ref_type='coupon')가 백스톱. **쿠폰 테이블은 글로벌 시스템 자원 — `org_id` 테넌트 필터 대상 아님**(등록 기록만 org 범위). 운영 데이터 보호상 그룹·코드는 hard-delete 하지 않고 `disable` 만.
+
 ## recorded_interviews
 
 대면(오프라인) 면접 녹음 → AI 평가. AI 채팅 면접(`interview_sessions`)과 별개 — 사람이 진행한 면접을 전사·평가. 업로드 + 준실시간 투트랙. 상세: [LIVE_INTERVIEW_PLAN.md](LIVE_INTERVIEW_PLAN.md).
@@ -716,6 +747,9 @@ organizations ─< users (org_id, role)
 
 users ─< sessions · password_resets · email_verifications · notifications
       └─< user_candidate_favorites · user_job_favorites (deprecated)
+
+coupon_groups ─< coupons  (글로벌 시스템 자원 — organizations 아래 아님)
+              coupons.redeemed_by_org_id >─ organizations (SET NULL, CASCADE 아님)
 ```
 
 ## 마이그레이션 스크립트
