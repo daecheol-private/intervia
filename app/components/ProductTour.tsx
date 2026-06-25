@@ -148,9 +148,12 @@ function EvalScreen() {
     <div className="flex flex-col gap-4 min-h-full">
       {/* 후보 헤더 (가명) — 이름/직무/메타 */}
       <div className="flex items-center gap-3 shrink-0">
-        <div className="w-12 h-12 rounded-full bg-primary-soft text-primary-deep flex items-center justify-center text-lg font-bold shrink-0">
-          {DEMO_NAME.charAt(0)}
-        </div>
+        {/* 데모용 가상 인물(AI 생성) 증명사진 — 고정 에셋, next/image 불필요 */}
+        <img
+          src="/demo-candidate.jpg"
+          alt={`${DEMO_NAME} 증명사진`}
+          className="w-12 h-12 rounded-full object-cover bg-primary-soft shrink-0"
+        />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-base font-bold text-ink">{DEMO_NAME}</span>
