@@ -258,6 +258,7 @@ export function McqPanel({
       {/* 헤더 아이콘 — 적용 시 색이 켜진다. 클릭 시 모달에서 생성·적용·검토. */}
       <button
         type="button"
+        data-tour="mcq-btn"
         onClick={() => setOpen(true)}
         title={tooltip}
         aria-label={tooltip}
@@ -383,7 +384,7 @@ export function McqPanel({
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4" data-tour="mcq-body">
             <p className="text-sm text-ink-soft leading-relaxed">
               직무 기본기를 묻는 4지선다를 AI 면접 시작 전에 출제합니다. 점수는 합불에
               반영되지 않는 <strong>참고용</strong>이며, 적용 여부는 토글로 켜고 끌 수

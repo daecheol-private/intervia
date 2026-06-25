@@ -511,10 +511,6 @@ export default function JobDetailPage() {
           lines.push(
             `✅ ${okList.length}명 등록 완료${withAtt > 0 ? ` (그 중 ${withAtt}명은 첨부 파일 포함)` : ""}`
           );
-          // 첫 후보 등록으로 온보딩 step3(이력서 올리기) 충족 — 플로팅 가이드가
-          // 새로고침 없이 즉시 완료 표시되도록 진행 상태 재조회를 요청.
-          if (typeof window !== "undefined")
-            window.dispatchEvent(new Event("intervia:setup-progress-refresh"));
         }
         if (failList.length > 0) {
           lines.push(`⚠️ ${failList.length}건 실패:`);
@@ -1415,6 +1411,7 @@ export default function JobDetailPage() {
                0명이면 헤더 버튼 대신 아래 인라인 히어로로 받는다. */}
             {hasCands && (
               <button
+                data-tour="resume-intake-btn"
                 onClick={() => setIntakeOpen(true)}
                 className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-surface hover:bg-primary-deep text-sm font-medium shadow-sm"
               >
@@ -1542,6 +1539,7 @@ export default function JobDetailPage() {
               </div>
               {intakeOpen && (
                 <button
+                  data-tour="resume-intake-close"
                   onClick={() => setIntakeOpen(false)}
                   aria-label="이력서 받기 닫기"
                   className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt"

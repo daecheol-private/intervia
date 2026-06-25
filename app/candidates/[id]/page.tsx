@@ -313,10 +313,6 @@ export default function CandidateDetailPage() {
     }
     setCreating(false);
     void load();
-    // 면접 링크 발송으로 온보딩 step4(AI 면접 보내기)가 충족됨 — 플로팅 가이드가
-    // 새로고침 없이 즉시 완료 표시되도록 진행 상태 재조회를 요청.
-    if (typeof window !== "undefined")
-      window.dispatchEvent(new Event("intervia:setup-progress-refresh"));
   };
 
   const startScreening = async () => {
@@ -741,6 +737,7 @@ export default function CandidateDetailPage() {
           <button
             key={t.key}
             type="button"
+            data-tour={`cand-tab-${t.key}`}
             disabled={!t.on}
             onClick={() => t.on && setTab(t.key)}
             aria-current={tab === t.key ? "page" : undefined}
@@ -779,7 +776,10 @@ export default function CandidateDetailPage() {
       {/* ── 종합평가 — 스코어카드 + 진행단계 + 6축 차트 ── */}
       {tab === "overview" && (
         <div className="mt-4 space-y-4 min-h-[calc(100vh-2rem)]">
-          <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
+          <div
+            data-tour="cand-overview"
+            className="bg-card border border-border-default rounded-2xl shadow-sm p-6"
+          >
             <div className="flex flex-col lg:flex-row gap-6">
               {/* 좌: 종합 스코어(+서류/면접 우측 인라인) + 종합 소견 */}
               <div className="flex-1 min-w-0">
@@ -852,7 +852,7 @@ export default function CandidateDetailPage() {
         <div className="mt-4 space-y-4">
 
       {/* Screening — 타이틀 없이 본문만 (점수+요약으로 시작) */}
-      <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
+      <div data-tour="cand-screening" className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
         {screeningPhase === "skipped" ? (
           <div className="space-y-4">
             <div className="text-sm bg-surface-alt border border-border-default text-ink-soft rounded-lg p-3 leading-relaxed">

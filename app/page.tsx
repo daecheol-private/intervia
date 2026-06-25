@@ -20,7 +20,6 @@ import { CountUp } from "./components/CountUp";
 import { HowItWorksCarousel } from "./components/HowItWorksCarousel";
 import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
 import { JobRowLink } from "./components/JobRowLink";
-import { GuideStepList, GuideStripCta } from "./components/tour/guide-steps";
 import {
   buttonClass,
   cn,
@@ -75,7 +74,6 @@ import {
 import { Donut } from "@/components/charts";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { buildSetupSteps } from "@/lib/setup-steps";
 
 export const dynamic = "force-dynamic";
 
@@ -606,18 +604,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       ? Math.round(Number(candAgg.avgDecisionDays) * 10) / 10
       : null;
 
-  // -- 첫 실행 가이드 (신규 법인 온보딩) ----------------------------------
-  // 멤버는 공고 등록 권한이 없을 수 있으나, 첫 사이클 안내 자체는 동일하게 노출.
-  // (system_admin 은 이 Dashboard 에 도달하지 않음 — 운영 대시보드로 리다이렉트)
   const orgName = orgRow?.name ?? null;
-  const setup1 = orgRow?.cultureFitProfile != null; // 인재상·컬쳐핏 확인(설정 저장)
-  const setup2 = totalJobs > 0; // 공고 등록
-  const setup3 = totalCand > 0; // 이력서 업로드
-  const setup4 = interviewReached > 0; // AI 면접 발송(응시 대기 이상)
-  const setupComplete = setup1 && setup2 && setup3 && setup4;
-  // 본인이 가이드를 숨겼으면 hero/strip 모두 표시 안 함 (플로팅 위젯과 동일 정책 — 개인 단위)
-  const guideDismissed = me.setupGuideDismissedAt != null;
-  const firstJobId = jobsWithActions[0]?.id ?? null;
 
   // 좌측 레일 접힘 상태(쿠키) — 이 페이지는 AppShellLayout 을 거치지 않고 셸을
   // 직접 렌더하므로 여기서도 동일하게 읽어 넘겨야 깜빡임이 없다.
@@ -640,34 +627,13 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </h1>
         <p className="text-sm text-ink-soft mt-1">
           {totalJobs === 0
-            ? "Intervia 에 오신 걸 환영합니다. 아래 4단계로 첫 채용을 시작해 보세요."
+            ? "Intervia 에 오신 걸 환영합니다. 첫 공고를 등록해 채용을 시작해 보세요."
             : "오늘의 채용 현황을 한눈에 확인하세요."}
         </p>
       </header>
 
-      {/* 공고가 하나도 없으면 KPI/목록 대신 시작 가이드만 — 첫 화면 단순화 */}
-      {me.role === "org_admin" && totalJobs === 0 && !guideDismissed ? (
-        <SetupGuide
-          variant="hero"
-          step1={setup1}
-          step2={setup2}
-          step3={setup3}
-          step4={setup4}
-          firstJobId={firstJobId}
-        />
-      ) : (
-        <>
-          {/* 셋업 미완 시 상단 슬림 진행 스트립 — 완료/숨김 시 사라짐. 법인담당자 전용. */}
-          {me.role === "org_admin" && !setupComplete && !guideDismissed && (
-            <SetupGuide
-              variant="strip"
-              step1={setup1}
-              step2={setup2}
-              step3={setup3}
-              step4={setup4}
-              firstJobId={firstJobId}
-            />
-          )}
+      {/* 대시보드 본문 — KPI · 파이프라인 · 오늘 할 일 · 공고 목록 */}
+      <>
 
       {/* 상단 KPI 카드 — 진행 공고 · 총 후보자 · AI 서류 평가 · 토큰 잔액 (전부 실집계).
          트렌드는 신뢰 가능한 것만(최근 7일 신규). 합류 요청은 '오늘 할 일' 로 이동. */}
@@ -1020,7 +986,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         )}
       </section>
         </>
-      )}
     </main>
     </AppShell>
   );
@@ -1029,77 +994,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
 // ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
-
-/**
- * 첫 실행 가이드 — 신규 법인이 "인재상·컬쳐핏 확인 → 공고 → 이력서 → AI 면접" 첫 사이클을 마치도록 안내.
- * variant="hero": 공고 0개일 때 대시보드 본문을 대체하는 큰 카드.
- * variant="strip": 일부만 진행됐을 때 대시보드 상단의 슬림 진행 스트립.
- * 3단계 모두 완료되면 호출 측에서 렌더하지 않음.
- * 대시보드 외 화면에서는 SetupGuideWidget(플로팅)이 같은 단계를 안내.
- */
-function SetupGuide({
-  variant,
-  step1,
-  step2,
-  step3,
-  step4,
-  firstJobId,
-}: {
-  variant: "hero" | "strip";
-  step1: boolean;
-  step2: boolean;
-  step3: boolean;
-  step4: boolean;
-  firstJobId: number | null;
-}) {
-  const steps = buildSetupSteps({ step1, step2, step3, step4 }, firstJobId);
-  const total = steps.length;
-  const doneCount = steps.filter((s) => s.done).length;
-  const activeStep = steps.find((s) => !s.done) ?? null;
-
-  if (variant === "strip") {
-    return (
-      <div className="mb-6 rounded-xl border border-primary/20 bg-primary-soft/40 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md bg-primary text-surface tabular-nums">
-            시작 가이드 {doneCount}/{total}
-          </span>
-          <span className="text-sm text-ink truncate">
-            {activeStep ? (
-              <>
-                다음 단계:{" "}
-                <strong className="font-semibold">{activeStep.title}</strong>
-              </>
-            ) : (
-              "설정 완료"
-            )}
-          </span>
-        </div>
-        {activeStep && <GuideStripCta step={activeStep} />}
-      </div>
-    );
-  }
-
-  return (
-    <section className="mb-8 rounded-2xl border border-border-default bg-card shadow-sm overflow-hidden">
-      <div className="px-6 sm:px-8 pt-6 sm:pt-8 pb-2">
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-soft text-primary-deep text-[11px] font-semibold mb-3">
-          <Sparkles className="w-3 h-3" strokeWidth={2.5} />
-          시작 가이드 · {doneCount}/{total} 완료
-        </div>
-        <h2 className="text-xl font-bold text-ink">첫 채용, {total}단계면 시작돼요</h2>
-        <p className="text-sm text-ink-soft mt-1">
-          아래 순서대로 진행하면 첫 AI 면접까지 한 번에 경험할 수 있어요.
-        </p>
-      </div>
-      <GuideStepList
-        steps={steps}
-        activeN={activeStep?.n ?? null}
-        variant="hero"
-      />
-    </section>
-  );
-}
 
 function KpiCard({
   label,

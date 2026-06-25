@@ -27,6 +27,27 @@ import { tourStore, useActiveTour } from "./tour-store";
 type Phase = "navigating" | "searching" | "shown" | "notfound";
 const BUBBLE_W = 340;
 
+/** 셀렉터에 해당하는 요소가 있으면 클릭(팝업 열기/닫기 트리거). 없으면 무시. */
+function clickSel(sel: string) {
+  if (typeof document === "undefined") return;
+  (document.querySelector(sel) as HTMLElement | null)?.click();
+}
+
+/**
+ * 팝업/패널/탭이 이미 열려 있는지 판정.
+ *  - open 트리거에 aria-pressed 가 있으면(토글 드로어·탭 등) 그 값으로 판정.
+ *  - 없으면(언마운트형 드로어·모달) 대상(target)이 DOM 에 있는지로 판정.
+ * 늘 마운트된 채 translate 로 숨는 드로어(토론)는 대상 존재만으론 못 가리므로 전자를 쓴다.
+ */
+function isPopupOpen(openSel: string, target: string): boolean {
+  if (typeof document === "undefined") return false;
+  const pressed = document
+    .querySelector(openSel)
+    ?.getAttribute("aria-pressed");
+  if (pressed != null) return pressed === "true";
+  return !!document.querySelector(target);
+}
+
 export function TourOverlay() {
   const active = useActiveTour();
   const pathname = usePathname() ?? "";
@@ -45,8 +66,35 @@ export function TourOverlay() {
   // 접근 거부(PIN·권한·만료·삭제)로 우리를 다른 경로로 튕겨낼 때, 끝없이 다시
   // 보내는 무한 루프를 끊기 위한 1회 가드.
   const navAttemptRef = useRef<string | null>(null);
+  // 이 가이드가 연(열려 있는) 팝업의 open/close 셀렉터 — 다음 단계가 다른 팝업을
+  // 원하거나 가이드를 떠날 때 close 를 눌러 닫는다(드로어·모달 따라하기).
+  const openPopupRef = useRef<{ open: string; close?: string } | null>(null);
 
   useEffect(() => setMounted(true), []);
+
+  // '다시 보지 않기' 체크 상태(멤버 가이드 전용). endTour 를 안정적인 콜백으로 유지하려고
+  // 값은 ref 로도 미러링해 종료 시점에 최신값을 읽는다.
+  const [dontShow, setDontShow] = useState(false);
+  const dontShowRef = useRef(false);
+  // 현재 가이드의 dismissKey — 멤버 가이드면 '다시 보지 않기' 기록에 쓸 키, 아니면 null.
+  const dismissKeyRef = useRef<string | null>(null);
+  dismissKeyRef.current = active?.dismissKey ?? null;
+
+  // 가이드 종료 — '다시 보지 않기'가 켜진 멤버 가이드면 노출을 기록(다음부터 자동으로
+  // 안 뜸)하고, 열어 둔 팝업이 있으면 닫은 뒤 스토어를 비운다.
+  const endTour = useCallback(() => {
+    if (dontShowRef.current && dismissKeyRef.current) {
+      void fetch("/api/orgs/me/member-guides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: dismissKeyRef.current }),
+      }).catch(() => {});
+    }
+    const cur = openPopupRef.current;
+    if (cur?.close) clickSel(cur.close);
+    openPopupRef.current = null;
+    tourStore.stop();
+  }, []);
 
   const scenario = active ? getScenario(active.scenarioId) : undefined;
   const step: TourStep | undefined = scenario?.steps[active?.step ?? 0];
@@ -59,6 +107,9 @@ export function TourOverlay() {
     if (active?.step === 0) {
       reachedRef.current = null;
       navAttemptRef.current = null;
+      // 새 가이드 시작 — '다시 보지 않기' 체크 초기화.
+      dontShowRef.current = false;
+      setDontShow(false);
     }
   }, [active?.scenarioId, active?.step]);
 
@@ -90,7 +141,7 @@ export function TourOverlay() {
       // 가이드 중 공고를 만들어 상세 페이지로 이동 → 되돌리지 않고 종료 →
       // 상세 페이지에서 다음 가이드가 자동으로 뜨도록 양보)
       if (reachedRef.current === stepKey) {
-        tourStore.stop();
+        endTour();
         return;
       }
       // 이 단계 목적지로 이미 한 번 보냈는데 아직도 다른 경로에 있다 =
@@ -99,7 +150,7 @@ export function TourOverlay() {
       // 방어, 이건 어떤 리다이렉트성 목적지든 막는 최종 안전장치.)
       if (navAttemptRef.current === stepKey) {
         navAttemptRef.current = null;
-        tourStore.stop();
+        endTour();
         return;
       }
       navAttemptRef.current = stepKey;
@@ -111,6 +162,22 @@ export function TourOverlay() {
     }
     // 목적지 경로에 도달 — 이동 시도 기록 해제(같은 단계 정상 재방문 허용).
     navAttemptRef.current = null;
+
+    // 팝업(드로어/모달) 동기화 — 이 단계가 원하는 팝업만 열어 둔다.
+    //  · 다른 팝업이 열려 있으면(원하는 게 없거나 open 셀렉터가 다르면) 닫는다.
+    //  · 원하는 팝업이 있는데 대상이 화면에 없으면(=닫혀 있으면) 트리거를 눌러 연다.
+    // 같은 팝업을 연속으로 가리키는 단계 사이에서는 닫지도 다시 열지도 않는다.
+    const desiredPopup = step.popup ?? null;
+    const curPopup = openPopupRef.current;
+    if (curPopup && (!desiredPopup || desiredPopup.open !== curPopup.open)) {
+      // 탭처럼 close 가 없으면 닫지 않는다(다음 단계 open 이 전환).
+      if (curPopup.close) clickSel(curPopup.close);
+      openPopupRef.current = null;
+    }
+    if (desiredPopup) {
+      if (!isPopupOpen(desiredPopup.open, step.target)) clickSel(desiredPopup.open);
+      openPopupRef.current = desiredPopup;
+    }
 
     let cancelled = false;
     let timer: number | undefined;
@@ -186,29 +253,57 @@ export function TourOverlay() {
     return () => ro.disconnect();
   }, [phase, idx]);
 
-  // ESC 로 닫기.
-  useEffect(() => {
-    if (!active) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") tourStore.stop();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [active]);
-
   const goNext = useCallback(() => {
     if (!active || !scenario) return;
     if (active.step >= scenario.steps.length - 1) {
-      tourStore.stop();
+      endTour();
     } else {
+      // 앞으로 갈 때 팝업 정리는 다음 단계 effect 의 동기화가 맡는다(여기서 닫지 않음).
       tourStore.setStep(active.step + 1);
     }
-  }, [active, scenario]);
+  }, [active, scenario, endTour]);
 
   const goPrev = useCallback(() => {
     if (!active) return;
     if (active.step > 0) tourStore.setStep(active.step - 1);
   }, [active]);
+
+  // 키보드 네비게이션 — →/Enter/Space=다음, ←=이전, Esc=닫기.
+  // 한 페이지에 여러 단계라 "다음"을 마우스로 찾아 누르는 수고를 던다.
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        endTour();
+        return;
+      }
+      // 폼 입력 중(주소·토론 textarea 등)에는 가로채지 않는다 — 스페이스·엔터가
+      // 가이드를 넘기지 않고 평소대로 입력되게.
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      const inField =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        !!el?.isContentEditable;
+      if (e.key === "ArrowRight") {
+        if (inField) return;
+        e.preventDefault();
+        goNext();
+      } else if (e.key === "ArrowLeft") {
+        if (inField) return;
+        e.preventDefault();
+        goPrev();
+      } else if (e.key === "Enter" || e.key === " ") {
+        // 포커스된 버튼/링크는 그쪽 클릭에 맡겨 이중 진행을 막는다(말풍선 '다음' 등).
+        if (inField || tag === "BUTTON" || tag === "A") return;
+        e.preventDefault(); // Space 기본 스크롤 방지
+        goNext();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, endTour, goNext, goPrev]);
 
   if (!mounted || !active || !scenario || !step) return null;
 
@@ -253,7 +348,7 @@ export function TourOverlay() {
             <span className="w-3 h-3 rounded-full border-2 border-surface/40 border-t-surface animate-spin" />
             안내할 화면을 준비하고 있어요…
             <button
-              onClick={() => tourStore.stop()}
+              onClick={() => endTour()}
               className="ml-1 underline underline-offset-2 opacity-80 hover:opacity-100"
             >
               취소
@@ -296,7 +391,7 @@ export function TourOverlay() {
                   )}
                 </span>
                 <button
-                  onClick={() => tourStore.stop()}
+                  onClick={() => endTour()}
                   aria-label="가이드 닫기"
                   className="shrink-0 -mr-1 -mt-0.5 w-6 h-6 flex items-center justify-center rounded-md text-ink-muted hover:text-ink hover:bg-surface-alt transition-colors"
                 >
@@ -316,7 +411,36 @@ export function TourOverlay() {
                 </p>
               )}
             </div>
-            <div className="flex items-center justify-end gap-2 px-4 py-2.5 bg-surface-alt/50 border-t border-border-default">
+            <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-surface-alt/50 border-t border-border-default">
+              {/* '다시 보지 않기' — 멤버 가이드(dismissKey)의 마지막 단계에서만. 체크 후
+                  종료(완료·닫기)하면 노출 기록 → 다음부터 자동으로 안 뜸. 미체크면 또 안내. */}
+              {active.dismissKey && isLast ? (
+                <label className="flex items-center gap-1.5 text-[11px] text-ink-muted cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={dontShow}
+                    onChange={(e) => {
+                      dontShowRef.current = e.target.checked;
+                      setDontShow(e.target.checked);
+                    }}
+                    className="w-3.5 h-3.5 rounded border-border-strong accent-primary cursor-pointer"
+                  />
+                  다시 보지 않기
+                </label>
+              ) : total > 1 ? (
+                // 키보드로 넘길 수 있음을 알리는 힌트 (데스크톱만).
+                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-ink-muted select-none">
+                  <kbd className="px-1 py-0.5 rounded bg-surface border border-border-default text-[10px] leading-none font-sans">
+                    Enter
+                  </kbd>
+                  <kbd className="px-1 py-0.5 rounded bg-surface border border-border-default text-[10px] leading-none font-sans">
+                    →
+                  </kbd>
+                  <span>로 다음</span>
+                </span>
+              ) : (
+                <span />
+              )}
               <div className="flex items-center gap-1.5">
                 {idx > 0 && (
                   <button

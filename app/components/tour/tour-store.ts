@@ -16,6 +16,12 @@ export type ActiveTour = {
   scenarioId: TourScenarioId;
   step: number;
   params: Record<string, string>;
+  /**
+   * 멤버 가이드일 때만 설정 — 가이드 끝에서 '다시 보지 않기'를 체크하고 종료하면
+   * 이 키로 노출 기록(POST /api/orgs/me/member-guides)을 남긴다. org_admin 순차
+   * 투어는 데이터 기반이라 이 키가 없다(체크박스도 안 뜸).
+   */
+  dismissKey?: string;
 };
 
 const KEY = "intervia-tour";
@@ -54,8 +60,12 @@ export const tourStore = {
       listeners.delete(l);
     };
   },
-  start(scenarioId: TourScenarioId, params: Record<string, string> = {}) {
-    write({ scenarioId, step: 0, params });
+  start(
+    scenarioId: TourScenarioId,
+    params: Record<string, string> = {},
+    dismissKey?: string
+  ) {
+    write({ scenarioId, step: 0, params, dismissKey });
   },
   setStep(step: number) {
     if (current) write({ ...current, step });

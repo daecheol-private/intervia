@@ -527,6 +527,7 @@ export function StagePanel({
             )}
             {STAGE_NEXT_MAP[candidate.stage] && (
               <button
+                data-tour="cand-stage-next"
                 onClick={() => setOpen("stage")}
                 disabled={busy}
                 className="shrink-0 whitespace-nowrap text-xs px-3.5 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-semibold disabled:opacity-50 transition-colors shadow-sm"

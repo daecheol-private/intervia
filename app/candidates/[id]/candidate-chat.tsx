@@ -230,6 +230,7 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
     <>
       <button
         type="button"
+        data-tour="cand-discuss-btn"
         onClick={() => setOpen((o) => !o)}
         aria-pressed={open}
         title="면접관 토론 — 이 후보자에 대한 의견을 자유롭게"
@@ -262,11 +263,15 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
               : "translate-x-full pointer-events-none"
           }`}
         >
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border-default bg-surface-alt/50 shrink-0">
+          <div
+            data-tour="cand-discuss-panel"
+            className="flex items-center gap-2 px-4 py-3 border-b border-border-default bg-surface-alt/50 shrink-0"
+          >
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden />
             <span className="text-sm font-bold text-ink">면접관 토론</span>
             <span className="text-[11px] text-ink-muted">실시간</span>
             <button
+              data-tour="cand-discuss-close"
               onClick={() => setOpen(false)}
               className="ml-auto text-ink-muted hover:text-ink-soft text-lg leading-none"
               aria-label="닫기"

@@ -1,96 +1,36 @@
 "use client";
 
 /**
- * 페이지 기반 가이드 자동 노출.
+ * 페이지 진입 가이드 자동 노출 — 법인담당자(org_admin)·면접관(member) 공통.
  *
- * "완료하지 않은 단계의 페이지에 들어가면 해당 가이드가 자동으로 뜬다."
- *  - /org/settings      → 인재상·컬쳐핏 (step1 미완)
- *  - /jobs/new          → 공고 등록     (step2 미완)
- *  - /jobs/{id}         → 이력서 업로드 (step3 미완)
- *  - /candidates/{id}   → AI 면접 보내기 (step4 미완 · 면접 버튼이 있는 후보만)
+ * 해당 페이지에 처음 들어가면 그 페이지의 할 일을 안내한다. 순서·데이터 완료 판정이
+ * 아니라 "이 사용자가 이 페이지 가이드를 껐는가"(users.seen_member_guides)로만 노출을
+ * 정한다. 노출 즉시 기록하지 않고, 가이드 끝의 '다시 보지 않기'를 체크하고 종료해야만
+ * 기록(끄기)된다 — 그 전까진 진입할 때마다 다시 안내한다(검토·반복 학습에 유리).
  *
- * 덕분에 공고를 만들고 상세 페이지로 자동 이동하면, step3(이력서) 미완
- * 상태이므로 이력서 업로드 가이드가 리프레시 없이 곧바로 뜬다.
+ *  - /jobs/{id}        → 공고 둘러보기 (member-job-page)
+ *  - /candidates/{id}  → 이력서 검토하기 (member-candidate-page)
  *
- * 완료 판정은 데이터 기준(/api/orgs/me/setup-progress)이고, 법인이 가이드를
- * 통째로 숨겼으면(show=false) 띄우지 않는다. 이미 진행 중인 가이드가 있으면
- * 양보한다. 같은 페이지에서 닫으면(경로 불변) 다시 뜨지 않고, 다른 페이지로
- * 갔다 돌아오면 (미완 상태인 한) 다시 뜬다.
+ * system_admin 에는 마운트하지 않는다(layout.tsx). 법인설정·토큰지갑 등 추가 가이드는
+ * PAGE_GUIDES 에 항목을 더하면 된다(역할 구분 없이 동일하게 노출).
  */
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { tourStore } from "./tour-store";
 import type { TourScenarioId } from "@/lib/tour-scenarios";
 
-type Progress = {
-  show: boolean;
-  step1: boolean;
-  step2: boolean;
-  step3: boolean;
-  step4: boolean;
-  firstJobId: number | null;
-};
-
-type AutoGuide = {
-  scenario: TourScenarioId;
-  /** 현재 경로가 이 가이드 대상이면 치환 params 반환, 아니면 null. */
-  match: (pathname: string) => Record<string, string> | null;
-  /** 이미 끝낸 단계인지 (끝났으면 안 띄움). */
-  done: (p: Progress) => boolean;
-  /** 지정 시, 이 셀렉터가 DOM 에 나타날 때까지 기다린 뒤에만 시작.
-   *  (예: AI 면접 버튼은 서류평가 끝난 후보에서만 비동기로 렌더됨) */
-  awaitTarget?: string;
-};
-
-// 이 세션에서 더 자동으로 띄울 게 없다고 판명되면(법인이 가이드를 숨겼거나
-// 1~4단계를 모두 완료) 이후 네비게이션마다의 재조회를 생략한다. 전체 새로고침
-// 시 모듈이 재평가되며 다시 확인한다.
-let settledForSession = false;
-
-const AUTO_GUIDES: AutoGuide[] = [
-  {
-    scenario: "culture-fit",
-    match: (p) => (p === "/org/settings" ? {} : null),
-    done: (p) => p.step1,
-  },
-  {
-    scenario: "job-create",
-    match: (p) => (p === "/jobs/new" ? {} : null),
-    done: (p) => p.step2,
-  },
-  {
-    scenario: "resume-upload",
-    match: (p) => {
-      const m = /^\/jobs\/(\d+)$/.exec(p);
-      return m ? { jobId: m[1] } : null;
-    },
-    done: (p) => p.step3,
-  },
-  {
-    scenario: "ai-interview",
-    match: (p) => {
-      const m = /^\/candidates\/(\d+)$/.exec(p);
-      return m ? { candidateId: m[1] } : null;
-    },
-    done: (p) => p.step4,
-    // 면접 요청 버튼이 있는 후보(서류평가 완료·미발송)에서만 노출.
-    // 아직 평가 전이거나 이미 면접을 보낸 후보에선 버튼이 없어 자동으로 건너뜀.
-    awaitTarget: '[data-tour="ai-interview-btn"]',
-  },
-];
-
-// 멤버(면접관) 전용 페이지 가이드 — 진입한 페이지의 "할 일"을 1회 안내.
-// org_admin 의 데이터 기반 순차 가이드와 달리, 순서·완료 판정이 아니라 "이 멤버가
-// 이 페이지 가이드를 봤는가"(users.seenMemberGuides)로만 노출 여부를 정한다.
-type MemberGuide = {
-  key: string; // seenMemberGuides 에 기록할 키 (member-guides API 화이트리스트와 일치)
+type PageGuide = {
+  key: string; // seen_member_guides 에 기록할 키 (member-guides API 화이트리스트와 일치)
   scenario: TourScenarioId;
   match: (p: string) => Record<string, string> | null;
-  // 이 타깃이 DOM 에 떠야 시작 — 없으면 시작·기록 모두 안 함(정상 진입 시 재시도).
-  // 잠긴 공고(언락 전엔 job-header 없음)·평가 전 후보(screening-report 없음) 대응.
+  // 이 타깃이 DOM 에 떠야 시작 — 없으면 시작 안 함(정상 진입 시 재시도).
+  // 잠긴 공고(언락 전엔 버튼 없음)·종결 후보(단계 변경 버튼 없음) 등 대응.
   awaitTarget: string;
+  // 드로어·모달이 sm+ 에서만 열리는 데스크톱 전용 가이드는 모바일에서 시작하지 않는다.
+  desktopOnly?: boolean;
 };
-const MEMBER_GUIDES: MemberGuide[] = [
+
+const PAGE_GUIDES: PageGuide[] = [
   {
     key: "job_page",
     scenario: "member-job-page",
@@ -98,19 +38,32 @@ const MEMBER_GUIDES: MemberGuide[] = [
       const m = /^\/jobs\/(\d+)$/.exec(p);
       return m ? { jobId: m[1] } : null;
     },
-    awaitTarget: '[data-tour="job-header"]',
+    // '이력서 받기' 버튼은 후보가 1명+ 있을 때만 헤더에 뜬다 → 안내할 거리가 있는
+    // 공고에서만 시작(0명이면 버튼 없음 → 시작 안 함, 다음에 재시도).
+    awaitTarget: '[data-tour="resume-intake-btn"]',
+    desktopOnly: true,
   },
   {
-    // 후보 상세의 멤버 가이드는 법인담당자 step4(ai-interview)를 그대로 재사용.
+    // 후보(이력서) 상세 — 종합평가 → 서류평가 → 단계 변경 → 토론 안내.
     key: "candidate_page",
-    scenario: "ai-interview",
+    scenario: "member-candidate-page",
     match: (p) => {
       const m = /^\/candidates\/(\d+)$/.exec(p);
       return m ? { candidateId: m[1] } : null;
     },
-    // 'AI면접 요청' 버튼이 있는 후보(평가완료·미발송)에서만 시작 — 법인담당자 step4 와 동일.
-    // 평가 전·이미 발송된 후보면 버튼이 없어 시작·기록 안 함(다음 대상 후보에서 재시도).
-    awaitTarget: '[data-tour="ai-interview-btn"]',
+    // '단계 변경' 버튼은 다음 전형이 있는(진행 가능한) 후보에서만 액션바에 뜬다 →
+    // 검토·진행할 거리가 있는 후보에서만 시작(종결 후보엔 안 뜸).
+    awaitTarget: '[data-tour="cand-stage-next"]',
+    desktopOnly: true,
+  },
+  {
+    // 법인 설정 — 회사 주소 → 컬처핏 정성평가 → 메일 서버 → 화상 면접 안내.
+    // /org/settings 는 법인담당자만 접근 → 자연히 org_admin 전용.
+    key: "org_settings",
+    scenario: "org-settings",
+    match: (p) => (p === "/org/settings" ? {} : null),
+    // 첫 섹션(회사 주소)이 떠야 시작 — 접근 권한 없으면 렌더 안 돼 시작 안 함.
+    awaitTarget: '[data-tour="cfg-address"]',
   },
 ];
 
@@ -132,75 +85,38 @@ function waitForSelector(
   });
 }
 
-export function TourAutoStart({
-  role,
-}: {
-  role: "org_admin" | "member";
-}) {
+export function TourAutoStart() {
   const pathname = usePathname() ?? "";
 
   useEffect(() => {
-    // 멤버(면접관): 공고/후보 페이지 첫 진입 시 그 페이지 가이드 1회 (계정별 seen 기록).
-    // 진입한 페이지의 할 일을 한 번 안내하고, 노출된 뒤로는 다시 띄우지 않는다.
-    if (role === "member") {
-      const cfg = MEMBER_GUIDES.find((g) => g.match(pathname));
-      if (!cfg || tourStore.get()) return;
-      const params = cfg.match(pathname)!;
-      let cancelled = false;
-      fetch("/api/orgs/me/member-guides", { cache: "no-store" })
-        .then((r) => (r.ok ? (r.json() as Promise<{ seen: string[] }>) : null))
-        .then(async (data) => {
-          if (cancelled || !data || data.seen.includes(cfg.key)) return;
-          // 타깃이 떠야 시작 — 없으면(잠긴 공고·평가 전 후보) 시작·기록 모두 안 함.
-          const ok = await waitForSelector(cfg.awaitTarget, 40, () => cancelled);
-          if (!ok || cancelled || tourStore.get()) return;
-          tourStore.start(cfg.scenario, params);
-          // 노출 = 한 번 봄 → 즉시 기록. 다음 진입부터 안 뜸.
-          void fetch("/api/orgs/me/member-guides", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ key: cfg.key }),
-          }).catch(() => {});
-        })
-        .catch(() => {});
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    // org_admin: 미완료 단계 페이지 진입 시 자동 (데이터 상태 기반).
-    if (settledForSession) return;
-    const cfg = AUTO_GUIDES.find((g) => g.match(pathname));
-    if (!cfg) return;
-    if (tourStore.get()) return; // 이미 진행 중인 가이드가 있으면 양보
-
+    const cfg = PAGE_GUIDES.find((g) => g.match(pathname));
+    if (!cfg || tourStore.get()) return;
+    // 데스크톱 전용 가이드(드로어·모달이 sm+ 에서만 열림)는 모바일에서 시작 안 함.
+    if (
+      cfg.desktopOnly &&
+      typeof window !== "undefined" &&
+      !window.matchMedia("(min-width: 640px)").matches
+    )
+      return;
     const params = cfg.match(pathname)!;
     let cancelled = false;
-    fetch("/api/orgs/me/setup-progress", { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<Progress>) : null))
-      .then(async (p) => {
-        if (cancelled || !p) return;
-        // 더 이상 띄울 게 없으면(가이드 숨김 or 1~4단계 모두 완료) 세션 동안 생략.
-        if (!p.show || (p.step1 && p.step2 && p.step3 && p.step4))
-          settledForSession = true;
-        if (!p.show) return; // 법인이 가이드를 통째로 숨김
-        if (cfg.done(p)) return; // 이미 완료한 단계
-        // 대상 요소가 비동기로 렌더되는 가이드는, 나타날 때까지 기다린 뒤에만
-        // 시작 (없으면 조용히 건너뜀 — '위치 못 찾음' 말풍선 방지).
-        if (cfg.awaitTarget) {
-          const ok = await waitForSelector(cfg.awaitTarget, 60, () => cancelled);
-          if (!ok || cancelled) return;
-        }
-        if (tourStore.get()) return; // 그 사이 수동 시작됐으면 양보
-        tourStore.start(cfg.scenario, params);
+    fetch("/api/orgs/me/member-guides", { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<{ seen: string[] }>) : null))
+      .then(async (data) => {
+        // seen 에 키가 있으면 = 사용자가 '다시 보지 않기'로 끈 것 → 안 띄움.
+        if (cancelled || !data || data.seen.includes(cfg.key)) return;
+        // 타깃이 떠야 시작 — 없으면(잠긴 공고·종결 후보 등) 시작 안 함.
+        const ok = await waitForSelector(cfg.awaitTarget, 40, () => cancelled);
+        if (!ok || cancelled || tourStore.get()) return;
+        // 노출 즉시 기록하지 않는다 — 가이드 끝에서 '다시 보지 않기'를 체크해야만
+        // 기록(끄기)된다. dismissKey 전달 → 말풍선 체크박스 → endTour 가 기록.
+        tourStore.start(cfg.scenario, params, cfg.key);
       })
-      .catch(() => {
-        /* 네트워크 오류 시 조용히 무시 — 자동 가이드는 부가 기능 */
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [pathname, role]);
+  }, [pathname]);
 
   return null;
 }

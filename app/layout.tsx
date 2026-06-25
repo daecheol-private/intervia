@@ -3,7 +3,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { NavBar } from "./components/NavBar";
 import { Footer } from "./components/Footer";
 import { ForcePasswordChange } from "./components/ForcePasswordChange";
-import { SetupGuideWidget } from "./components/SetupGuideWidget";
 import { TourOverlay } from "./components/tour/TourOverlay";
 import { TourAutoStart } from "./components/tour/TourAutoStart";
 import { DialogHost } from "./components/Dialog";
@@ -60,12 +59,9 @@ export default async function RootLayout({
         />
         <div className="flex-1 flex flex-col">{children}</div>
         <Footer loggedIn={!!user} />
-        {/* 순차 온보딩 위젯은 법인담당자 전용 — 멤버(면접관)는 페이지 진입형 가이드를 쓴다. */}
-        {user && user.role === "org_admin" && <SetupGuideWidget />}
+        {/* 페이지 진입 가이드 — 법인담당자·면접관 공통(system_admin 제외). */}
         {user && user.role !== "system_admin" && <TourOverlay />}
-        {user && user.role !== "system_admin" && (
-          <TourAutoStart role={user.role} />
-        )}
+        {user && user.role !== "system_admin" && <TourAutoStart />}
         {user?.mustChangePassword && (
           <ForcePasswordChange email={user.email} />
         )}
