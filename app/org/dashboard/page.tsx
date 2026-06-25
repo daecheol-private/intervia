@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { STAGE_META } from "@/lib/stage-meta";
 import { Donut, VBars, HBars, TimeArea, C } from "@/components/charts";
 
 type JobStat = {
@@ -23,7 +22,7 @@ type Pending = {
   who: string;
   label: string;
   count: number;
-  stages: { stage: string; count: number }[];
+  items: { label: string; count: number }[];
 };
 
 type Dashboard = {
@@ -238,8 +237,9 @@ export default function OrgDashboardPage() {
               지금 처리할 일
             </h2>
             <p className="text-xs text-ink-muted mb-4">
-              진행 중 후보를 “누가 공을 쥐고 있나” 기준으로 묶었습니다. HR 처리
-              대기가 곧 오늘의 액션 아이템입니다.
+              지금 결정·조치가 필요한 후보는 <b>처리 대기</b>입니다. 면접 일정이
+              잡혀 진행을 기다리는 후보는 <b>면접 예정</b>으로 따로 묶었습니다(면접일이
+              지나면 자동으로 처리 대기로 넘어옵니다).
             </p>
             {data.pending.length === 0 ? (
               <p className="text-sm text-ink-muted py-4 text-center">
@@ -261,23 +261,15 @@ export default function OrgDashboardPage() {
                       </span>
                     </div>
                     <ul className="mt-2 space-y-0.5">
-                      {p.stages.slice(0, 4).map((s) => {
-                        const meta = STAGE_META[s.stage as keyof typeof STAGE_META];
-                        const label = meta
-                          ? meta.sub
-                            ? `${meta.main}·${meta.sub}`
-                            : meta.main
-                          : s.stage;
-                        return (
-                          <li
-                            key={s.stage}
-                            className="flex justify-between text-[10px] opacity-80"
-                          >
-                            <span className="truncate">{label}</span>
-                            <span className="tabular-nums ml-1">{s.count}</span>
-                          </li>
-                        );
-                      })}
+                      {p.items.slice(0, 5).map((s) => (
+                        <li
+                          key={s.label}
+                          className="flex justify-between text-[10px] opacity-80"
+                        >
+                          <span className="truncate">{s.label}</span>
+                          <span className="tabular-nums ml-1">{s.count}</span>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 ))}

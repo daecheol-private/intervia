@@ -16,11 +16,22 @@
  * 후보 원본 행은 응답에 싣지 않는다(서버에서만 집계). screeningReport JSON 도 서버 측에서만 사용.
  */
 import { db } from "@/lib/db";
-import { candidates, jobPostings } from "@/lib/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import {
+  candidates,
+  jobPostings,
+  interviewSessions,
+  interviewSchedules,
+  screeningJobs,
+} from "@/lib/schema";
+import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
-import { STAGE_RANK, STAGE_WAITER, type Stage } from "@/lib/stage-meta";
+import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
+import {
+  deriveCandidateState,
+  type Waiter,
+  type CandidateStateInput,
+} from "@/lib/candidate-state";
 import { parseDbTimestamp } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -59,6 +70,7 @@ export async function GET(req: Request) {
   // 후보자 (org) — 집계에 필요한 컬럼만
   const cands = await db
     .select({
+      id: candidates.id,
       jobId: candidates.jobId,
       stage: candidates.stage,
       outcome: candidates.outcome,
@@ -66,6 +78,9 @@ export async function GET(req: Request) {
       screeningScore: candidates.screeningScore,
       // 집계엔 recommendation 한 필드만 쓰므로 리포트 JSON 전체를 끌어오지 않는다(대시보드 페이로드 절감).
       recommendation: sql<string | null>`json_extract(${candidates.screeningReport}, '$.recommendation')`,
+      // 파생 상태(deriveCandidateState) 입력용 — JSON 본문/마스킹 텍스트는 전송하지 않고 존재/길이만.
+      hasReport: sql<number>`CASE WHEN ${candidates.screeningReport} IS NOT NULL THEN 1 ELSE 0 END`,
+      maskedLen: sql<number>`COALESCE(LENGTH(${candidates.resumeMaskedText}), 0)`,
       createdAt: candidates.createdAt,
       decidedAt: candidates.decidedAt,
     })
@@ -178,40 +193,144 @@ export async function GET(req: Request) {
     count: ranks.filter((r) => r >= st.rank).length,
   }));
 
-  // 단계별 대기 (액션 필요) — 진행중 후보를 waiter 로 그룹
-  const WAITER_LABEL: Record<string, string> = {
-    hr: "HR 처리 대기",
+  // 단계별 대기 (액션 필요) — 후보자 파생 상태(deriveCandidateState)로 "지금 누가 무엇을"을 판정.
+  //   stage 만으로는 "면접 확정·진행 대기"(아직 면접일 전)와 "면접 완료·결과 입력 필요"(시각 경과)를
+  //   구분할 수 없다. 큐/세션/스케줄 row 를 합쳐 목록·뱃지와 동일한 SSOT 규칙으로 분류한다.
+  //   (이 라우트가 유일하게 SSOT 를 안 쓰던 곳 — 이제 대시보드 카운트가 후보 목록과 일치)
+  const pendingCands = cands.filter(
+    (c) =>
+      !c.outcome &&
+      c.stage !== "hired" &&
+      c.stage !== "rejected" &&
+      c.stage !== "withdrawn"
+  );
+  const pendingIds = pendingCands.map((c) => c.id);
+
+  // 파생에 필요한 보조 row — 진행 중 후보에 한해서만(종결자는 closed 로 파생되어 버킷 제외).
+  const [sessRows, jobRows, schedRows] = await Promise.all([
+    pendingIds.length
+      ? db
+          .select({
+            candidateId: interviewSessions.candidateId,
+            status: interviewSessions.status,
+          })
+          .from(interviewSessions)
+          .where(inArray(interviewSessions.candidateId, pendingIds))
+          .orderBy(desc(interviewSessions.createdAt))
+      : Promise.resolve([]),
+    pendingIds.length
+      ? db
+          .select({
+            candidateId: screeningJobs.candidateId,
+            status: screeningJobs.status,
+            attempts: screeningJobs.attempts,
+          })
+          .from(screeningJobs)
+          .where(inArray(screeningJobs.candidateId, pendingIds))
+          .orderBy(desc(screeningJobs.id))
+      : Promise.resolve([]),
+    pendingIds.length
+      ? db
+          .select({
+            candidateId: interviewSchedules.candidateId,
+            round: interviewSchedules.round,
+            status: interviewSchedules.status,
+            selectedSlot: interviewSchedules.selectedSlot,
+          })
+          .from(interviewSchedules)
+          .where(
+            and(
+              inArray(interviewSchedules.candidateId, pendingIds),
+              inArray(interviewSchedules.status, [
+                "pending",
+                "counter_proposed",
+                "selected",
+              ])
+            )
+          )
+          .orderBy(desc(interviewSchedules.id))
+      : Promise.resolve([]),
+  ]);
+
+  // 후보자별 최신 1건씩 — desc 정렬이라 첫 항목이 최신.
+  const sessByCand = new Map<number, string>();
+  for (const s of sessRows)
+    if (!sessByCand.has(s.candidateId)) sessByCand.set(s.candidateId, s.status);
+  const jobByCand = new Map<number, { status: string; attempts: number }>();
+  for (const j of jobRows)
+    if (!jobByCand.has(j.candidateId))
+      jobByCand.set(j.candidateId, { status: j.status, attempts: j.attempts });
+  type SchedInfo = {
+    status: "pending" | "counter_proposed" | "selected";
+    selectedEnd: string | null;
+  };
+  const r1ByCand = new Map<number, SchedInfo>();
+  const r2ByCand = new Map<number, SchedInfo>();
+  for (const s of schedRows) {
+    const m = s.round === "round2" ? r2ByCand : r1ByCand;
+    if (!m.has(s.candidateId))
+      m.set(s.candidateId, {
+        status: s.status as SchedInfo["status"],
+        selectedEnd:
+          s.status === "selected" ? (s.selectedSlot?.end ?? null) : null,
+      });
+  }
+
+  const WAITER_LABEL: Record<Waiter, string> = {
+    hr: "처리 대기",
+    interviewer: "면접 예정",
     candidate: "지원자 응답 대기",
-    interviewer: "면접관 평가 대기",
     system: "AI 평가 진행 중",
     none: "기타",
   };
-  const waiterAgg: Record<
-    string,
-    { who: string; label: string; count: number; stages: Record<string, number> }
-  > = {};
-  for (const [stage, n] of Object.entries(pipeline)) {
-    const who = STAGE_WAITER[stage as Stage]?.who ?? "none";
-    waiterAgg[who] ??= {
-      who,
-      label: WAITER_LABEL[who] ?? who,
-      count: 0,
-      stages: {},
-    };
-    waiterAgg[who].count += n;
-    waiterAgg[who].stages[stage] = n;
+  const buckets = new Map<
+    Waiter,
+    { who: Waiter; label: string; count: number; items: Map<string, { label: string; count: number }> }
+  >();
+  for (const c of pendingCands) {
+    const jb = jobByCand.get(c.id);
+    const active = jb?.status === "queued" || jb?.status === "processing";
+    const st = deriveCandidateState(
+      {
+        stage: c.stage as Stage,
+        outcome: null,
+        screeningReport: c.hasReport ? 1 : null,
+        parsed: (c.maskedLen ?? 0) >= 30,
+        queueStatus: active ? (jb!.status as "queued" | "processing") : null,
+        queueAttempts: jb?.attempts ?? 0,
+        lastJobStatus: (jb?.status ?? null) as CandidateStateInput["lastJobStatus"],
+        latestInterviewStatus: (sessByCand.get(c.id) ??
+          null) as CandidateStateInput["latestInterviewStatus"],
+        round1ScheduleStatus: r1ByCand.get(c.id)?.status ?? null,
+        round2ScheduleStatus: r2ByCand.get(c.id)?.status ?? null,
+        round1SelectedEnd: r1ByCand.get(c.id)?.selectedEnd ?? null,
+        round2SelectedEnd: r2ByCand.get(c.id)?.selectedEnd ?? null,
+      },
+      now
+    );
+    let b = buckets.get(st.waiter);
+    if (!b) {
+      b = { who: st.waiter, label: WAITER_LABEL[st.waiter], count: 0, items: new Map() };
+      buckets.set(st.waiter, b);
+    }
+    b.count++;
+    // 액션 라벨 기준으로 묶는다 — 1·2차 동일 액션(역제안·응답 대기 등)은 한 줄로 합산.
+    const it = b.items.get(st.label) ?? { label: st.label, count: 0 };
+    it.count++;
+    b.items.set(st.label, it);
   }
-  const waiterOrder = ["hr", "candidate", "interviewer", "system", "none"];
+  const waiterOrder: Waiter[] = ["hr", "interviewer", "candidate", "system"];
   const pending = waiterOrder
-    .filter((w) => waiterAgg[w])
-    .map((w) => ({
-      who: waiterAgg[w].who,
-      label: waiterAgg[w].label,
-      count: waiterAgg[w].count,
-      stages: Object.entries(waiterAgg[w].stages)
-        .map(([stage, count]) => ({ stage, count }))
-        .sort((a, b) => b.count - a.count),
-    }));
+    .filter((w) => buckets.has(w))
+    .map((w) => {
+      const b = buckets.get(w)!;
+      return {
+        who: b.who,
+        label: b.label,
+        count: b.count,
+        items: [...b.items.values()].sort((a, z) => z.count - a.count),
+      };
+    });
 
   // 공고별 비교
   type JobAgg = {
