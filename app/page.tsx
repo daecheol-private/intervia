@@ -19,6 +19,7 @@ import { ProductTour } from "./components/ProductTour";
 import { CountUp } from "./components/CountUp";
 import { HowItWorksCarousel } from "./components/HowItWorksCarousel";
 import { TokenChargeRequestButton } from "./components/TokenChargeRequestButton";
+import { JobRowLink } from "./components/JobRowLink";
 import { GuideStepList, GuideStripCta } from "./components/tour/guide-steps";
 import {
   buttonClass,
@@ -945,9 +946,11 @@ async function Dashboard({ me }: { me: CurrentUser }) {
                     : `D-${dLeft}`;
               const pct = (n: number) => (cnt > 0 ? (n / cnt) * 100 : 0);
               return (
-                <Link
+                <JobRowLink
                   key={j.id}
-                  href={`/jobs/${j.id}`}
+                  jobId={j.id}
+                  title={j.title}
+                  locked={locked}
                   className="flex items-center gap-3 px-4 py-3 border-b border-border-default last:border-0 hover:bg-surface-alt/50 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
@@ -1010,7 +1013,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
                     {dday}
                   </div>
                   <ArrowRight className="w-4 h-4 text-ink-muted shrink-0" />
-                </Link>
+                </JobRowLink>
               );
             })}
           </div>
