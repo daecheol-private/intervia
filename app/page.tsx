@@ -9,7 +9,7 @@ import {
   jobInterviewers,
   interviewSchedules,
 } from "@/lib/schema";
-import { desc, eq, count, sql, and } from "drizzle-orm";
+import { desc, eq, count, sql, and, inArray } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { getUnlockChecker } from "@/lib/job-lock";
@@ -95,30 +95,39 @@ const LOW_BALANCE_THRESHOLD = 50; // 멤버 충전 요청 버튼 노출 임계�
 // ---------------------------------------------------------------------------
 
 async function Dashboard({ me }: { me: CurrentUser }) {
-  const orgScope = me.role === "system_admin" ? null : me.orgId ?? -1;
-  const orgFilter = orgScope == null ? undefined : eq(jobPostings.orgId, orgScope);
-  const candFilter = orgScope == null ? undefined : eq(candidates.orgId, orgScope);
   const nowIso = new Date().toISOString();
   // 최근 7일 기준선 — KPI 트렌드("최근 7일 신규")용. createdAt 비교로 실제 신규만 집계.
   const cutoff7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
+  // 면접관 스코프 — 대시보드의 차트·카운트(KPI·파이프라인·지원자 응답 대기)는 모두
+  // "로그인 사용자가 면접관으로 지정된 공고"만 집계한다. 공고 생성자는 자동 면접관.
+  // (단, 아래 '공고 목록'은 예외 — 법인 전체 공고를 보여주고 면접관 공고를 상단 정렬)
+  const myInterviewerRows = await db
+    .select({ jobId: jobInterviewers.jobId })
+    .from(jobInterviewers)
+    .where(eq(jobInterviewers.userId, me.id));
+  const myJobIds = myInterviewerRows.map((r) => r.jobId);
+  const interviewerSet = new Set(myJobIds);
+  const scopeIds = myJobIds.length > 0 ? myJobIds : [-1];
+  const candScopeFilter = inArray(candidates.jobId, scopeIds);
+  // 공고 목록은 법인 전체 — 차트/카운트(면접관 스코프)와 의도적으로 스코프가 다르다.
+  const orgJobFilter = eq(jobPostings.orgId, me.orgId ?? -1);
 
   // 상호 독립 쿼리 전부 병렬 — 순차 await 는 원격 DB(Turso) RTT × 쿼리 수가
   // 첫 화면 TTFB 에 그대로 더해진다.
   const [
     orgRow,
-    totalJobs,
     candAgg,
     queueCount,
     joinRequestCount,
     tokenBalance,
     pricing,
-    myInterviewerRows,
     jobsRaw,
     myInterviewerJobs,
     counterRows,
     expiredAiRows,
     resultDueRows,
-    orgCount,
+    awaitingAgg,
   ] = await Promise.all([
     // 인사말 법인명 + 첫 실행 가이드용 컬처핏 설정 여부 — orgId 있는 경우만 조회.
     me.orgId
@@ -131,12 +140,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           .where(eq(organizations.id, me.orgId))
           .then(([org]) => org ?? null)
       : Promise.resolve(null),
-    // -- 공고 통계 --------------------------------------------------------
-    db
-      .select({ total: count() })
-      .from(jobPostings)
-      .where(orgFilter ?? sql`1=1`)
-      .then(([r]) => Number(r?.total ?? 0)),
     // -- 후보자 총량 (KPI 카드용) ------------------------------------------
     // 단계별 분포는 공고 카드에서 표시 — 대시보드 상단엔 합계만.
     db
@@ -144,8 +147,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         total: count(),
         // 종결 판정은 outcome 기준 — stage 는 종결 후에도 진행 단계를 보존한다.
         decided: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NOT NULL THEN 1 ELSE 0 END)`,
-        // 첫 실행 가이드용 — AI 면접 단계(발송 후 응시 대기) 이상에 도달한 후보 수.
-        interviewReached: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('ai_pending','ai_evaluated','round1_candidate','round1_scheduling','round1_waiting','round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
         // KPI/파이프라인용 집계 (전부 실데이터 — 추정·생성값 없음).
         hired: sql<number>`SUM(CASE WHEN ${candidates.outcome} = 'hired' THEN 1 ELSE 0 END)`,
         evaluated: sql<number>`SUM(CASE WHEN ${candidates.screeningScore} IS NOT NULL THEN 1 ELSE 0 END)`,
@@ -156,17 +157,9 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         pipeAi: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NULL AND ${candidates.stage} IN ('ai_pending','ai_evaluated') THEN 1 ELSE 0 END)`,
         pipeR1: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NULL AND ${candidates.stage} IN ('round1_candidate','round1_scheduling','round1_waiting') THEN 1 ELSE 0 END)`,
         pipeR2: sql<number>`SUM(CASE WHEN ${candidates.outcome} IS NULL AND ${candidates.stage} IN ('round1_passed','round2_passed') THEN 1 ELSE 0 END)`,
-        // 채용 퍼널(누적 도달) — stage 는 종결 후에도 도달 단계를 보존하므로 outcome 무관하게 "거쳐간" 수.
-        //   reachedAi = interviewReached(위), 그 외 단계 누적은 아래에서 별도 집계.
-        reachedScreened: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('screened','ai_pending','ai_evaluated','round1_candidate','round1_scheduling','round1_waiting','round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
-        respondedAi: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('ai_evaluated','round1_candidate','round1_scheduling','round1_waiting','round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
-        reachedR1: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('round1_candidate','round1_scheduling','round1_waiting','round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
-        reachedR2: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('round1_passed','round2_passed','hired') THEN 1 ELSE 0 END)`,
-        // 평균 처리 기간(일) — 결정된 후보의 created→decided.
-        avgDecisionDays: sql<number | null>`AVG(CASE WHEN ${candidates.decidedAt} IS NOT NULL THEN julianday(${candidates.decidedAt}) - julianday(${candidates.createdAt}) END)`,
       })
       .from(candidates)
-      .where(candFilter ?? sql`1=1`)
+      .where(candScopeFilter)
       .then(([r]) => r),
     // -- 평가 대기 큐 카운트 -----------------------------------------------
     db
@@ -174,12 +167,10 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       .from(screeningJobs)
       .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
       .where(
-        candFilter
-          ? and(
-              candFilter,
-              sql`${screeningJobs.status} IN ('queued','processing')`
-            )
-          : sql`${screeningJobs.status} IN ('queued','processing')`
+        and(
+          candScopeFilter,
+          sql`${screeningJobs.status} IN ('queued','processing')`
+        )
       )
       .then(([r]) => Number(r?.c ?? 0)),
     // -- 합류 요청 (org_admin / system_admin 만) ---------------------------
@@ -223,11 +214,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       return null;
     })(),
     getAllPricing(),
-    // 내가 면접관인 공고 id — 목록 정렬 1순위 + 잠금 일괄 판정 재료
-    db
-      .select({ jobId: jobInterviewers.jobId })
-      .from(jobInterviewers)
-      .where(eq(jobInterviewers.userId, me.id)),
     // -- 공고별 액션 카운트 (인사담당자가 처리해야 할 단계만) ----------------
     // - screened: 서류평가 완료 → 면접 보낼지 결정 대기 (인사담당자 액션)
     // - ai_pending: 링크 발송 후 후보자 응시 대기 (후보자 액션, 모니터링용)
@@ -260,15 +246,15 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         needsRound1Schedule: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
         // 2차 진행 결정 — 이미 2차 일정이 진행 중(active 스케줄 존재)인 후보는 제외
         // (lib/candidate-state.ts r2_decide 판정과 동일)
-        needsRound2Decision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = ${candidates.id} AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
+        needsRound2Decision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = candidates.id AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
         needsFinalOffer: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
       })
       .from(jobPostings)
       .leftJoin(candidates, eq(candidates.jobId, jobPostings.id))
-      .where(orgFilter ?? sql`1=1`)
+      .where(orgJobFilter)
       .groupBy(jobPostings.id)
       .orderBy(
-        // active 먼저, 그 안에서 최신순. 면접관 우선 정렬은 JS 에서 다시 적용.
+        // active 먼저, 그 안에서 최신순. 면접관 공고 우선 정렬은 JS 에서 재적용.
         sql`CASE WHEN ${jobPostings.status} = 'active' THEN 0 ELSE 1 END`,
         desc(jobPostings.createdAt)
       ),
@@ -281,14 +267,14 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         passwordHash: jobPostings.passwordHash,
         pendingDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_evaluated' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
         round1Candidates: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_candidate' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
-        round1Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = ${candidates.id} AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
+        round1Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND NOT EXISTS (SELECT 1 FROM interview_schedules s WHERE s.candidate_id = candidates.id AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected')) THEN 1 ELSE 0 END)`,
         round2Passed: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round2_passed' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
         // 서류평가 완료 → 면접 진행 결정 (stage=screened). 공고 상세 "서류평가 후 면접 진행 결정"과 동일 집계.
         screenedDecision: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'screened' AND ${candidates.outcome} IS NULL THEN 1 ELSE 0 END)`,
         // 서류 평가 조치 필요(실패·충전대기·미실행) — funnel route resumeActionNeeded 와 동일 판정.
         resumeActionNeeded: sql<number>`SUM(CASE WHEN ${candidates.stage} IN ('applied','screened') AND ${candidates.outcome} IS NULL AND (
-          (SELECT s.status FROM screening_jobs s WHERE s.candidate_id = ${candidates.id} ORDER BY s.id DESC LIMIT 1) IN ('failed','paused')
-          OR ((SELECT s.status FROM screening_jobs s WHERE s.candidate_id = ${candidates.id} ORDER BY s.id DESC LIMIT 1) IS NULL AND ${candidates.screeningReport} IS NULL)
+          (SELECT s.status FROM screening_jobs s WHERE s.candidate_id = candidates.id ORDER BY s.id DESC LIMIT 1) IN ('failed','paused')
+          OR ((SELECT s.status FROM screening_jobs s WHERE s.candidate_id = candidates.id ORDER BY s.id DESC LIMIT 1) IS NULL AND ${candidates.screeningReport} IS NULL)
         ) THEN 1 ELSE 0 END)`,
       })
       .from(jobInterviewers)
@@ -334,8 +320,8 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           eq(jobInterviewers.userId, me.id),
           eq(candidates.stage, "ai_pending"),
           sql`${candidates.outcome} IS NULL`,
-          sql`EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status = 'expired')`,
-          sql`NOT EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status IN ('pending','in_progress','completed'))`
+          sql`EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = candidates.id AND s.status = 'expired')`,
+          sql`NOT EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = candidates.id AND s.status IN ('pending','in_progress','completed'))`
         )
       )
       .groupBy(candidates.jobId, jobPostings.title),
@@ -366,13 +352,23 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         )
       )
       .groupBy(interviewSchedules.jobId, jobPostings.title),
-    // -- system_admin: 법인 수 (참고용) ------------------------------------
-    me.role === "system_admin"
-      ? db
-          .select({ c: count() })
-          .from(organizations)
-          .then(([r]): number | null => Number(r?.c ?? 0))
-      : Promise.resolve<number | null>(null),
+    // -- 지원자 응답 대기 현황 (지원자 차례 — 공이 후보자에게 있는 상태) -------
+    // candidate-state.ts 의 candidate-waiter 파생과 동일 판정을 SQL 로 재현:
+    //   ai_pending + 최신 세션 pending/in_progress = AI 면접 응시 대기
+    //   round1_scheduling + 최신 활성 1차 스케줄 = pending = 일정 응답 대기
+    //   round1_passed + 최신 활성 2차 스케줄 = pending = 일정 응답 대기
+    // ⚠️ 서브쿼리의 외부 참조는 리터럴 `candidates.id` — JOIN 없는 단일 FROM 쿼리에선
+    //   Drizzle 이 `${candidates.id}` 를 접두어 없는 `"id"` 로 렌더해 서브쿼리 내부
+    //   테이블의 id 로 오결합된다(항상 0). GOTCHAS §5. (JOIN 있는 위 쿼리들은 정규화돼 안전)
+    db
+      .select({
+        aiWaiting: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'ai_pending' AND ${candidates.outcome} IS NULL AND (SELECT s.status FROM interview_sessions s WHERE s.candidate_id = candidates.id ORDER BY s.created_at DESC LIMIT 1) IN ('pending','in_progress') THEN 1 ELSE 0 END)`,
+        r1Waiting: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_scheduling' AND ${candidates.outcome} IS NULL AND (SELECT s.status FROM interview_schedules s WHERE s.candidate_id = candidates.id AND s.round = 'round1' AND s.status IN ('pending','counter_proposed','selected') ORDER BY s.id DESC LIMIT 1) = 'pending' THEN 1 ELSE 0 END)`,
+        r2Waiting: sql<number>`SUM(CASE WHEN ${candidates.stage} = 'round1_passed' AND ${candidates.outcome} IS NULL AND (SELECT s.status FROM interview_schedules s WHERE s.candidate_id = candidates.id AND s.round = 'round2' AND s.status IN ('pending','counter_proposed','selected') ORDER BY s.id DESC LIMIT 1) = 'pending' THEN 1 ELSE 0 END)`,
+      })
+      .from(candidates)
+      .where(candScopeFilter)
+      .then(([r]) => r),
   ]);
 
   // 토큰 잔액으로 가능한 액션 수 환산 — KPI 카드 보조 문구
@@ -385,17 +381,16 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       ? Math.floor(tokenBalance / pricing.interview)
       : 0;
 
-  const interviewerSet = new Set(myInterviewerRows.map((r) => r.jobId));
   // 잠금 일괄 판정 — 면접관 공고 집합은 위에서 1회 조회했으므로 공고당 DB 재조회 없이
   // 쿠키만으로 동기 판정한다 (기존엔 공고 × 알림 루프마다 2쿼리씩 발생).
   const unlocked = await getUnlockChecker(me, interviewerSet);
 
-  const jobsWithActions = jobsRaw.sort((a, b) => {
-    // 1순위: 내가 면접관인 공고
+  // 공고 목록은 법인 전체. 내가 면접관인 공고를 맨 위로 끌어올리고, 그 안에서는
+  // SQL orderBy(active 먼저·최신순)를 유지한다.
+  const jobsWithActions = [...jobsRaw].sort((a, b) => {
     const ai = interviewerSet.has(a.id) ? 1 : 0;
     const bi = interviewerSet.has(b.id) ? 1 : 0;
     if (ai !== bi) return bi - ai;
-    // 2순위: SQL orderBy 결과 유지 (active 먼저, created desc)
     return 0;
   });
 
@@ -561,11 +556,9 @@ async function Dashboard({ me }: { me: CurrentUser }) {
 
   // 우선순위: count 큰 순
   notifications.sort((a, b) => b.count - a.count);
-  void orgCount; // system_admin 은 /admin/dashboard 로 리다이렉트 — 참고용 유지
 
   const totalCand = Number(candAgg?.total ?? 0);
   const decidedCount = Number(candAgg?.decided ?? 0);
-  const interviewReached = Number(candAgg?.interviewReached ?? 0);
 
   // -- KPI / 파이프라인 파생값 (전부 실집계) ----------------------------------
   const inProgressCand = totalCand - decidedCount;
@@ -586,25 +579,11 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   ];
   const pipelineTotal = pipeline.reduce((s, p) => s + p.value, 0);
 
-  // 채용 퍼널(누적 도달) + 단계 전환율 — 파이프라인 카드 우측. 도넛(현재 분포)과 보완.
-  const funnelSteps = [
-    { label: "지원", value: totalCand },
-    { label: "서류 평가", value: Number(candAgg?.reachedScreened ?? 0) },
-    { label: "AI 면접", value: interviewReached },
-    { label: "1차 면접", value: Number(candAgg?.reachedR1 ?? 0) },
-    { label: "2차 면접", value: Number(candAgg?.reachedR2 ?? 0) },
-    { label: "합격", value: hiredCount },
-  ];
-  // 핵심 지표 — 비율·속도 중심(단계별 수는 도넛/퍼널이 담당).
-  // 합격률은 제외 — 생존 편향(종결 +14일 후 불합격·취소 후보는 삭제되고 합격자는 영구 보존)으로
-  // 시간이 지날수록 100%에 수렴해 오해를 부른다. (lib/job-lifecycle.ts purgePiiAfterClose)
-  const aiRespondedCount = Number(candAgg?.respondedAi ?? 0);
-  const aiResponseRate =
-    interviewReached > 0 ? aiRespondedCount / interviewReached : null;
-  const avgDecisionDays =
-    candAgg?.avgDecisionDays != null
-      ? Math.round(Number(candAgg.avgDecisionDays) * 10) / 10
-      : null;
+  // -- 지원자 응답 대기 현황 (공이 후보자에게 있는 상태) ------------------------
+  const aiWaiting = Number(awaitingAgg?.aiWaiting ?? 0);
+  const r1Waiting = Number(awaitingAgg?.r1Waiting ?? 0);
+  const r2Waiting = Number(awaitingAgg?.r2Waiting ?? 0);
+  const totalAwaiting = aiWaiting + r1Waiting + r2Waiting;
 
   const orgName = orgRow?.name ?? null;
 
@@ -628,7 +607,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           안녕하세요, {orgName ? `${orgName} ` : ""}{me.name} 님
         </h1>
         <p className="text-sm text-ink-soft mt-1">
-          {totalJobs === 0
+          {jobsWithActions.length === 0
             ? "Intervia 에 오신 걸 환영합니다. 첫 공고를 등록해 채용을 시작해 보세요."
             : "오늘의 채용 현황을 한눈에 확인하세요."}
         </p>
@@ -651,7 +630,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
               value={myActiveJobs}
               Icon={ClipboardList}
               sub={`전체 ${myTotalJobs}건`}
-              href="/jobs"
+              href="/jobs?mine=1"
               accent="blue"
             />
             <KpiCard
@@ -694,94 +673,64 @@ async function Dashboard({ me }: { me: CurrentUser }) {
             </div>
           )}
 
-          {/* 채용 파이프라인 — 좌: 진행 중 분포 도넛 / 우: 누적 전환 퍼널 + 핵심 지표. 전부 실집계. */}
-          <section className="flex-1 bg-card border border-border-default rounded-2xl p-5 shadow-sm">
-            <header className="flex items-baseline gap-2 mb-4 flex-wrap">
-              <h2 className="text-sm font-semibold text-ink">채용 파이프라인</h2>
-              <span className="text-xs text-ink-soft">진행 중 분포 · 단계 전환 · 핵심 지표</span>
-            </header>
-            {totalCand > 0 ? (
-              <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-                {/* 좌: 진행 중 단계 분포 도넛 */}
-                <div className="shrink-0 mx-auto lg:mx-0">
-                  <Donut
-                    data={pipeline}
-                    size={152}
-                    thickness={22}
-                    centerTop={String(pipelineTotal)}
-                    centerSub="명"
-                  />
+          {/* 채용 파이프라인 + 지원자 응답 대기 — 좌우 2분할. 둘 다 내가 면접관인 공고 기준 실집계. */}
+          <section className="flex-1 bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
+            <div className="grid sm:grid-cols-2">
+              {/* 좌: 채용 파이프라인 (진행 중 단계 분포) — 도넛을 패널 영역 중앙에 크게 배치 */}
+              <div className="p-5 flex flex-col">
+                <header className="mb-4">
+                  <h2 className="text-sm font-semibold text-ink">채용 파이프라인</h2>
+                  <p className="text-xs text-ink-soft mt-0.5">진행 중 단계 분포</p>
+                </header>
+                <div className="flex-1 flex items-center justify-center min-h-[208px]">
+                  {pipelineTotal > 0 ? (
+                    <Donut
+                      data={pipeline}
+                      size={168}
+                      thickness={26}
+                      centerTop={String(pipelineTotal)}
+                      centerSub="명"
+                    />
+                  ) : (
+                    <p className="text-center text-sm text-ink-soft">
+                      진행 중인 후보가 없습니다.
+                    </p>
+                  )}
                 </div>
-                {/* 우: 누적 전환 퍼널 + 핵심 지표 */}
-                <div className="flex-1 min-w-0 space-y-3">
-                  <div>
-                    <div className="text-[11px] font-medium text-ink-muted mb-1.5">
-                      단계별 전환{" "}
-                      <span className="text-ink-soft/70">(누적 도달 · 전환율)</span>
-                    </div>
-                    <div className="space-y-1">
-                      {funnelSteps.map((step, i) => {
-                        const w =
-                          totalCand > 0 ? (step.value / totalCand) * 100 : 0;
-                        const prev = funnelSteps[i - 1]?.value ?? 0;
-                        const conv =
-                          i === 0
-                            ? null
-                            : prev > 0
-                              ? Math.round((step.value / prev) * 100)
-                              : 0;
-                        return (
-                          <div
-                            key={step.label}
-                            className="flex items-center gap-2 text-xs"
-                          >
-                            <span className="w-14 shrink-0 text-ink-soft">
-                              {step.label}
-                            </span>
-                            <div className="flex-1 bg-surface-alt rounded h-4 relative overflow-hidden">
-                              <div
-                                className="absolute inset-y-0 left-0 bg-primary/70 rounded"
-                                style={{ width: `${w}%` }}
-                              />
-                              <span className="absolute inset-0 flex items-center px-1.5 text-[10px] font-medium text-ink tabular-nums">
-                                {step.value}
-                              </span>
-                            </div>
-                            <span className="w-9 shrink-0 text-right text-[10px] text-ink-muted tabular-nums">
-                              {conv != null ? `${conv}%` : "—"}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  {/* 핵심 지표 — 비율·속도. 합격률은 생존 편향으로 제외(위 파생값 주석 참고). */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-lg bg-surface-alt/60 px-2.5 py-2">
-                      <div className="text-[10px] text-ink-soft">평균 처리 기간</div>
-                      <div className="text-sm font-bold text-ink tabular-nums">
-                        {avgDecisionDays != null ? `${avgDecisionDays}일` : "—"}
-                      </div>
-                    </div>
-                    <div className="rounded-lg bg-surface-alt/60 px-2.5 py-2">
-                      <div className="text-[10px] text-ink-soft">AI 면접 응답률</div>
-                      <div className="text-sm font-bold text-ink tabular-nums">
-                        {aiResponseRate != null
-                          ? `${Math.round(aiResponseRate * 100)}%`
-                          : "—"}
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-ink-muted leading-snug">
-                    현재 보관 중인 후보 기준 — 종결 후 정리된 과거 후보는 제외됩니다.
+              </div>
+              {/* 우: 지원자 응답 대기 (지원자 차례) */}
+              <div className="p-5 border-t sm:border-t-0 sm:border-l border-border-default">
+                <header className="mb-4">
+                  <h2 className="text-sm font-semibold text-ink">지원자 응답 대기</h2>
+                  <p className="text-xs text-ink-soft mt-0.5">
+                    지원자 차례 · 회신을 기다리는 중
                   </p>
-                </div>
+                </header>
+                {totalAwaiting > 0 ? (
+                  <div className="space-y-3">
+                    <AwaitRow
+                      label="AI 면접 응시"
+                      desc="링크 발송 후 미응시"
+                      value={aiWaiting}
+                    />
+                    <AwaitRow
+                      label="1차 일정 회신"
+                      desc="제시한 시간 응답 대기"
+                      value={r1Waiting}
+                    />
+                    <AwaitRow
+                      label="2차 일정 회신"
+                      desc="제시한 시간 응답 대기"
+                      value={r2Waiting}
+                    />
+                  </div>
+                ) : (
+                  <p className="py-10 text-center text-sm text-ink-soft">
+                    회신 대기 중인 후보가 없습니다.
+                  </p>
+                )}
               </div>
-            ) : (
-              <div className="py-10 text-center text-sm text-ink-soft">
-                아직 파이프라인에 진행 중인 후보가 없습니다.
-              </div>
-            )}
+            </div>
           </section>
         </div>
 
@@ -996,6 +945,33 @@ async function Dashboard({ me }: { me: CurrentUser }) {
 // ---------------------------------------------------------------------------
 // 컴포넌트
 // ---------------------------------------------------------------------------
+
+/** 지원자 응답 대기 한 줄 — 라벨/설명 + 우측 수치. 후보자 차례라 중립 톤(액션 강조 X). */
+function AwaitRow({
+  label,
+  desc,
+  value,
+}: {
+  label: string;
+  desc: string;
+  value: number;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-surface-alt/50 px-3 py-2.5">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium text-ink truncate">{label}</div>
+        <div className="text-[11px] text-ink-soft truncate">{desc}</div>
+      </div>
+      <span
+        className={`shrink-0 text-lg font-bold tabular-nums ${
+          value > 0 ? "text-ink" : "text-ink-muted"
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
 
 function KpiCard({
   label,

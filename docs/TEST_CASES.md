@@ -505,8 +505,7 @@
 ### 8.5 리포트 / 퍼널 / 비교
 - [x] **TC-8.5.1** `GET /api/jobs/[id]/funnel` → stage 분포 + KPI(avgScreeningScore 등), PIN 가드 적용
   > ✅ stages 분포 + KPI 반환. (PIN 가드는 isJobUnlocked 적용 — 코드)
-- [x] **TC-8.5.2** `GET /api/org/funnel` → 전사 퍼널(org_admin+, member 403)
-  > ✅ admin 200(daysBack/kpi), member 403.
+- [~] **TC-8.5.2** ~~`GET /api/org/funnel` → 전사 퍼널~~ — **제거됨(2026-06-26)**. 채용현황 대시보드(`/org/dashboard`) + `/api/org/funnel` 라우트 삭제. 홈 대시보드(`app/page.tsx`)가 면접관 스코프로 통합 — 전사 집계 대신 "내가 면접관인 공고"만 집계.
 - [x] **TC-8.5.3** `/jobs/[id]/report`, `/jobs/[id]/compare` 페이지 렌더 + 데이터 정합
   > ✅ 코드 검증(UI 페이지). 데이터는 funnel API(8.5.1)와 동일 소스.
 

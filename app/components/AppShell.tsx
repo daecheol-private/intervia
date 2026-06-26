@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   Home,
   BarChart3,
+  ClipboardList,
   Coins,
   Users,
   Settings,
@@ -22,6 +23,7 @@ import {
   Bell,
   Menu,
   ChevronLeft,
+  Ticket,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 
@@ -42,14 +44,17 @@ function buildSections(role: Role): NavSection[] {
   if (role !== "system_admin") {
     sections.push({
       label: null,
-      items: [{ href: "/", label: "대시보드", Icon: Home }],
+      items: [
+        { href: "/", label: "대시보드", Icon: Home },
+        // 내 면접 공고 — 면접관으로 지정된 공고만(멤버도 확인 가능)
+        { href: "/jobs?mine=1", label: "내 면접 공고", Icon: ClipboardList },
+      ],
     });
   }
   if (role === "org_admin") {
     sections.push({
       label: "법인",
       items: [
-        { href: "/org/dashboard", label: "채용 현황", Icon: BarChart3 },
         { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
         { href: "/org/members", label: "멤버", Icon: Users },
         { href: "/org/settings", label: "법인 설정", Icon: Settings },
@@ -72,6 +77,7 @@ function buildSections(role: Role): NavSection[] {
         { href: "/admin/announcements", label: "공지", Icon: Megaphone },
         { href: "/admin/marketing", label: "마케팅 메일", Icon: Mail },
         { href: "/admin/pricing", label: "단가", Icon: DollarSign },
+        { href: "/admin/coupons", label: "쿠폰", Icon: Ticket },
         { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
         { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
         { href: "/admin/appeals", label: "이의제기", Icon: Scale },
@@ -84,7 +90,9 @@ function buildSections(role: Role): NavSection[] {
 }
 
 function isActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  // 쿼리스트링(예: /jobs?mine=1)은 경로 비교에서 제외 — pathname 엔 쿼리가 없다.
+  const base = href.split("?")[0];
+  return base === "/" ? pathname === "/" : pathname.startsWith(base);
 }
 
 const navItemClass = (active: boolean, collapsed = false) =>

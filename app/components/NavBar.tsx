@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Shield,
   ChevronDown,
+  ClipboardList,
   Coins,
   Users,
   Users2,
@@ -25,6 +26,7 @@ import {
   LifeBuoy,
   Megaphone,
   Mail,
+  Ticket,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 import LogoutButton from "../logout-button";
@@ -56,6 +58,8 @@ function buildSections(role: Role): NavSection[] {
       label: null,
       items: [
         { href: "/", label: "대시보드", Icon: Home },
+        // 내 면접 공고 — 면접관으로 지정된 공고만(멤버도 확인 가능)
+        { href: "/jobs?mine=1", label: "내 면접 공고", Icon: ClipboardList },
         { href: "/support", label: "고객센터", Icon: LifeBuoy },
       ],
     });
@@ -64,7 +68,6 @@ function buildSections(role: Role): NavSection[] {
     sections.push({
       label: "법인",
       items: [
-        { href: "/org/dashboard", label: "채용 현황", Icon: BarChart3 },
         { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
         { href: "/org/members", label: "멤버", Icon: Users },
         { href: "/org/settings", label: "법인 설정", Icon: Settings },
@@ -86,6 +89,7 @@ function buildSections(role: Role): NavSection[] {
         { href: "/admin/announcements", label: "공지", Icon: Megaphone },
         { href: "/admin/marketing", label: "마케팅 메일", Icon: Mail },
         { href: "/admin/pricing", label: "단가", Icon: DollarSign },
+        { href: "/admin/coupons", label: "쿠폰", Icon: Ticket },
         { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
         { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
         { href: "/admin/appeals", label: "이의제기", Icon: Scale },
@@ -165,12 +169,18 @@ export function NavBar({
           <>
             {/* 데스크톱 (≥ sm): 기존 가로 메뉴 */}
             <div className="hidden sm:flex items-center gap-1.5">
+              {!isSystemAdmin && (
+                <NavLink
+                  href="/jobs?mine=1"
+                  label="내 면접 공고"
+                  Icon={ClipboardList}
+                />
+              )}
               {canManageOrg && (
                 <Dropdown
                   label="법인"
                   Icon={Building2}
                   items={[
-                    { href: "/org/dashboard", label: "채용 현황", Icon: BarChart3 },
                     { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
                     { href: "/org/members", label: "멤버", Icon: Users },
                     // 메일 서버·줌 연동은 법인 설정 > 외부 연동으로 이동 (첫 화면 단순화)
@@ -196,6 +206,7 @@ export function NavBar({
                       { href: "/admin/announcements", label: "공지", Icon: Megaphone },
                       { href: "/admin/marketing", label: "마케팅 메일", Icon: Mail },
                       { href: "/admin/pricing", label: "단가", Icon: DollarSign },
+                      { href: "/admin/coupons", label: "쿠폰", Icon: Ticket },
                       { href: "/admin/metrics", label: "메트릭", Icon: BarChart3 },
                       { href: "/admin/audit", label: "감사 로그", Icon: ScrollText },
                       { href: "/admin/appeals", label: "이의제기", Icon: Scale },
@@ -390,10 +401,12 @@ function MobileMenu({
                     </div>
                   )}
                   {section.items.map((it) => {
+                    // 쿼리스트링(예: /jobs?mine=1)은 경로 비교에서 제외.
+                    const base = it.href.split("?")[0];
                     const active =
-                      it.href === "/"
+                      base === "/"
                         ? currentPath === "/"
-                        : currentPath.startsWith(it.href);
+                        : currentPath.startsWith(base);
                     return (
                       <Link
                         key={it.href}

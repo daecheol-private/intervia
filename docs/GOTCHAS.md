@@ -446,6 +446,14 @@ const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
 
 **해결**: 별도 쿼리로 가져와서 JS에서 merge. 실제 사례: `app/api/jobs/[id]/candidates/route.ts`의 GET에서 후보자 목록 + 면접 세션 분리 조회 후 Map으로 매칭.
 
+### 5-1. JOIN 없는 단일 FROM 쿼리는 `sql` 템플릿 안의 `${table.col}` 이 접두어를 잃는다 (2026-06-26)
+
+**증상**: `sql\`SUM(CASE WHEN ... AND (SELECT s.status FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} ...) ...)\`` 같은 상관 서브쿼리 집계가 **항상 0/상수**. 같은 SQL 을 raw 로 직접 실행하면 정상.
+
+**원인**: Drizzle 은 **JOIN 이 없는 단일 테이블 쿼리**(`.from(candidates)` 만)에서 컬럼을 접두어 없이 렌더한다 — `${candidates.id}` → `"id"` (NOT `"candidates"."id"`). 그 `"id"` 가 서브쿼리 안에서 `interview_sessions s` 의 `id` 컬럼으로 오결합되어 `s.candidate_id = s.id` 가 되고, 거의 항상 false → 0. (대시보드의 `jobsRaw`·`myInterviewerJobs` 가 같은 패턴인데도 멀쩡한 건 **JOIN 이 있어** Drizzle 이 `"candidates"."id"` 로 정규화하기 때문.)
+
+**해결**: 서브쿼리의 외부 컬럼 참조는 `${candidates.id}` 대신 **리터럴 `candidates.id`** 로 쓴다(`sql` 템플릿에 테이블명을 직접 박음 → SQLite 가 외부 테이블로 정확히 상관). `app/page.tsx` 의 `awaitingAgg`(지원자 응답 대기 집계)가 실제 적용 사례. 진단법: `query.toSQL().sql` 을 찍어 `WHERE s.x = "id"` 처럼 접두어 없는 외부 참조가 있는지 확인.
+
 ## 6. Edge runtime 제약
 
 **걸리는 것**:
