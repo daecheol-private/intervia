@@ -6,6 +6,7 @@ import {
   CHARGE_PACKAGES,
   CHARGE_BONUS_BOOSTED,
   BETA_BONUS_MULTIPLIER,
+  withVat,
 } from "@/lib/beta";
 
 // 토스 v2 표준결제 SDK(CDN)가 노출하는 전역. npm 의존 없이 스크립트로 로드.
@@ -108,7 +109,7 @@ export default function ChargePanel() {
       <div className="flex items-baseline justify-between gap-2 mb-3">
         <h2 className="text-sm font-semibold text-ink">충전하기</h2>
         <span className="text-[11px] text-ink-muted">
-          100원 = 1 토큰 (VAT 별도) · 많이 충전할수록 보너스 ↑
+          100원 = 1 토큰 · 결제 시 VAT 10% 별도 · 많이 충전할수록 보너스 ↑
         </span>
       </div>
 
@@ -144,6 +145,9 @@ export default function ChargePanel() {
               )}
               <div className="text-xs text-ink-muted">
                 {(p.krw / 10_000).toLocaleString()}만원
+              </div>
+              <div className="text-[9px] text-ink-muted/80 tabular-nums">
+                결제 {withVat(p.krw).toLocaleString()}원
               </div>
               <div className="text-base font-bold text-ink mt-1 tabular-nums">
                 {isBusy ? (
@@ -184,7 +188,7 @@ export default function ChargePanel() {
       {clientKey ? (
         <p className="mt-3 flex items-center gap-1.5 text-[11px] text-ink-muted">
           <CreditCard className="w-3.5 h-3.5" strokeWidth={2.25} />
-          신용·체크카드로 즉시 충전됩니다. 카드를 누르면 결제창이 열립니다.
+          신용·체크카드로 즉시 충전됩니다. 표시 금액에 VAT 10%가 더해진 금액이 결제됩니다.
         </p>
       ) : (
         <p className="mt-3 text-xs text-ink-soft bg-surface-alt border border-border-default rounded-lg px-3 py-2">

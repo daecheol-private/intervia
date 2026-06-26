@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useStepUpFetch } from "@/app/components/StepUpModal";
 import { formatLocalDateTime } from "@/lib/utils";
+import { withVat } from "@/lib/beta";
 
 type Order = {
   id: number;
@@ -54,8 +55,8 @@ export default function AdminOrgPaymentsPage() {
 
   const cancel = async (o: Order) => {
     const reason = prompt(
-      `결제 #${o.id} (${o.amountKrw.toLocaleString()}원) 을 취소·환불합니다.\n\n` +
-        `· 카드사로 ${o.amountKrw.toLocaleString()}원이 실제 환불됩니다.\n` +
+      `결제 #${o.id} (${withVat(o.amountKrw).toLocaleString()}원) 을 취소·환불합니다.\n\n` +
+        `· 카드사로 ${withVat(o.amountKrw).toLocaleString()}원이 실제 환불됩니다.\n` +
         `· 지급했던 ${o.tokens.toLocaleString()} 토큰이 회수됩니다 (이미 사용했으면 잔액이 음수가 될 수 있음).\n\n` +
         `사유 (5자 이상, 감사 로그 기록):`
     );
@@ -75,7 +76,7 @@ export default function AdminOrgPaymentsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason: reason.trim() }),
         },
-        `결제 #${o.id} (${o.amountKrw.toLocaleString()}원) 을 카드사로 환불하고 ${o.tokens.toLocaleString()} 토큰을 회수합니다.`
+        `결제 #${o.id} (${withVat(o.amountKrw).toLocaleString()}원) 을 카드사로 환불하고 ${o.tokens.toLocaleString()} 토큰을 회수합니다.`
       );
     } catch {
       setBusy(null);
@@ -153,7 +154,7 @@ export default function AdminOrgPaymentsPage() {
                     })}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono tabular-nums">
-                    {o.amountKrw.toLocaleString()}원
+                    {withVat(o.amountKrw).toLocaleString()}원
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono tabular-nums text-ink-soft">
                     {o.tokens.toLocaleString()}

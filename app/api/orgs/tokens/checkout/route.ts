@@ -2,7 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { db } from "@/lib/db";
 import { paymentOrders } from "@/lib/schema";
-import { isAllowedChargeAmount } from "@/lib/beta";
+import { isAllowedChargeAmount, withVat } from "@/lib/beta";
 import { calcTokensForKrw } from "@/lib/tokens";
 import { makeTossOrderId } from "@/lib/toss";
 
@@ -51,10 +51,12 @@ export async function POST(req: Request) {
     })
     .returning({ id: paymentOrders.id });
 
+  // 'VAT 별도' — 표시가(amountKrw)는 공급가, 토스에 청구하는 실제 결제액은 +VAT.
+  // payment_orders.amount_krw 에는 공급가를 저장(토큰 계산 기준), 청구·대조는 withVat 로 파생.
   return Response.json({
     orderId: makeTossOrderId(order.id),
-    amount: amountKrw,
-    orderName: `Intervia 토큰 충전 ${amountKrw.toLocaleString()}원`,
+    amount: withVat(amountKrw),
+    orderName: `Intervia 토큰 충전 ${amountKrw.toLocaleString()}원 (VAT 포함 ${withVat(amountKrw).toLocaleString()}원)`,
     customerEmail: me!.email,
     customerName: me!.name,
   });

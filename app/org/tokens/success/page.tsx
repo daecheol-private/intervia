@@ -7,7 +7,13 @@ import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 type Result =
   | { phase: "loading" }
-  | { phase: "ok"; granted: number; balance: number; amountKrw: number }
+  | {
+      phase: "ok";
+      granted: number;
+      balance: number;
+      amountKrw: number;
+      paidAmountKrw: number;
+    }
   | { phase: "error"; message: string };
 
 function SuccessInner() {
@@ -48,6 +54,7 @@ function SuccessInner() {
             granted: data.granted ?? 0,
             balance: data.balance ?? 0,
             amountKrw: data.amountKrw ?? Number(amount),
+            paidAmountKrw: data.paidAmountKrw ?? Number(amount),
           });
         } else {
           setResult({
@@ -85,7 +92,7 @@ function SuccessInner() {
             <CheckCircle2 className="w-12 h-12 mx-auto text-primary" />
             <h1 className="text-lg font-bold text-ink mt-4">충전 완료</h1>
             <p className="text-sm text-ink-soft mt-2">
-              {result.amountKrw.toLocaleString()}원 결제로{" "}
+              {result.paidAmountKrw.toLocaleString()}원 결제(VAT 포함)로{" "}
               <strong className="text-primary-deep">
                 {result.granted.toLocaleString()} 토큰
               </strong>

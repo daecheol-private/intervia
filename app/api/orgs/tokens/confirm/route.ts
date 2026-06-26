@@ -5,6 +5,7 @@ import { paymentOrders } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { applyChargePayment } from "@/lib/tokens";
 import { confirmTossPayment, parseTossOrderId, TossError } from "@/lib/toss";
+import { withVat } from "@/lib/beta";
 
 export const runtime = "nodejs";
 
@@ -61,18 +62,18 @@ export async function POST(req: Request) {
       { status: 400 }
     );
 
-  // pending — 클라이언트가 보낸 금액이 주문 금액과 다르면 위변조 의심, 즉시 차단.
-  if (Number(body.amount) !== order.amountKrw)
+  // pending — 클라이언트가 보낸 금액이 주문 결제액(공급가+VAT)과 다르면 위변조 의심, 즉시 차단.
+  if (Number(body.amount) !== withVat(order.amountKrw))
     return new Response("결제 금액이 주문과 일치하지 않습니다.", {
       status: 400,
     });
 
   try {
-    // amount 는 DB 값(권위) — 클라이언트 입력을 신뢰하지 않는다.
+    // amount 는 DB 공급가에 VAT 를 더한 실제 결제액(권위) — 클라이언트 입력을 신뢰하지 않는다.
     const result = await confirmTossPayment({
       paymentKey,
       orderId: orderIdStr,
-      amount: order.amountKrw,
+      amount: withVat(order.amountKrw),
     });
     if (result.status !== "DONE") {
       return new Response(
@@ -116,6 +117,7 @@ async function applyAndRespond(
     // granted 는 주문의 토큰값(고정) — 새로고침/재확인 시 alreadyApplied 라도 0 으로 보이지 않게.
     granted: order.tokens,
     balance: r.balance,
-    amountKrw: order.amountKrw,
+    amountKrw: order.amountKrw, // 공급가
+    paidAmountKrw: withVat(order.amountKrw), // 실제 카드 결제액(VAT 포함)
   });
 }

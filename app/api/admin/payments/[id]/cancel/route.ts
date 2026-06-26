@@ -7,6 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { reverseChargePayment } from "@/lib/tokens";
 import { cancelTossPayment, makeTossOrderId, TossError } from "@/lib/toss";
 import { logAudit } from "@/lib/audit";
+import { withVat } from "@/lib/beta";
 
 export const runtime = "nodejs";
 
@@ -55,13 +56,13 @@ export async function POST(
       orgId: order.orgId,
       paymentOrderId: order.id,
       tokens: order.tokens,
-      amountKrw: order.amountKrw,
+      amountKrw: withVat(order.amountKrw),
       userId: me!.id,
     });
     return Response.json({
       ok: true,
       alreadyCancelled: true,
-      refundedKrw: order.amountKrw,
+      refundedKrw: withVat(order.amountKrw),
       reversedTokens: r.reversed,
       balance: r.balance,
     });

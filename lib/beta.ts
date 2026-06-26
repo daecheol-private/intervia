@@ -25,6 +25,20 @@ type Key =
 
 export const TOKEN_KRW = 100; // 100원 = 1 토큰
 
+/**
+ * 부가가치세 — 충전은 'VAT 별도' 정책. 패키지 표시가(krw)는 공급가액이고,
+ * 실제 카드 결제액 = 공급가 × (1 + VAT_RATE). payment_orders.amount_krw 에는 공급가를
+ * 저장(토큰 계산·tokens 컬럼 기준)하고, 토스에 청구·대조하는 금액은 항상 withVat() 로 파생한다.
+ * 한국 부가세 10% 고정 — 모든 CHARGE_PACKAGES 가 ×1.1 정수로 떨어진다(5만→5.5만 …).
+ */
+export const VAT_RATE = 0.1;
+export function withVat(supplyKrw: number): number {
+  return Math.round(supplyKrw * (1 + VAT_RATE));
+}
+export function vatOf(supplyKrw: number): number {
+  return withVat(supplyKrw) - supplyKrw;
+}
+
 /** 정가(앵커) — 베타 종료 후 복귀 단가. */
 export const LIST_PRICING: Record<Key, number> = {
   job_post: 0,

@@ -21,6 +21,10 @@
     {
       "path": "/api/cron/expire-interviews",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-payments",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

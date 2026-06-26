@@ -94,6 +94,57 @@ export async function confirmTossPayment(args: {
   };
 }
 
+const TOSS_LOOKUP_URL = (orderId: string) =>
+  `https://api.tosspayments.com/v1/payments/orders/${encodeURIComponent(orderId)}`;
+
+export type TossPaymentLookup = {
+  paymentKey: string;
+  orderId: string;
+  status: string; // READY / IN_PROGRESS / WAITING_FOR_DEPOSIT / DONE / CANCELED / PARTIAL_CANCELED / ABORTED / EXPIRED
+  totalAmount: number;
+};
+
+/**
+ * orderId 로 결제 상태 조회 — reconciliation(미아 주문 자가치유) 전용. 출금을 일으키지 않는 읽기.
+ * - 토스에 해당 orderId 결제가 존재하면 객체, 아예 없으면(결제창 이탈 등) null.
+ * - confirm 과 달리 승인 API 가 아니라 **조회**이므로 호출만으로 돈이 빠지지 않는다.
+ * - 일시 네트워크/5xx 오류는 TossError throw — 호출자가 다음 회차에 재시도.
+ */
+export async function getTossPaymentByOrderId(
+  orderId: string
+): Promise<TossPaymentLookup | null> {
+  const auth = Buffer.from(`${secretKey()}:`).toString("base64");
+  let res: Response;
+  try {
+    res = await fetch(TOSS_LOOKUP_URL(orderId), {
+      method: "GET",
+      headers: { Authorization: `Basic ${auth}` },
+    });
+  } catch {
+    throw new TossError(
+      "NETWORK",
+      "결제 조회 중 네트워크 오류가 발생했습니다."
+    );
+  }
+  // 토스에 결제가 없음 — 결제창에서 인증 전 이탈해 결제 객체가 생성되지 않은 경우.
+  if (res.status === 404) return null;
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const code = typeof data.code === "string" ? data.code : "UNKNOWN";
+    if (code === "NOT_FOUND_PAYMENT" || code === "NOT_FOUND_PAYMENT_SESSION")
+      return null;
+    const message =
+      typeof data.message === "string" ? data.message : "결제 조회에 실패했습니다.";
+    throw new TossError(code, message);
+  }
+  return {
+    paymentKey: String(data.paymentKey ?? ""),
+    orderId: String(data.orderId ?? orderId),
+    status: String(data.status ?? ""),
+    totalAmount: Number(data.totalAmount ?? 0),
+  };
+}
+
 const TOSS_CANCEL_URL = (paymentKey: string) =>
   `https://api.tosspayments.com/v1/payments/${encodeURIComponent(paymentKey)}/cancel`;
 
