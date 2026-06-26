@@ -10,6 +10,7 @@ import {
   Shield,
   ChevronDown,
   ClipboardList,
+  CalendarClock,
   Coins,
   Users,
   Users2,
@@ -60,6 +61,8 @@ function buildSections(role: Role): NavSection[] {
         { href: "/", label: "대시보드", Icon: Home },
         // 내 면접 공고 — 면접관으로 지정된 공고만(멤버도 확인 가능)
         { href: "/jobs?mine=1", label: "내 면접 공고", Icon: ClipboardList },
+        { href: "/candidates", label: "후보자", Icon: Users },
+        { href: "/interviews", label: "면접 일정", Icon: CalendarClock },
         { href: "/support", label: "고객센터", Icon: LifeBuoy },
       ],
     });
@@ -128,7 +131,8 @@ export function NavBar({
   // 로그인 상태에서만 — 비로그인(role=null)이면 공개 랜딩/리다이렉트 대상이라 상단바 유지.
   const usesAppShell =
     pathname === "/" ||
-    pathname.startsWith("/candidates/") ||
+    pathname.startsWith("/candidates") ||
+    pathname.startsWith("/interviews") ||
     pathname.startsWith("/jobs") ||
     pathname.startsWith("/org") ||
     pathname.startsWith("/admin") ||
@@ -170,11 +174,19 @@ export function NavBar({
             {/* 데스크톱 (≥ sm): 기존 가로 메뉴 */}
             <div className="hidden sm:flex items-center gap-1.5">
               {!isSystemAdmin && (
-                <NavLink
-                  href="/jobs?mine=1"
-                  label="내 면접 공고"
-                  Icon={ClipboardList}
-                />
+                <>
+                  <NavLink
+                    href="/jobs?mine=1"
+                    label="내 면접 공고"
+                    Icon={ClipboardList}
+                  />
+                  <NavLink href="/candidates" label="후보자" Icon={Users} />
+                  <NavLink
+                    href="/interviews"
+                    label="면접 일정"
+                    Icon={CalendarClock}
+                  />
+                </>
               )}
               {canManageOrg && (
                 <Dropdown
