@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CalendarClock } from "lucide-react";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 
 export function SchedulePropose({
@@ -23,10 +24,10 @@ export function SchedulePropose({
       <button
         onClick={() => setOpen(true)}
         disabled={disabled}
-        className="ml-auto text-xs px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="ml-auto inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         title={disabled ? "후보자를 체크하세요" : label}
       >
-        📅 {label} ({selectedIds.length})
+        <CalendarClock className="w-3.5 h-3.5" /> {label} ({selectedIds.length})
       </button>
       <ScheduleProposeModal
         jobId={jobId}

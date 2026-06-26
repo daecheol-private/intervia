@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronRight, X } from "lucide-react";
 import { formatLocalDateTime } from "@/lib/utils";
 
 export const recColor: Record<string, string> = {
@@ -177,12 +178,10 @@ export function Section({
             )}
           </span>
           {collapsible && (
-            <span
-              className={`text-ink-muted text-xs transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
+            <ChevronRight
+              className={`text-ink-muted w-4 h-4 transition-transform shrink-0 ${open ? "rotate-90" : ""}`}
               aria-hidden
-            >
-              ▶
-            </span>
+            />
           )}
         </button>
         {open && (
@@ -234,9 +233,10 @@ export function Modal({
           <h3 className="font-semibold text-ink">{title}</h3>
           <button
             onClick={onClose}
-            className="text-ink-muted hover:text-ink-soft"
+            aria-label="닫기"
+            className="inline-flex items-center justify-center text-ink-muted hover:text-ink-soft"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
         {children}

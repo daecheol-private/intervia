@@ -14,6 +14,7 @@
  * 출력 포맷: `{ start: ISO, end: ISO }[]` — datetime-local 과 동일.
  */
 import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 export type SlotItem = { start: string; end: string };
 
@@ -195,9 +196,10 @@ export function SlotCalendarPicker({
         <button
           type="button"
           onClick={() => gotoMonth(-1)}
-          className="px-2 py-1 rounded hover:bg-surface-alt text-ink-soft text-sm"
+          aria-label="이전 달"
+          className="inline-flex items-center justify-center px-2 py-1 rounded hover:bg-surface-alt text-ink-soft"
         >
-          ‹
+          <ChevronLeft className="w-4 h-4" strokeWidth={2.25} />
         </button>
         <span className="text-sm font-semibold text-ink">
           {view.getFullYear()}년 {view.getMonth() + 1}월
@@ -205,9 +207,10 @@ export function SlotCalendarPicker({
         <button
           type="button"
           onClick={() => gotoMonth(1)}
-          className="px-2 py-1 rounded hover:bg-surface-alt text-ink-soft text-sm"
+          aria-label="다음 달"
+          className="inline-flex items-center justify-center px-2 py-1 rounded hover:bg-surface-alt text-ink-soft"
         >
-          ›
+          <ChevronRight className="w-4 h-4" strokeWidth={2.25} />
         </button>
       </div>
 
@@ -358,10 +361,10 @@ export function SlotCalendarPicker({
                 <button
                   type="button"
                   onClick={() => removeSlot(i)}
-                  className="text-primary hover:text-rose-600"
+                  className="inline-flex items-center justify-center text-primary hover:text-rose-600"
                   aria-label="제거"
                 >
-                  ✕
+                  <X className="w-3.5 h-3.5" strokeWidth={2.25} />
                 </button>
               </div>
             ))}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { MessageSquare, Send } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { confirmDialog } from "@/app/components/Dialog";
 
@@ -240,7 +240,8 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
             : "bg-primary-soft text-primary-deep border-primary/30 hover:bg-primary-soft/70"
         }`}
       >
-        💬 토론
+        <MessageSquare className="w-3.5 h-3.5" />
+        토론
         {unread > 0 && (
           <span className="ml-0.5 min-w-[16px] h-4 px-1 rounded-full bg-danger text-surface text-[10px] font-semibold inline-flex items-center justify-center tabular-nums">
             {unread > 99 ? "99+" : unread}

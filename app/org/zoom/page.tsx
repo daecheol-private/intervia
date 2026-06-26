@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { BookOpen } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { formatLocalDateTime } from "@/lib/utils";
@@ -104,7 +105,8 @@ export default function OrgZoomPage() {
           href="/org/zoom/guide"
           className="inline-flex items-center gap-1 mt-3 text-sm font-medium text-primary hover:text-primary-deep underline"
         >
-          📘 연동 방법 설명서 보기
+          <BookOpen className="w-4 h-4" />
+          연동 방법 설명서 보기
         </Link>
       </div>
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { LogOut } from "lucide-react";
 import { useStepUpFetch } from "@/app/components/StepUpModal";
 
 type Row = {
@@ -392,9 +393,10 @@ export default function AdminUsersPage() {
               const d = (await res.json()) as { sessionsRevoked: number };
               alert(`${d.sessionsRevoked}개 세션을 만료했습니다.`);
             }}
-            className="shrink-0 px-3 py-2 text-xs bg-card border border-danger/40 hover:bg-danger-soft text-danger rounded font-medium"
+            className="shrink-0 px-3 py-2 text-xs bg-card border border-danger/40 hover:bg-danger-soft text-danger rounded font-medium inline-flex items-center gap-1"
           >
-            🚨 전체 강제 로그아웃
+            <LogOut className="w-3.5 h-3.5" />
+            전체 강제 로그아웃
           </button>
         </div>
       </div>

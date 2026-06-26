@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  ClipboardList,
+  Loader2,
+  Mail,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { BulletBlock } from "./screening-report";
 import { HL, recColor, scoreColor, scoreBarColor, showRec } from "./shared";
@@ -135,7 +143,8 @@ export function InterviewLinkBox({
           className="px-4 py-2 rounded-lg text-sm font-medium bg-primary hover:bg-primary-deep text-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-1.5"
         >
           {sending && <Loader2 className="w-4 h-4 animate-spin" />}
-          {sending ? "발송 중..." : "📧 재발송"}
+          {!sending && <Mail className="w-4 h-4" />}
+          {sending ? "발송 중..." : "재발송"}
         </button>
       </div>
       {sent && (
@@ -337,7 +346,8 @@ export function InterviewEvaluationRetry({
           className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
         >
           {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-          {busy ? "재평가 중..." : "🔄 AI 평가 재시도"}
+          {!busy && <RefreshCw className="w-4 h-4" />}
+          {busy ? "재평가 중..." : "AI 평가 재시도"}
         </button>
         <button
           onClick={onShowTranscript}
@@ -622,16 +632,20 @@ function McqResultBlock({
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-surface text-sm font-bold hover:bg-primary-deep transition-colors shadow-sm"
             >
               {open ? (
-                <>문항별 정오 접기 ▲</>
+                <>
+                  문항별 정오 접기
+                  <ChevronUp className="w-4 h-4" />
+                </>
               ) : (
                 <>
-                  📋 어떤 문항을 틀렸는지 보기
+                  <ClipboardList className="w-4 h-4" />
+                  어떤 문항을 틀렸는지 보기
                   {wrong > 0 && (
                     <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-surface/25 text-surface text-xs font-extrabold">
                       오답 {wrong}
                     </span>
                   )}
-                  <span aria-hidden>▾</span>
+                  <ChevronDown className="w-4 h-4" />
                 </>
               )}
             </button>
@@ -898,9 +912,10 @@ export function TranscriptModal({
           <h3 className="font-bold text-ink">면접 대화록</h3>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-surface-alt text-ink-muted hover:text-ink transition-colors"
+            aria-label="닫기"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-surface-alt text-ink-muted hover:text-ink transition-colors"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
         <div className="overflow-y-auto p-5 space-y-3 bg-surface-alt">

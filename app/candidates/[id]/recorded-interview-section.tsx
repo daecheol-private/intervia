@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ChevronRight, Loader2, Mic } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { notify } from "@/app/components/Dialog";
 import {
@@ -347,9 +347,10 @@ export function RecordedInterviewPanel({
             <button
               onClick={() => setLiveOpen(true)}
               disabled={uploading || !consent}
-              className="px-4 py-2 rounded-lg border border-primary/40 text-primary-deep hover:bg-primary-soft text-sm font-medium disabled:opacity-50"
+              className="px-4 py-2 rounded-lg border border-primary/40 text-primary-deep hover:bg-primary-soft text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
             >
-              ● 라이브 녹음
+              <Mic className="w-4 h-4" />
+              라이브 녹음
             </button>
           </div>
           {uploading ? (
@@ -654,12 +655,10 @@ function RecordedReportCard({
                 </span>
                 <span className="flex items-center gap-1.5 text-[11px] text-ink-muted">
                   {transcriptOpen ? "접기" : "펼치기"}
-                  <span
-                    className={`transition-transform ${transcriptOpen ? "rotate-90" : ""}`}
+                  <ChevronRight
+                    className={`w-3.5 h-3.5 transition-transform ${transcriptOpen ? "rotate-90" : ""}`}
                     aria-hidden
-                  >
-                    ▶
-                  </span>
+                  />
                 </span>
               </button>
               {transcriptOpen && (

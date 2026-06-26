@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Copy, Check } from "lucide-react";
 
 /**
  * 텍스트를 클립보드에 복사하는 재사용 버튼.
@@ -9,8 +10,8 @@ import { useState } from "react";
  */
 export function CopyButton({
   text,
-  label = "📋 복사",
-  copiedLabel = "✓ 복사됨",
+  label = "복사",
+  copiedLabel = "복사됨",
   className,
   disabled,
 }: {
@@ -40,6 +41,11 @@ export function CopyButton({
         "inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-50"
       }
     >
+      {copied ? (
+        <Check className="w-3.5 h-3.5" strokeWidth={2.25} />
+      ) : (
+        <Copy className="w-3.5 h-3.5" strokeWidth={2.25} />
+      )}
       {copied ? copiedLabel : label}
     </button>
   );

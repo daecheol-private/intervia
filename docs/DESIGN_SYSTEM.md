@@ -119,6 +119,35 @@ import { Button, Card, Badge, Alert, Container, SectionHeading, Field, Input, Ch
 
 ---
 
+## 아이콘 규칙
+
+**단일 소스: `lucide-react` 하나만.** 버튼·링크·토글의 leading 아이콘에 이모지(📎🔄📅📧⭐💬🗑 …)나 유니코드 기호(`▶ ■ ✕ ✓ ✗ ★ ▲ ▾`)를 쓰지 않는다. 이모지는 OS/브라우저마다 모양·색·크기가 달라 lucide 라인 아이콘과 시각 언어가 충돌한다.
+
+- **크기**: 작은 `text-xs` 액션 버튼 `w-3.5 h-3.5`, 기본/큰 버튼 `w-4 h-4`. 텍스트 **왼쪽(leading)** + `inline-flex items-center gap-1`(또는 `gap-1.5`).
+- **색**: 아이콘에 색을 지정하지 말고 버튼 텍스트색(`currentColor`)을 따른다.
+- **의미 1:1 재사용** — 같은 뜻엔 항상 같은 아이콘(화면 전체에서 "이 모양=이 의미" 학습되게):
+
+| 의미 | 아이콘 | 의미 | 아이콘 |
+|---|---|---|---|
+| 이력서·파일 다운로드 | `FileDown` | 첨부/파일선택 | `Paperclip` |
+| 마스킹/내용 보기·숨기기 | `Eye`/`EyeOff` | 재평가·재시도·새로고침 | `RefreshCw` |
+| 일정 제시·조정 | `CalendarClock` | 메일 발송·통보 | `Mail` |
+| 공유/전송 | `Send` | 후보 승급·지정 | `UserCheck` |
+| 즐겨찾기 | `Star`/`StarOff` | 토론/코멘트 | `MessageSquare` |
+| 단계 변경(다음으로) | `ChevronRight` | 종결 결정 | `Flag` |
+| 합격/확인 | `Check` | 불합격/닫기·취소 | `X` |
+| 삭제 | `Trash2` | 수정 | `Pencil` |
+| 링크 | `Link2` | 검색 | `Search` |
+| 복사 | `Copy` | 가져오기 | `Download` |
+| 녹음·마이크 | `Mic` | 녹음 정지 | `Square`(fill) |
+| 화상/줌 | `Video` | 추가 | `Plus` |
+| 알림 | `Bell` | 설정 | `Settings` |
+| 가이드·설명서 | `BookOpen` | 강제 로그아웃 | `LogOut` |
+
+**예외(유지해도 됨)**: 네비 "← 뒤로" 링크, 본문 문장 속 전이 화살표(`A → B`), 빈 상태의 큰 일러스트 이모지(`text-2xl`+), 경고/안내 박스 prose 속 이모지, 상태 배지 라벨 — 이들은 버튼 아이콘이 아니라 손대지 않는다.
+
+---
+
 ## 자주 쓰는 패턴 (레퍼런스 구현 기준)
 
 리디자인된 3화면이 곧 레퍼런스다. 새 화면은 이 패턴을 재사용한다.

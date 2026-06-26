@@ -11,7 +11,7 @@ export function EditCandidateButton({
 }: {
   candidate: Candidate;
   onSaved: () => void | Promise<void>;
-  /** text = "✎ 정보 수정" 칩 / icon = 아이콘만(헤더 우측 액션용) */
+  /** text = "정보 수정" 칩 / icon = 아이콘만(헤더 우측 액션용) */
   variant?: "text" | "icon";
 }) {
   const [open, setOpen] = useState(false);
@@ -62,10 +62,11 @@ export function EditCandidateButton({
       ) : (
         <button
           onClick={() => setOpen(true)}
-          className="text-[11px] px-2 py-0.5 rounded-md border border-border-strong hover:bg-surface-alt text-ink-soft"
+          className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-border-strong hover:bg-surface-alt text-ink-soft"
           title="이름·이메일·연락처·최종학력 수정"
         >
-          ✎ 정보 수정
+          <Pencil className="w-3.5 h-3.5" />
+          정보 수정
         </button>
       )}
       {open && (

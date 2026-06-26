@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  FileDown,
+  Flag,
+  Loader2,
+  Mail,
+  RefreshCw,
+  UserCheck,
+} from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { STAGE_LABELS as STAGE_LABELS_SHARED } from "@/lib/stage-meta";
 import { confirmDialog } from "@/app/components/Dialog";
@@ -456,14 +467,20 @@ export function StagePanel({
             rel="noopener noreferrer"
             className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-border-strong hover:bg-surface-alt text-ink-soft inline-flex items-center gap-1"
           >
-            📎 이력서
+            <FileDown className="w-3.5 h-3.5" />
+            이력서
           </a>
         )}
         {candidate.resumeMaskedText && (
           <button
             onClick={() => setShowFullResume(!showFullResume)}
-            className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-border-strong hover:bg-surface-alt text-ink-soft"
+            className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-border-strong hover:bg-surface-alt text-ink-soft inline-flex items-center gap-1"
           >
+            {showFullResume ? (
+              <EyeOff className="w-3.5 h-3.5" />
+            ) : (
+              <Eye className="w-3.5 h-3.5" />
+            )}
             {showFullResume ? "마스킹 접기" : "마스킹 보기"}
           </button>
         )}
@@ -482,8 +499,12 @@ export function StagePanel({
               title="공고/평가 가이드 수정 후, 오류 복구, 또는 결과 재확인 시 다시 평가합니다"
               className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-border-strong text-primary hover:bg-surface-alt disabled:opacity-50 inline-flex items-center justify-center gap-1"
             >
-              {rescreenBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {rescreenBusy ? "요청 중..." : "🔄 재평가"}
+              {rescreenBusy ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
+              {rescreenBusy ? "요청 중..." : "재평가"}
             </button>
           ))}
         {!candidate.resumeFilePath && !candidate.resumeMaskedText && (
@@ -498,10 +519,11 @@ export function StagePanel({
               <button
                 onClick={() => void move("round1_candidate")}
                 disabled={busy}
-                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 transition-colors"
+                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 transition-colors inline-flex items-center gap-1"
                 title="1차 면접 후보로 지정 — 공고 목록 상단 별도 섹션으로 이동"
               >
-                ⭐ 1차 면접 후보로 지정
+                <UserCheck className="w-3.5 h-3.5" />
+                1차 면접 후보로 지정
               </button>
             )}
             {(candidate.stage === "round1_candidate" ||
@@ -509,20 +531,22 @@ export function StagePanel({
               <button
                 onClick={() => setOpen("schedule")}
                 disabled={busy}
-                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 transition-colors"
+                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 transition-colors inline-flex items-center gap-1"
                 title="1차 면접 시간을 제안하거나, 전화 등으로 협의된 시간을 직접 확정합니다"
               >
-                📅 1차 일정 제시
+                <CalendarClock className="w-3.5 h-3.5" />
+                1차 일정 제시
               </button>
             )}
             {candidate.stage === "round1_passed" && (
               <button
                 onClick={() => setOpen("schedule2")}
                 disabled={busy}
-                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 transition-colors"
+                className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 transition-colors inline-flex items-center gap-1"
                 title="2차 면접 시간을 제안하거나, 전화 등으로 협의된 시간을 직접 확정합니다"
               >
-                📅 2차 일정 제시
+                <CalendarClock className="w-3.5 h-3.5" />
+                2차 일정 제시
               </button>
             )}
             {STAGE_NEXT_MAP[candidate.stage] && (
@@ -530,18 +554,20 @@ export function StagePanel({
                 data-tour="cand-stage-next"
                 onClick={() => setOpen("stage")}
                 disabled={busy}
-                className="shrink-0 whitespace-nowrap text-xs px-3.5 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-semibold disabled:opacity-50 transition-colors shadow-sm"
+                className="shrink-0 whitespace-nowrap text-xs px-3.5 py-1.5 max-sm:py-2.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-semibold disabled:opacity-50 transition-colors shadow-sm inline-flex items-center gap-1"
                 title="다음 단계로 진행"
               >
-                ▶ 단계 변경
+                <ChevronRight className="w-3.5 h-3.5" />
+                단계 변경
               </button>
             )}
             <button
               onClick={() => setOpen("decide")}
               disabled={busy}
-              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-warning/40 bg-warning-soft text-warning hover:bg-warning-soft/70 transition-colors"
+              className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 max-sm:py-2.5 rounded-md border border-warning/40 bg-warning-soft text-warning hover:bg-warning-soft/70 transition-colors inline-flex items-center gap-1"
               title="최종합격·불합격·지원취소로 종결"
             >
+              <Flag className="w-3.5 h-3.5" />
               종결 결정
             </button>
             </>
@@ -553,10 +579,11 @@ export function StagePanel({
               <button
                 onClick={openNotify}
                 disabled={busy}
-                className="text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50 transition-colors"
+                className="text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50 transition-colors inline-flex items-center gap-1"
                 title="후보자에게 결과 통보 메일이 아직 발송되지 않았습니다"
               >
-                📧 결정 통보 보내기
+                <Mail className="w-3.5 h-3.5" />
+                결정 통보 보내기
               </button>
             )}
           <CandidateChat candidateId={candidate.id} />

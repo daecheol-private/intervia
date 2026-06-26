@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { FileDown, Loader2, X } from "lucide-react";
 import { confirmDialog } from "@/app/components/Dialog";
 
 type Attachment = {
@@ -157,10 +157,11 @@ export function AttachmentsPanel({
                     href={`/api/uploads/candidate/${candidateId}/attachment/${a.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline truncate"
+                    className="text-sm text-primary hover:underline truncate inline-flex items-center gap-1 min-w-0"
                     title={a.originalName}
                   >
-                    📎 {a.originalName}
+                    <FileDown className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{a.originalName}</span>
                   </a>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -170,10 +171,11 @@ export function AttachmentsPanel({
                   {canModify && (
                     <button
                       onClick={() => void remove(a)}
-                      className="text-xs text-ink-muted hover:text-danger px-1"
+                      className="inline-flex items-center justify-center text-ink-muted hover:text-danger px-1"
                       title="첨부 삭제"
+                      aria-label="첨부 삭제"
                     >
-                      ✕
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CalendarClock, Plus, RefreshCw } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { confirmDialog } from "@/app/components/Dialog";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
@@ -170,9 +171,19 @@ export function ScheduleBox({
         <div className="flex items-center gap-2 pt-1">
           <button
             onClick={() => setProposeOpen(true)}
-            className="text-xs px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep font-medium hover:bg-primary-soft"
+            className="text-xs px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep font-medium hover:bg-primary-soft inline-flex items-center gap-1"
           >
-            {isConfirmed ? "📅 일정 변경" : "🔄 일정 다시 잡기"}
+            {isConfirmed ? (
+              <>
+                <CalendarClock className="w-3.5 h-3.5" />
+                일정 변경
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5" />
+                일정 다시 잡기
+              </>
+            )}
           </button>
           <span className="text-[11px] text-ink-muted">
             {isConfirmed
@@ -293,9 +304,10 @@ function MeetingLinkPanel({
           </div>
           <button
             onClick={() => setModalOpen(true)}
-            className="mt-3 px-3 py-1.5 text-xs font-semibold bg-warning hover:bg-warning text-white rounded-lg"
+            className="mt-3 px-3 py-1.5 text-xs font-semibold bg-warning hover:bg-warning text-white rounded-lg inline-flex items-center gap-1"
           >
-            + 미팅 링크 추가
+            <Plus className="w-3.5 h-3.5" />
+            미팅 링크 추가
           </button>
         </div>
         {modalOpen && (

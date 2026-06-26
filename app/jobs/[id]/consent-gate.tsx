@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ClipboardList } from "lucide-react";
 
 /**
  * 지원자 AI 평가 안내 게이트 (공고당 1회).
@@ -92,7 +93,7 @@ export function ApplicantConsentGate({
           }
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-2 text-xs font-medium text-surface hover:bg-primary/90"
         >
-          📋 안내 문구 보기 · 공고에 넣는 법 →
+          <ClipboardList className="w-3.5 h-3.5" /> 안내 문구 보기 · 공고에 넣는 법 →
         </Link>
       </div>
 

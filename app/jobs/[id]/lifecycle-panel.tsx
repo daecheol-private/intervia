@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { formatLocalDate } from "@/lib/utils";
 import { notify, confirmDialog } from "@/app/components/Dialog";
 import type { Job } from "./types";
@@ -268,10 +269,10 @@ export function InterviewersInline({ jobId }: { jobId: number }) {
             <button
               onClick={() => remove(r.userId, r.name)}
               disabled={busy}
-              className="text-ink-muted hover:text-danger disabled:opacity-50 leading-none"
+              className="inline-flex items-center text-ink-muted hover:text-danger disabled:opacity-50 leading-none"
               title="면접관에서 제외"
             >
-              ✕
+              <X className="w-3.5 h-3.5" />
             </button>
           </span>
         ))

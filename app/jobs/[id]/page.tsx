@@ -20,9 +20,16 @@ import {
   Loader2,
   CalendarClock,
   BarChart3,
+  Check,
+  Download,
+  Folder,
+  Mail,
   Pencil,
+  RefreshCw,
+  Search,
   Trash2,
   Inbox,
+  UserCheck,
   X,
 } from "lucide-react";
 import {
@@ -1254,8 +1261,12 @@ export default function JobDetailPage() {
             className="px-2.5 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary-soft text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="이미 평가된 후보를 다시 평가합니다 (공고/평가 가이드 수정 후 등)"
           >
-            {bulkBusy === "rescreen" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {bulkBusy === "rescreen" ? "처리 중..." : "🔄 재평가"}
+            {bulkBusy === "rescreen" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            {bulkBusy === "rescreen" ? "처리 중..." : "재평가"}
           </button>
         )}
         {(onlyStage === "screened" ||
@@ -1267,8 +1278,12 @@ export default function JobDetailPage() {
             className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-1.5"
             title="선택된 후보 전원에게 AI 면접 링크 메일 발송"
           >
-            {bulkBusy === "interviewSend" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {bulkBusy === "interviewSend" ? "발송 중..." : "📧 AI 면접 발송"}
+            {bulkBusy === "interviewSend" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Mail className="w-3.5 h-3.5" />
+            )}
+            {bulkBusy === "interviewSend" ? "발송 중..." : "AI 면접 발송"}
           </button>
         )}
         {(onlyStage === "round1_candidate" ||
@@ -1286,9 +1301,10 @@ export default function JobDetailPage() {
           <button
             onClick={() => void bulkAdvance("round1_candidate", inProgress.map((c) => c.id))}
             disabled={bulkBusy !== null}
-            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+            className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium disabled:opacity-50 whitespace-nowrap inline-flex items-center gap-1"
           >
-            ⭐ 1차 면접 후보로 지정
+            <UserCheck className="w-3.5 h-3.5" />
+            1차 면접 후보로 지정
           </button>
         )}
         {onlyStage === "round1_passed" && (
@@ -1719,9 +1735,10 @@ export default function JobDetailPage() {
           <button
             onClick={() => folderInputRef.current?.click()}
             disabled={uploading || !canUpload || isExpired}
-            className="text-xs text-ink-soft hover:text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-xs text-ink-soft hover:text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
           >
-            📁 폴더로 선택하기
+            <Folder className="w-3.5 h-3.5" />
+            폴더로 선택하기
           </button>
         </div>
         <ul className="text-xs text-ink-muted mt-3 space-y-1 text-left inline-block">
@@ -1847,8 +1864,8 @@ export default function JobDetailPage() {
             placeholder="이름·이메일·전화·요약·전형·태그·결과·점수 검색"
             className="w-full border border-border-strong rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted text-sm">
-            🔍
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted">
+            <Search className="w-4 h-4" />
           </span>
         </div>
         <select
@@ -1896,10 +1913,11 @@ export default function JobDetailPage() {
         </select>
         <a
           href={`/api/jobs/${jobId}/candidates/export`}
-          className="hidden sm:block px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-ink-soft text-sm ml-auto"
+          className="hidden sm:inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-ink-soft text-sm ml-auto"
           title="후보자 데이터 CSV 다운로드"
         >
-          📥 CSV
+          <Download className="w-4 h-4" />
+          CSV
         </a>
       </div>
 
@@ -2096,9 +2114,10 @@ export default function JobDetailPage() {
                   void bulkDecide("hired", ids);
                 }}
                 disabled={bulkBusy !== null}
-                className="px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-1.5"
               >
-                ✓ 최종합격
+                <Check className="w-4 h-4" />
+                최종합격
               </button>
               <button
                 onClick={() => {
@@ -2107,9 +2126,10 @@ export default function JobDetailPage() {
                   void bulkDecide("rejected", ids);
                 }}
                 disabled={bulkBusy !== null}
-                className="px-4 py-2.5 rounded-lg bg-ink hover:bg-ink-soft text-surface text-sm font-medium disabled:opacity-50 transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-ink hover:bg-ink-soft text-surface text-sm font-medium disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-1.5"
               >
-                ✗ 불합격
+                <X className="w-4 h-4" />
+                불합격
               </button>
               <button
                 onClick={() => setDecideIds(null)}

@@ -11,6 +11,7 @@
  *   </Modal>
  */
 import { useEffect } from "react";
+import { X } from "lucide-react";
 
 export function Modal({
   open,
@@ -58,9 +59,9 @@ export function Modal({
           <button
             onClick={onClose}
             aria-label="닫기"
-            className="w-8 h-8 rounded-lg text-ink-muted hover:text-ink-soft hover:bg-surface-alt flex items-center justify-center text-lg leading-none"
+            className="w-8 h-8 rounded-lg text-ink-muted hover:text-ink-soft hover:bg-surface-alt flex items-center justify-center"
           >
-            ✕
+            <X className="w-4 h-4" strokeWidth={2.25} />
           </button>
         </div>
         <div className="overflow-y-auto p-5">{children}</div>

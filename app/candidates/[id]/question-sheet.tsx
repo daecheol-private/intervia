@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { HL } from "./shared";
 import {
@@ -347,10 +347,10 @@ function QuestionSheetModal({
             </label>
             <button
               onClick={onClose}
-              className="text-ink-muted hover:text-ink-soft text-xl leading-none"
+              className="inline-flex items-center justify-center text-ink-muted hover:text-ink-soft leading-none"
               aria-label="닫기"
             >
-              ×
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>

@@ -101,8 +101,8 @@ export default async function ApplicantConsentTemplatePage({
           </h2>
           <CopyButton
             text={koreanShort}
-            label="📋 짧은 안내문 복사"
-            copiedLabel="✓ 복사됐어요"
+            label="짧은 안내문 복사"
+            copiedLabel="복사됐어요"
           />
         </div>
         <p className="text-xs text-ink-muted mb-2">
@@ -145,8 +145,8 @@ export default async function ApplicantConsentTemplatePage({
             <div className="flex justify-end mb-2">
               <CopyButton
                 text={koreanTemplate}
-                label="📋 전체 문구 복사"
-                copiedLabel="✓ 복사됐어요"
+                label="전체 문구 복사"
+                copiedLabel="복사됐어요"
               />
             </div>
             <pre className="rounded-lg border border-border-default bg-surface-alt p-4 text-xs whitespace-pre-wrap font-mono text-ink leading-relaxed">
@@ -278,8 +278,8 @@ export default async function ApplicantConsentTemplatePage({
             <div className="flex justify-end mb-2">
               <CopyButton
                 text={englishTemplate}
-                label="📋 Copy (English)"
-                copiedLabel="✓ Copied"
+                label="Copy (English)"
+                copiedLabel="Copied"
               />
             </div>
             <pre className="rounded-lg border border-border-default bg-surface-alt p-4 text-xs whitespace-pre-wrap font-mono text-ink leading-relaxed">

@@ -287,7 +287,7 @@ export default function NewJobPage() {
             disabled={saving}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong bg-card px-3 py-2 text-sm font-medium text-ink-soft hover:bg-surface-alt disabled:opacity-50"
           >
-            🔗 지원링크 생성
+            <Link2 className="w-4 h-4" /> 지원링크 생성
           </button>
           <p className="mt-1 text-[11px] text-ink-muted">
             채용사이트에 붙여넣을 지원 링크가 필요할 때. 링크만 먼저 발급되고, 저장 시 그 공고에 연결됩니다.

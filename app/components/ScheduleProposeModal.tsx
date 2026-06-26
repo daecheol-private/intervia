@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CalendarClock, Pencil, Monitor, Building2 } from "lucide-react";
 import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
 
 export type ProposeResult = {
@@ -236,7 +237,10 @@ export function ScheduleProposeModal({
                         : "bg-card border-border-default text-ink-muted"
                     }`}
                   >
-                    <span className="block text-sm font-medium">📅 시간 제안</span>
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      <CalendarClock className="w-4 h-4" strokeWidth={2.25} />
+                      시간 제안
+                    </span>
                     <span className="block text-[10px] mt-0.5 opacity-80">
                       후보자가 메일 링크로 시간 선택
                     </span>
@@ -250,7 +254,10 @@ export function ScheduleProposeModal({
                         : "bg-card border-border-default text-ink-muted"
                     }`}
                   >
-                    <span className="block text-sm font-medium">📝 직접 확정</span>
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      <Pencil className="w-4 h-4" strokeWidth={2.25} />
+                      직접 확정
+                    </span>
                     <span className="block text-[10px] mt-0.5 opacity-80">
                       전화 등으로 협의된 시간 즉시 등록
                     </span>
@@ -302,24 +309,26 @@ export function ScheduleProposeModal({
                   <button
                     type="button"
                     onClick={() => setModeOnline(true)}
-                    className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
+                    className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-sm ${
                       modeOnline
                         ? "bg-primary-soft border-primary/40 text-primary-deep"
                         : "bg-card border-border-default text-ink-muted"
                     }`}
                   >
-                    💻 온라인
+                    <Monitor className="w-4 h-4" strokeWidth={2.25} />
+                    온라인
                   </button>
                   <button
                     type="button"
                     onClick={() => setModeOnline(false)}
-                    className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
+                    className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-sm ${
                       !modeOnline
                         ? "bg-primary-soft border-primary/40 text-primary-deep"
                         : "bg-card border-border-default text-ink-muted"
                     }`}
                   >
-                    🏢 오프라인
+                    <Building2 className="w-4 h-4" strokeWidth={2.25} />
+                    오프라인
                   </button>
                 </div>
               </div>

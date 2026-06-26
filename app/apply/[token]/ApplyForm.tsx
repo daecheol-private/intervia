@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { FileText, Paperclip, X } from "lucide-react";
 
 const MAX_FILE_MB = 10;
 const ACCEPT = ".pdf,.docx";
@@ -165,13 +166,17 @@ export default function ApplyForm({
           />
           {file && (
             <div className="mt-1.5 flex items-center justify-between rounded-lg bg-surface-alt px-3 py-1.5 text-xs text-ink-soft">
-              <span className="truncate">📄 {file.name}</span>
+              <span className="inline-flex items-center gap-1 truncate">
+                <FileText className="w-3.5 h-3.5 shrink-0" strokeWidth={2.25} />
+                <span className="truncate">{file.name}</span>
+              </span>
               <button
                 type="button"
                 onClick={removeResume}
-                className="ml-2 shrink-0 text-ink-muted hover:text-danger"
+                className="ml-2 shrink-0 inline-flex items-center gap-1 text-ink-muted hover:text-danger"
               >
-                ✕ 제거
+                <X className="w-3.5 h-3.5" strokeWidth={2.25} />
+                제거
               </button>
             </div>
           )}
@@ -208,14 +213,17 @@ export default function ApplyForm({
                   key={`${a.name}-${a.size}-${i}`}
                   className="flex items-center justify-between rounded-lg bg-surface-alt px-3 py-1.5"
                 >
-                  <span className="truncate">📎 {a.name}</span>
+                  <span className="inline-flex items-center gap-1 truncate">
+                    <Paperclip className="w-3.5 h-3.5 shrink-0" strokeWidth={2.25} />
+                    <span className="truncate">{a.name}</span>
+                  </span>
                   <button
                     type="button"
                     onClick={() => removeAttachment(i)}
-                    className="ml-2 shrink-0 text-ink-muted hover:text-danger"
+                    className="ml-2 shrink-0 inline-flex items-center justify-center text-ink-muted hover:text-danger"
                     aria-label="첨부 제거"
                   >
-                    ✕
+                    <X className="w-3.5 h-3.5" strokeWidth={2.25} />
                   </button>
                 </li>
               ))}

@@ -13,7 +13,7 @@
  * - 임시 공고(isDraft)에서는 생성 불가.
  */
 import { useEffect, useRef, useState } from "react";
-import { ListChecks } from "lucide-react";
+import { ListChecks, Trash2 } from "lucide-react";
 import { Modal } from "@/app/components/Modal";
 import { notify } from "@/app/components/Dialog";
 import type { McqQuestion } from "@/lib/mcq";
@@ -321,7 +321,7 @@ export function McqPanel({
                       onClick={() => deleteQ(q.id)}
                       className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border-default text-xs font-semibold text-ink-muted hover:text-danger hover:border-danger/50 hover:bg-danger-soft transition-colors"
                     >
-                      🗑 삭제
+                      <Trash2 className="w-3.5 h-3.5" /> 삭제
                     </button>
                   </div>
                   <ul className="mt-2 space-y-1">

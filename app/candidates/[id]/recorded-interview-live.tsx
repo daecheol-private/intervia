@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Mic, Square } from "lucide-react";
 import { notify } from "@/app/components/Dialog";
 import { useVoiceInput } from "@/app/interview/[token]/use-voice-input";
 
@@ -383,9 +383,10 @@ export function LiveRecorder({
           <div className="flex gap-2">
             <button
               onClick={start}
-              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm"
+              className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm inline-flex items-center gap-1.5"
             >
-              ● 녹음 시작
+              <Mic className="w-4 h-4" />
+              녹음 시작
             </button>
             <button
               onClick={onClose}
@@ -413,9 +414,10 @@ export function LiveRecorder({
             </span>
             <button
               onClick={finish}
-              className="px-4 py-2 rounded-lg bg-danger hover:opacity-90 text-white text-sm font-medium shadow-sm"
+              className="px-4 py-2 rounded-lg bg-danger hover:opacity-90 text-white text-sm font-medium shadow-sm inline-flex items-center gap-1.5"
             >
-              ■ 면접 종료
+              <Square className="w-4 h-4" fill="currentColor" />
+              면접 종료
             </button>
           </div>
 
