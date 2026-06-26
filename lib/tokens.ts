@@ -2,7 +2,7 @@ import { db } from "./db";
 import { tokenWallets, tokenLedger, tokenPricing, users } from "./schema";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { isUniqueViolation, isTransientDbError } from "./db-errors";
-import { EFFECTIVE_PRICING } from "./beta";
+import { EFFECTIVE_PRICING, CHARGE_BONUS_TIERS } from "./beta";
 
 // 동시 쓰기 트랜잭션이 SQLITE_BUSY 로 즉시 실패할 때 짧게 재시도 (멱등 차감 누락 방지).
 // 멱등 게이트(token_ledger_idem_uq)가 있어 재시도가 이중 차감을 만들지 않는다.
@@ -37,22 +37,15 @@ const DEFAULT_PRICING: Record<FeatureKey, number> = EFFECTIVE_PRICING;
 // 기존 법인 합류(invite/join-request)에는 지급 X. 함수는 orgId 기준 멱등.
 export const WELCOME_BONUS_TOKENS = 500;
 
-/**
- * 충전 보너스 정책 — KRW 결제액에 따라 추가 지급 토큰 계산.
- * 100원당 1 토큰 + 구간별 보너스.
- */
-export const CHARGE_BONUS_TIERS: ReadonlyArray<{
-  minKrw: number;
-  bonusRatio: number;
-}> = [
-  { minKrw: 1_000_000, bonusRatio: 0.2 }, // 100만원+ → 20%
-  { minKrw: 500_000, bonusRatio: 0.15 }, // 50만원+ → 15%
-  { minKrw: 300_000, bonusRatio: 0.1 }, // 30만원+ → 10%
-  { minKrw: 100_000, bonusRatio: 0.05 }, // 10만원+ → 5%
-  { minKrw: 0, bonusRatio: 0 },
-];
+// 충전 보너스 정책(구간·%)은 lib/beta.ts CHARGE_BONUS_TIERS 단일 소스에서 관리한다.
+// 오픈베타 동안은 정가 보너스의 ×배(BETA_BONUS_MULTIPLIER)가 자동 반영된다.
+export { CHARGE_BONUS_TIERS };
 
-/** KRW 금액 → 지급 토큰 (기본 + 보너스) 계산. krw 는 공급가액(VAT 제외) 기준. */
+/**
+ * KRW 금액 → 지급 토큰 (기본 + 보너스) 계산. krw 는 공급가액(VAT 제외) 기준.
+ * 100원당 1 토큰 + 구간별 보너스. 보너스는 정수 % 로 계산(`base * pct / 100`)해
+ * UI(ChargePanel·랜딩)의 표시값과 정확히 일치시킨다(부동소수 드리프트 방지).
+ */
 export function calcTokensForKrw(krw: number): {
   base: number;
   bonus: number;
@@ -64,8 +57,8 @@ export function calcTokensForKrw(krw: number): {
   const tier =
     CHARGE_BONUS_TIERS.find((t) => krw >= t.minKrw) ??
     CHARGE_BONUS_TIERS[CHARGE_BONUS_TIERS.length - 1];
-  const bonus = Math.floor(base * tier.bonusRatio);
-  return { base, bonus, total: base + bonus, bonusRatio: tier.bonusRatio };
+  const bonus = Math.floor((base * tier.bonusPct) / 100);
+  return { base, bonus, total: base + bonus, bonusRatio: tier.bonusPct / 100 };
 }
 
 // 가격표(소수 행, 정적)는 admin 이 가끔만 바꾼다 — 매 과금마다 DB 왕복하지 않도록 짧게 캐시.

@@ -29,12 +29,14 @@ import {
   Card,
   Reveal,
 } from "./components/ui";
+import { getAllPricing, WELCOME_BONUS_TOKENS } from "@/lib/tokens";
 import {
-  getAllPricing,
-  WELCOME_BONUS_TOKENS,
-  CHARGE_BONUS_TIERS,
-} from "@/lib/tokens";
-import { BETA, LIST_PRICING } from "@/lib/beta";
+  BETA,
+  LIST_PRICING,
+  CHARGE_PACKAGES,
+  CHARGE_BONUS_BOOSTED,
+  BETA_BONUS_MULTIPLIER,
+} from "@/lib/beta";
 import {
   ArrowRight,
   BarChart3,
@@ -1322,22 +1324,34 @@ async function Landing() {
             </div>
           </div>
 
-          {/* 충전 보너스 */}
+          {/* 충전 보너스 — 오픈베타 동안 ×배 부스트 */}
           <div className="mt-10 reveal">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-soft text-center">
-              많이 충전할수록 더 드립니다
-            </h3>
+            {CHARGE_BONUS_BOOSTED ? (
+              <div className="text-center">
+                <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-accent-soft border border-accent/40 text-sm font-bold text-accent-deep">
+                  <Sparkles className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+                  보너스 토큰 {BETA_BONUS_MULTIPLIER}배 혜택!
+                  <Sparkles className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+                </span>
+                <p className="mt-2 text-[11px] text-ink-soft">
+                  오픈베타 기간 한정 · {BETA.endsAtLabel}까지
+                </p>
+              </div>
+            ) : (
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-soft text-center">
+                많이 충전할수록 더 드립니다
+              </h3>
+            )}
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {CHARGE_BONUS_TIERS.filter((t) => t.bonusRatio > 0)
-                .slice()
-                .reverse()
-                .map((t) => (
-                  <BonusCell
-                    key={t.minKrw}
-                    minKrw={t.minKrw}
-                    bonusRatio={t.bonusRatio}
-                  />
-                ))}
+              {CHARGE_PACKAGES.filter((p) => p.bonusPct > 0).map((p) => (
+                <BonusCell
+                  key={p.krw}
+                  krw={p.krw}
+                  listPct={p.listBonusPct}
+                  pct={p.bonusPct}
+                  boosted={CHARGE_BONUS_BOOSTED}
+                />
+              ))}
             </div>
             <p className="mt-4 text-[11px] text-ink-soft text-center">
               진행 중인 평가·면접은 잔액이 부족해도 끝까지 완료됩니다(부족분은 다음 충전 시 자동 정산). 잔액이 0 이하가 되면 충전 전까지 신규 작업이 차단됩니다.
@@ -1938,21 +1952,44 @@ function PriceCell({
 }
 
 function BonusCell({
-  minKrw,
-  bonusRatio,
+  krw,
+  listPct,
+  pct,
+  boosted,
 }: {
-  minKrw: number;
-  bonusRatio: number;
+  krw: number;
+  /** 정가 보너스 % (베타 부스트 시 취소선으로 비교 표시). */
+  listPct: number;
+  /** 실제 적용 보너스 % (베타 반영). */
+  pct: number;
+  boosted: boolean;
 }) {
-  const pct = Math.round(bonusRatio * 100);
   return (
-    <div className="rounded-xl bg-card border border-border-default p-4 text-center">
+    <div
+      className={`rounded-xl border p-4 text-center ${
+        boosted
+          ? "bg-accent-soft/40 border-accent/30"
+          : "bg-card border-border-default"
+      }`}
+    >
       <div className="text-[11px] text-ink-soft tabular-nums font-semibold">
-        {(minKrw / 10000).toLocaleString()}만원+
+        {(krw / 10000).toLocaleString()}만원+{boosted ? " 충전 시" : ""}
       </div>
-      <div className="mt-1 text-xl font-bold text-primary tabular-nums">
-        +{pct}%
-      </div>
+      {boosted ? (
+        <div className="mt-1 flex items-center justify-center gap-1 tabular-nums">
+          <span className="text-sm font-semibold text-ink-soft/60 line-through">
+            +{listPct}%
+          </span>
+          <span className="text-ink-soft/50" aria-hidden>
+            →
+          </span>
+          <span className="text-xl font-bold text-accent-deep">+{pct}%</span>
+        </div>
+      ) : (
+        <div className="mt-1 text-xl font-bold text-primary tabular-nums">
+          +{pct}%
+        </div>
+      )}
       <div className="text-[10px] text-ink-muted mt-0.5">보너스 토큰</div>
     </div>
   );

@@ -59,13 +59,24 @@ export function isBetaDiscounted(key: Key): boolean {
   return BETA.active && EFFECTIVE_PRICING[key] < LIST_PRICING[key];
 }
 
-// ──────────────── 토큰 충전 패키지 ────────────────
-// 결제(토스) 충전 시 선택 가능한 KRW 금액 — 단일 소스.
-// /org/tokens 카드 표시 + checkout 라우트의 허용 금액 검증이 같은 목록을 쓴다
-// (클라이언트가 임의 금액으로 주문 생성하는 것을 차단).
-// ⚠️ bonusPct 는 표시용 — 실제 지급 토큰은 서버의 calcTokensForKrw(=CHARGE_BONUS_TIERS)가
-//    권위. 두 값은 일치해야 한다(여기 금액 구간 ↔ lib/tokens.ts CHARGE_BONUS_TIERS).
-export const CHARGE_PACKAGES: ReadonlyArray<{
+// ──────────────── 토큰 충전 패키지 / 충전 보너스 ────────────────
+// 결제(토스) 충전 시 선택 가능한 KRW 금액 + 구간별 보너스 % — 단일 소스.
+// /org/tokens 카드 표시 + 랜딩 + checkout 라우트의 허용 금액 검증 + 서버 지급 계산이
+// 모두 같은 목록을 쓴다 (클라이언트가 임의 금액으로 주문 생성하는 것을 차단).
+//
+// 오픈베타 동안은 가격 인하(30→10)와 같은 방식으로 충전 보너스도 ×배 해서 지급한다.
+//   · BETA.active=true + BETA_BONUS_MULTIPLIER=2 → 정가 보너스(5/10/15/20%)의 2배.
+//   · 베타 종료(BETA.active=false): 자동으로 정가 보너스(LIST_CHARGE_BONUS)로 복귀.
+// CHARGE_PACKAGES.bonusPct 는 실제 적용(베타 반영) %, listBonusPct 는 정가 %(UI 취소선용).
+//
+// ⚠️ bonusPct 와 서버 지급(calcTokensForKrw=CHARGE_BONUS_TIERS)은 둘 다 여기서 파생되므로
+//    표시와 실제 지급이 항상 일치한다 — 한쪽만 고치지 말 것.
+
+/** 오픈베타 충전 보너스 배수 — 베타 동안 보너스 토큰 N배. 종료 시 정가로 자동 복귀. */
+export const BETA_BONUS_MULTIPLIER = 2;
+
+/** 정가(앵커) 충전 보너스 — krw 결제 구간별 %. 베타 종료 후 복귀값. */
+const LIST_CHARGE_BONUS: ReadonlyArray<{
   krw: number;
   bonusPct: number;
   popular?: boolean;
@@ -75,6 +86,41 @@ export const CHARGE_PACKAGES: ReadonlyArray<{
   { krw: 300_000, bonusPct: 10, popular: true },
   { krw: 500_000, bonusPct: 15 },
   { krw: 1_000_000, bonusPct: 20 },
+];
+
+/** 실제 충전 패키지 — 베타 활성 시 보너스 배수를 적용한 값. */
+export const CHARGE_PACKAGES: ReadonlyArray<{
+  krw: number;
+  /** 실제 적용 보너스 % (베타 반영). 서버 지급·UI 표시 모두 이 값. */
+  bonusPct: number;
+  /** 정가 보너스 % (UI 취소선·비교용). */
+  listBonusPct: number;
+  popular?: boolean;
+}> = LIST_CHARGE_BONUS.map((p) => ({
+  krw: p.krw,
+  listBonusPct: p.bonusPct,
+  bonusPct: BETA.active ? p.bonusPct * BETA_BONUS_MULTIPLIER : p.bonusPct,
+  popular: p.popular,
+}));
+
+/** 충전 보너스가 배수 적용(부스트) 중인지 — UI '2배 혜택' 배너 판단용. */
+export const CHARGE_BONUS_BOOSTED = BETA.active && BETA_BONUS_MULTIPLIER > 1;
+
+/**
+ * 충전 보너스 구간 — 서버 지급 계산(lib/tokens.ts calcTokensForKrw)의 권위 소스.
+ * CHARGE_PACKAGES(=베타 반영)에서 파생하므로 UI 표시와 항상 일치한다.
+ * calcTokensForKrw 는 `krw >= minKrw` 인 첫 구간을 쓰므로 minKrw 내림차순 + 맨 끝 0% 백스톱.
+ * bonusPct 는 정수 % — 지급은 `Math.floor(base * bonusPct / 100)` (부동소수 드리프트 방지).
+ */
+export const CHARGE_BONUS_TIERS: ReadonlyArray<{
+  minKrw: number;
+  bonusPct: number;
+}> = [
+  ...[...CHARGE_PACKAGES]
+    .filter((p) => p.bonusPct > 0)
+    .sort((a, b) => b.krw - a.krw)
+    .map((p) => ({ minKrw: p.krw, bonusPct: p.bonusPct })),
+  { minKrw: 0, bonusPct: 0 },
 ];
 
 /** checkout 허용 금액인지 — 임의 금액 주문 차단용. */

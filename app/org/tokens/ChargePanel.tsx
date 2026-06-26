@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, Loader2 } from "lucide-react";
-import { CHARGE_PACKAGES } from "@/lib/beta";
+import { CreditCard, Loader2, Sparkles } from "lucide-react";
+import {
+  CHARGE_PACKAGES,
+  CHARGE_BONUS_BOOSTED,
+  BETA_BONUS_MULTIPLIER,
+} from "@/lib/beta";
 
 // 토스 v2 표준결제 SDK(CDN)가 노출하는 전역. npm 의존 없이 스크립트로 로드.
 type TossPaymentInstance = {
@@ -108,6 +112,13 @@ export default function ChargePanel() {
         </span>
       </div>
 
+      {CHARGE_BONUS_BOOSTED && (
+        <div className="mb-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-soft border border-accent/40 text-xs font-semibold text-accent-deep">
+          <Sparkles className="w-3.5 h-3.5" strokeWidth={2.5} aria-hidden />
+          오픈베타 한정 — 충전 보너스 {BETA_BONUS_MULTIPLIER}배 지급 중
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         {CHARGE_PACKAGES.map((p) => {
           const base = Math.floor(p.krw / 100);
@@ -143,9 +154,19 @@ export default function ChargePanel() {
               </div>
               <div className="text-[10px] text-ink-muted mt-0.5">토큰</div>
               {p.bonusPct > 0 ? (
-                <div className="mt-2 inline-block text-[10px] font-semibold text-primary-deep bg-primary-soft px-1.5 py-0.5 rounded">
-                  +{p.bonusPct}% 보너스
-                </div>
+                CHARGE_BONUS_BOOSTED ? (
+                  <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-accent-deep bg-accent-soft px-1.5 py-0.5 rounded tabular-nums">
+                    <span className="line-through opacity-60">
+                      +{p.listBonusPct}%
+                    </span>
+                    <span aria-hidden>→</span>
+                    <span>+{p.bonusPct}% 보너스</span>
+                  </div>
+                ) : (
+                  <div className="mt-2 inline-block text-[10px] font-semibold text-primary-deep bg-primary-soft px-1.5 py-0.5 rounded">
+                    +{p.bonusPct}% 보너스
+                  </div>
+                )
               ) : (
                 <div className="mt-2 text-[10px] text-ink-muted">보너스 없음</div>
               )}
