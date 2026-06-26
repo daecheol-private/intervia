@@ -383,6 +383,7 @@ export default function AiEvaluationDisclosurePage() {
           사업자등록번호 {COMPANY_INFO.bizRegistrationNo} · 개인정보 보호책임자:{" "}
           {COMPANY_INFO.email}
         </div>
+        <div>통신판매업 신고번호 {COMPANY_INFO.mailOrderSalesNo}</div>
         <div className="mt-2">
           관련 문서:{" "}
           <Link href="/privacy" className="text-primary hover:underline">

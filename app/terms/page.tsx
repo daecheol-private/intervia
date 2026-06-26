@@ -274,6 +274,7 @@ export default function TermsPage() {
         <div>
           사업자등록번호 {COMPANY_INFO.bizRegistrationNo} · {COMPANY_INFO.email}
         </div>
+        <div>통신판매업 신고번호 {COMPANY_INFO.mailOrderSalesNo}</div>
         {COMPANY_INFO.phone && <div>{COMPANY_INFO.phone}</div>}
       </div>
     </main>

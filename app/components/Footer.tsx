@@ -36,6 +36,7 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
     `상호 ${COMPANY_INFO.name}`,
     `대표 ${COMPANY_INFO.representative}`,
     `사업자등록번호 ${COMPANY_INFO.bizRegistrationNo}`,
+    `통신판매업신고 ${COMPANY_INFO.mailOrderSalesNo}`,
     `주소 ${COMPANY_INFO.address}`,
     <>
       전화{" "}
