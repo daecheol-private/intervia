@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, MessageSquare } from "lucide-react";
 
 import { formatKstDateTime } from "@/lib/utils";
 import { CandidateScores } from "./candidate-scores";
@@ -49,6 +49,32 @@ function OpenInNewTabButton({ candidateId }: { candidateId: number }) {
     >
       <ExternalLink className="w-4 h-4" />
     </button>
+  );
+}
+
+// 면접관 토론 배지 — 코멘트가 있으면 표시. 내가 안 읽은 남의 글이 있으면 그 개수를 빨강(강조)으로,
+// 다 읽었으면 전체 개수를 회색으로. 안읽음 수는 서버 읽음선 기준이라 기기 무관하게 정확하다.
+function CommentBadge({
+  count,
+  unread,
+}: {
+  count: number;
+  unread: number;
+}) {
+  if (count <= 0) return null;
+  const hasUnread = unread > 0;
+  return (
+    <span
+      title={hasUnread ? `읽지 않은 토론 코멘트 ${unread}개` : "면접관 토론 코멘트"}
+      className={`inline-flex items-center gap-0.5 text-[10px] rounded-md px-1.5 py-0.5 leading-none tabular-nums ${
+        hasUnread
+          ? "bg-danger text-surface font-semibold"
+          : "bg-surface-alt text-ink-muted border border-border-default"
+      }`}
+    >
+      <MessageSquare className="w-3 h-3" strokeWidth={2} />
+      {hasUnread ? (unread > 99 ? "99+" : unread) : count > 99 ? "99+" : count}
+    </span>
   );
 }
 
@@ -133,6 +159,7 @@ function CandidateCardImpl({
               {c.screeningReport && (
                 <RecBadge rec={c.screeningReport.recommendation} />
               )}
+              <CommentBadge count={c.commentCount} unread={c.unreadCommentCount} />
             </div>
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted mt-1.5">
               {c.careerYears != null && <span>경력 {c.careerYears}년</span>}

@@ -752,6 +752,35 @@ export const candidateComments = sqliteTable(
 );
 
 /**
+ * 면접관 토론 코멘트 "읽음" 워터마크 — 사용자 × 후보자 단위.
+ *
+ * lastReadCommentId 보다 큰 "남의" 코멘트(author != user)가 그 사용자에게 안 읽은 글.
+ * 패널을 열어 보면(또는 새 글이 오는 동안 열려 있으면) 해당 후보자의 최신 코멘트 id 로 승격.
+ * 기존 localStorage 방식(기기별)을 대체 — 서버 기록이라 기기 무관하게 정확하다.
+ * jobInterviewers 와 동일하게 명시적 PK 없이 uniqueIndex 로 (user, candidate) 유니크 강제.
+ */
+export const candidateCommentReads = sqliteTable(
+  "candidate_comment_reads",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    candidateId: integer("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    lastReadCommentId: integer("last_read_comment_id").notNull().default(0),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`)
+      .$onUpdate(nowTimestamp),
+  },
+  (t) => ({
+    pk: uniqueIndex("idx_comment_reads_pk").on(t.userId, t.candidateId),
+    candidateIdx: index("idx_comment_reads_candidate").on(t.candidateId),
+  })
+);
+
+/**
  * 공고별 면접관. 한 공고에 여러 면접관 지정.
  *
  * 자동 추가 시점:

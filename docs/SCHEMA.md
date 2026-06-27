@@ -320,7 +320,20 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 | body | TEXT NOT NULL | 코멘트 본문 5000자 이내 |
 | created_at | TEXT NOT NULL | |
 
-같은 법인 멤버 누구나 작성·조회. 채팅 의미론이라 수정 없이 본인 코멘트만 삭제. 근사 실시간은 폴링(열림 3s·닫힘 5s). **안읽음 상태는 서버에 두지 않고** 클라이언트 localStorage(`iv:chat-read:{candidateId}:{userId}`, 사용자별)로 관리 — 남의 새 글만 카운트, 기기 바꾸면 리셋.
+같은 법인 멤버 누구나 작성·조회. 채팅 의미론이라 수정 없이 본인 코멘트만 삭제. 근사 실시간은 폴링(열림 3s·닫힘 10s). **안읽음 상태는 서버 [candidate_comment_reads](#candidate_comment_reads) 테이블에 기록** — 사용자×후보자 읽음선과 비교해 남의 새 글만 카운트, 기기 무관(2026-06-28 localStorage 방식에서 전환, migration 0051). 공고 후보자 목록 카드에도 안읽음 배지 노출.
+
+## candidate_comment_reads
+
+면접관 토론 코멘트 "읽음" 워터마크 — 사용자 × 후보자 단위. `last_read_comment_id` 보다 큰 "남의"(author != user) 코멘트가 그 사용자의 안읽은 글. 패널 열람 시 POST `/api/candidates/[id]/comments/read` 가 최신 코멘트 id 로 upsert. (migration 0051, 2026-06-28)
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | |
+| candidate_id | INTEGER NOT NULL FK candidates(id) ON DELETE CASCADE | |
+| last_read_comment_id | INTEGER NOT NULL DEFAULT 0 | 이 사용자가 읽은 마지막 코멘트 id |
+| updated_at | TEXT NOT NULL | $onUpdate |
+
+`job_interviewers` 와 동일하게 명시적 PK 없이 `idx_comment_reads_pk` UNIQUE(user_id, candidate_id) 로 유니크 강제(upsert 충돌 타깃) + `idx_comment_reads_candidate`(candidate_id).
 
 ## job_interviewers
 
@@ -754,7 +767,8 @@ organizations ─< users (org_id, role)
       │        │             ├─< interview_schedules (job_id·org_id 비정규화)
       │        │             ├─< interview_question_sheets (후보자당 라운드별 1건)
       │        │             ├─< interviewer_notes
-      │        │             └─< candidate_comments
+      │        │             ├─< candidate_comments
+      │        │             └─< candidate_comment_reads >─ users (읽음 워터마크)
       │        └─< job_interviewers >─ users
       └─< (위 모든 자식 CASCADE)
 

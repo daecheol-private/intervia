@@ -76,6 +76,10 @@ export type Candidate = {
   // 확정 슬롯 종료 시각 — 경과 시 "면접 완료 · 결과 입력 필요" 파생 (lib/candidate-state.ts)
   round1SelectedEnd: string | null;
   round2SelectedEnd: string | null;
+  // 면접관 토론 — 목록 카드 배지용. commentCount=전체 코멘트 수,
+  // unreadCommentCount=현재 사용자가 안 읽은 남의 코멘트 수(서버 읽음선 기준, 기기 무관).
+  commentCount: number;
+  unreadCommentCount: number;
 };
 
 /** 면접 확정 일정 항목 (GET /api/jobs/[id]/round1-schedule). 1차·2차 통합. */

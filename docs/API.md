@@ -81,7 +81,7 @@
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
-| GET | `/api/jobs/[id]/candidates` | 🔑 후보자 목록 + 최근 면접 세션 머지 + `round1ScheduleStatus`/`round2ScheduleStatus`(라운드별 최신 활성 스케줄 상태 — 응답 대기 vs 역제시 구분, 1차/2차 대기 그룹 분리용). 목록 페이지는 `?stage=counter_proposed` pseudo 필터로 역제시 건만 표시 가능 (대시보드 역제시 알림 딥링크) |
+| GET | `/api/jobs/[id]/candidates` | 🔑 후보자 목록 + 최근 면접 세션 머지 + `round1ScheduleStatus`/`round2ScheduleStatus`(라운드별 최신 활성 스케줄 상태 — 응답 대기 vs 역제시 구분, 1차/2차 대기 그룹 분리용) + `commentCount`/`unreadCommentCount`(면접관 토론 — 카드의 토론 배지용. `unreadCommentCount`=현재 사용자가 안 읽은 남의 코멘트 수, 서버 읽음선 `candidate_comment_reads` LEFT JOIN 으로 계산 — 기기 무관). 목록 페이지는 `?stage=counter_proposed` pseudo 필터로 역제시 건만 표시 가능 (대시보드 역제시 알림 딥링크) |
 | GET | `/api/jobs/[id]/round1-schedule` | 🔑 확정 면접 일정(1·2차 통합) — `status=selected` + `outcome IS NULL` + (round1·`stage=round1_waiting` OR round2·`stage=round1_passed`) 조인 → 후보자별 `round`·선택 슬롯·온오프라인·주소, 시간 빠른 순. "면접 일정" 팝업용 (라우트 경로는 호환 위해 유지) |
 | POST | `/api/jobs/[id]/schedule-propose` | 🔑 후보자 다수에게 면접 슬롯 제시 + 메일. `round`(round1/round2, 기본 round1) — **round2 는 `round1_passed` 후보만** 가드, stage 변경 없음(round1 은 round1_scheduling 으로 전환). 같은 시간대 다수 후보 확정 허용 — 더블부킹 검사 없음 (2026-06-12) |
 | POST | `/api/candidates/[id]/schedule-manual` | 🔑 전화 등으로 협의된 1·2차 면접 시간을 제시 절차 없이 **즉시 확정 등록**(`status=selected`). body `{round?, slot, modeOnline?, address?, notifyCandidate?}`. round2 는 `round1_passed` 후보만, round1 은 stage→round1_waiting. `notifyCandidate` 시 후보자 확정 메일(줌 연동 시 자동 생성), 면접관 인앱 알림 fanout. 🪙 잔액 0 이하 402 |
@@ -145,6 +145,8 @@
 | GET | `/api/candidates/[id]/comments` | 🔒 🏢 | 이력서별 면접관 토론 코멘트 목록(id 오름차순). `?afterId=N` 이면 그 id 이후 새 코멘트만(폴링용). 같은 법인 누구나 조회 |
 | POST | `/api/candidates/[id]/comments` | 🔒 🏢 | `{body}` 코멘트 작성(5000자 이내). 본인 row 생성, 작성자명 포함 반환 |
 | DELETE | `/api/candidates/[id]/comments/[commentId]` | 🔒 🏢 | 본인 작성 코멘트 삭제 (수정 없음) |
+| GET | `/api/candidates/[id]/comments/read` | 🔒 🏢 | 현재 사용자의 이 후보자 토론 읽음선 `{lastReadId}`(없으면 0) |
+| POST | `/api/candidates/[id]/comments/read` | 🔒 🏢 | 이 후보자 코멘트를 "모두 읽음" 처리(서버가 MAX(id) 계산해 upsert). 패널 열람 시 호출. 안읽음 수 = `lastReadId` 보다 큰 남의 코멘트. `candidate_comment_reads` 테이블, 기기 무관 |
 | GET | `/api/jobs/[id]/funnel` | 🔒 🏢 | 공고 채용 깔때기 — `{stages, pendingByStage, hrActions, total, avgScreeningScore, countWithScreeningScore, decisionBreakdown, kpi}`. `hrActions` = 스케줄 row 기반 HR 액션 수(`counterProposed` 역제시 확정 대기, `round1PassedUndecided` 2차 진행 미결정 — "오늘 결정할 일" 용) |
 | GET | `/api/jobs/[id]/candidates/export` | 🔒 🏢 | CSV 다운로드 (UTF-8 BOM, 14컬럼) |
 

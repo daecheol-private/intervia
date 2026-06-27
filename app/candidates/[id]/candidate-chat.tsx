@@ -29,30 +29,28 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   // 이 사용자가 마지막으로 읽은(=본) 코멘트 id. 이보다 큰 남의 글이 "안 읽음".
+  // 서버(candidate_comment_reads)에 기록 — 기기 무관하게 정확하다.
   const [lastReadId, setLastReadId] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null); // 슬라이드 패널 — 폭 실측용
   const lastIdRef = useRef(0); // 폴링 커서 — 마지막으로 받은 코멘트 id
-  // 읽음 기준선은 "후보자 × 사용자" 단위로 저장 — 같은 브라우저에서 계정을 바꿔도
-  // 사용자별로 분리된다. (me 가 아직 없으면 키 null → 저장 보류)
-  const storageKey = me ? `iv:chat-read:${candidateId}:${me.id}` : null;
+  const markedRef = useRef(0); // 서버에 "읽음" 처리한 마지막 코멘트 id (중복 POST 방지)
 
+  // 패널을 보고 있는 동안 호출 — 서버에 이 후보자의 코멘트를 모두 읽음 처리하고
+  // 로컬 lastReadId 도 올려 배지를 즉시 0 으로. id 가 더 안 늘었으면 no-op.
   const markRead = useCallback(
     (id: number) => {
-      setLastReadId((prev) => {
-        const next = Math.max(prev, id);
-        if (storageKey) {
-          try {
-            window.localStorage.setItem(storageKey, String(next));
-          } catch {
-            /* private mode 등 무시 */
-          }
-        }
-        return next;
+      if (id <= markedRef.current) return;
+      markedRef.current = id;
+      setLastReadId((prev) => Math.max(prev, id));
+      void fetch(`/api/candidates/${candidateId}/comments/read`, {
+        method: "POST",
+      }).catch(() => {
+        /* 실패 시 다음 열람에서 다시 시도 */
       });
     },
-    [storageKey]
+    [candidateId]
   );
 
   // 최초: 작성자 식별 + 코멘트 로드 + (사용자별) 읽음 기준선 복원.
@@ -61,30 +59,26 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [meR, listR] = await Promise.all([
+      const [meR, listR, readR] = await Promise.all([
         fetch("/api/auth/status")
           .then((r) => r.json())
           .catch(() => null),
         fetch(`/api/candidates/${candidateId}/comments`)
           .then((r) => (r.ok ? r.json() : []))
           .catch(() => []),
+        // 서버 읽음선 — 없으면(처음 보는 후보자) 0 → 남의 기존 글은 모두 "안 읽음"으로 표시.
+        fetch(`/api/candidates/${candidateId}/comments/read`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
       ]);
       if (!alive) return;
-      const meUser = meR?.user ?? null;
-      setMe(meUser);
+      setMe(meR?.user ?? null);
       const list: Comment[] = Array.isArray(listR) ? listR : [];
       setComments(list);
       lastIdRef.current = list.length ? list[list.length - 1].id : 0;
-      if (meUser) {
-        try {
-          const stored = window.localStorage.getItem(
-            `iv:chat-read:${candidateId}:${meUser.id}`
-          );
-          if (stored != null) setLastReadId(Number(stored) || 0);
-        } catch {
-          /* private mode 등 무시 */
-        }
-      }
+      const serverRead = Number(readR?.lastReadId) || 0;
+      setLastReadId(serverRead);
+      markedRef.current = serverRead;
     })();
     return () => {
       alive = false;

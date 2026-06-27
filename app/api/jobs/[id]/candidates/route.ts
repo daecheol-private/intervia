@@ -7,6 +7,8 @@ import {
   screeningJobs,
   candidateAttachments,
   userCandidateFavorites,
+  candidateComments,
+  candidateCommentReads,
 } from "@/lib/schema";
 import { eq, desc, inArray, and, sql } from "drizzle-orm";
 import { isJobUnlocked } from "@/lib/job-lock";
@@ -105,7 +107,7 @@ export async function GET(
   // 보조 조회 4종은 상호 독립 — 병렬 실행 (순차 await 는 원격 DB RTT 가 그대로 합산).
   // sessions 는 목록에서 status·evaluation 만 쓰므로 컬럼 축소 — 전체 select() 는
   // 면접 대화록(messages, 세션당 수십 KB)까지 끌어와 폴링마다 전송된다.
-  const [sessions, allJobs, schedRows, favRows] = await Promise.all([
+  const [sessions, allJobs, schedRows, favRows, commentAgg] = await Promise.all([
     ids.length
       ? db
           .select({
@@ -169,6 +171,29 @@ export async function GET(
             )
           )
       : Promise.resolve([]),
+    // 면접관 토론 코멘트 집계 — 목록 카드의 "토론 N · 안읽음" 배지용.
+    //  cnt    = 전체 코멘트 수
+    //  unread = 현재 사용자가 안 읽은 "남의" 코멘트 수
+    //           (author != me AND id > 내 읽음선). 읽음선은 서버 기록(candidate_comment_reads)
+    //           을 LEFT JOIN — 행이 없으면 0 으로 간주(처음 보는 후보자는 전부 안읽음).
+    ids.length
+      ? db
+          .select({
+            candidateId: candidateComments.candidateId,
+            cnt: sql<number>`COUNT(*)`,
+            unread: sql<number>`SUM(CASE WHEN ${candidateComments.authorUserId} <> ${me!.id} AND ${candidateComments.id} > COALESCE(${candidateCommentReads.lastReadCommentId}, 0) THEN 1 ELSE 0 END)`,
+          })
+          .from(candidateComments)
+          .leftJoin(
+            candidateCommentReads,
+            and(
+              eq(candidateCommentReads.candidateId, candidateComments.candidateId),
+              eq(candidateCommentReads.userId, me!.id)
+            )
+          )
+          .where(inArray(candidateComments.candidateId, ids))
+          .groupBy(candidateComments.candidateId)
+      : Promise.resolve([]),
   ]);
 
   const latestByCandidate = new Map<number, typeof sessions[number]>();
@@ -224,13 +249,25 @@ export async function GET(
 
   const favoritedSet = new Set(favRows.map((r) => r.candidateId));
 
+  const commentByCandidate = new Map<number, { cnt: number; unread: number }>();
+  for (const cm of commentAgg) {
+    commentByCandidate.set(cm.candidateId, {
+      cnt: Number(cm.cnt ?? 0),
+      unread: Number(cm.unread ?? 0),
+    });
+  }
+
   const result = rows.map((r) => {
     const s = latestByCandidate.get(r.id);
     const j = jobByCandidate.get(r.id);
     const isActive = j?.status === "queued" || j?.status === "processing";
+    const cm = commentByCandidate.get(r.id);
     const { maskedLen, ...rest } = r;
     return {
       ...rest,
+      // 면접관 토론 — 목록 카드 배지. 안읽음 수는 서버 읽음선 기준(기기 무관).
+      commentCount: cm?.cnt ?? 0,
+      unreadCommentCount: cm?.unread ?? 0,
       // 파싱(텍스트 추출+마스킹) 완료 여부 — UI 가 '분석 중' vs '평가 중' 구분.
       parsed: (maskedLen ?? 0) >= 30,
       favorited: favoritedSet.has(r.id),

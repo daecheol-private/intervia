@@ -35,6 +35,9 @@ export async function GET(
 
   // 공고 단위 "최대 변경 시각". 세션·평가큐는 candidate_id 만 있어 candidates 로 좁힌다
   // (인덱스: *_candidate_updated / candidates·일정은 *_job_updated).
+  // 면접관 토론 코멘트는 updated_at 이 없고(추가·삭제만, 수정 없음) created_at 으로 충분 —
+  // 새 코멘트가 달리면 sig 가 바뀌어 목록 카드의 토론 배지가 폴링 주기에 자동 갱신된다.
+  // (삭제는 sig 를 안 올리지만 "새 코멘트 알림" 목적엔 무관.)
   const rows = await db.all<{ sig: string | null }>(sql`
     SELECT MAX(mx) AS sig FROM (
       SELECT MAX(updated_at) AS mx FROM candidates WHERE job_id = ${jobId}
@@ -46,6 +49,9 @@ export async function GET(
         JOIN candidates c ON c.id = sj.candidate_id WHERE c.job_id = ${jobId}
       UNION ALL
       SELECT MAX(updated_at) FROM interview_schedules WHERE job_id = ${jobId}
+      UNION ALL
+      SELECT MAX(cc.created_at) FROM candidate_comments cc
+        JOIN candidates c ON c.id = cc.candidate_id WHERE c.job_id = ${jobId}
     )
   `);
   return Response.json({ sig: rows[0]?.sig ?? "" });
