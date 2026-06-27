@@ -73,7 +73,7 @@ import {
   User,
   Workflow,
 } from "lucide-react";
-import { Donut } from "@/components/charts";
+import { Donut, MultiLineCumulative, CATEGORICAL } from "@/components/charts";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -136,6 +136,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     expiredAiRows,
     resultDueRows,
     awaitingAgg,
+    perJobElapsed,
   ] = await Promise.all([
     // 인사말 법인명 + 첫 실행 가이드용 컬처핏 설정 여부 — orgId 있는 경우만 조회.
     me.orgId
@@ -365,6 +366,29 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       .from(candidates)
       .where(candScopeFilter)
       .then(([r]) => r),
+    // -- 공고별 지원 추이 (게시일=0 기준 경과일별 신규, 최대 30일) -------------
+    // 경과일 = floor(julianday(지원시각) - julianday(게시시각)). 24h 단위라 타임존 무관.
+    // 누적은 JS 에서. 미게시(publishedAt NULL) 공고는 추이 대상 아님.
+    db
+      .select({
+        jobId: candidates.jobId,
+        elapsed: sql<number>`CAST(julianday(${candidates.createdAt}) - julianday(${jobPostings.publishedAt}) AS INTEGER)`,
+        c: count(),
+      })
+      .from(candidates)
+      .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
+      .where(
+        and(
+          jobScopeFilter,
+          sql`${jobPostings.publishedAt} IS NOT NULL`,
+          sql`julianday(${candidates.createdAt}) - julianday(${jobPostings.publishedAt}) >= 0`,
+          sql`julianday(${candidates.createdAt}) - julianday(${jobPostings.publishedAt}) < 31`
+        )
+      )
+      .groupBy(
+        candidates.jobId,
+        sql`CAST(julianday(${candidates.createdAt}) - julianday(${jobPostings.publishedAt}) AS INTEGER)`
+      ),
   ]);
 
   // 토큰 잔액으로 가능한 액션 수 환산 — KPI 카드 보조 문구
@@ -560,12 +584,6 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const inProgressCand = totalCand - decidedCount;
   const hiredCount = Number(candAgg?.hired ?? 0);
   const newCandWeek = Number(candAgg?.newWeek ?? 0);
-  // 스코프 내 공고 수 — 진행 중(active) + 전체. 첫 KPI 카드용.
-  // jobsWithActions 가 이미 스코프(멤버=내 면접 공고 / 법인담당자=법인 전체)를 반영한다.
-  const scopeActiveJobs = jobsWithActions.filter(
-    (j) => j.status === "active"
-  ).length;
-  const scopeTotalJobs = jobsWithActions.length;
   // 채용 파이프라인 도넛 — 진행 중 단계 분포 + 합격. 색은 charts.tsx 팔레트와 동일 계열.
   const pipeline = [
     { label: "서류", value: Number(candAgg?.pipeResume ?? 0), color: "#94a3b8" },
@@ -581,6 +599,59 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const r1Waiting = Number(awaitingAgg?.r1Waiting ?? 0);
   const r2Waiting = Number(awaitingAgg?.r2Waiting ?? 0);
   const totalAwaiting = aiWaiting + r1Waiting + r2Waiting;
+
+  // -- 공고별 지원 추이 시리즈 (게시일=0 기준 누적, 최대 30일) ------------------
+  // member=내 면접 공고(보통 1개) / org_admin=법인 전체. 총량 큰 순 상위 N개만 라인.
+  // 라인 길이는 공고마다 다름(게시 후 경과일+1) — X축은 0..최대길이, 짧은 공고는 자기 끝에서 멈춘다.
+  const elapsedByJob = new Map<number, Map<number, number>>();
+  for (const r of perJobElapsed) {
+    let m = elapsedByJob.get(r.jobId);
+    if (!m) {
+      m = new Map();
+      elapsedByJob.set(r.jobId, m);
+    }
+    m.set(Number(r.elapsed), Number(r.c));
+  }
+  const jobById = new Map(jobsWithActions.map((j) => [j.id, j]));
+  const MS_DAY = 86_400_000;
+  const trendSeriesAll = Array.from(elapsedByJob.keys()).map((jobId) => {
+    const j = jobById.get(jobId);
+    const em = elapsedByJob.get(jobId)!;
+    // 게시 후 오늘까지 경과일(cap 30) — 라인이 미래 빈 구간까지 평평하게 늘어지지 않도록.
+    const pub = j?.publishedAt ? new Date(j.publishedAt).getTime() : null;
+    const elapsedToday =
+      pub != null ? Math.min(30, Math.floor((Date.now() - pub) / MS_DAY)) : 0;
+    let cum = 0;
+    const data: number[] = [];
+    for (let d = 0; d <= elapsedToday; d++) {
+      cum += em.get(d) ?? 0;
+      data.push(cum);
+    }
+    return { jobId, data, total: cum };
+  });
+  // 끝(현재 누적) 큰 순 상위 N. 라인이 너무 많으면 스파게티 → 팔레트 길이 안에서 제한.
+  trendSeriesAll.sort((a, b) => b.total - a.total);
+  const TREND_MAX_LINES = 6;
+  const trendTop = trendSeriesAll.slice(0, TREND_MAX_LINES);
+  const trendRest = trendSeriesAll.slice(TREND_MAX_LINES);
+  const trendSeries = trendTop.map((s, i) => {
+    const j = jobById.get(s.jobId);
+    const locked = j?.passwordHash != null && !unlocked(s.jobId);
+    return {
+      label: locked ? "🔒 비공개" : (j?.title ?? `공고 #${s.jobId}`),
+      color: CATEGORICAL[i % CATEGORICAL.length],
+      data: s.data,
+    };
+  });
+  const trendMaxLen = Math.max(0, ...trendSeries.map((s) => s.data.length));
+  // x축: 게시 후 경과일(0,1,2,…). 마지막 라벨에만 "일" 단위를 붙여 축 의미를 분명히.
+  const trendDayLabels = Array.from({ length: trendMaxLen }, (_, i) =>
+    i === trendMaxLen - 1 && trendMaxLen > 1 ? `${i}일` : String(i)
+  );
+  const trendRestTotal = trendRest.reduce((s, r) => s + r.total, 0);
+  const trendHasData = trendSeries.some(
+    (s) => s.data.length > 0 && s.data[s.data.length - 1] > 0
+  );
 
   const orgName = orgRow?.name ?? null;
 
@@ -623,23 +694,38 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         {/* 좌측 컬럼 — KPI 카드 + 큐 알림 + 파이프라인 */}
         <div className="lg:col-span-2 flex flex-col gap-4">
           {/* 상단 KPI 카드 — 진행 공고 · 총 후보자 · AI 서류 평가 · 토큰 잔액 (전부 실집계) */}
-          <div className="grid grid-cols-3 gap-3">
-            <KpiCard
-              label={isOrgScope ? "진행 공고" : "내 면접 공고"}
-              value={scopeActiveJobs}
-              Icon={ClipboardList}
-              sub={`전체 ${scopeTotalJobs}건`}
-              href="/jobs"
-              accent="blue"
-            />
-            <KpiCard
-              label="총 후보자"
-              value={totalCand}
-              Icon={Users}
-              trend={newCandWeek > 0 ? `+${newCandWeek} 최근 7일` : undefined}
-              sub={`진행 ${inProgressCand} · 결정 ${decidedCount}`}
-              accent="indigo"
-            />
+          <div className="grid grid-cols-3 gap-3 lg:items-stretch">
+            {/* 공고별 지원 추이 — 최근 30일 누적 라인. member=내 면접 공고(보통 1개)
+               / org_admin=법인 전체 상위 6개. '진행 공고·총 후보자' 숫자는 헤더로 흡수. */}
+            <section className="col-span-2 bg-card border border-border-default rounded-2xl shadow-sm p-4 flex flex-col">
+              <header className="mb-2 flex items-baseline justify-between gap-2">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-ink">공고별 지원 추이</h2>
+                  <p className="text-[11px] text-ink-soft mt-0.5">게시일부터 · 최대 30일 · 누적</p>
+                </div>
+                <div className="text-[11px] text-ink-soft text-right tabular-nums shrink-0">
+                  총 {totalCand}명 · 진행 {inProgressCand}
+                  {newCandWeek > 0 && (
+                    <span className="text-success ml-1.5 font-medium">
+                      ▲{newCandWeek} / 7일
+                    </span>
+                  )}
+                </div>
+              </header>
+              {trendHasData ? (
+                <MultiLineCumulative
+                  series={trendSeries}
+                  dayLabels={trendDayLabels}
+                  height={200}
+                  restCount={trendRest.length}
+                  restTotal={trendRestTotal}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center min-h-[180px] text-center text-sm text-ink-soft px-4">
+                  아직 표시할 지원 추이가 없습니다.
+                </div>
+              )}
+            </section>
             <KpiCard
               label="토큰 잔액"
               value={tokenBalance != null ? tokenBalance.toLocaleString() : "-"}

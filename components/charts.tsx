@@ -694,3 +694,136 @@ export function TimeArea({
     </div>
   );
 }
+
+/* ───────── 다계열 누적 라인 (공고별 지원 추이 · 절대 날짜축) ───────── */
+
+export function MultiLineCumulative({
+  series,
+  dayLabels,
+  height = 190,
+  unit = "명",
+  restCount = 0,
+  restTotal = 0,
+}: {
+  // data = 각 날짜의 "누적" 지원자 수 (단조증가). 라인별 길이는 dayLabels 와 동일.
+  series: { label: string; color: string; data: number[] }[];
+  dayLabels: string[];
+  height?: number;
+  unit?: string;
+  // 상위 N개만 라인으로 그릴 때, 나머지 공고 합산 표기용.
+  restCount?: number;
+  restTotal?: number;
+}) {
+  const width = 640;
+  const padL = 32;
+  const padR = 12;
+  const padT = 12;
+  const padB = 26;
+  const plotW = width - padL - padR;
+  const plotH = height - padT - padB;
+  const n = dayLabels.length;
+  const max = Math.max(1, ...series.flatMap((s) => s.data));
+  const sx = (i: number) =>
+    padL + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const sy = (v: number) => padT + plotH - (v / max) * plotH;
+  const labelStep = Math.max(1, Math.ceil(n / 6));
+
+  return (
+    <div>
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`}>
+        {[0, 0.5, 1].map((f) => (
+          <g key={f}>
+            <line
+              x1={padL}
+              y1={sy(f * max)}
+              x2={padL + plotW}
+              y2={sy(f * max)}
+              stroke={C.grid}
+            />
+            <text
+              x={padL - 4}
+              y={sy(f * max) + 3}
+              textAnchor="end"
+              className="fill-slate-400"
+              style={{ fontSize: 13.5 }}
+            >
+              {Math.round(f * max)}
+            </text>
+          </g>
+        ))}
+        {series.map((s, si) => {
+          const line = s.data.map((v, i) => `${sx(i)},${sy(v)}`).join(" ");
+          const last = s.data.length - 1;
+          return (
+            <g key={si}>
+              <polyline
+                points={line}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={2}
+                strokeLinejoin="round"
+              />
+              {/* 모든 점에 마커 + 넓은 투명 hover 영역(<title> 로 게시 후 경과일·누적 표시) */}
+              {s.data.map((v, i) => (
+                <g key={i}>
+                  <circle
+                    cx={sx(i)}
+                    cy={sy(v)}
+                    r={i === last ? 2.8 : 1.8}
+                    fill={s.color}
+                  />
+                  <circle cx={sx(i)} cy={sy(v)} r={7} fill="transparent">
+                    <title>{`${s.label} · 게시 +${i}일: ${v}${unit}`}</title>
+                  </circle>
+                </g>
+              ))}
+            </g>
+          );
+        })}
+        {dayLabels.map((d, i) =>
+          i % labelStep === 0 || i === n - 1 ? (
+            <text
+              key={`l${i}`}
+              x={sx(i)}
+              y={height - 7}
+              textAnchor="middle"
+              className="fill-slate-400"
+              style={{ fontSize: 13.5 }}
+            >
+              {d}
+            </text>
+          ) : null
+        )}
+      </svg>
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[14px]">
+        {series.map((s, i) => {
+          const total = s.data[s.data.length - 1] ?? 0;
+          return (
+            <li key={i} className="inline-flex items-center gap-1.5 min-w-0">
+              <span
+                className="w-3 h-3 rounded-sm shrink-0"
+                style={{ background: s.color }}
+              />
+              <span className="text-slate-600 truncate max-w-[170px]">
+                {s.label}
+              </span>
+              <span className="font-semibold text-slate-900 tabular-nums">
+                {total}
+                {unit}
+              </span>
+            </li>
+          );
+        })}
+        {restCount > 0 && (
+          <li className="inline-flex items-center gap-1.5 text-slate-400">
+            외 {restCount}개 공고
+            <span className="tabular-nums">
+              {restTotal}
+              {unit}
+            </span>
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
