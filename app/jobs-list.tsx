@@ -63,17 +63,17 @@ function DDayBadge({ job }: { job: Job }) {
 
 export default function JobsList({
   jobs,
-  isAdmin,
+  canBypassLock,
 }: {
   jobs: Job[];
-  isAdmin: boolean;
+  canBypassLock: boolean;
 }) {
   const router = useRouter();
   const [pinJob, setPinJob] = useState<Job | null>(null);
 
   const handleClick = (job: Job, e: React.MouseEvent) => {
-    // 관리자는 잠금 우회
-    if (job.hasPassword && !isAdmin) {
+    // 시스템관리자·법인담당자(org_admin)는 본인 법인 공고 잠금을 PIN 없이 우회
+    if (job.hasPassword && !canBypassLock) {
       e.preventDefault();
       setPinJob(job);
     }

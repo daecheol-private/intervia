@@ -14,7 +14,10 @@ export async function isJobUnlocked(
 ): Promise<boolean> {
   const user = me !== undefined ? me : await getCurrentUser();
   if (!user) return false;
-  if (user.isAdmin) return true; // 관리자는 모든 공고 잠금 우회
+  if (user.isAdmin) return true; // system_admin: 모든 공고 잠금 우회
+  // 법인담당자(org_admin)는 본인 법인 전체에 접근 권한이 있으므로 PIN 우회.
+  // 모든 호출처가 ownsOrg/org_id 필터로 타 법인 공고를 선차단하므로 여기서 org 재검증은 불필요(2026-06-27 호출처 전수 감사 완료).
+  if (user.role === "org_admin") return true;
   // 공고 면접관으로 등록된 사용자는 PIN 우회 (공유 메일로 자동 등록되거나, PIN 입력 후 자가 지정한 멤버 포함)
   const [row] = await db
     .select({ jobId: jobInterviewers.jobId })
@@ -40,6 +43,8 @@ export async function getUnlockChecker(
   return (jobId: number) => {
     if (!user) return false;
     if (user.isAdmin) return true;
+    // 법인담당자(org_admin): 목록은 이미 org 필터를 거쳐 본인 법인 것만 들어오므로 전부 우회.
+    if (user.role === "org_admin") return true;
     if (interviewerJobIds.has(jobId)) return true;
     return jar.get(COOKIE_PREFIX + jobId)?.value === "1";
   };

@@ -147,7 +147,10 @@ export default async function JobsListPage({
         </div>
       </div>
 
-      <JobsList jobs={serialized} isAdmin={me?.isAdmin ?? false} />
+      <JobsList
+        jobs={serialized}
+        canBypassLock={me ? me.isAdmin || me.role === "org_admin" : false}
+      />
     </main>
   );
 }
