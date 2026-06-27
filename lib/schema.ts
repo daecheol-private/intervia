@@ -1721,3 +1721,36 @@ export const interviewTranscriptSegments = sqliteTable(
 
 export type InterviewTranscriptSegment =
   typeof interviewTranscriptSegments.$inferSelect;
+
+/**
+ * 면접관 일일 할 일 요약 메일(daily digest) 발송 기록 — 멱등용.
+ *
+ * 매일 KST 09:00 cron 이 면접관(job_interviewers 배정자)별로 "오늘 할 일" 요약 메일을
+ * 1통씩 보낸 뒤 (userId, digestDate) 를 기록한다. 같은 날 cron 이 중복 실행되거나
+ * system_admin 이 수동 호출해도 이미 기록된 면접관은 건너뛴다(중복 발송 방지).
+ * digestDate 는 'YYYY-MM-DD'(KST 기준). 사용자 삭제 시 함께 제거(cascade).
+ * 순수 추가(additive) 테이블 — 기존 데이터에 영향 없음.
+ */
+export const dailyDigestLogs = sqliteTable(
+  "daily_digest_logs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    digestDate: text("digest_date").notNull(),
+    sentAt: text("sent_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    // 하루 1회 보장 + 동시 실행 race 의 최종 방어선(DB 레벨).
+    userDateUq: uniqueIndex("daily_digest_logs_user_date_uq").on(
+      t.userId,
+      t.digestDate
+    ),
+  })
+);
+
+export type DailyDigestLog = typeof dailyDigestLogs.$inferSelect;
+export type NewDailyDigestLog = typeof dailyDigestLogs.$inferInsert;

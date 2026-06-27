@@ -351,6 +351,13 @@
       "when": 1782526782645,
       "tag": "0049_living_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1782571686382,
+      "tag": "0050_strong_karen_page",
+      "breakpoints": true
     }
   ]
 }
