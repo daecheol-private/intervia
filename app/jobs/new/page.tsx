@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Sparkles, Link2, Loader2 } from "lucide-react";
+import { Sparkles, Link2, Loader2, Info } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { confirmDialog } from "@/app/components/Dialog";
@@ -341,6 +341,22 @@ export default function NewJobPage() {
             {importInfo}
           </div>
         )}
+      </div>
+
+      <div className="flex gap-3 bg-surface-alt border border-border-default rounded-2xl p-4 mb-5">
+        <Info className="w-4 h-4 text-ink-muted shrink-0 mt-0.5" />
+        <div className="text-xs text-ink-soft leading-relaxed">
+          <p className="font-semibold text-ink">
+            여러 직군을 함께 뽑는다면 공고를 직군별로 따로 등록하세요.
+          </p>
+          <p className="mt-1">
+            예를 들어 <b>연구·영업·보안</b>을 한 번에 채용하더라도, 직군마다 공고를
+            나눠 만드는 것을 권장합니다. 공고 하나당 그 직군에 맞는{" "}
+            <b>AI 면접관 페르소나(캐릭터)</b>가 생성되고 <b>평가 기준</b>도 그 직군에
+            맞춰지기 때문입니다. 한 공고에 여러 직군을 섞으면 면접 질문과 합·불 평가가
+            어느 직군에도 정확하지 않게 됩니다.
+          </p>
+        </div>
       </div>
 
       <div className="bg-card border border-border-default rounded-2xl p-6 space-y-5 shadow-sm">
