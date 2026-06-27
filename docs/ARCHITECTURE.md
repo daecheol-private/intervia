@@ -39,8 +39,8 @@ HR (로그인)
 ```
 interviewer/
 ├── app/
-│   ├── page.tsx                    # 대시보드 (server) — 첫 실행 가이드 / KPI / 공고 목록
-│   ├── jobs-list.tsx               # 대시보드 클라이언트 컴포넌트 (PIN 모달)
+│   ├── page.tsx                    # 대시보드 (server) — KPI / 내 공고(멤버=면접관 스코프 / org_admin=법인 전체)
+│   ├── jobs-list-all.tsx           # '공고' 메뉴(/jobs) 목록 — 전체폭 큰 카드 세로 스택, 면접관 공고 상단, 잠긴 공고는 지원현황 블라인드+PIN 모달
 │   ├── layout.tsx                  # 루트 레이아웃 (server) — 네비바
 │   ├── logout-button.tsx           # 클라이언트 컴포넌트
 │   ├── login/page.tsx              # 로그인 + 첫 setup 자동 전환
@@ -333,7 +333,7 @@ interviewer/
 
 - 서버 컴포넌트: DB 직접 쿼리, 첫 페인트 빠름 — 주로 대시보드/레이아웃
 - 클라이언트 컴포넌트: 인터랙티브 폼/채팅/모달 — 대부분의 페이지
-- 서버 → 클라이언트 분리: dashboard에서 직접 DB 쿼리 후 `<JobsList jobs={...} isAdmin={...} />`로 props 전달
+- 서버 → 클라이언트 분리: 서버에서 직접 DB 쿼리 후 직렬화해 클라이언트 목록으로 props 전달 (예: `/jobs` → `<JobsAllList jobs={...} />`, 잠금/블라인드 판정은 서버에서 끝내 `blinded` 플래그로 전달)
 
 ## 면접관 페르소나 (lib/prompts.ts)
 

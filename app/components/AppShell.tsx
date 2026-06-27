@@ -47,8 +47,8 @@ function buildSections(role: Role): NavSection[] {
       label: null,
       items: [
         { href: "/", label: "대시보드", Icon: Home },
-        // 내 면접 공고 — 면접관으로 지정된 공고만(멤버도 확인 가능)
-        { href: "/jobs?mine=1", label: "내 면접 공고", Icon: ClipboardList },
+        // 공고 — 법인 전체 공고. 내가 면접관인 공고는 상단·상세, 그 외는 기본(+PIN 게이트).
+        { href: "/jobs", label: "공고", Icon: ClipboardList },
         // 공고를 가로지르는 뷰 — member=면접관 공고, org_admin=법인 전체(페이지에서 차등)
         { href: "/candidates", label: "후보자", Icon: Users },
         { href: "/interviews", label: "면접 일정", Icon: CalendarClock },
@@ -94,7 +94,7 @@ function buildSections(role: Role): NavSection[] {
 }
 
 function isActive(pathname: string, href: string): boolean {
-  // 쿼리스트링(예: /jobs?mine=1)은 경로 비교에서 제외 — pathname 엔 쿼리가 없다.
+  // 쿼리스트링(예: /path?foo=1)은 경로 비교에서 제외 — pathname 엔 쿼리가 없다.
   const base = href.split("?")[0];
   return base === "/" ? pathname === "/" : pathname.startsWith(base);
 }

@@ -99,9 +99,11 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   // 최근 7일 기준선 — KPI 트렌드("최근 7일 신규")용. createdAt 비교로 실제 신규만 집계.
   const cutoff7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-  // 면접관 스코프 — 대시보드의 차트·카운트(KPI·파이프라인·지원자 응답 대기)는 모두
-  // "로그인 사용자가 면접관으로 지정된 공고"만 집계한다. 공고 생성자는 자동 면접관.
-  // (단, 아래 '공고 목록'은 예외 — 법인 전체 공고를 보여주고 면접관 공고를 상단 정렬)
+  // 대시보드 스코프 — 토큰 잔액을 제외한 모든 값(KPI·파이프라인·지원자 응답 대기·
+  // 오늘 할 일·공고 목록)이 같은 스코프를 공유한다:
+  //   · 멤버(member)         → "내가 면접관으로 지정된 공고"만 (공고 생성자는 자동 면접관)
+  //   · 법인담당자(org_admin) → 법인 전체
+  // system_admin 은 홈에서 운영 대시보드로 리다이렉트되므로 여기 도달하지 않는다.
   const myInterviewerRows = await db
     .select({ jobId: jobInterviewers.jobId })
     .from(jobInterviewers)
@@ -109,9 +111,15 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const myJobIds = myInterviewerRows.map((r) => r.jobId);
   const interviewerSet = new Set(myJobIds);
   const scopeIds = myJobIds.length > 0 ? myJobIds : [-1];
-  const candScopeFilter = inArray(candidates.jobId, scopeIds);
-  // 공고 목록은 법인 전체 — 차트/카운트(면접관 스코프)와 의도적으로 스코프가 다르다.
-  const orgJobFilter = eq(jobPostings.orgId, me.orgId ?? -1);
+  const isOrgScope = me.role === "org_admin";
+  // 후보자 단위 필터 (candidates 테이블 대상)
+  const candScopeFilter = isOrgScope
+    ? eq(candidates.orgId, me.orgId ?? -1)
+    : inArray(candidates.jobId, scopeIds);
+  // 공고 단위 필터 (jobPostings 테이블 대상) — 공고 목록·오늘 할 일 알림이 공유.
+  const jobScopeFilter = isOrgScope
+    ? eq(jobPostings.orgId, me.orgId ?? -1)
+    : inArray(jobPostings.id, scopeIds);
 
   // 상호 독립 쿼리 전부 병렬 — 순차 await 는 원격 DB(Turso) RTT × 쿼리 수가
   // 첫 화면 TTFB 에 그대로 더해진다.
@@ -123,7 +131,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     tokenBalance,
     pricing,
     jobsRaw,
-    myInterviewerJobs,
+    jobActionRows,
     counterRows,
     expiredAiRows,
     resultDueRows,
@@ -251,17 +259,18 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       })
       .from(jobPostings)
       .leftJoin(candidates, eq(candidates.jobId, jobPostings.id))
-      .where(orgJobFilter)
+      .where(jobScopeFilter)
       .groupBy(jobPostings.id)
       .orderBy(
         // active 먼저, 그 안에서 최신순. 면접관 공고 우선 정렬은 JS 에서 재적용.
         sql`CASE WHEN ${jobPostings.status} = 'active' THEN 0 ELSE 1 END`,
         desc(jobPostings.createdAt)
       ),
-    // 내가 면접관인 공고들 — 단계별 대기 카운트 (알림용)
+    // 오늘 할 일 알림용 — 스코프 내 공고의 단계별 대기 카운트.
+    // (멤버=내 면접 공고 / 법인담당자=법인 전체, jobScopeFilter 가 결정)
     db
       .select({
-        jobId: jobInterviewers.jobId,
+        jobId: jobPostings.id,
         title: jobPostings.title,
         orgId: jobPostings.orgId,
         passwordHash: jobPostings.passwordHash,
@@ -277,12 +286,11 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           OR ((SELECT s.status FROM screening_jobs s WHERE s.candidate_id = candidates.id ORDER BY s.id DESC LIMIT 1) IS NULL AND ${candidates.screeningReport} IS NULL)
         ) THEN 1 ELSE 0 END)`,
       })
-      .from(jobInterviewers)
-      .innerJoin(jobPostings, eq(jobPostings.id, jobInterviewers.jobId))
+      .from(jobPostings)
       .leftJoin(candidates, eq(candidates.jobId, jobPostings.id))
-      .where(eq(jobInterviewers.userId, me.id))
-      .groupBy(jobInterviewers.jobId, jobPostings.title),
-    // 역제시 알림 — 내가 면접관인 공고에서 status='counter_proposed' 인 스케쥴
+      .where(jobScopeFilter)
+      .groupBy(jobPostings.id),
+    // 역제시 알림 — 스코프 내 공고에서 status='counter_proposed' 인 스케쥴
     db
       .select({
         jobId: interviewSchedules.jobId,
@@ -291,16 +299,9 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         n: count(),
       })
       .from(interviewSchedules)
-      .innerJoin(
-        jobInterviewers,
-        eq(jobInterviewers.jobId, interviewSchedules.jobId)
-      )
       .innerJoin(jobPostings, eq(jobPostings.id, interviewSchedules.jobId))
       .where(
-        and(
-          eq(jobInterviewers.userId, me.id),
-          eq(interviewSchedules.status, "counter_proposed")
-        )
+        and(jobScopeFilter, eq(interviewSchedules.status, "counter_proposed"))
       )
       .groupBy(interviewSchedules.jobId, jobPostings.title),
     // AI 면접 링크 만료(응시 중 중단) 알림 — 미응시 만료는 cron 이 자동 불합격 처리하지만,
@@ -313,11 +314,10 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         n: count(),
       })
       .from(candidates)
-      .innerJoin(jobInterviewers, eq(jobInterviewers.jobId, candidates.jobId))
       .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
       .where(
         and(
-          eq(jobInterviewers.userId, me.id),
+          jobScopeFilter,
           eq(candidates.stage, "ai_pending"),
           sql`${candidates.outcome} IS NULL`,
           sql`EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = candidates.id AND s.status = 'expired')`,
@@ -335,15 +335,11 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         n: count(),
       })
       .from(interviewSchedules)
-      .innerJoin(
-        jobInterviewers,
-        eq(jobInterviewers.jobId, interviewSchedules.jobId)
-      )
       .innerJoin(jobPostings, eq(jobPostings.id, interviewSchedules.jobId))
       .innerJoin(candidates, eq(candidates.id, interviewSchedules.candidateId))
       .where(
         and(
-          eq(jobInterviewers.userId, me.id),
+          jobScopeFilter,
           eq(interviewSchedules.status, "selected"),
           sql`${candidates.outcome} IS NULL`,
           sql`datetime(json_extract(${interviewSchedules.selectedSlot}, '$.end')) <= datetime(${nowIso})`,
@@ -400,7 +396,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     if (j.passwordHash && !unlocked(j.id)) lockedJobIdsAtJobs.add(j.id);
   }
 
-  // 알림 — 내가 면접관으로 지정된 공고에서 액션 대기 중인 항목.
+  // 알림 — 스코프 내 공고(멤버=내 면접 공고 / 법인담당자=법인 전체)에서 액션 대기 중인 항목.
   // 데이터 구조는 generic 하게 만들어, 알림 종류를 나중에 추가/조정 가능.
   type Notification = {
     id: string;
@@ -412,7 +408,7 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     tone: "amber" | "blue" | "indigo" | "rose";
   };
   const notifications: Notification[] = [];
-  for (const j of myInterviewerJobs) {
+  for (const j of jobActionRows) {
     const locked = j.passwordHash != null && !unlocked(j.jobId);
     const jobTitle = locked ? "🔒 비공개" : j.title;
     // 파이프라인 순서 — 서류 평가 조치 → 서류평가 후 진행 결정 → (이하 AI/면접 단계)
@@ -564,11 +560,12 @@ async function Dashboard({ me }: { me: CurrentUser }) {
   const inProgressCand = totalCand - decidedCount;
   const hiredCount = Number(candAgg?.hired ?? 0);
   const newCandWeek = Number(candAgg?.newWeek ?? 0);
-  // 내가 면접관인 공고 — 진행 중(active) 수 + 전체(active+종결). KPI '내 면접 공고' 카드용.
-  const myActiveJobs = jobsWithActions.filter(
-    (j) => interviewerSet.has(j.id) && j.status === "active"
+  // 스코프 내 공고 수 — 진행 중(active) + 전체. 첫 KPI 카드용.
+  // jobsWithActions 가 이미 스코프(멤버=내 면접 공고 / 법인담당자=법인 전체)를 반영한다.
+  const scopeActiveJobs = jobsWithActions.filter(
+    (j) => j.status === "active"
   ).length;
-  const myTotalJobs = interviewerSet.size;
+  const scopeTotalJobs = jobsWithActions.length;
   // 채용 파이프라인 도넛 — 진행 중 단계 분포 + 합격. 색은 charts.tsx 팔레트와 동일 계열.
   const pipeline = [
     { label: "서류", value: Number(candAgg?.pipeResume ?? 0), color: "#94a3b8" },
@@ -608,7 +605,9 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </h1>
         <p className="text-sm text-ink-soft mt-1">
           {jobsWithActions.length === 0
-            ? "Intervia 에 오신 걸 환영합니다. 첫 공고를 등록해 채용을 시작해 보세요."
+            ? isOrgScope
+              ? "Intervia 에 오신 걸 환영합니다. 첫 공고를 등록해 채용을 시작해 보세요."
+              : "아직 면접관으로 지정된 공고가 없습니다. 좌측 ‘공고’ 메뉴에서 법인 전체 공고를 확인하세요."
             : "오늘의 채용 현황을 한눈에 확인하세요."}
         </p>
       </header>
@@ -626,11 +625,11 @@ async function Dashboard({ me }: { me: CurrentUser }) {
           {/* 상단 KPI 카드 — 진행 공고 · 총 후보자 · AI 서류 평가 · 토큰 잔액 (전부 실집계) */}
           <div className="grid grid-cols-3 gap-3">
             <KpiCard
-              label="내 면접 공고"
-              value={myActiveJobs}
+              label={isOrgScope ? "진행 공고" : "내 면접 공고"}
+              value={scopeActiveJobs}
               Icon={ClipboardList}
-              sub={`전체 ${myTotalJobs}건`}
-              href="/jobs?mine=1"
+              sub={`전체 ${scopeTotalJobs}건`}
+              href="/jobs"
               accent="blue"
             />
             <KpiCard
@@ -803,11 +802,13 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </div>
       </div>
 
-      {/* 공고 목록 — 표(시안). 행 클릭 시 공고 상세로. 단계별 액션은 상세·'오늘 할 일'에서.
-         AI 서류 = 그 공고 평가된 후보의 평균 AI 서류 점수(실집계). 등록 = createdAt 경과. */}
+      {/* 내 공고 — 스코프 내 공고(멤버=내 면접 공고 / 법인담당자=법인 전체). 행 클릭 시 공고
+         상세로. 단계별 액션은 상세·'오늘 할 일'에서. 법인 전체 목록은 좌측 '공고' 메뉴에서. */}
       <section className="mb-8">
         <header className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-ink">공고 목록</h2>
+          <h2 className="text-sm font-semibold text-ink">
+            {isOrgScope ? "법인 공고" : "내 공고"}
+          </h2>
           <Link
             href="/jobs/new"
             className="hidden sm:inline-block text-xs px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-deep text-surface font-medium transition-colors"
@@ -817,16 +818,22 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         </header>
         {jobsWithActions.length === 0 ? (
           <div className="bg-card border border-dashed border-border-strong rounded-2xl py-12 text-center">
-            <p className="text-sm text-ink-soft">아직 등록된 공고가 없습니다.</p>
+            <p className="text-sm text-ink-soft">
+              {isOrgScope
+                ? "아직 등록된 공고가 없습니다."
+                : "내가 면접관으로 지정된 공고가 없습니다."}
+            </p>
             {/* 공고 등록은 입력 항목이 많아 PC에서만 지원 — 모바일은 안내 문구로 대체 */}
             <Link
-              href="/jobs/new"
+              href={isOrgScope ? "/jobs/new" : "/jobs"}
               className="hidden sm:inline-block mt-3 text-xs text-primary hover:underline"
             >
-              첫 공고 등록 →
+              {isOrgScope ? "첫 공고 등록 →" : "법인 공고 전체 보기 →"}
             </Link>
             <p className="sm:hidden mt-3 text-xs text-ink-soft">
-              공고 등록은 PC(데스크톱)에서 진행해 주세요.
+              {isOrgScope
+                ? "공고 등록은 PC(데스크톱)에서 진행해 주세요."
+                : "좌측 ‘공고’ 메뉴에서 법인 전체 공고를 확인하세요."}
             </p>
           </div>
         ) : (

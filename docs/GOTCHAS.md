@@ -583,7 +583,8 @@ DB 아웃박스 테이블로 승격.
 | 위치 | 우회 방법 |
 |---|---|
 | API 서버 | `lib/job-lock.ts` `isJobUnlocked()` 안에서 `getCurrentUser().isAdmin` 체크 |
-| 클라이언트 (대시보드 PIN 모달) | `app/jobs-list.tsx`의 `handleClick`에서 `if (!isAdmin)` 체크 — server component에서 `isAdmin` prop으로 전달 |
+| 클라이언트 (대시보드 공고 행) | `app/components/JobRowLink.tsx` — 잠긴 공고면 `JobPinModal` 팝업, 우회 여부는 server 가 `locked` prop 으로 판정해 전달 |
+| 클라이언트 ('공고' 메뉴 /jobs) | `app/jobs-list-all.tsx`의 `handleClick`에서 `if (job.blinded)` 체크 — server(`app/jobs/page.tsx`)가 `getUnlockChecker` 로 공고별 `blinded`(잠금+우회불가) 를 판정해 전달하고, 블라인드 공고는 지원 현황 수치를 아예 미전송 |
 
 새 페이지에서 잠금 체크 추가 시 양쪽 다 챙길 것.
 

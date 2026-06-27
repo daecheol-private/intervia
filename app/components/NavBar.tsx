@@ -59,8 +59,8 @@ function buildSections(role: Role): NavSection[] {
       label: null,
       items: [
         { href: "/", label: "대시보드", Icon: Home },
-        // 내 면접 공고 — 면접관으로 지정된 공고만(멤버도 확인 가능)
-        { href: "/jobs?mine=1", label: "내 면접 공고", Icon: ClipboardList },
+        // 공고 — 법인 전체 공고. 내가 면접관인 공고는 상단·상세, 그 외는 기본(+PIN 게이트).
+        { href: "/jobs", label: "공고", Icon: ClipboardList },
         { href: "/candidates", label: "후보자", Icon: Users },
         { href: "/interviews", label: "면접 일정", Icon: CalendarClock },
         { href: "/support", label: "고객센터", Icon: LifeBuoy },
@@ -175,11 +175,7 @@ export function NavBar({
             <div className="hidden sm:flex items-center gap-1.5">
               {!isSystemAdmin && (
                 <>
-                  <NavLink
-                    href="/jobs?mine=1"
-                    label="내 면접 공고"
-                    Icon={ClipboardList}
-                  />
+                  <NavLink href="/jobs" label="공고" Icon={ClipboardList} />
                   <NavLink href="/candidates" label="후보자" Icon={Users} />
                   <NavLink
                     href="/interviews"
@@ -413,7 +409,7 @@ function MobileMenu({
                     </div>
                   )}
                   {section.items.map((it) => {
-                    // 쿼리스트링(예: /jobs?mine=1)은 경로 비교에서 제외.
+                    // 쿼리스트링(예: /path?foo=1)은 경로 비교에서 제외.
                     const base = it.href.split("?")[0];
                     const active =
                       base === "/"
