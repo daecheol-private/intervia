@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const SESSION_COOKIE = "session";
-// 슬라이딩 세션 TTL(초) — lib/auth.ts SESSION_TTL_HOURS 와 동기화.
-const SESSION_TTL_SEC = 24 * 60 * 60;
+// 슬라이딩 세션 TTL(초) — lib/auth.ts SESSION_TTL_HOURS 와 동기화. (idle 6시간)
+const SESSION_TTL_SEC = 6 * 60 * 60;
 
 // CSRF 면제 경로 — 외부에서 호출되는 콜백/공개 엔드포인트.
 //   * /api/interview/* : 후보자(비로그인) 면접 진행 — 토큰 자체가 인증

@@ -7,17 +7,18 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 
 export const SESSION_COOKIE = "session";
-// 로그인 세션 유효기간 — 슬라이딩 24시간(마지막 활동 기준). 발급 시 now+TTL,
+// 로그인 세션 유효기간 — 슬라이딩 6시간(마지막 활동 기준, idle 타임아웃). 발급 시 now+TTL,
 // 이후 활동할 때마다(아래 throttle 간격) getCurrentUser 가 expiresAt 를 now+TTL 로 민다.
-// 쿠키 maxAge 슬라이딩은 proxy.ts 가 담당(RSC 에서는 쿠키 set 불가) — TTL 동기화 필요.
-const SESSION_TTL_HOURS = 24;
+// → 6시간 안에 접속하면 연장, 6시간 무활동이면 만료. 쿠키 maxAge 슬라이딩은 proxy.ts 가
+// 담당(RSC 에서는 쿠키 set 불가) — TTL 동기화 필요.
+const SESSION_TTL_HOURS = 6;
 const SESSION_TTL_MS = SESSION_TTL_HOURS * 60 * 60 * 1000;
 const SESSION_TTL_SEC = SESSION_TTL_HOURS * 60 * 60;
 // last_seen/만료 슬라이딩 갱신 빈도 — 매 요청마다 쓰면 DB 부하. 최소 간격(초) 이상 차이 나면 update.
 // SQLite/Turso 는 단일 writer 라 전 법인 쓰기가 직렬화됨 → 인증된 모든 요청이 세션
 // write 를 유발하면 쓰기 경합의 큰 축이 된다. 5분 간격이면 "현재 디바이스 마지막 활동"
 // 표시 정밀도는 5분 단위로만 떨어지고(허용), 세션 write 는 ~5배 감소.
-// 슬라이딩 만료도 같은 throttle 을 타므로 idle 한도는 24h ~ 24h+5분 사이(허용).
+// 슬라이딩 만료도 같은 throttle 을 타므로 idle 한도는 약 6h(±5분 throttle 오차).
 const LAST_SEEN_UPDATE_INTERVAL_SEC = 300;
 
 // 2026 권장: bcrypt cost 12. 기존 cost=10 으로 만든 해시는 verify 시 자동 호환.
