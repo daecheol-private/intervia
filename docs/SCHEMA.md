@@ -721,6 +721,19 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 | low_confidence | INTEGER NOT NULL DEFAULT 0 | 저신뢰 전사(boolean) |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
+## daily_digest_logs
+
+면접관 일일 할 일 요약 메일(daily digest) 발송 기록 — 멱등용. 매일 KST 09:00 cron(`/api/cron/daily-digest`)이 면접관(`job_interviewers` 배정 active 계정)별로 본인 배정 공고의 '오늘 할 일'을 요약해 1통 발송한 뒤 `(user_id, digest_date)` 를 기록한다. 같은 날 중복 실행(수동 재호출·동시 실행)은 기록된 면접관을 건너뛴다. 순수 추가(additive) 테이블.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| user_id | INTEGER NOT NULL FK users(id) ON DELETE CASCADE | 면접관 |
+| digest_date | TEXT NOT NULL | `YYYY-MM-DD`(KST). 발송 기준일 |
+| sent_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+인덱스: `(user_id, digest_date)` UNIQUE — 하루 1통 보장 + 동시 실행 race 의 최종 방어선.
+
 ## TypeScript 타입
 
 `lib/schema.ts` 하단 export. `Organization`, `User`, `JobPosting`, `Candidate`, `InterviewSession`, `OrgJoinRequest`, `TokenWallet`, `TokenLedger`, `TokenPricing`, `PaymentOrder`, `UserRole`, `TokenReason` 등.
