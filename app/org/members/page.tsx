@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
 import { useStepUpFetch } from "@/app/components/StepUpModal";
 
 type Member = {
@@ -156,13 +155,10 @@ export default function OrgMembersPage() {
   };
 
   return (
-    <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-ink-muted hover:underline">
-          ← 대시보드
-        </Link>
-        <h1 className="text-2xl font-bold text-ink mt-2">법인 멤버 관리</h1>
-        <p className="text-sm text-ink-muted mt-1">
+        <h1 className="text-2xl font-bold text-ink">법인 멤버 관리</h1>
+        <p className="text-sm text-ink-soft mt-1">
           멤버 권한을 부여·비활성화하거나, 법인 합류 요청을 승인할 수 있습니다.
         </p>
       </div>

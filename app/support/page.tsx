@@ -58,10 +58,10 @@ export default function SupportPage() {
   }, [load]);
 
   return (
-    <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-ink">고객센터</h1>
+          <h1 className="text-2xl font-bold text-ink">고객센터</h1>
           <p className="text-sm text-ink-soft mt-1 leading-relaxed">
             서비스 이용 중 불편사항이나 문의를 남겨 주세요. 접수 내용은 운영팀이
             확인 후 가입하신 이메일로 회신드립니다.

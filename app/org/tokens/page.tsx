@@ -62,7 +62,7 @@ export default function TokensPage() {
 
   if (err)
     return (
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         <div className="rounded-2xl border border-border-default bg-card p-8 text-center">
           <div className="text-3xl mb-3">🔒</div>
           <h1 className="text-base font-semibold text-ink mb-2">
@@ -80,19 +80,16 @@ export default function TokensPage() {
     );
   if (!data)
     return (
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted text-sm">
+      <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 text-ink-muted text-sm">
         불러오는 중...
       </main>
     );
 
   return (
-    <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-ink-muted hover:underline">
-          ← 대시보드
-        </Link>
-        <h1 className="text-2xl font-bold text-ink mt-2">토큰</h1>
-        <p className="text-sm text-ink-muted mt-1">법인의 토큰 잔액 및 사용 내역.</p>
+        <h1 className="text-2xl font-bold text-ink">토큰</h1>
+        <p className="text-sm text-ink-soft mt-1">법인의 토큰 잔액 및 사용 내역.</p>
       </div>
 
       {/* 잔액 카드 — 큰 숫자 + KRW 환산 */}

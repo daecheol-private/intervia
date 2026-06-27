@@ -13,7 +13,7 @@ export default async function NotificationsPage() {
   const unread = items.filter((i) => !i.readAt).length;
 
   return (
-    <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-ink">알림</h1>

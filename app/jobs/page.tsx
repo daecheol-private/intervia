@@ -94,13 +94,10 @@ export default async function JobsListPage() {
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      <div className="flex items-end justify-between gap-3 mb-8">
+      <div className="flex items-end justify-between gap-3 mb-6">
         <div>
-          <Link href="/" className="text-xs text-ink-muted hover:text-ink">
-            ← 대시보드
-          </Link>
-          <h1 className="text-2xl font-bold text-ink mt-1">공고</h1>
-          <p className="text-sm text-ink-muted mt-1">
+          <h1 className="text-2xl font-bold text-ink">공고</h1>
+          <p className="text-sm text-ink-soft mt-1">
             법인 전체 공고 {serialized.length}건 · 내가 면접관인 공고를 먼저 표시
           </p>
         </div>

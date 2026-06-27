@@ -270,13 +270,10 @@ export default function OrgSettingsPage() {
   };
 
   return (
-    <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <Link href="/" className="text-xs text-ink-muted hover:underline">
-          ← 대시보드
-        </Link>
-        <h1 className="text-xl font-semibold text-ink mt-1">법인 설정</h1>
-        <p className="text-sm text-ink-muted mt-0.5">
+        <h1 className="text-2xl font-bold text-ink">법인 설정</h1>
+        <p className="text-sm text-ink-soft mt-1">
           법인 전체에 적용되는 정책입니다. 법인 관리자만 변경할 수 있습니다.
         </p>
       </div>
