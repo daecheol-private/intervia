@@ -78,6 +78,7 @@ dev.log
 /scripts/_*
 /scripts/.cookie-*
 /data.db.bak*
+/data.db.*bak*
 
 # 운영 DB 백업·덤프 (민감 데이터 — 절대 커밋 X)
 backup-prod-*.json
