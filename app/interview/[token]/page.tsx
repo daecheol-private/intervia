@@ -35,6 +35,8 @@ type McqInfo = {
   required: boolean;
   /** 4지선다 — 문항당 보기 4개 중 정답 1개 선택 (정답은 비노출) */
   items?: Array<{ id: string; question: string; options: string[] }>;
+  /** 영어 면접: 번역 캐시가 아직 없어 백그라운드 번역 중 — 폴링으로 대기 */
+  translating?: boolean;
 };
 
 type SessionInfo = {
@@ -438,6 +440,13 @@ export default function InterviewPage() {
   }
 
   // 객관식 사전 문항 단계 — 인성검사 후 · 채팅 시작 전. 완료 시 면접 자동 시작.
+  // 영어 면접: 객관식 번역이 아직 준비 중이면 잠깐 폴링 대기(대부분 동의·인성검사 중에 끝남).
+  if (!ended && info.mcq?.required && info.mcq.translating && !info.mcq.items) {
+    return (
+      <McqPreparing token={token} lang={lang} onReady={(d) => setInfo(d)} />
+    );
+  }
+
   if (!ended && info.mcq?.required && info.mcq.items) {
     return (
       <McqGate
@@ -1224,6 +1233,50 @@ function PersonalityGate({
         </div>
       </div>
     </main>
+  );
+}
+
+/**
+ * 객관식 영어 번역 대기 화면 — 영어 면접에서 prefetch 가 아직 안 끝났을 때만 잠깐 노출.
+ * 2.5초마다 세션을 다시 받아 mcq.items 가 오면(번역 완료) 상위로 올려 McqGate 로 넘어간다.
+ */
+function McqPreparing({
+  token,
+  lang,
+  onReady,
+}: {
+  token: string;
+  lang: Lang;
+  onReady: (info: SessionInfo) => void;
+}) {
+  useEffect(() => {
+    let alive = true;
+    const poll = async () => {
+      try {
+        const r = await fetch(`/api/interview/${token}`);
+        if (!r.ok) return;
+        const d = (await r.json()) as SessionInfo;
+        if (alive && d.mcq?.items) onReady(d);
+      } catch {
+        /* 다음 틱에 재시도 */
+      }
+    };
+    const timer = setInterval(() => void poll(), 2500);
+    void poll();
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [token, onReady]);
+
+  return (
+    <CenteredCard>
+      <div className="flex justify-center mb-4">
+        <TypingDots />
+      </div>
+      <h1 className="text-lg font-bold text-ink">{t(lang, "mcq.preparing.title")}</h1>
+      <p className="text-sm text-ink-muted mt-2">{t(lang, "mcq.preparing.hint")}</p>
+    </CenteredCard>
   );
 }
 

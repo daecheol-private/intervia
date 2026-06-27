@@ -140,6 +140,8 @@ const ko: Dict = {
   "mcq.optionsAria": "보기 선택",
   "mcq.footerLast": "선택하면 면접이 시작됩니다",
   "mcq.footerNext": "선택하면 다음 문제로 넘어갑니다",
+  "mcq.preparing.title": "문항 준비 중",
+  "mcq.preparing.hint": "잠시만 기다려 주세요. 곧 시작됩니다.",
 
   // ── 동의 화면 (consent) ──────────────────────────────
   "consent.candidateHonorific": "{name} 님",
@@ -295,6 +297,8 @@ const en: Dict = {
   "mcq.optionsAria": "Choose an option",
   "mcq.footerLast": "Selecting an answer starts the interview",
   "mcq.footerNext": "Selecting an answer moves to the next question",
+  "mcq.preparing.title": "Preparing questions",
+  "mcq.preparing.hint": "Just a moment — this will start shortly.",
 
   // ── 동의 화면 (consent) ──────────────────────────────
   "consent.candidateHonorific": "Dear {name}",

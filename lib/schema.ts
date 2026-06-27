@@ -217,6 +217,12 @@ export const jobPostings = sqliteTable("job_postings", {
   mcqEnabled: integer("mcq_enabled", { mode: "boolean" })
     .notNull()
     .default(false),
+  // 객관식 영어 번역 캐시 — 영어 면접 지원자용. mcqSet 의 question/options 만 번역하고
+  // answer 인덱스는 보존(채점 안 깨짐). 공고 단위 캐시(같은 공고 영어 지원자 재사용),
+  // mcqSet 수정 시 null 로 무효화. additive ADD COLUMN.
+  mcqSetEn: text("mcq_set_en", { mode: "json" }).$type<McqQuestion[] | null>(),
+  // 영어 번역 진행 시각(ISO). null = 미진행/완료. mcqGeneratingAt 과 동일 패턴(폴링 stale 판정).
+  mcqEnTranslatingAt: text("mcq_en_translating_at"),
   // AI 평가 중점 사항 — **HR 내부용. 후보자에게 비공개**.
   // 채용 담당자가 AI 평가 가중치를 직접 코멘트 ("보안 경력 최우선" 등).
   // 서류평가/면접 진행/면접 평가 프롬프트에 별도 가이드 블록으로 주입됨.

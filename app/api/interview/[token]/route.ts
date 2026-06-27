@@ -13,8 +13,10 @@ import {
   parseTraitProfile,
   toPublicItems,
 } from "@/lib/personality";
-import { hasMcqQuestions, toPublicMcq } from "@/lib/mcq";
+import { hasMcqQuestions, toPublicMcq, type PublicMcqQuestion } from "@/lib/mcq";
 import { isAiInterviewSuperseded } from "@/lib/stage-meta";
+import { after } from "next/server";
+import { ensureMcqTranslated } from "@/lib/mcq-translate";
 
 export const runtime = "nodejs";
 
@@ -116,6 +118,26 @@ export async function GET(
     ...safeSession
   } = session;
 
+  // 객관식 단계 표시 데이터 — 영어 면접이면 번역 캐시(mcqSetEn)를 쓰고, 아직 없으면
+  // translating 신호를 주고 백그라운드 번역을 (재)트리거한다(PATCH prefetch 의 백업).
+  let mcqField: {
+    required: boolean;
+    items?: PublicMcqQuestion[];
+    translating?: boolean;
+  };
+  if (!mcqRequired) {
+    mcqField = { required: false };
+  } else if (session.language === "en") {
+    if (hasMcqQuestions(job.mcqSetEn)) {
+      mcqField = { required: true, items: toPublicMcq(job.mcqSetEn ?? []) };
+    } else {
+      mcqField = { required: true, translating: true };
+      after(() => ensureMcqTranslated(job.id));
+    }
+  } else {
+    mcqField = { required: true, items: toPublicMcq(job.mcqSet ?? []) };
+  }
+
   return Response.json({
     session: safeSession,
     candidate: { id: candidate.id, name: candidate.name },
@@ -148,12 +170,12 @@ export async function GET(
           required: true,
           // 강제선택형 — 문항당 진술 2개(a/b), 특성 태그는 비노출.
           // 출제 세트는 공고의 선호 특성 프로필 기준 (법인 컬처핏 설정은 출제 여부만 결정)
-          items: toPublicItems(buildItemSet(parseTraitProfile(job.traitProfile))),
+          items: toPublicItems(
+            buildItemSet(parseTraitProfile(job.traitProfile), session.language)
+          ),
         }
       : { required: false },
     // 객관식 사전 문항 — 정답·검증플래그는 비노출(toPublicMcq). 인성검사 다음 단계로 출제.
-    mcq: mcqRequired
-      ? { required: true, items: toPublicMcq(job.mcqSet ?? []) }
-      : { required: false },
+    mcq: mcqField,
   });
 }

@@ -8,9 +8,11 @@
  * 인증: 토큰만. 언어는 비민감 정보이고 본인확인(동의) 이전 단계라 이메일 검증을 두지 않는다.
  */
 import { db } from "@/lib/db";
-import { interviewSessions } from "@/lib/schema";
+import { interviewSessions, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { after } from "next/server";
 import { normalizeLang } from "@/lib/i18n/interview";
+import { ensureMcqTranslated } from "@/lib/mcq-translate";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -52,6 +54,16 @@ export async function PATCH(
       .update(interviewSessions)
       .set({ language })
       .where(eq(interviewSessions.id, session.id));
+  }
+
+  // 영어 선택 시 그 공고의 객관식을 백그라운드로 미리 번역(prefetch) — 동의·인성검사를
+  // 보는 동안 끝나도록. 멱등(이미 번역/진행 중이면 skip). 응답은 기다리지 않는다.
+  if (language === "en") {
+    const [cand] = await db
+      .select({ jobId: candidates.jobId })
+      .from(candidates)
+      .where(eq(candidates.id, session.candidateId));
+    if (cand) after(() => ensureMcqTranslated(cand.jobId));
   }
   return Response.json({ ok: true, language });
 }

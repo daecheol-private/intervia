@@ -151,7 +151,7 @@ export async function POST(
   if (cultureFit && session.personalityProfile && session.personalityResponses) {
     // 출제·앵커 모두 공고의 선호 특성 프로필 기준 (검사 출제 세트와 동일해야 함)
     const jobTrait = parseTraitProfile(job.traitProfile);
-    const items = buildItemSet(jobTrait);
+    const items = buildItemSet(jobTrait, session.language);
     personalityAnchors = notableResponses(
       items,
       session.personalityResponses,

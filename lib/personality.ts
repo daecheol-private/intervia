@@ -15,6 +15,8 @@
  *   → 무성의·무작위 응답 변별. 진짜 변별은 면접 행동 검증이 담당한다.
  */
 
+import type { Lang } from "./i18n/interview";
+
 export type TraitKey =
   | "openness"
   | "conscientiousness"
@@ -123,7 +125,7 @@ export function traitProfileInputToJson(
  * 인덱스 0~3: 1라운드(전체 10쌍) / 4~5: 2라운드(앞 N쌍만 재질문) /
  * 8: 심화 자기 진술 / 9: 심화 파트너 진술(자기 진술과 인덱스를 분리해야 high 특성이 인접해도 문장이 겹치지 않음). 6·7: 예비.
  */
-const STATEMENTS: Record<TraitKey, string[]> = {
+const STATEMENTS_KO: Record<TraitKey, string[]> = {
   openness: [
     "익숙한 방법보다 새로운 방식을 먼저 시도해 본다",
     "처음 해 보는 일을 맡는 것이 즐겁다",
@@ -186,6 +188,77 @@ const STATEMENTS: Record<TraitKey, string[]> = {
   ],
 };
 
+// STATEMENTS_KO 의 영어판 — 인덱스·특성·개수(10)가 완전히 동일해야 한다.
+// 채점은 trait·문항 id 기반이라 텍스트만 다르고 점수에는 영향이 없다(영어 면접 지원자에게
+// 같은 문항을 영어로 보여줄 뿐). 강제선택이므로 모든 진술은 긍정적으로 들리게 번역.
+const STATEMENTS_EN: Record<TraitKey, string[]> = {
+  openness: [
+    "I try new approaches before falling back on familiar ones",
+    "I enjoy taking on tasks I've never done before",
+    "I find joy in broadening my knowledge across many fields",
+    "When I see a better way, I'll change even an established process",
+    "I feel energized in fast-changing environments",
+    "I tend to adopt new tools and technologies early",
+    "I look for opportunities in paths others haven't taken",
+    "I'm most absorbed in the idea-shaping stage",
+    "I'm not afraid to dive into unfamiliar territory",
+    "If there's a better way, I'll gladly relearn it from scratch",
+  ],
+  conscientiousness: [
+    "Once I start something, I see it through to the end",
+    "I make a plan and follow it through",
+    "I check the details carefully",
+    "I manage my schedule to finish ahead of the deadline",
+    "I strive to meet the high standards I set for myself",
+    "I review once more to reduce mistakes",
+    "I finish what I take on, no matter what",
+    "I deliver consistent quality even on repetitive work",
+    "I keep even the smallest promises",
+    "I push the quality of my work all the way up",
+  ],
+  extraversion: [
+    "I easily start a conversation with people I've just met",
+    "I gain energy from working with many people",
+    "I'm comfortable voicing my opinion in front of a group",
+    "I tend to lead the conversation in meetings",
+    "I take on the role of connecting people and setting the mood",
+    "I don't find it burdensome to give presentations or demos",
+    "My thoughts come together in lively discussion",
+    "I look forward to occasions where I meet new people",
+    "I enjoy being the one who energizes the team",
+    "I tend to speak up first even in a room of strangers",
+  ],
+  agreeableness: [
+    "When a colleague is struggling, I'm the first to offer help",
+    "I make an effort to see things from the other person's point of view",
+    "Even when we disagree, I respect the other person's perspective",
+    "I can give up my own way for the team's success",
+    "I hear out my teammates before making a decision",
+    "When conflict arises, I tend to the relationship first",
+    "I find it rewarding to help colleagues grow",
+    "I put shared goals ahead of personal achievement",
+    "I notice what's needed before being asked for help",
+    "I believe good teamwork leads to good results",
+  ],
+  emotionalStability: [
+    "I stay composed even under intense pressure",
+    "I tend to bounce back fairly quickly after a failure",
+    "Criticism doesn't shake me much emotionally",
+    "I calmly look for alternatives when unexpected problems arise",
+    "I take stressful situations as chances to grow",
+    "The more urgent things get, the calmer I become",
+    "I focus on facts rather than emotions when making judgments",
+    "I perform at my usual level even in tense settings",
+    "I keep my drive even through difficult times",
+    "Even when the result is poor, I look for the lesson first",
+  ],
+};
+
+const STATEMENTS_BY_LANG: Record<Lang, Record<TraitKey, string[]>> = {
+  ko: STATEMENTS_KO,
+  en: STATEMENTS_EN,
+};
+
 export type PersonalityItem = {
   id: string;
   /** 선택지 1 */
@@ -227,7 +300,8 @@ const REPEAT_PAIRINGS_COUNT = 5;
 
 // 결정적 생성 — 라운드별로 좌우를 뒤집어 위치 편향을 상쇄.
 // 진술 배정: 특성별 등장 순서대로 1라운드 0~, 2라운드 4~ 사용 (재사용 없음).
-function buildBaseItems(): PersonalityItem[] {
+function buildBaseItems(lang: Lang): PersonalityItem[] {
+  const S = STATEMENTS_BY_LANG[lang];
   const items: PersonalityItem[] = [];
   for (const round of [0, 1] as const) {
     const used: Record<TraitKey, number> = {
@@ -240,8 +314,8 @@ function buildBaseItems(): PersonalityItem[] {
     const pairings =
       round === 0 ? PAIRINGS : PAIRINGS.slice(0, REPEAT_PAIRINGS_COUNT);
     pairings.forEach(([x, y], i) => {
-      const sx = STATEMENTS[x][round * 4 + used[x]++];
-      const sy = STATEMENTS[y][round * 4 + used[y]++];
+      const sx = S[x][round * 4 + used[x]++];
+      const sy = S[y][round * 4 + used[y]++];
       const first = round === 0 ? { trait: x, text: sx } : { trait: y, text: sy };
       const second = round === 0 ? { trait: y, text: sy } : { trait: x, text: sx };
       items.push({
@@ -256,15 +330,20 @@ function buildBaseItems(): PersonalityItem[] {
   return items;
 }
 
-const BASE_ITEMS: PersonalityItem[] = buildBaseItems();
+const BASE_ITEMS_KO = buildBaseItems("ko");
+const BASE_ITEMS_EN = buildBaseItems("en");
 
 /**
  * 공고 특성 프로필에 따른 출제 세트 — base(1라운드 10 + 2라운드 N)는 항상, high 특성당 심화 1쌍 추가.
  * 같은 프로필이면 항상 같은 세트·순서 (결정적). 총 문항 = (10 + REPEAT_PAIRINGS_COUNT) + high 수(0~3).
  */
-export function buildItemSet(profile?: TraitProfile | null): PersonalityItem[] {
+export function buildItemSet(
+  profile?: TraitProfile | null,
+  lang: Lang = "ko"
+): PersonalityItem[] {
   const p = profile ?? DEFAULT_TRAIT_PROFILE;
-  const items = [...BASE_ITEMS];
+  const S = STATEMENTS_BY_LANG[lang];
+  const items = [...(lang === "en" ? BASE_ITEMS_EN : BASE_ITEMS_KO)];
   for (const t of TRAIT_KEYS) {
     if (p[t] !== "high") continue;
     const idx = TRAIT_KEYS.indexOf(t);
@@ -273,8 +352,8 @@ export function buildItemSet(profile?: TraitProfile | null): PersonalityItem[] {
     // 자기 진술은 8번, 파트너 진술은 9번 — 인덱스를 분리해야 파트너 특성도 high 라
     // 자기 심화에서 파트너[8]을 자기 진술로 다시 써(같은 문장 중복) 출제되는 일이 없다.
     // (각 특성은 정확히 한 번만 누군가의 파트너 → 파트너[9]끼리도 겹치지 않음)
-    const self = { trait: t, text: STATEMENTS[t][8] };
-    const other = { trait: partner, text: STATEMENTS[partner][9] };
+    const self = { trait: t, text: S[t][8] };
+    const other = { trait: partner, text: S[partner][9] };
     items.push({
       id: `em-${t}-1`,
       // high 특성이 한쪽에 고정되지 않도록 idx 짝/홀로 좌우 교차 (위치 균형)

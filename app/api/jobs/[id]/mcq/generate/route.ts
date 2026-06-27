@@ -102,7 +102,14 @@ export async function POST(
       // 생성 성공 → 세트 저장 + 기본 적용(ON). HR 이 토글로 끌 수 있다.
       await db
         .update(jobPostings)
-        .set({ mcqSet: questions, mcqGeneratingAt: null, mcqEnabled: true })
+        .set({
+          mcqSet: questions,
+          mcqGeneratingAt: null,
+          mcqEnabled: true,
+          // 재생성된 문항이므로 영어 번역 캐시 무효화 — 다음 영어 지원자 진입 시 재번역.
+          mcqSetEn: null,
+          mcqEnTranslatingAt: null,
+        })
         .where(eq(jobPostings.id, jobId));
     } catch (e) {
       log.error("mcq_generate_failed", {

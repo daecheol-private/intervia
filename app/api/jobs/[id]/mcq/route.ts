@@ -92,6 +92,9 @@ export async function PUT(
     .set({
       mcqSet: empty ? null : set,
       mcqGeneratingAt: null,
+      // 문항이 바뀌면 영어 번역 캐시 무효화 — 다음 영어 지원자 진입 시 재번역된다.
+      mcqSetEn: null,
+      mcqEnTranslatingAt: null,
       ...(empty ? { mcqEnabled: false } : {}),
     })
     .where(eq(jobPostings.id, a.jobId));
