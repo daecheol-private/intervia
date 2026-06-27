@@ -444,6 +444,51 @@ function ConfidenceChip({ c }: { c?: Confidence }) {
   );
 }
 
+/** 6축 한 항목 (라벨·가중치·점수·바·사유) — BreakdownBlock/BreakdownBars 공유. */
+function AxisRow({
+  axis,
+  breakdown,
+}: {
+  axis: (typeof SCREENING_AXES)[number];
+  breakdown: NonNullable<NonNullable<Candidate["screeningReport"]>["breakdown"]>;
+}) {
+  const { key, label, weight } = axis;
+  const d = breakdown[key as BreakdownKey];
+  return (
+    <div className="py-2 first:pt-0 last:pb-0">
+      <div className="flex items-baseline justify-between gap-2 mb-1">
+        <span className="text-sm font-medium text-ink">
+          {label}
+          <span className="text-[10px] text-ink-muted ml-1.5 font-normal">
+            {weight}
+          </span>
+        </span>
+        <span
+          className={`text-base font-bold tabular-nums ${
+            d ? scoreColor(d.score) : "text-ink-muted"
+          }`}
+        >
+          {d ? d.score : "—"}
+        </span>
+      </div>
+      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-primary transition-all"
+          style={{
+            width: `${d ? Math.max(0, Math.min(100, d.score)) : 0}%`,
+          }}
+        />
+      </div>
+      {d?.reason && (
+        <p className="text-[11px] text-ink-muted mt-1 leading-snug flex items-start gap-1.5">
+          <span className="flex-1">{d.reason}</span>
+          <ConfidenceChip c={d.confidence} />
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function BreakdownBlock({
   breakdown,
 }: {
@@ -463,42 +508,9 @@ export function BreakdownBlock({
           <FitHexagon breakdown={breakdown} />
         </div>
         <div className="divide-y divide-border-default">
-          {SCREENING_AXES.map(({ key, label, weight }) => {
-            const d = breakdown[key as BreakdownKey];
-            return (
-              <div key={key} className="py-2 first:pt-0 last:pb-0">
-                <div className="flex items-baseline justify-between gap-2 mb-1">
-                  <span className="text-sm font-medium text-ink">
-                    {label}
-                    <span className="text-[10px] text-ink-muted ml-1.5 font-normal">
-                      {weight}
-                    </span>
-                  </span>
-                  <span
-                    className={`text-base font-bold tabular-nums ${
-                      d ? scoreColor(d.score) : "text-ink-muted"
-                    }`}
-                  >
-                    {d ? d.score : "—"}
-                  </span>
-                </div>
-                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all"
-                    style={{
-                      width: `${d ? Math.max(0, Math.min(100, d.score)) : 0}%`,
-                    }}
-                  />
-                </div>
-                {d?.reason && (
-                  <p className="text-[11px] text-ink-muted mt-1 leading-snug flex items-start gap-1.5">
-                    <span className="flex-1">{d.reason}</span>
-                    <ConfidenceChip c={d.confidence} />
-                  </p>
-                )}
-              </div>
-            );
-          })}
+          {SCREENING_AXES.map((axis) => (
+            <AxisRow key={axis.key} axis={axis} breakdown={breakdown} />
+          ))}
         </div>
       </div>
       {!hasNewAxes && (
@@ -524,43 +536,15 @@ export function BreakdownBars({
       <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
         공고 적합도 (6축)
       </div>
-      <div className="divide-y divide-border-default">
-        {SCREENING_AXES.map(({ key, label, weight }) => {
-          const d = breakdown[key as BreakdownKey];
-          return (
-            <div key={key} className="py-2 first:pt-0 last:pb-0">
-              <div className="flex items-baseline justify-between gap-2 mb-1">
-                <span className="text-sm font-medium text-ink">
-                  {label}
-                  <span className="text-[10px] text-ink-muted ml-1.5 font-normal">
-                    {weight}
-                  </span>
-                </span>
-                <span
-                  className={`text-base font-bold tabular-nums ${
-                    d ? scoreColor(d.score) : "text-ink-muted"
-                  }`}
-                >
-                  {d ? d.score : "—"}
-                </span>
-              </div>
-              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{
-                    width: `${d ? Math.max(0, Math.min(100, d.score)) : 0}%`,
-                  }}
-                />
-              </div>
-              {d?.reason && (
-                <p className="text-[11px] text-ink-muted mt-1 leading-snug flex items-start gap-1.5">
-                  <span className="flex-1">{d.reason}</span>
-                  <ConfidenceChip c={d.confidence} />
-                </p>
-              )}
-            </div>
-          );
-        })}
+      {/* 6축을 3:3 으로 2분할 — 좁은 화면에서는 자동으로 한 열로 쌓임. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-8">
+        {[SCREENING_AXES.slice(0, 3), SCREENING_AXES.slice(3)].map((col, ci) => (
+          <div key={ci} className="divide-y divide-border-default">
+            {col.map((axis) => (
+              <AxisRow key={axis.key} axis={axis} breakdown={breakdown} />
+            ))}
+          </div>
+        ))}
       </div>
       {!hasNewAxes && (
         <div className="text-[11px] text-ink-muted text-center">
