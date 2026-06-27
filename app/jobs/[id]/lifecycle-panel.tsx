@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { X, UserCheck } from "lucide-react";
 import { formatLocalDate } from "@/lib/utils";
 import { notify, confirmDialog } from "@/app/components/Dialog";
 import type { Job } from "./types";
@@ -253,9 +253,12 @@ export function InterviewersInline({ jobId }: { jobId: number }) {
   return (
     <div
       data-tour="interviewers-inline"
-      className="flex items-center flex-wrap justify-end gap-1.5 text-xs"
+      className="flex items-center flex-wrap justify-end gap-1.5 text-sm"
     >
-      <span className="text-ink-muted">면접관</span>
+      <span className="inline-flex items-center gap-1 text-ink-soft font-medium">
+        <UserCheck className="w-4 h-4 text-ink-muted" />
+        면접관
+      </span>
       {data.interviewers.length === 0 ? (
         <span className="text-ink-muted">미지정</span>
       ) : (
@@ -263,13 +266,13 @@ export function InterviewersInline({ jobId }: { jobId: number }) {
           <span
             key={r.userId}
             title={r.email}
-            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-surface-alt text-ink-soft"
+            className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-0.5 rounded-full bg-accent-soft text-primary-deep font-semibold ring-1 ring-accent/40"
           >
             {r.name}
             <button
               onClick={() => remove(r.userId, r.name)}
               disabled={busy}
-              className="inline-flex items-center text-ink-muted hover:text-danger disabled:opacity-50 leading-none"
+              className="inline-flex items-center text-primary-deep/50 hover:text-danger disabled:opacity-50 leading-none"
               title="면접관에서 제외"
             >
               <X className="w-3.5 h-3.5" />
@@ -281,7 +284,7 @@ export function InterviewersInline({ jobId }: { jobId: number }) {
         <button
           onClick={selfAssign}
           disabled={busy}
-          className="px-2 py-0.5 rounded-full border border-primary/40 text-primary-deep hover:bg-primary-soft font-medium disabled:opacity-50"
+          className="px-2.5 py-0.5 rounded-full border border-primary/40 text-primary-deep hover:bg-primary-soft text-xs font-medium disabled:opacity-50"
           title="나를 이 공고의 면접관으로 지정"
         >
           {busy ? "처리 중…" : "+ 면접관 지정"}
