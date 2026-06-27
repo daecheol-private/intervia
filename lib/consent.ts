@@ -13,6 +13,7 @@
 import { db } from "./db";
 import { consentLogs } from "./schema";
 import { eq, desc } from "drizzle-orm";
+import type { Lang } from "./i18n/interview";
 
 // 1.1.0 — Google 국외이전 단독 항목 분리, AI 거부권 영향 명시 (PIPA §28의8, §37의2)
 // 1.2.0 — 마스킹 표현 절제, 식별가능정보 자동 마스킹 명시
@@ -101,6 +102,75 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     legalBasis: "PIPA §26",
   },
 ] as const;
+
+/**
+ * 영어 동의문 — 위 CONSENT_ITEMS(한국어, 법적 정본) 1.8.0 내용의 기능적 번역.
+ * 외국인 지원자가 영어 면접을 선택했을 때 표시한다. 법적 효력은 한국어판이 가지며
+ * (정본 고지는 동의 화면 상단에 별도 노출), 정식 영문 법무 검토는 운영 배포 전 별도로 진행한다.
+ * key·legalBasis·kind·required·CONSENT_VERSION 은 언어와 무관하게 동일(번역만 추가).
+ */
+const CONSENT_TEXT_EN: Record<
+  string,
+  { title: string; summary: string; description: string }
+> = {
+  collection_use: {
+    title: "Consent to Collection and Use of Personal Information",
+    summary:
+      "Collected: name·contact·age·education·resume·interview transcript · " +
+      "Purpose: hiring process (screening·interview·decision) · " +
+      "Retention: phased deletion after the decision · Refusal: interview unavailable",
+    description:
+      "Items collected: name·email·phone·age·education (level·major·school)·resume text·interview transcript. " +
+      "Purpose of use: conducting the hiring process (document screening·interview·hire/reject decision). " +
+      "Retention period: the original resume file and masked text are deleted immediately upon the hire/reject decision, and evaluation results (scores·recommendation) are automatically deleted 14 days after the job posting closes (in compliance with the Fair Hiring Procedure Act §11). " +
+      "However, a final successful candidate's information is retained until the hiring company deletes it, for onboarding and HR-record purposes. If you refuse, you cannot take part in the interview.\n\n" +
+      "[Behavioral data for fraud prevention] To verify interview fairness, behavioral data on answer input (paste/typing volume, response time, screen-leaving and question-copy attempts) is collected and used to prevent fraud such as proxy answering with external tools. This behavioral data is provided only as reference for the recruiter and does not by itself determine hire/reject. " +
+      "Separately, an AI analysis of the writing style of your answers (estimating the possibility of external AI ghostwriting) is produced as reference material. This analysis does not by itself determine hire/reject.",
+  },
+  cross_border: {
+    title: "Consent to Overseas Transfer of Personal Information",
+    summary:
+      "Overseas transfer: Vercel (USA)·Turso (Japan)·Resend (USA) · " +
+      "AI evaluation·interview processed in Korea (Seoul), excluded from transfer · Refusal: interview unavailable",
+    description:
+      "To operate the service, the above personal information is transferred overseas as follows. Recipient·country·purpose: Vercel Inc. (USA — hosting·resume file storage), Turso (Tokyo, Japan — database), Resend (USA — default system email delivery; the company's own SMTP server is used instead if registered). " +
+      "Items transferred: the items collected above and the interview transcript. Timing·method: transmitted and stored over HTTPS throughout service use. Retention period: same as the collection·use consent above. " +
+      "AI evaluation·interview is processed in the Google Cloud Seoul region (asia-northeast3) and is not subject to overseas transfer. If you refuse, the interview cannot proceed.",
+  },
+  ai_decision: {
+    title: "Notice on Automated AI Evaluation and Your Rights",
+    summary:
+      "AI produces scores·recommendations, but the final hire/reject decision is made by a human recruiter. " +
+      "You have the right to request an explanation of the result, to raise an objection, and to refuse AI evaluation and request a standard hiring process.",
+    description:
+      "For your resume and interview answers, AI (Google Gemini, Google Cloud Seoul region) produces scores·recommendations, but the final hire/reject decision is made through human review by the recruiter — AI does not decide alone. " +
+      "You have the right to (1) request an explanation of the AI evaluation result, (2) raise an objection (a channel is provided), and (3) refuse AI evaluation and request the applying company's standard hiring process (paper resume + human interview).",
+  },
+  processors: {
+    title: "Notice on Entrusted Processors",
+    summary:
+      "Personal information processing is entrusted to Google Cloud Korea·Vercel·Turso·Resend. " +
+      "The full list of processors·tasks·countries·retention is available in §5 of the Privacy Policy.",
+    description:
+      "For smooth service provision, personal information processing is entrusted to Google Cloud Korea (AI evaluation·interview, Seoul asia-northeast3)·Vercel (hosting·file storage)·Turso (database)·Resend (email delivery). " +
+      "The full list of processors·entrusted tasks·countries·retention and the data processing agreement (DPA) details are available in §5 of the Privacy Policy.",
+  },
+};
+
+/**
+ * 선택 언어의 동의 항목 목록. ko 는 원본(CONSENT_ITEMS) 그대로,
+ * en 은 구조·key·legalBasis 는 유지한 채 title/summary/description 만 영어로 교체한 사본.
+ * (en 번역 누락 항목은 해당 항목만 한국어로 폴백.)
+ */
+export function getConsentItems(lang: Lang): ConsentItem[] {
+  if (lang !== "en") return [...CONSENT_ITEMS];
+  return CONSENT_ITEMS.map((item) => {
+    const tr = CONSENT_TEXT_EN[item.key];
+    return tr
+      ? { ...item, title: tr.title, summary: tr.summary, description: tr.description }
+      : item;
+  });
+}
 
 export function validateConsents(
   consents: Record<string, unknown>

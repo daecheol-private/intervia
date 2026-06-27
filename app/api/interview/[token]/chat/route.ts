@@ -214,7 +214,9 @@ export async function POST(
       candidate.screeningReport ?? null,
       cultureFit,
       personalityAnchors,
-      personalityReliabilityNote
+      personalityReliabilityNote,
+      // 지원자가 시작 화면에서 고른 면접 언어 — en 이면 면접관이 영어로 진행(평가 리포트는 한국어 유지).
+      session.language
     ),
     history: history.slice(0, -1).map((m) => ({
       role: m.role,

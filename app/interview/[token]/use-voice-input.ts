@@ -73,10 +73,16 @@ export function useVoiceInput({
   }, []);
 
   const start = useCallback(() => {
+    // 에러 문구 한/영 분기 — lang 은 "ko-KR"/"en-US" 형식. 로직·재시작 동작은 동일, 문구만 변경.
+    const en = lang.startsWith("en");
     setError(null);
     const Ctor = getCtor();
     if (!Ctor) {
-      setError("이 브라우저는 음성 입력을 지원하지 않습니다. (Chrome/Edge/Safari 권장)");
+      setError(
+        en
+          ? "This browser does not support voice input. (Chrome/Edge/Safari recommended)"
+          : "이 브라우저는 음성 입력을 지원하지 않습니다. (Chrome/Edge/Safari 권장)"
+      );
       return;
     }
     // 기존 인스턴스 정리 — stoppingRef 먼저 true 로 만들어 onend 자동재시작 차단
@@ -108,15 +114,25 @@ export function useVoiceInput({
       setInterim(interimAcc);
     };
     rec.onerror = (e) => {
-      const map: Record<string, string> = {
-        "not-allowed": "마이크 권한이 거부되었습니다. 브라우저 설정에서 허용해 주세요.",
-        "service-not-allowed": "음성 인식 서비스가 차단되어 있습니다.",
-        "no-speech": "", // 자주 발생 — 자동 재시작에 의존하므로 알림 X
-        "audio-capture": "마이크 장치를 찾을 수 없습니다.",
-        network: "음성 인식 네트워크 오류.",
-        aborted: "",
-      };
-      const msg = map[e.error] ?? `음성 입력 오류: ${e.error}`;
+      const map: Record<string, string> = en
+        ? {
+            "not-allowed":
+              "Microphone access was denied. Please allow it in your browser settings.",
+            "service-not-allowed": "The speech recognition service is blocked.",
+            "no-speech": "", // 자주 발생 — 자동 재시작에 의존하므로 알림 X
+            "audio-capture": "No microphone device was found.",
+            network: "Speech recognition network error.",
+            aborted: "",
+          }
+        : {
+            "not-allowed": "마이크 권한이 거부되었습니다. 브라우저 설정에서 허용해 주세요.",
+            "service-not-allowed": "음성 인식 서비스가 차단되어 있습니다.",
+            "no-speech": "", // 자주 발생 — 자동 재시작에 의존하므로 알림 X
+            "audio-capture": "마이크 장치를 찾을 수 없습니다.",
+            network: "음성 인식 네트워크 오류.",
+            aborted: "",
+          };
+      const msg = map[e.error] ?? (en ? `Voice input error: ${e.error}` : `음성 입력 오류: ${e.error}`);
       if (msg) setError(msg);
       // 권한 거부 류는 즉시 정지 처리
       if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") {

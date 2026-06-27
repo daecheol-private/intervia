@@ -880,6 +880,11 @@ export const interviewSessions = sqliteTable("interview_sessions", {
   })
     .notNull()
     .default("pending"),
+  // 면접 진행 언어 — 지원자가 시작 화면에서 선택(ko 기본 / en). 동의서·면접관 대화·음성 lang 에 반영.
+  // 평가 리포트는 이 값과 무관하게 항상 한국어. additive ADD COLUMN DEFAULT 'ko' — 기존 세션 백필.
+  language: text("language", { enum: ["ko", "en"] })
+    .notNull()
+    .default("ko"),
   messages: text("messages", { mode: "json" })
     .$type<InterviewMessage[]>()
     .notNull()

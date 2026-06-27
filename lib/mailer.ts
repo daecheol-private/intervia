@@ -459,8 +459,8 @@ export function buildInterviewEmail(opts: {
   const { candidateName, jobTitle, url, expiresAt, orgName } = opts;
   const sender = orgName?.trim() || null;
   const subject = sender
-    ? `[${sender}] AI 면접 안내 — ${jobTitle}`
-    : `[Intervia 면접 안내] ${jobTitle}`;
+    ? `[${sender}] AI 면접 안내 / Interview Invitation — ${jobTitle}`
+    : `[Intervia] AI 면접 안내 / Interview Invitation — ${jobTitle}`;
   const senderLine = sender ? `${sender} 채용팀` : "채용 담당자";
   const text = `안녕하세요 ${candidateName}님,
 
@@ -483,7 +483,31 @@ ${url}
 
 내 정보 보기 / 평가 조회: ${url}/me
 
-감사합니다.`;
+감사합니다.
+
+— English —
+
+Hello ${candidateName},
+
+Thank you for applying to the ${jobTitle} position${sender ? ` at ${sender}` : ""}. Please take your AI interview (powered by Intervia) via the link below.
+
+${url}
+
+Link expires: ${expiresAt}
+
+* Chat-based, about 10-30 minutes.
+* Your results are sent to the recruiter; you will be contacted with next steps.
+* Please use a quiet environment with enough time.
+* Heavy copy-paste from external tools (e.g., ChatGPT) may be flagged in the evaluation report.
+
+[Safety notice]
+* This interview never asks for passwords, payment, financial information, your national ID, or ID copies.
+* This link is for you only - please do not share it.
+* If you did not expect this or it seems suspicious, contact the company directly.
+
+View my info / results: ${url}/me
+
+Thank you.`;
 
   const html = wrapEmailCard({
     innerHtml: `
@@ -512,6 +536,36 @@ ${url}
         • 본 면접은 <strong>비밀번호·결제·금융정보·주민등록번호·신분증 사본</strong>을 절대 요구하지 않습니다.<br>
         • 위 링크는 <strong>본인 전용</strong>이며 타인에게 전달하지 마세요.<br>
         • 요청한 적이 없거나 의심스러우면 ${sender ? `<strong>${escapeHtml(sender)}</strong>에 ` : "지원하신 회사에 "}직접 문의해 주세요.
+      </div>
+      <div style="border-top:1px solid #e2e8f0;margin:28px 0 0;padding-top:20px;">
+        <h2 style="font-size:18px;margin:4px 0 8px;color:#0f172a;">Hello ${escapeHtml(candidateName)},</h2>
+        <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
+          Thank you for applying to the <strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> position${sender ? ` at <strong style="color:#0f172a;">${escapeHtml(sender)}</strong>` : ""}. Please take your AI interview (powered by Intervia) using the button below.
+        </p>
+        <p style="text-align:center;margin:0 0 16px;">
+          <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">Start interview</a>
+        </p>
+        <p style="font-size:12px;color:#64748b;margin:0 0 20px;text-align:center;">
+          If the button does not work, copy this link:<br>
+          <a href="${url}" style="color:${EMAIL_BRAND.primary};word-break:break-all;">${url}</a>
+        </p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:13px;color:#475569;line-height:1.6;">
+          <div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Interview info</div>
+          • Chat-based, about 10–30 minutes.<br>
+          • Your results are sent directly to the recruiter.<br>
+          • <strong>Use a quiet environment with enough time.</strong><br>
+          • <strong>Heavy copy-paste from external tools (e.g., ChatGPT)</strong> may be flagged in the report.<br>
+          • Link expires: <strong>${expiresAt}</strong>
+        </div>
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;font-size:12px;color:#92400e;line-height:1.6;margin-top:12px;">
+          <div style="font-weight:700;margin-bottom:4px;">🔒 Safety notice</div>
+          • This interview never asks for <strong>passwords, payment, financial information, your national ID, or ID copies</strong>.<br>
+          • This link is <strong>for you only</strong> — please do not share it.<br>
+          • If you did not expect this or it seems suspicious, contact ${sender ? `<strong>${escapeHtml(sender)}</strong>` : "the company"} directly.
+        </div>
+        <p style="font-size:12px;color:#64748b;margin:16px 0 0;text-align:center;">
+          <a href="${url}/me" style="color:${EMAIL_BRAND.primary};">View my info / results</a>
+        </p>
       </div>
     `,
     footer: `<a href="${url}/me" style="color:#64748b;text-decoration:underline;">내 정보 보기 / 평가 조회</a><br><br>본 메일은 ${sender ? `${escapeHtml(sender)}의 채용 절차를 위해 ` : ""}Intervia 시스템에서 자동 발송되었습니다.`,

@@ -1,0 +1,1 @@
+ALTER TABLE `interview_sessions` ADD `language` text DEFAULT 'ko' NOT NULL;

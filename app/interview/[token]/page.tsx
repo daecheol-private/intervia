@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useVoiceInput } from "./use-voice-input";
 import { LogoMark, Logo } from "@/app/components/Logo";
 import { MicHelpModal } from "@/app/components/MicHelpModal";
+import { t, normalizeLang, type Lang } from "@/lib/i18n/interview";
 
 type Message = { role: "user" | "model"; content: string };
 
@@ -59,6 +60,8 @@ type SessionInfo = {
   withdrawn?: boolean;
   terminated?: boolean;
   superseded?: boolean;
+  /** 면접 진행 언어 — 지원자가 시작 화면에서 고른 값. 동의 항목도 이 언어로 내려온다. */
+  language?: Lang;
   consentRequired?: boolean;
   consentVersion?: string;
   consentItems?: ConsentItem[];
@@ -76,14 +79,15 @@ type Step = { key: StepKey; label: string };
  * 이 면접의 진행 단계 목록을 만든다. flow(서버가 항상 내려줌) 우선,
  * 없으면 required 플래그로 fallback (채팅 시작 전 화면에서만 정확).
  */
-function buildSteps(info: SessionInfo): Step[] {
+function buildSteps(info: SessionInfo, lang: Lang): Step[] {
   const hasPersonality =
     info.flow?.hasPersonality ?? !!info.personality?.required;
   const hasMcq = info.flow?.hasMcq ?? !!info.mcq?.required;
   const steps: Step[] = [];
-  if (hasPersonality) steps.push({ key: "personality", label: "인성검사" });
-  if (hasMcq) steps.push({ key: "mcq", label: "직무 역량" });
-  steps.push({ key: "interview", label: "면접" });
+  if (hasPersonality)
+    steps.push({ key: "personality", label: t(lang, "step.personality") });
+  if (hasMcq) steps.push({ key: "mcq", label: t(lang, "step.mcq") });
+  steps.push({ key: "interview", label: t(lang, "step.interview") });
   return steps;
 }
 
@@ -91,6 +95,9 @@ export default function InterviewPage() {
   const params = useParams<{ token: string }>();
   const token = params.token;
   const [info, setInfo] = useState<SessionInfo | null>(null);
+  // 면접 진행 언어 — info fetch 로 서버값 반영, 언어 게이트에서 확정.
+  const [lang, setLang] = useState<Lang>("ko");
+  const [langChosen, setLangChosen] = useState(false);
   const [error, setError] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -138,6 +145,7 @@ export default function InterviewPage() {
       .then((d) => {
         if (!d) return;
         setInfo(d);
+        setLang(normalizeLang(d.language));
         setMessages(d.session.messages);
         if (d.session.status === "completed") {
           setEnded(true);
@@ -272,8 +280,8 @@ export default function InterviewPage() {
 
   // 음성 입력 — 인식된 텍스트는 input 에 누적, 사용자가 검토 후 전송 버튼으로 전송
   const voice = useVoiceInput({
-    lang: "ko-KR",
-    onFinalText: (t) => setInput((prev) => (prev ? prev + " " + t : t)),
+    lang: lang === "en" ? "en-US" : "ko-KR",
+    onFinalText: (txt) => setInput((prev) => (prev ? prev + " " + txt : txt)),
   });
   const toggleVoice = () => {
     if (voice.listening) voice.stop();
@@ -290,10 +298,10 @@ export default function InterviewPage() {
 
   const finalize = async () => {
     if (messages.length < 2) {
-      alert("대화가 너무 짧습니다. 답변을 더 진행해 주세요.");
+      alert(t(lang, "interview.tooShort"));
       return;
     }
-    if (!confirm("면접을 종료하시겠습니까?")) return;
+    if (!confirm(t(lang, "interview.confirmEnd"))) return;
     setFinalizing(true);
     setEnded(true);
     await finalizeSilently();
@@ -304,7 +312,7 @@ export default function InterviewPage() {
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">🚫</div>
-        <h1 className="text-xl font-bold text-ink">접속 불가</h1>
+        <h1 className="text-xl font-bold text-ink">{t(lang, "gate.error.title")}</h1>
         <p className="text-ink-soft mt-2">{error}</p>
       </CenteredCard>
     );
@@ -312,22 +320,26 @@ export default function InterviewPage() {
 
   if (!info)
     return (
-      <main className="p-6 text-ink-muted text-center mt-20">불러오는 중...</main>
+      <main className="p-6 text-ink-muted text-center mt-20">
+        {t(lang, "gate.loading")}
+      </main>
     );
 
   // 이 면접의 진행 단계(인성/객관식/면접) — 동의 화면·게이트·면접 헤더의 프로그레스 표시에 공유.
-  const steps = buildSteps(info);
+  const steps = buildSteps(info, lang);
 
   // 지원취소된 후보 — 토큰이 살아있어도 재진입 시 동의 화면 대신 안내.
   if (info.withdrawn) {
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">🗑️</div>
-        <h1 className="text-xl font-bold text-ink">지원이 취소되었습니다</h1>
+        <h1 className="text-xl font-bold text-ink">
+          {t(lang, "gate.withdrawn.title")}
+        </h1>
         <p className="text-ink-soft mt-2 leading-relaxed">
-          이 지원은 지원자 요청으로 취소되어 면접을 진행할 수 없습니다.
+          {t(lang, "gate.withdrawn.body")}
           <br />
-          관심 가져주셔서 감사합니다.
+          {t(lang, "gate.withdrawn.thanks")}
         </p>
       </CenteredCard>
     );
@@ -338,9 +350,11 @@ export default function InterviewPage() {
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">✅</div>
-        <h1 className="text-xl font-bold text-ink">종료된 전형입니다</h1>
+        <h1 className="text-xl font-bold text-ink">
+          {t(lang, "gate.terminated.title")}
+        </h1>
         <p className="text-ink-soft mt-2 leading-relaxed">
-          이 전형은 이미 종결되어 면접을 진행할 수 없습니다.
+          {t(lang, "gate.terminated.body")}
         </p>
       </CenteredCard>
     );
@@ -351,10 +365,11 @@ export default function InterviewPage() {
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">➡️</div>
-        <h1 className="text-xl font-bold text-ink">다음 전형으로 진행되었습니다</h1>
+        <h1 className="text-xl font-bold text-ink">
+          {t(lang, "gate.superseded.title")}
+        </h1>
         <p className="text-ink-soft mt-2 leading-relaxed">
-          이 AI 면접은 더 이상 진행하지 않습니다. 다음 절차는 채용 담당자가
-          별도로 안내해 드립니다.
+          {t(lang, "gate.superseded.body")}
         </p>
       </CenteredCard>
     );
@@ -364,9 +379,27 @@ export default function InterviewPage() {
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">⏱️</div>
-        <h1 className="text-xl font-bold text-ink">만료된 링크입니다</h1>
-        <p className="text-ink-soft mt-2">담당자에게 새 링크를 요청하세요.</p>
+        <h1 className="text-xl font-bold text-ink">
+          {t(lang, "gate.expired.title")}
+        </h1>
+        <p className="text-ink-soft mt-2">{t(lang, "gate.expired.body")}</p>
       </CenteredCard>
+    );
+  }
+
+  // 언어 선택 게이트 — 동의가 필요한(아직 시작 전) 세션에서, 언어를 아직 안 골랐으면
+  // 동의 화면 앞에 한/영 선택을 먼저 받는다. 선택 후 동의 항목을 그 언어로 다시 받아온다.
+  if (info.consentRequired && !langChosen) {
+    return (
+      <LanguageGate
+        token={token}
+        current={info}
+        onChoose={(d) => {
+          setInfo(d);
+          setLang(normalizeLang(d.language));
+          setLangChosen(true);
+        }}
+      />
     );
   }
 
@@ -374,6 +407,7 @@ export default function InterviewPage() {
     return (
       <ConsentGate
         token={token}
+        lang={lang}
         candidateName={info.candidate.name}
         orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
@@ -391,6 +425,7 @@ export default function InterviewPage() {
     return (
       <PersonalityGate
         token={token}
+        lang={lang}
         orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
         items={info.personality.items}
@@ -407,6 +442,7 @@ export default function InterviewPage() {
     return (
       <McqGate
         token={token}
+        lang={lang}
         orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
         items={info.mcq.items}
@@ -446,7 +482,7 @@ export default function InterviewPage() {
             <p className="text-[11px] sm:text-xs text-ink-muted mt-0.5 truncate">
               {info.job.position} · {info.job.level} · {info.job.employmentType}
               {info.job.interviewDurationMinutes
-                ? ` · 약 ${info.job.interviewDurationMinutes}분`
+                ? ` · ${t(lang, "interview.approxMinutes", { minutes: info.job.interviewDurationMinutes })}`
                 : ""}
             </p>
             </div>
@@ -455,17 +491,17 @@ export default function InterviewPage() {
             <button
               onClick={finalize}
               disabled={finalizing || messages.length < 2}
-              aria-label="면접 종료"
+              aria-label={t(lang, "interview.end")}
               className="shrink-0 px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-xs sm:text-sm text-ink-soft disabled:opacity-40 min-h-[36px]"
             >
-              면접 종료
+              {t(lang, "interview.end")}
             </button>
           )}
         </div>
 
         {!ended && steps.length > 1 && (
           <div className="mt-3 pt-3 border-t border-border-default">
-            <StepProgress steps={steps} current="interview" />
+            <StepProgress steps={steps} current="interview" lang={lang} />
           </div>
         )}
 
@@ -474,6 +510,7 @@ export default function InterviewPage() {
             startedAt={info.session.startedAt ?? clientStartedAt}
             messages={messages}
             streaming={streaming}
+            lang={lang}
           />
         )}
         {/* 막힌 후보자가 종료 화면에 도달하지 못해도 쓸 수 있는 상시 신고 채널 */}
@@ -482,7 +519,7 @@ export default function InterviewPage() {
             href={`/interview/${token}/inquiry`}
             className="text-[11px] text-ink-muted hover:text-ink-soft underline"
           >
-            문제가 있나요? 신고 / 문의
+            {t(lang, "interview.report")}
           </a>
         </div>
       </div>
@@ -493,7 +530,7 @@ export default function InterviewPage() {
           ref={scrollRef}
           role="log"
           aria-live="polite"
-          aria-label="면접 대화"
+          aria-label={t(lang, "interview.chatLogAria")}
           className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4 bg-gradient-to-b from-surface-alt/50 to-card"
           // 복사 방지 — 질문을 외부 LLM 으로 옮기는 행위 억제 + 시도 횟수 기록.
           // 차단해도 스크린샷 등 우회는 가능 → 억제·신호 수집 목적.
@@ -514,10 +551,11 @@ export default function InterviewPage() {
                 key={i}
                 role={m.role}
                 content={m.content.replace("[INTERVIEW_END]", "")}
+                lang={lang}
               />
             ))}
           {streaming && messages[messages.length - 1]?.role === "user" && (
-            <div className="flex justify-start" aria-label="응답 생성 중">
+            <div className="flex justify-start" aria-label={t(lang, "interview.generating")}>
               <div className="bg-slate-100 rounded-2xl px-4 py-3">
                 <TypingDots />
               </div>
@@ -537,7 +575,7 @@ export default function InterviewPage() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
                 </span>
-                <span className="font-medium">듣는 중</span>
+                <span className="font-medium">{t(lang, "interview.listening")}</span>
                 {voice.interim && (
                   <span className="text-ink-soft truncate italic">
                     {voice.interim}
@@ -553,17 +591,17 @@ export default function InterviewPage() {
                   onClick={() => setMicHelp(true)}
                   className="shrink-0 underline font-medium hover:text-rose-900"
                 >
-                  설정 방법
+                  {t(lang, "interview.settingsHow")}
                 </button>
               </div>
             )}
             <div className="flex gap-2 items-end">
               <textarea
                 ref={textareaRef}
-                aria-label="답변 입력"
+                aria-label={t(lang, "interview.answerAria")}
                 className="flex-1 border border-border-strong rounded-xl px-3 py-2.5 text-base sm:text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-h-[44px] max-h-[120px]"
                 rows={1}
-                placeholder={voice.listening ? "말씀하세요 — 인식된 내용이 여기에 채워집니다" : "답변을 입력하거나 마이크 버튼을 누르세요"}
+                placeholder={voice.listening ? t(lang, "interview.inputPlaceholderListening") : t(lang, "interview.inputPlaceholder")}
                 value={input}
                 onChange={(e) => {
                   // LLM 보조 신호 — paste 가 아닌 일반 변경은 typedChars 누적
@@ -606,8 +644,8 @@ export default function InterviewPage() {
                   onClick={toggleVoice}
                   // 정지는 streaming 중에도 가능해야 함 — start 만 streaming 중 차단.
                   disabled={!voice.listening && streaming}
-                  aria-label={voice.listening ? "음성 입력 정지" : "음성 입력 시작"}
-                  title={voice.listening ? "정지" : "음성으로 답변하기"}
+                  aria-label={voice.listening ? t(lang, "interview.voiceStop") : t(lang, "interview.voiceStart")}
+                  title={voice.listening ? t(lang, "interview.voiceStopTitle") : t(lang, "interview.voiceStartTitle")}
                   className={
                     "rounded-xl text-sm font-medium shadow-sm min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors " +
                     (voice.listening
@@ -634,16 +672,16 @@ export default function InterviewPage() {
               <button
                 onClick={handleSend}
                 disabled={streaming || !input.trim()}
-                aria-label="전송"
+                aria-label={t(lang, "interview.send")}
                 className="bg-primary hover:bg-primary-deep active:bg-primary-deep text-surface px-4 sm:px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-40 shadow-sm min-h-[44px] min-w-[60px]"
               >
-                전송
+                {t(lang, "interview.send")}
               </button>
             </div>
             <div className="mt-1 flex items-center justify-between gap-2">
               <p className="text-[10px] text-ink-muted hidden sm:block">
-                Enter = 전송, Shift+Enter = 줄바꿈
-                {voice.supported && " · 🎙 마이크로 음성 입력 가능 (Chrome·Edge·Safari)"}
+                {t(lang, "interview.enterHint")}
+                {voice.supported && t(lang, "interview.micHint")}
               </p>
               {voice.supported && (
                 <button
@@ -651,7 +689,7 @@ export default function InterviewPage() {
                   onClick={() => setMicHelp(true)}
                   className="text-[11px] text-ink-muted hover:text-primary-deep underline shrink-0"
                 >
-                  마이크가 안 되나요?
+                  {t(lang, "interview.micTrouble")}
                 </button>
               )}
             </div>
@@ -663,15 +701,15 @@ export default function InterviewPage() {
         <div className="mt-4 bg-gradient-to-br from-primary-soft to-accent-soft/40 border border-primary/30 rounded-2xl p-8 text-center">
           <div className="text-4xl mb-3">✅</div>
           <h2 className="text-lg font-bold text-ink">
-            면접이 종료되었습니다
+            {t(lang, "interview.ended.title")}
           </h2>
           <p className="text-sm text-ink-soft mt-2 leading-relaxed">
-            소중한 시간 내어 면접에 응해 주셔서 감사합니다.
+            {t(lang, "interview.ended.thanks")}
             <br />
-            평가 결과는 채용 담당자에게만 전달되며, 별도로 안내드릴 예정입니다.
+            {t(lang, "interview.ended.resultNote")}
           </p>
           <p className="text-xs text-ink-muted mt-4">
-            이 창은 안전하게 닫으셔도 됩니다.
+            {t(lang, "interview.ended.closeWindow")}
           </p>
           <div className="mt-5 pt-5 border-t border-primary/30 text-xs text-ink-soft space-y-1">
             <div>
@@ -679,7 +717,7 @@ export default function InterviewPage() {
                 href={`/interview/${token}/me`}
                 className="text-primary-deep underline hover:text-primary-deep"
               >
-                내 정보 열람·삭제 (PIPA §35·36)
+                {t(lang, "interview.ended.myInfo")}
               </a>
             </div>
             <div>
@@ -687,7 +725,7 @@ export default function InterviewPage() {
                 href={`/interview/${token}/appeal`}
                 className="text-primary-deep underline hover:text-primary-deep"
               >
-                자동화 의사결정 이의제기 (PIPA §37의2)
+                {t(lang, "interview.ended.appeal")}
               </a>
             </div>
           </div>
@@ -702,13 +740,15 @@ export default function InterviewPage() {
 function ChatBubble({
   role,
   content,
+  lang,
 }: {
   role: "user" | "model";
   content: string;
+  lang: Lang;
 }) {
   if (role === "user") {
     return (
-      <div className="flex justify-end" role="article" aria-label="내 답변">
+      <div className="flex justify-end" role="article" aria-label={t(lang, "interview.bubble.mine")}>
         <div className="max-w-[85%] sm:max-w-[80%] bg-primary text-surface rounded-2xl rounded-br-md px-3.5 py-2.5 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap shadow-sm break-words">
           {content}
         </div>
@@ -716,7 +756,7 @@ function ChatBubble({
     );
   }
   return (
-    <div className="flex justify-start gap-2" role="article" aria-label="면접관 질문">
+    <div className="flex justify-start gap-2" role="article" aria-label={t(lang, "interview.bubble.interviewer")}>
       <LogoMark size={32} className="shrink-0 rounded-full" />
       {/* select-none — 질문 텍스트 선택/복사 방지 (외부 LLM 전달 억제) */}
       <div className="max-w-[85%] sm:max-w-[80%] bg-slate-100 text-slate-900 rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap break-words select-none">
@@ -772,10 +812,12 @@ function StepProgress({
   steps,
   current,
   size = "sm",
+  lang,
 }: {
   steps: Step[];
   current: StepKey | null;
   size?: "sm" | "lg";
+  lang: Lang;
 }) {
   if (steps.length < 2) return null;
   const currentIdx = current ? steps.findIndex((s) => s.key === current) : -1;
@@ -783,7 +825,7 @@ function StepProgress({
   return (
     <ol
       className={`flex items-center ${lg ? "gap-1.5 sm:gap-2" : "gap-1 sm:gap-1.5"}`}
-      aria-label="면접 진행 단계"
+      aria-label={t(lang, "step.progressAria")}
     >
       {steps.map((s, i) => {
         const done = currentIdx >= 0 && i < currentIdx;
@@ -853,10 +895,12 @@ function Timer({
   startedAt,
   messages,
   streaming,
+  lang,
 }: {
   startedAt: string | null;
   messages: Message[];
   streaming: boolean;
+  lang: Lang;
 }) {
   const [now, setNow] = useState<number>(() => Date.now());
   const [answerStartAt, setAnswerStartAt] = useState<number | null>(null);
@@ -886,17 +930,17 @@ function Timer({
   return (
     <div
       className="mt-3 flex items-center gap-4 text-xs text-ink-muted"
-      aria-label={`면접 경과 ${fmtTime(elapsedMs)}`}
+      aria-label={t(lang, "interview.timer.elapsedAria", { time: fmtTime(elapsedMs) })}
     >
       <span className="flex items-center gap-1.5">
-        <span className="text-[10px] text-ink-muted uppercase tracking-wider">전체</span>
+        <span className="text-[10px] text-ink-muted uppercase tracking-wider">{t(lang, "interview.timer.total")}</span>
         <span className="tabular-nums font-semibold text-ink-soft text-sm">
           {fmtTime(elapsedMs)}
         </span>
       </span>
       <span className="text-border-default">|</span>
       <span className="flex items-center gap-1.5">
-        <span className="text-[10px] text-ink-muted uppercase tracking-wider">이번 질문</span>
+        <span className="text-[10px] text-ink-muted uppercase tracking-wider">{t(lang, "interview.timer.thisQuestion")}</span>
         <span
           className={`tabular-nums font-semibold text-sm ${
             answerMs != null ? "text-primary-deep" : "text-ink-muted"
@@ -915,6 +959,7 @@ function Timer({
  */
 function PersonalityGate({
   token,
+  lang,
   orgName,
   jobTitle,
   items,
@@ -922,6 +967,7 @@ function PersonalityGate({
   onDone,
 }: {
   token: string;
+  lang: Lang;
   orgName: string | null;
   jobTitle: string;
   items: Array<{ id: string; a: string; b: string }>;
@@ -994,28 +1040,27 @@ function PersonalityGate({
             {orgName}
           </p>
         )}
-        <p className="text-xs text-ink-muted mt-0.5 mb-4">{jobTitle} AI 면접</p>
+        <p className="text-xs text-ink-muted mt-0.5 mb-4">{jobTitle} {t(lang, "interview.aiInterview")}</p>
         <div className="text-3xl mb-3">📝</div>
-        <h1 className="text-xl font-bold text-ink">면접 전 사전 문항</h1>
+        <h1 className="text-xl font-bold text-ink">{t(lang, "personality.start.title")}</h1>
         {steps.length > 1 && (
           <div className="mt-4 flex justify-center">
-            <StepProgress steps={steps} current="personality" />
+            <StepProgress steps={steps} current="personality" lang={lang} />
           </div>
         )}
         <p className="text-sm text-ink-soft mt-4 leading-relaxed text-left">
-          <strong>{jobTitle}</strong> AI 면접을 시작하기 전,{" "}
-          <strong>{total}개의 간단한 문항</strong>에 답해 주세요. 각 문항에서{" "}
-          <strong>두 문장 중 나에게 더 가까운 쪽</strong>을 고르면 됩니다. 약
-          2~3분 소요됩니다.
+          <strong>{jobTitle}</strong>{t(lang, "personality.start.intro1")}
+          <strong>{total}{t(lang, "personality.start.intro2")}</strong>{t(lang, "personality.start.intro3")}
+          <strong>{t(lang, "personality.start.intro4")}</strong>{t(lang, "personality.start.intro5")}
         </p>
         <ul className="text-xs text-ink-muted mt-4 space-y-1.5 text-left bg-surface-alt border border-border-default rounded-xl p-4">
-          <li>· 정답은 없습니다 — 두 문장 모두 좋은 모습이며, 평소의 나에 더 가까운 쪽을 고르면 됩니다.</li>
+          <li>{t(lang, "personality.start.bullet1")}</li>
           <li>
-            · <strong className="text-ink-soft">응답하신 내용은 이어지는 면접에서 실제 경험 사례로 확인됩니다.</strong>{" "}
-            솔직한 응답이 가장 유리합니다.
+            · <strong className="text-ink-soft">{t(lang, "personality.start.bullet2a")}</strong>{" "}
+            {t(lang, "personality.start.bullet2b")}
           </li>
-          <li>· 응답은 면접 참고 자료로만 활용되며 합격·불합격을 결정하지 않습니다.</li>
-          <li>· 모든 문항에 응답하면 면접이 자동으로 시작됩니다.</li>
+          <li>{t(lang, "personality.start.bullet3")}</li>
+          <li>{t(lang, "personality.start.bullet4")}</li>
         </ul>
         <button
           onClick={() => {
@@ -1024,7 +1069,7 @@ function PersonalityGate({
           }}
           className="mt-6 w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-surface text-sm font-semibold shadow-sm"
         >
-          시작하기
+          {t(lang, "common.start")}
         </button>
       </CenteredCard>
     );
@@ -1036,9 +1081,9 @@ function PersonalityGate({
         <div className="flex justify-center mb-4">
           <TypingDots />
         </div>
-        <h1 className="text-lg font-bold text-ink">응답 제출 중...</h1>
+        <h1 className="text-lg font-bold text-ink">{t(lang, "common.submitting")}</h1>
         <p className="text-sm text-ink-muted mt-2">
-          잠시 후 면접이 시작됩니다.
+          {t(lang, "common.submittingHint")}
         </p>
       </CenteredCard>
     );
@@ -1059,31 +1104,31 @@ function PersonalityGate({
                   {orgName}
                 </p>
                 <p className="text-[11px] text-ink-muted truncate leading-tight">
-                  {jobTitle} <span className="text-ink-muted">AI 면접</span>
+                  {jobTitle} <span className="text-ink-muted">{t(lang, "interview.aiInterview")}</span>
                 </p>
               </>
             ) : (
               <p className="text-base font-bold text-ink truncate leading-tight">
                 {jobTitle}{" "}
-                <span className="font-normal text-ink-muted">AI 면접</span>
+                <span className="font-normal text-ink-muted">{t(lang, "interview.aiInterview")}</span>
               </p>
             )}
           </div>
         </div>
         {steps.length > 1 && (
           <div className="px-5 pt-3.5">
-            <StepProgress steps={steps} current="personality" />
+            <StepProgress steps={steps} current="personality" lang={lang} />
           </div>
         )}
         {/* 진행 헤더 */}
         <div className="px-5 pt-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
-              사전 문항
+              {t(lang, "personality.sectionLabel")}
             </span>
             <span
               className="text-xs font-semibold text-ink-soft tabular-nums"
-              aria-label={`${total}문항 중 ${idx + 1}번째`}
+              aria-label={t(lang, "personality.progressAria", { total, idx: idx + 1 })}
             >
               {idx + 1} / {total}
             </span>
@@ -1105,11 +1150,12 @@ function PersonalityGate({
         {/* 문항 — 강제선택: 두 진술 중 더 나에 가까운 쪽 */}
         <div className="px-5 py-6">
           <p className="text-sm font-medium text-ink-muted">
-            둘 중 <strong className="text-ink">나에게 더 가까운 쪽</strong>을
-            골라 주세요
+            {t(lang, "personality.choicePromptA")}
+            <strong className="text-ink">{t(lang, "personality.choicePromptB")}</strong>
+            {t(lang, "personality.choicePromptC")}
           </p>
 
-          <div className="mt-4 space-y-3" role="radiogroup" aria-label="응답 선택">
+          <div className="mt-4 space-y-3" role="radiogroup" aria-label={t(lang, "personality.choiceAria")}>
             {(
               [
                 [1, current.a],
@@ -1156,7 +1202,7 @@ function PersonalityGate({
                 onClick={() => void submit(answers)}
                 className="ml-2 underline font-medium"
               >
-                다시 제출
+                {t(lang, "common.resubmit")}
               </button>
             </div>
           )}
@@ -1170,10 +1216,10 @@ function PersonalityGate({
             disabled={idx === 0}
             className="text-xs text-ink-muted hover:text-ink-soft disabled:opacity-0 px-2 py-1.5"
           >
-            ← 이전 문항
+            {t(lang, "common.prevQuestion")}
           </button>
           <span className="text-[10px] text-ink-muted">
-            둘 다 좋은 모습입니다 — 더 가까운 쪽이면 됩니다
+            {t(lang, "personality.footerHint")}
           </span>
         </div>
       </div>
@@ -1183,6 +1229,7 @@ function PersonalityGate({
 
 function McqGate({
   token,
+  lang,
   orgName,
   jobTitle,
   items,
@@ -1190,6 +1237,7 @@ function McqGate({
   onDone,
 }: {
   token: string;
+  lang: Lang;
   orgName: string | null;
   jobTitle: string;
   items: Array<{ id: string; question: string; options: string[] }>;
@@ -1260,30 +1308,29 @@ function McqGate({
             {orgName}
           </p>
         )}
-        <p className="text-xs text-ink-muted mt-0.5 mb-4">{jobTitle} AI 면접</p>
+        <p className="text-xs text-ink-muted mt-0.5 mb-4">{jobTitle} {t(lang, "interview.aiInterview")}</p>
         <div className="text-3xl mb-3">📋</div>
-        <h1 className="text-xl font-bold text-ink">면접 전 직무 역량 평가</h1>
+        <h1 className="text-xl font-bold text-ink">{t(lang, "mcq.start.title")}</h1>
         {steps.length > 1 && (
           <div className="mt-4 flex justify-center">
-            <StepProgress steps={steps} current="mcq" />
+            <StepProgress steps={steps} current="mcq" lang={lang} />
           </div>
         )}
         <p className="text-sm text-ink-soft mt-4 leading-relaxed text-left">
-          <strong>{jobTitle}</strong> AI 면접을 시작하기 전,{" "}
-          <strong>{total}개의 4지선다 문제</strong>를 풀어 주세요. 직무 기본기를
-          확인하는 문제이며, 각 문항에서 <strong>보기 4개 중 하나</strong>를
-          고르면 자동으로 다음 문제로 넘어갑니다.
+          <strong>{jobTitle}</strong>{t(lang, "mcq.start.intro1")}
+          <strong>{total}{t(lang, "mcq.start.intro2")}</strong>{t(lang, "mcq.start.intro3")}
+          <strong>{t(lang, "mcq.start.intro4")}</strong>{t(lang, "mcq.start.intro5")}
         </p>
         <ul className="text-xs text-ink-muted mt-4 space-y-1.5 text-left bg-surface-alt border border-border-default rounded-xl p-4">
-          <li>· 부담 없이 풀어 주세요 — 직무의 기본기를 확인하는 수준입니다.</li>
-          <li>· 점수는 면접 참고 자료로만 활용되며 합격·불합격을 결정하지 않습니다.</li>
-          <li>· 모든 문항에 응답하면 면접이 자동으로 시작됩니다.</li>
+          <li>{t(lang, "mcq.start.bullet1")}</li>
+          <li>{t(lang, "mcq.start.bullet2")}</li>
+          <li>{t(lang, "mcq.start.bullet3")}</li>
         </ul>
         <button
           onClick={() => setStarted(true)}
           className="mt-6 w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-surface text-sm font-semibold shadow-sm"
         >
-          시작하기
+          {t(lang, "common.start")}
         </button>
       </CenteredCard>
     );
@@ -1295,8 +1342,8 @@ function McqGate({
         <div className="flex justify-center mb-4">
           <TypingDots />
         </div>
-        <h1 className="text-lg font-bold text-ink">응답 제출 중...</h1>
-        <p className="text-sm text-ink-muted mt-2">잠시 후 면접이 시작됩니다.</p>
+        <h1 className="text-lg font-bold text-ink">{t(lang, "common.submitting")}</h1>
+        <p className="text-sm text-ink-muted mt-2">{t(lang, "common.submittingHint")}</p>
       </CenteredCard>
     );
   }
@@ -1314,31 +1361,31 @@ function McqGate({
                   {orgName}
                 </p>
                 <p className="text-[11px] text-ink-muted truncate leading-tight">
-                  {jobTitle} <span className="text-ink-muted">AI 면접</span>
+                  {jobTitle} <span className="text-ink-muted">{t(lang, "interview.aiInterview")}</span>
                 </p>
               </>
             ) : (
               <p className="text-base font-bold text-ink truncate leading-tight">
                 {jobTitle}{" "}
-                <span className="font-normal text-ink-muted">AI 면접</span>
+                <span className="font-normal text-ink-muted">{t(lang, "interview.aiInterview")}</span>
               </p>
             )}
           </div>
         </div>
         {steps.length > 1 && (
           <div className="px-5 pt-3.5">
-            <StepProgress steps={steps} current="mcq" />
+            <StepProgress steps={steps} current="mcq" lang={lang} />
           </div>
         )}
         {/* 진행 헤더 */}
         <div className="px-5 pt-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
-              직무 역량
+              {t(lang, "mcq.sectionLabel")}
             </span>
             <span
               className="text-xs font-semibold text-ink-soft tabular-nums"
-              aria-label={`${total}문항 중 ${idx + 1}번째`}
+              aria-label={t(lang, "mcq.progressAria", { total, idx: idx + 1 })}
             >
               {idx + 1} / {total}
             </span>
@@ -1363,7 +1410,7 @@ function McqGate({
             {current.question}
           </p>
 
-          <div className="mt-4 space-y-2.5" role="radiogroup" aria-label="보기 선택">
+          <div className="mt-4 space-y-2.5" role="radiogroup" aria-label={t(lang, "mcq.optionsAria")}>
             {current.options.map((text, i) => {
               const isSelected = selected === i;
               return (
@@ -1412,10 +1459,10 @@ function McqGate({
             disabled={idx === 0}
             className="text-xs text-ink-muted hover:text-ink-soft disabled:opacity-0 px-2 py-2"
           >
-            ← 이전
+            {t(lang, "common.prev")}
           </button>
           <span className="text-[10px] text-ink-muted">
-            {isLast ? "선택하면 면접이 시작됩니다" : "선택하면 다음 문제로 넘어갑니다"}
+            {isLast ? t(lang, "mcq.footerLast") : t(lang, "mcq.footerNext")}
           </span>
         </div>
       </div>
@@ -1436,8 +1483,71 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * 면접 언어 선택 게이트 — 동의 화면 앞 단계. 언어가 아직 확정되지 않은 화면이라
+ * 이 화면만 한/영을 병기한다(lang.* 키는 ko·en 사전이 동일). 선택 시 언어를 저장하고
+ * 동의 항목을 그 언어로 다시 받아와(onChoose) 다음 단계(동의)로 넘긴다.
+ */
+function LanguageGate({
+  token,
+  current,
+  onChoose,
+}: {
+  token: string;
+  current: SessionInfo;
+  onChoose: (d: SessionInfo) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const choose = async (chosen: Lang) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fetch(`/api/interview/${token}/language`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: chosen }),
+      });
+      // 선택 언어로 동의 항목을 다시 받기 위해 GET 재요청.
+      const r = await fetch(`/api/interview/${token}`);
+      const d = (await r.json()) as SessionInfo;
+      onChoose({ ...d, language: normalizeLang(d.language) });
+    } catch {
+      // 네트워크 등 실패 — 화면이 멈추지 않게 기존 info 를 유지하고 언어만 반영해 진행.
+      // (동의 항목은 이전 언어로 남을 수 있으나 화면 정지보다는 낫다.)
+      onChoose({ ...current, language: chosen });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <CenteredCard>
+      <h1 className="text-xl font-bold text-ink">{t("ko", "lang.title")}</h1>
+      <p className="text-ink-soft mt-2 leading-relaxed">{t("ko", "lang.hint")}</p>
+      <div className="mt-6 flex flex-col gap-3">
+        <button
+          onClick={() => void choose("ko")}
+          disabled={busy}
+          className="w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-surface text-sm font-semibold shadow-sm disabled:opacity-50"
+        >
+          {t("ko", "lang.ko")}
+        </button>
+        <button
+          onClick={() => void choose("en")}
+          disabled={busy}
+          className="w-full px-4 py-3 rounded-xl border border-border-strong text-ink-soft hover:bg-surface-alt text-sm font-semibold disabled:opacity-50"
+        >
+          {t("ko", "lang.en")}
+        </button>
+      </div>
+    </CenteredCard>
+  );
+}
+
 function ConsentGate({
   token,
+  lang,
   candidateName,
   orgName,
   jobTitle,
@@ -1446,6 +1556,7 @@ function ConsentGate({
   onAccepted,
 }: {
   token: string;
+  lang: Lang;
   candidateName: string;
   orgName: string | null;
   jobTitle: string;
@@ -1468,12 +1579,7 @@ function ConsentGate({
 
   // 지원취소 — 자의로 지원 철회 시 outcome=withdrawn + 본문 즉시 폐기.
   const withdraw = async () => {
-    if (
-      !confirm(
-        "지원을 취소하시면 면접에 참여할 수 없으며, 제출하신 이력서 정보는 즉시 폐기됩니다. 계속하시겠습니까?"
-      )
-    )
-      return;
+    if (!confirm(t(lang, "consent.withdrawConfirm"))) return;
     setBusy(true);
     setErr("");
     const res = await fetch(`/api/interview/${token}/withdraw`, {
@@ -1525,11 +1631,11 @@ function ConsentGate({
     return (
       <CenteredCard>
         <div className="text-3xl mb-3">🗑️</div>
-        <h1 className="text-xl font-bold text-ink">지원 취소 완료</h1>
+        <h1 className="text-xl font-bold text-ink">{t(lang, "consent.withdrawn.title")}</h1>
         <p className="text-ink-soft mt-2 leading-relaxed">
-          지원이 취소되었으며, 제출하신 이력서 정보는 폐기되었습니다.
+          {t(lang, "consent.withdrawn.body")}
           <br />
-          관심 가져주셔서 감사합니다.
+          {t(lang, "consent.withdrawn.thanks")}
         </p>
       </CenteredCard>
     );
@@ -1542,32 +1648,43 @@ function ConsentGate({
           <div className="mb-3">
             <Logo size={32} />
           </div>
-          <div className="text-xs text-ink-muted mb-1.5">{candidateName} 님</div>
+          <div className="text-xs text-ink-muted mb-1.5">
+            {t(lang, "consent.candidateHonorific", { name: candidateName })}
+          </div>
           {orgName ? (
             <>
               <div className="text-xl sm:text-2xl font-bold text-ink leading-tight">
                 {orgName}
               </div>
               <h1 className="text-sm sm:text-base font-semibold text-ink-soft mt-1">
-                {jobTitle} AI 면접 — 개인정보 처리 동의
+                {t(lang, "consent.title", { job: jobTitle })}
               </h1>
             </>
           ) : (
             <h1 className="text-lg sm:text-xl font-bold text-ink">
-              {jobTitle} AI 면접 — 개인정보 처리 동의
+              {t(lang, "consent.title", { job: jobTitle })}
             </h1>
           )}
         </header>
 
+        {/* 영어판은 법적 정본이 한국어임을 헤더 아래에 작은 안내문으로 고지. (ko 는 빈 문자열) */}
+        {lang === "en" && t(lang, "consent.governingNotice") && (
+          <div className="px-6 py-2.5 border-b border-border-default bg-surface-alt/60">
+            <p className="text-[11px] text-ink-muted leading-relaxed">
+              {t(lang, "consent.governingNotice")}
+            </p>
+          </div>
+        )}
+
         {steps.length > 1 && (
           <div className="px-6 py-5 border-b border-border-default bg-card">
             <p className="text-[15px] font-bold text-ink mb-3">
-              동의를 완료하면 아래 순서로 진행됩니다
+              {t(lang, "consent.flowTitle")}
               <span className="font-medium text-ink-soft text-xs ml-1.5">
-                · 총 {steps.length}단계
+                {t(lang, "consent.flowSteps", { n: steps.length })}
               </span>
             </p>
-            <StepProgress steps={steps} current={null} size="lg" />
+            <StepProgress steps={steps} current={null} size="lg" lang={lang} />
           </div>
         )}
 
@@ -1595,7 +1712,7 @@ function ConsentGate({
                           : "bg-surface-alt text-ink-soft"
                       }`}
                     >
-                      {it.required ? "필수" : "선택"}
+                      {it.required ? t(lang, "common.required") : t(lang, "common.optional")}
                     </span>
                     <span className="text-[10px] text-ink-muted">
                       {it.legalBasis}
@@ -1611,7 +1728,7 @@ function ConsentGate({
                 onClick={() => toggleExpanded(it.key)}
                 className="ml-7 mt-1.5 text-[11px] font-medium text-primary hover:underline"
               >
-                {expanded[it.key] ? "접기" : "자세히 보기"}
+                {expanded[it.key] ? t(lang, "consent.collapse") : t(lang, "consent.expand")}
               </button>
             </li>
           ))}
@@ -1620,7 +1737,7 @@ function ConsentGate({
         {noticeItems.length > 0 && (
           <div className="px-6 py-3 border-t border-border-default bg-surface-alt/60">
             <div className="text-[10px] font-semibold text-ink-muted uppercase tracking-wide mb-2">
-              안내 사항 (확인)
+              {t(lang, "consent.noticeSection")}
             </div>
             <ul className="space-y-2.5">
               {noticeItems.map((it) => (
@@ -1630,7 +1747,7 @@ function ConsentGate({
                       {it.title}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-surface-alt text-ink-soft">
-                      고지
+                      {t(lang, "consent.noticeBadge")}
                     </span>
                     <span className="text-[10px] text-ink-muted">
                       {it.legalBasis}
@@ -1646,7 +1763,7 @@ function ConsentGate({
                     onClick={() => toggleExpanded(it.key)}
                     className="mt-1.5 text-[11px] font-medium text-primary hover:underline"
                   >
-                    {expanded[it.key] ? "접기" : "자세히 보기"}
+                    {expanded[it.key] ? t(lang, "consent.collapse") : t(lang, "consent.expand")}
                   </button>
                 </li>
               ))}
@@ -1657,9 +1774,9 @@ function ConsentGate({
         <div className="px-6 py-4 border-t border-border-default bg-surface-alt">
           <div className="mb-4 bg-card border border-border-default rounded-xl p-4">
             <label className="flex items-center gap-2 text-sm font-semibold text-ink mb-2">
-              본인 확인 — 지원 시 등록한 이메일
+              {t(lang, "consent.identityLabel")}
               <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-danger-soft text-danger">
-                필수
+                {t(lang, "common.required")}
               </span>
             </label>
             <input
@@ -1676,23 +1793,20 @@ function ConsentGate({
               }`}
             />
             <p className="text-[11px] text-ink-muted mt-1.5">
-              면접 링크 유출 방지를 위해 지원 시 등록한 이메일과 일치해야 면접이
-              시작됩니다.
+              {t(lang, "consent.identityHint")}
             </p>
           </div>
           <p className="text-[11px] text-ink-muted leading-relaxed mb-3">
-            동의하지 않거나 지원을 취소하면 면접 절차에 참여할 수 없습니다. 자동화 의사결정 결과에
-            대해서는 본인 식별 후 설명 요청 및 이의제기 권리가 있습니다 (PIPA
-            §37의2). 자세한 사항은 채용 담당자 또는{" "}
+            {t(lang, "consent.legalIntro1")}
             <a
               href="/privacy"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary-deep underline hover:text-primary-deep"
             >
-              개인정보 처리방침
+              {t(lang, "consent.privacyPolicy")}
             </a>
-            을 확인하세요.
+            {t(lang, "consent.legalIntro2")}
           </p>
           {err && (
             <div className="text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2 mb-3">
@@ -1706,19 +1820,19 @@ function ConsentGate({
               className="flex-1 px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {busy
-                ? "처리 중..."
+                ? t(lang, "consent.busy")
                 : !allRequiredChecked
-                  ? "필수 항목에 동의해 주세요"
+                  ? t(lang, "consent.needRequired")
                   : !emailFilled
-                    ? "본인 확인 이메일을 입력해 주세요"
-                    : "동의하고 면접 시작"}
+                    ? t(lang, "consent.needEmail")
+                    : t(lang, "consent.submit")}
             </button>
             <button
               onClick={withdraw}
               disabled={busy}
               className="px-4 py-2.5 rounded-lg border border-danger/40 text-danger hover:bg-danger-soft text-sm disabled:opacity-50"
             >
-              지원취소
+              {t(lang, "consent.withdraw")}
             </button>
           </div>
         </div>

@@ -337,6 +337,13 @@
       "when": 1782409209079,
       "tag": "0047_plain_juggernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1782522612479,
+      "tag": "0048_kind_praxagora",
+      "breakpoints": true
     }
   ]
 }

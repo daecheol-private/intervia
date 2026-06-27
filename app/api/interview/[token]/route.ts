@@ -6,7 +6,7 @@ import {
   organizations,
 } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { hasValidConsent, CONSENT_ITEMS, CONSENT_VERSION } from "@/lib/consent";
+import { hasValidConsent, getConsentItems, CONSENT_VERSION } from "@/lib/consent";
 import type { CultureFitProfile } from "@/lib/prompts";
 import {
   buildItemSet,
@@ -130,9 +130,11 @@ export async function GET(
       interviewDurationMinutes: job.interviewDurationMinutes,
     },
     expired: false,
+    // 면접 진행 언어 — 지원자가 시작 화면에서 고른 값. 동의 항목도 이 언어로 내려준다.
+    language: session.language,
     consentRequired: !consented,
     consentVersion: CONSENT_VERSION,
-    consentItems: CONSENT_ITEMS,
+    consentItems: getConsentItems(session.language),
     // 면접 전체 단계 구성 — required(미완료 여부)와 무관하게 이 면접에 어떤 단계가
     // 있는지. 채팅이 시작되면 personalityRequired/mcqRequired 가 false 로 내려가므로,
     // 면접 단계에서도 프로그레스바가 전체 흐름을 그릴 수 있도록 별도로 전달.
