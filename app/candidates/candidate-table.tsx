@@ -148,7 +148,15 @@ export function CandidateTable({
             : "조건에 맞는 후보자가 없습니다."}
         </div>
       ) : (
-        <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
+        <>
+          {/* 모바일(<sm): 카드 목록 — 한 카드 안에 단계·서류평가까지 노출 */}
+          <ul className="sm:hidden flex flex-col gap-2">
+            {filtered.map((r) => (
+              <CandidateMobileCard key={r.id} r={r} onClick={() => goTo(r)} />
+            ))}
+          </ul>
+          {/* 태블릿·데스크톱(≥sm): 테이블 */}
+          <div className="hidden sm:block bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -253,6 +261,7 @@ export function CandidateTable({
             </table>
           </div>
         </div>
+        </>
       )}
     </div>
   );
@@ -280,6 +289,88 @@ function Chip({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * 모바일 전용 후보자 카드 — 좁은 화면에서 테이블 컬럼이 잘리거나 숨겨지던 문제를 해결.
+ * 단계(StageBadge/OutcomeBadge)와 서류평가(점수+추천)를 한 카드에 함께 노출한다.
+ * (≥sm 에서는 기존 테이블 사용)
+ */
+function CandidateMobileCard({
+  r,
+  onClick,
+}: {
+  r: CandidateRow;
+  onClick: () => void;
+}) {
+  const detail = r.locked
+    ? null
+    : [
+        r.careerYears != null ? `경력 ${r.careerYears}년` : null,
+        r.educationSchool,
+        r.email,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "—";
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full text-left bg-card border border-border-default rounded-xl p-3 shadow-sm transition-colors active:bg-surface-alt/60"
+      >
+        <div className="flex items-start gap-3">
+          <Avatar
+            id={r.id}
+            name={r.name}
+            hasPhoto={!!r.photoFilePath}
+            locked={r.locked}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {r.locked && (
+                <Lock className="w-3.5 h-3.5 text-ink-muted shrink-0" />
+              )}
+              <span className="font-semibold text-ink truncate">{r.name}</span>
+            </div>
+            {/* 단계 / 결과 */}
+            <div className="flex flex-wrap items-center gap-1 mt-1">
+              {r.outcome !== "hired" && <StageBadge stage={r.stage} />}
+              {r.outcome && <OutcomeBadge outcome={r.outcome} />}
+            </div>
+            {/* 공고 */}
+            <div className="text-[11px] text-ink-soft truncate mt-1">
+              {r.jobTitle}
+            </div>
+            {detail && (
+              <div className="text-[11px] text-ink-muted truncate mt-0.5">
+                {detail}
+              </div>
+            )}
+          </div>
+        </div>
+        {/* 서류평가 + 등록일 */}
+        <div className="flex items-center justify-between gap-2 mt-2.5 pt-2.5 border-t border-border-default">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[10px] text-ink-muted uppercase tracking-wider">
+              서류
+            </span>
+            {r.screeningScore != null ? (
+              <span className="text-sm font-bold text-ink tabular-nums">
+                {r.screeningScore}
+              </span>
+            ) : (
+              <span className="text-sm text-ink-muted">—</span>
+            )}
+            {r.recommendation && <RecBadge rec={r.recommendation} />}
+          </div>
+          <span className="text-[11px] text-ink-soft tabular-nums shrink-0">
+            {formatLocalDate(r.createdAt)}
+          </span>
+        </div>
+      </button>
+    </li>
   );
 }
 

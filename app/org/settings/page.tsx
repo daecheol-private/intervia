@@ -472,15 +472,15 @@ export default function OrgSettingsPage() {
                             <span className="text-[11px] text-ink-muted w-8 shrink-0 mt-1.5">
                               가이드
                             </span>
-                            <input
-                              type="text"
+                            <textarea
                               value={item.guide}
                               disabled={!canEdit}
                               onChange={(e) =>
                                 updateQualItem(key, { guide: e.target.value })
                               }
                               placeholder="AI 에게 줄 평가 힌트 (선택)"
-                              className="flex-1 border border-border-strong rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-alt disabled:text-ink-muted"
+                              rows={2}
+                              className="flex-1 min-w-0 resize-y border border-border-strong rounded-md px-2.5 py-1.5 text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-alt disabled:text-ink-muted"
                             />
                           </div>
                         </div>
