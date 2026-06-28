@@ -92,6 +92,11 @@ export default function JobDetailPage() {
   const [locked, setLocked] = useState<{ title: string } | null>(null);
   const [loadError, setLoadError] = useState<"not_found" | "failed" | null>(null);
   const [search, setSearch] = useState("");
+  // 불합격 통보 미발송 안내 배너 — 닫은 시점의 미발송 명단 시그니처(공고별 localStorage).
+  // 현재 명단과 같으면 숨기고, 새 불합격 미발송이 생겨 명단이 바뀌면 다시 표시한다.
+  const [rejectBannerDismissedSig, setRejectBannerDismissedSig] = useState<
+    string | null
+  >(null);
   // 만료 결정 모달 — 닫아도 페이지 상단 띠는 유지. 다시 열기 가능.
   const [expiredModalDismissed, setExpiredModalDismissed] = useState(false);
   // 단일 필터 — 칩·드롭다운·펀널 박스가 전부 이 하나의 상태를 공유한다.
@@ -247,6 +252,17 @@ export default function JobDetailPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, locked]);
+
+  // 불합격 통보 미발송 배너 — 공고별 닫힘 상태 복원(localStorage). 공고 전환 시 갱신.
+  useEffect(() => {
+    try {
+      setRejectBannerDismissedSig(
+        localStorage.getItem(`iv_reject_banner_dismissed_${jobId}`)
+      );
+    } catch {
+      setRejectBannerDismissedSig(null);
+    }
+  }, [jobId]);
 
   // 드래그된 폴더 안의 모든 파일을 재귀 수집 (HTML5 webkitGetAsEntry).
   // 각 파일에 폴더 경로를 보존해서 서버 그룹화에 활용.
@@ -711,12 +727,16 @@ export default function JobDetailPage() {
         if (ca !== cb) return cb - ca;
         return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
       });
-    // 1차 면접 후보는 별도 섹션 상단 노출 + border 강조 (즐겨찾기는 제외)
+    // 1차 면접 후보는 별도 섹션 상단 노출 + border 강조 (즐겨찾기는 제외).
+    // 단, 종결(합격/불합격/취소)된 후보는 "일정 제시" 액션 대상이 아니므로 핀에서 제외 —
+    // 일반 흐름으로 보내면 파생 그룹이 closed_neg/closed_hired 라 맨 뒤로 정렬된다.
+    const isActiveRound1Pin = (c: Candidate) =>
+      c.stage === "round1_candidate" && c.outcome == null;
     const round1Candidates = filtered.filter(
-      (c) => c.stage === "round1_candidate" && !c.favorited
+      (c) => isActiveRound1Pin(c) && !c.favorited
     );
     const otherCandidates = filtered.filter(
-      (c) => c.stage !== "round1_candidate" && !c.favorited
+      (c) => !isActiveRound1Pin(c) && !c.favorited
     );
     // 그룹별로 미리 분할 — 렌더에서 GROUP_ORDER 마다 다시 filter 하지 않도록.
     const grouped = {} as Record<GroupKey, Candidate[]>;
@@ -1921,31 +1941,57 @@ export default function JobDetailPage() {
         </a>
       </div>
 
-      {/* 불합격 통보 미발송 일괄 처리 배너 */}
+      {/* 불합격 통보 미발송 안내 — 통보는 의무가 아니라 선택이므로 경고가 아닌 중립 안내(톤다운).
+          닫으면 같은 미발송 명단에 대해선 다시 뜨지 않고, 새 불합격 미발송이 생기면 다시 표시된다. */}
       {(() => {
         const unnotified = candidatesList.filter(
           (c) => c.outcome === "rejected" && c.decisionEmailCount === 0 && !!c.email
         );
         if (unnotified.length === 0) return null;
+        // 현재 미발송 명단 시그니처 — 닫힘 비교 기준. 명단이 바뀌면 다시 노출.
+        const sig = unnotified
+          .map((c) => c.id)
+          .sort((a, b) => a - b)
+          .join(",");
+        if (rejectBannerDismissedSig === sig) return null;
+        const dismiss = () => {
+          setRejectBannerDismissedSig(sig);
+          try {
+            localStorage.setItem(`iv_reject_banner_dismissed_${jobId}`, sig);
+          } catch {
+            /* localStorage 불가 환경 — 세션 내 숨김만 */
+          }
+        };
         return (
-          <div className="mt-3 flex items-center gap-3 bg-warning-soft border border-warning/30 rounded-xl px-4 py-3 flex-wrap">
-            <span className="text-sm text-warning font-medium">
-              📭 불합격 통보 메일 미발송 {unnotified.length}명
+          <div className="mt-3 flex items-center gap-3 bg-surface-alt border border-border-default rounded-xl px-4 py-3 flex-wrap">
+            <Mail className="w-4 h-4 text-ink-muted shrink-0" />
+            <span className="text-sm text-ink-soft">
+              불합격 통보 메일 미발송 {unnotified.length}명
             </span>
             <button
               onClick={() => setFilter("rejected")}
-              className="text-xs px-2.5 py-1 rounded-md border border-warning/40 text-warning hover:bg-warning/10"
+              className="text-xs px-2.5 py-1 rounded-md border border-border-strong text-ink-soft hover:bg-surface"
             >
               불합격만 보기
             </button>
-            <button
-              onClick={() => void bulkDecisionMail(unnotified.map((c) => c.id))}
-              disabled={bulkBusy !== null}
-              className="ml-auto text-xs px-3 py-1.5 rounded-md bg-warning hover:bg-warning/85 text-surface font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
-            >
-              {bulkBusy === "decisionMail" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {bulkBusy === "decisionMail" ? "발송 중..." : "일괄 통보 발송"}
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => void bulkDecisionMail(unnotified.map((c) => c.id))}
+                disabled={bulkBusy !== null}
+                className="text-xs px-3 py-1.5 rounded-md border border-border-strong text-ink-soft hover:bg-surface font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+              >
+                {bulkBusy === "decisionMail" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {bulkBusy === "decisionMail" ? "발송 중..." : "일괄 통보 발송"}
+              </button>
+              <button
+                onClick={dismiss}
+                className="p-1 rounded-md text-ink-muted hover:bg-surface hover:text-ink-soft"
+                title="이 안내 닫기"
+                aria-label="이 안내 닫기"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         );
       })()}
