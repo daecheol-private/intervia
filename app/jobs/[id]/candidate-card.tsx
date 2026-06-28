@@ -161,7 +161,8 @@ function CandidateCardImpl({
               )}
               <CommentBadge count={c.commentCount} unread={c.unreadCommentCount} />
             </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted mt-1.5">
+            {/* 메타(경력·나이·학력·연락처)는 모바일에선 숨김 — 목록 가독성. 상세 화면에서 확인. */}
+            <div className="hidden sm:flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted mt-1.5">
               {c.careerYears != null && <span>경력 {c.careerYears}년</span>}
               {c.age != null && <span>{c.age}세</span>}
               {(c.educationLevel || c.educationSchool || c.educationMajor) && (
@@ -175,18 +176,18 @@ function CandidateCardImpl({
               {c.email && <span>{c.email}</span>}
             </div>
             {c.careerSummary && (
-              <p className="text-xs text-ink-soft mt-1">{c.careerSummary}</p>
+              <p className="hidden sm:block text-xs text-ink-soft mt-1">{c.careerSummary}</p>
             )}
             </div>
           </div>
           <CandidateScores c={c} />
         </div>
         {c.screeningReport?.summary && (
-          <p className="text-sm text-ink-soft mt-2 bg-surface-alt border border-border-default rounded-lg px-3 py-2">
+          <p className="hidden sm:block text-sm text-ink-soft mt-2 bg-surface-alt border border-border-default rounded-lg px-3 py-2">
             <HL text={c.screeningReport.summary} />
           </p>
         )}
-        <div className="text-[11px] text-ink-muted mt-1">
+        <div className="hidden sm:block text-[11px] text-ink-muted mt-1">
           {formatKstDateTime(c.createdAt)} 업로드
         </div>
       </Link>
