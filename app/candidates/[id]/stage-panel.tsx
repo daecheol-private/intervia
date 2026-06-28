@@ -454,7 +454,7 @@ export function StagePanel({
 
   return (
     <>
-      <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-visible text-sm">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-sm">
         {candidate.decidedAt && (
           <span className="text-xs text-ink-muted shrink-0 whitespace-nowrap">
             결정 {formatKstDateTime(candidate.decidedAt)}
@@ -512,7 +512,7 @@ export function StagePanel({
             🔒 보존기간 경과로 이력서 원본 폐기됨
           </span>
         )}
-        <div className="flex gap-1.5 sm:gap-2 shrink-0 sm:ml-auto items-center">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 sm:shrink-0 sm:ml-auto items-center">
           {!isTerminal && (
             <>
             {candidate.stage === "ai_evaluated" && (

@@ -576,31 +576,6 @@ export default function CandidateDetailPage() {
                   )}
                 <EmailSentBadge sentAt={candidate.lastInterviewEmailSentAt} />
               </div>
-              {candidate.careerSummary && (
-                <p className="mt-1.5 text-sm text-ink-soft leading-snug">
-                  {candidate.careerSummary}
-                </p>
-              )}
-              {/* 연락처·이메일 — 아이콘 + 값 (라벨 없이). 이메일이 길어도 줄 전체를
-                  쓰도록 라벨 그리드에서 분리. 좁은 화면에선 이메일이 다음 줄로 래핑. */}
-              {(formatPhoneKr(candidate.phone) || candidate.email) && (
-                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-ink-soft">
-                  {formatPhoneKr(candidate.phone) && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Phone className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden />
-                      <span>{formatPhoneKr(candidate.phone)}</span>
-                    </span>
-                  )}
-                  {candidate.email && (
-                    <span className="inline-flex items-center gap-1.5 min-w-0">
-                      <Mail className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden />
-                      <span className="truncate" title={candidate.email}>
-                        {candidate.email}
-                      </span>
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -626,6 +601,31 @@ export default function CandidateDetailPage() {
             </button>
           </div>
         </div>
+        {/* 한 줄 소개 + 연락처 — 사진 옆 좁은 컬럼에 두면 모바일에서 소개글이 여러
+            줄로 쪼개지고 전화·이메일이 끊긴다. 정보 그리드처럼 전체 너비로 빼 정렬. */}
+        {candidate.careerSummary && (
+          <p className="mt-3 text-sm text-ink-soft leading-snug">
+            {candidate.careerSummary}
+          </p>
+        )}
+        {(formatPhoneKr(candidate.phone) || candidate.email) && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-ink-soft">
+            {formatPhoneKr(candidate.phone) && (
+              <span className="inline-flex items-center gap-1.5">
+                <Phone className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden />
+                <span className="whitespace-nowrap">{formatPhoneKr(candidate.phone)}</span>
+              </span>
+            )}
+            {candidate.email && (
+              <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+                <Mail className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden />
+                <span className="truncate" title={candidate.email}>
+                  {candidate.email}
+                </span>
+              </span>
+            )}
+          </div>
+        )}
         {/* 기본 정보 — 사진 컬럼 아래 전체 너비로 빼, 진행바·버튼과 좌측 시작점 정렬 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 mt-4">
           <InfoCell
@@ -658,8 +658,10 @@ export default function CandidateDetailPage() {
           />
         </div>
         </div>
-        {/* 진행 단계 (컴팩트) — 액션 버튼 영역 위 */}
-        <div className="border-t border-border-default px-6 py-3 flex items-center gap-x-3 gap-y-2 text-[11px] flex-wrap">
+        {/* 진행 단계 (컴팩트) — 액션 버튼 영역 위.
+            모바일은 폭이 좁아 5단계 라벨을 모두 펼치면 가로 스크롤이 생기므로
+            현재 단계 라벨만 노출하고 나머지는 아이콘만 표시(max-sm:hidden)한다. */}
+        <div className="border-t border-border-default px-4 sm:px-6 py-3 flex items-center gap-x-3 gap-y-2 text-[11px] flex-wrap">
           <div className="flex items-center gap-1.5">
             {STEPS.map((s, i) => {
               const done = effRank > s.max;
@@ -669,7 +671,7 @@ export default function CandidateDetailPage() {
                 <Fragment key={s.label}>
                   {i > 0 && (
                     <span
-                      className={`h-0.5 w-4 sm:w-7 rounded-full ${effRank >= s.min ? "bg-primary" : "bg-border-default"}`}
+                      className={`h-0.5 w-3 sm:w-7 rounded-full ${effRank >= s.min ? "bg-primary" : "bg-border-default"}`}
                       aria-hidden
                     />
                   )}
@@ -686,7 +688,11 @@ export default function CandidateDetailPage() {
                       <s.Icon className="w-3.5 h-3.5" strokeWidth={2.4} />
                     </span>
                     <span
-                      className={`whitespace-nowrap ${current ? "font-semibold text-primary-deep" : done ? "text-ink-soft" : "text-ink-muted"}`}
+                      className={`whitespace-nowrap ${
+                        current
+                          ? "font-semibold text-primary-deep"
+                          : `max-sm:hidden ${done ? "text-ink-soft" : "text-ink-muted"}`
+                      }`}
                     >
                       {s.label}
                     </span>

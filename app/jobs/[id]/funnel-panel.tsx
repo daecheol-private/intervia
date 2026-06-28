@@ -272,8 +272,9 @@ export function FunnelPanel({
         </div>
       </div>
 
-      {/* 파이프라인 — 버킷 5박스. 데스크톱은 1줄 꽉 채움(flex-1), 모바일은 가로 스크롤. */}
-      <div className="flex items-stretch gap-1 pb-1 overflow-x-auto sm:overflow-visible -mx-1 px-1">
+      {/* 파이프라인 — 버킷 5박스. 데스크톱은 1줄 꽉 채움(flex-1) + 연결 화살표.
+          모바일은 가로 스크롤 대신 2열 그리드(화살표 숨김, 최종 합격은 가로 전체). */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-stretch sm:gap-1 sm:pb-1 sm:-mx-1 sm:px-1">
         {pipelineCells.map((cell, i) => {
           const subsLine = cell.subs
             .filter((x) => x.n > 0)
@@ -284,7 +285,9 @@ export function FunnelPanel({
           return (
             <div
               key={cell.stage}
-              className="flex items-center gap-1 shrink-0 sm:shrink sm:flex-1 min-w-[104px] sm:min-w-0"
+              className={`flex items-center gap-1 sm:flex-1 sm:min-w-0 ${
+                cell.solid ? "col-span-2 sm:col-span-1" : ""
+              }`}
             >
               <button
                 type="button"
@@ -323,7 +326,7 @@ export function FunnelPanel({
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
-                  className="h-4 w-4 shrink-0 text-border-strong"
+                  className="hidden sm:block h-4 w-4 shrink-0 text-border-strong"
                   aria-hidden
                 >
                   <path
