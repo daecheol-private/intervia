@@ -12,6 +12,7 @@ type Pricing = {
   resume_upload: number;
   interview: number;
   interview_question_gen: number;
+  offline_interview: number;
 };
 
 type LedgerRow = {
@@ -23,6 +24,7 @@ type LedgerRow = {
     | "resume_upload"
     | "interview"
     | "interview_question_gen"
+    | "offline_interview"
     | "job_extend"
     | "refund"
     | "admin_adjust";
@@ -180,7 +182,7 @@ export default function TokensPage() {
       {/* 기능별 단가 — 큰 카드 3개 */}
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-ink mb-3">기능별 단가</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <PriceCard
             icon="📋"
             label="공고 등록"
@@ -205,6 +207,13 @@ export default function TokensPage() {
             label="면접 문제 생성"
             tokens={data.pricing.interview_question_gen}
             hint="면접 문제 1건 생성 (1·2차 동일)"
+          />
+          <PriceCard
+            icon="🎙️"
+            label="대면 면접 평가"
+            tokens={data.pricing.offline_interview}
+            listTokens={LIST_PRICING.offline_interview}
+            hint="녹음·음성 1건 전사 + AI 평가 (1·2차)"
           />
         </div>
         <p className="text-[11px] text-ink-muted mt-2">
@@ -343,6 +352,8 @@ function reasonLabel(r: LedgerRow["reason"]): string {
       return "AI 면접 링크 발급";
     case "interview_question_gen":
       return "면접 문제 생성";
+    case "offline_interview":
+      return "대면 면접 평가";
     case "job_extend":
       return "공고 연장";
     case "refund":
