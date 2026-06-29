@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import {
+  AlertCircle,
   CalendarClock,
+  CheckCircle2,
   ChevronRight,
   Eye,
   EyeOff,
@@ -12,6 +14,7 @@ import {
   Mail,
   RefreshCw,
   UserCheck,
+  X,
 } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { STAGE_LABELS as STAGE_LABELS_SHARED } from "@/lib/stage-meta";
@@ -256,6 +259,13 @@ export function StagePanel({
     null
   );
 
+  // 성공 토스트는 잠시 후 자동으로 닫는다 (에러는 사용자가 읽고 대응하도록 유지).
+  useEffect(() => {
+    if (msg?.kind !== "ok") return;
+    const t = setTimeout(() => setMsg(null), 4000);
+    return () => clearTimeout(t);
+  }, [msg]);
+
   const isTerminal = candidate.outcome != null;
 
   // outcome 별 선택 가능 사유. 사용자가 outcome 바꿀 때 default reason 자동 선택.
@@ -362,6 +372,15 @@ export function StagePanel({
     }
     setBusy(false);
     setOpen(null);
+    // 변경 완료 피드백 — ai_pending 링크 생성 실패 등으로 이미 에러가 세팅된 경우는 보존.
+    setMsg((prev) =>
+      prev?.kind === "err"
+        ? prev
+        : {
+            kind: "ok",
+            text: `'${STAGE_LABEL[newStage] ?? newStage}' 단계로 변경하였습니다.`,
+          }
+    );
     onChanged();
   };
 
@@ -598,13 +617,28 @@ export function StagePanel({
 
       {msg && (
         <div
-          className={`mt-3 text-xs px-3 py-2 rounded-lg border ${
+          role="status"
+          aria-live="polite"
+          className={`chat-bubble-in fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 flex items-start gap-2 max-w-[90vw] rounded-xl border px-4 py-3 text-sm shadow-lg ${
             msg.kind === "ok"
               ? "bg-primary-soft border-primary/30 text-primary-deep"
               : "bg-danger-soft border-danger/30 text-danger"
           }`}
         >
-          {msg.text}
+          {msg.kind === "ok" ? (
+            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+          ) : (
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+          )}
+          <span className="leading-relaxed">{msg.text}</span>
+          <button
+            type="button"
+            onClick={() => setMsg(null)}
+            aria-label="닫기"
+            className="ml-1 shrink-0 opacity-60 hover:opacity-100"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
