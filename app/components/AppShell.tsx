@@ -25,8 +25,11 @@ import {
   Menu,
   ChevronLeft,
   Ticket,
+  Compass,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
+import { matchPageGuide } from "@/lib/tour-pages";
+import { tourStore } from "./tour/tour-store";
 
 type Role = "system_admin" | "org_admin" | "member" | null;
 
@@ -230,6 +233,7 @@ function SidebarInner({
   pathname,
   onNavigate,
   collapsed = false,
+  isMobile = false,
 }: {
   role: Role;
   userName: string;
@@ -238,8 +242,15 @@ function SidebarInner({
   pathname: string;
   onNavigate?: () => void;
   collapsed?: boolean;
+  isMobile?: boolean;
 }) {
   const sections = buildSections(role);
+  // 이 화면에 페이지 진입 가이드가 있으면 '가이드 다시 보기'를 노출 — 끔(seen) 여부와
+  // 무관하게 다시 띄운다(tourStore.start 는 자동 노출의 seen 검사를 거치지 않음).
+  // 데스크톱 전용 가이드(드로어 sm+)는 모바일 드로어에선 숨긴다.
+  const pageGuide = role !== "system_admin" ? matchPageGuide(pathname) : null;
+  const showReplay =
+    !!pageGuide && (!pageGuide.guide.desktopOnly || !isMobile);
   return (
     <div className="flex flex-col h-full">
       <div
@@ -308,6 +319,24 @@ function SidebarInner({
               <LifeBuoy className="w-[18px] h-[18px] shrink-0" />
               {!collapsed && <span>고객센터</span>}
             </Link>
+            {showReplay && pageGuide && (
+              <button
+                type="button"
+                onClick={() => {
+                  tourStore.start(
+                    pageGuide.guide.scenario,
+                    pageGuide.params,
+                    pageGuide.guide.key
+                  );
+                  onNavigate?.();
+                }}
+                title={collapsed ? "가이드 다시 보기" : undefined}
+                className={navItemClass(false, collapsed)}
+              >
+                <Compass className="w-[18px] h-[18px] shrink-0" />
+                {!collapsed && <span>가이드 다시 보기</span>}
+              </button>
+            )}
           </div>
         </nav>
       </div>
@@ -413,6 +442,7 @@ export function AppShell({
               isDev={isDev}
               pathname={pathname}
               onNavigate={() => setMobileOpen(false)}
+              isMobile
             />
           </div>
         </div>

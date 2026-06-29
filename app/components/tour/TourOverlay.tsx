@@ -72,10 +72,12 @@ export function TourOverlay() {
 
   useEffect(() => setMounted(true), []);
 
-  // '다시 보지 않기' 체크 상태(멤버 가이드 전용). endTour 를 안정적인 콜백으로 유지하려고
+  // '다시 보지 않기' 체크 상태(멤버 가이드 전용). 기본 체크됨 — 한 번 본 가이드를
+  // 매번 다시 띄우지 않는 게 자연스러우므로, 사용자가 일부러 해제하지 않는 한
+  // 완료 시 노출 기록이 남는다. endTour 를 안정적인 콜백으로 유지하려고
   // 값은 ref 로도 미러링해 종료 시점에 최신값을 읽는다.
-  const [dontShow, setDontShow] = useState(false);
-  const dontShowRef = useRef(false);
+  const [dontShow, setDontShow] = useState(true);
+  const dontShowRef = useRef(true);
   // 현재 가이드의 dismissKey — 멤버 가이드면 '다시 보지 않기' 기록에 쓸 키, 아니면 null.
   const dismissKeyRef = useRef<string | null>(null);
   dismissKeyRef.current = active?.dismissKey ?? null;
@@ -107,9 +109,9 @@ export function TourOverlay() {
     if (active?.step === 0) {
       reachedRef.current = null;
       navAttemptRef.current = null;
-      // 새 가이드 시작 — '다시 보지 않기' 체크 초기화.
-      dontShowRef.current = false;
-      setDontShow(false);
+      // 새 가이드 시작 — '다시 보지 않기' 기본 체크됨으로 초기화.
+      dontShowRef.current = true;
+      setDontShow(true);
     }
   }, [active?.scenarioId, active?.step]);
 

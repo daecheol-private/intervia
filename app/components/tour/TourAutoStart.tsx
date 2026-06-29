@@ -17,55 +17,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { tourStore } from "./tour-store";
-import type { TourScenarioId } from "@/lib/tour-scenarios";
-
-type PageGuide = {
-  key: string; // seen_member_guides 에 기록할 키 (member-guides API 화이트리스트와 일치)
-  scenario: TourScenarioId;
-  match: (p: string) => Record<string, string> | null;
-  // 이 타깃이 DOM 에 떠야 시작 — 없으면 시작 안 함(정상 진입 시 재시도).
-  // 잠긴 공고(언락 전엔 버튼 없음)·종결 후보(단계 변경 버튼 없음) 등 대응.
-  awaitTarget: string;
-  // 드로어·모달이 sm+ 에서만 열리는 데스크톱 전용 가이드는 모바일에서 시작하지 않는다.
-  desktopOnly?: boolean;
-};
-
-const PAGE_GUIDES: PageGuide[] = [
-  {
-    key: "job_page",
-    scenario: "member-job-page",
-    match: (p) => {
-      const m = /^\/jobs\/(\d+)$/.exec(p);
-      return m ? { jobId: m[1] } : null;
-    },
-    // '이력서 받기' 버튼은 후보가 1명+ 있을 때만 헤더에 뜬다 → 안내할 거리가 있는
-    // 공고에서만 시작(0명이면 버튼 없음 → 시작 안 함, 다음에 재시도).
-    awaitTarget: '[data-tour="resume-intake-btn"]',
-    desktopOnly: true,
-  },
-  {
-    // 후보(이력서) 상세 — 종합평가 → 서류평가 → 단계 변경 → 토론 안내.
-    key: "candidate_page",
-    scenario: "member-candidate-page",
-    match: (p) => {
-      const m = /^\/candidates\/(\d+)$/.exec(p);
-      return m ? { candidateId: m[1] } : null;
-    },
-    // '단계 변경' 버튼은 다음 전형이 있는(진행 가능한) 후보에서만 액션바에 뜬다 →
-    // 검토·진행할 거리가 있는 후보에서만 시작(종결 후보엔 안 뜸).
-    awaitTarget: '[data-tour="cand-stage-next"]',
-    desktopOnly: true,
-  },
-  {
-    // 법인 설정 — 회사 주소 → 컬처핏 정성평가 → 메일 서버 → 화상 면접 안내.
-    // /org/settings 는 법인담당자만 접근 → 자연히 org_admin 전용.
-    key: "org_settings",
-    scenario: "org-settings",
-    match: (p) => (p === "/org/settings" ? {} : null),
-    // 첫 섹션(회사 주소)이 떠야 시작 — 접근 권한 없으면 렌더 안 돼 시작 안 함.
-    awaitTarget: '[data-tour="cfg-address"]',
-  },
-];
+import { PAGE_GUIDES } from "@/lib/tour-pages";
 
 /** sel 이 DOM 에 나타나면 true, tries 회(×150ms) 안에 못 찾으면 false. */
 function waitForSelector(
