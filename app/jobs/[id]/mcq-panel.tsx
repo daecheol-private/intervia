@@ -255,16 +255,18 @@ export function McqPanel({
 
   return (
     <>
-      {/* 헤더 아이콘 — 적용 시 색이 켜진다. 클릭 시 모달에서 생성·적용·검토. */}
+      {/* 역량평가 — 라벨 버튼('이력서 받기' 옆). 미설정·미적용=회색(비활성 색),
+         적용 중=색이 켜진 활성 색, 생성 중=깜빡임. 클릭하면 모달에서 안내·생성·적용·검토. */}
       <button
         type="button"
         data-tour="mcq-btn"
         onClick={() => setOpen(true)}
         title={tooltip}
         aria-label={tooltip}
-        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${triggerClass}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${triggerClass}`}
       >
         <ListChecks className="w-4 h-4" />
+        역량평가
       </button>
 
       <Modal

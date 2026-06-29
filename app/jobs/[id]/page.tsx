@@ -1455,6 +1455,9 @@ export default function JobDetailPage() {
                 이력서 받기
               </button>
             )}
+            {/* 역량평가(면접 전 객관식 사전문항) — '이력서 받기' 옆 라벨 버튼.
+               미설정·미적용=회색, 문제 생성·적용 시 활성 색으로 켜진다. */}
+            <McqPanel jobId={jobId} disabled={isExpired} isDraft={!!job.isDraft} />
             {/* 면접 일정 — 확정된 면접이 있을 때만 표시하고, 색을 채워 눈에 띄게. */}
             {(() => {
               // 확정 면접 대기 = 1차(stage=round1_waiting) + 2차(round1_passed + round2 확정).
@@ -1486,10 +1489,8 @@ export default function JobDetailPage() {
               );
             })()}
 
-            {/* 유틸리티 아이콘 묶음 — 공유 · 리포트 · 역량평가 · 수정 · 삭제. */}
+            {/* 유틸리티 아이콘 묶음 — 공유 · 리포트 · 수정 · 삭제. */}
             <div className="flex items-center gap-1">
-              {/* 역량평가(면접 전 객관식 사전문항) — 적용 시 색이 켜진다. 아이콘 묶음 맨 앞. */}
-              <McqPanel jobId={jobId} disabled={isExpired} isDraft={!!job.isDraft} />
               <ShareButton jobId={Number(jobId)} jobTitle={job.title} iconOnly />
               <Link
                 href={`/jobs/${jobId}/report`}
