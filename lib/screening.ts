@@ -53,7 +53,7 @@ async function getCultureFitCached(orgId: number): Promise<CultureFitProfile | n
   return profile;
 }
 
-const TEXT_EXTRACTABLE = new Set(["pdf", "docx", "txt", "md", "html", "htm"]);
+const TEXT_EXTRACTABLE = new Set(["pdf", "docx", "hwpx", "txt", "md", "html", "htm"]);
 function extOf(name: string): string {
   return (name.split(".").pop() ?? "").toLowerCase();
 }

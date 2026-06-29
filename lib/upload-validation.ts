@@ -5,7 +5,7 @@
 
 // 개별 첨부 1건 상한. 초과 시 그 파일만 제외 — 동영상 삽입된 PPT 등
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB
-export const RESUME_EXTS = new Set(["pdf", "docx"]);
+export const RESUME_EXTS = new Set(["pdf", "docx", "hwpx"]);
 export const ATTACHMENT_EXTS = new Set([
   "pdf",
   "docx",
@@ -37,7 +37,8 @@ export function verifyMagic(name: string, buf: Buffer): string | null {
       buf[4] !== 0x2d
     )
       return "유효한 PDF 파일이 아닙니다.";
-  } else if (e === "docx" || e === "pptx" || e === "xlsx") {
+  } else if (e === "docx" || e === "pptx" || e === "xlsx" || e === "hwpx") {
+    // hwpx 도 ZIP 컨테이너라 PK 매직(0x50 0x4b) 공유.
     if (buf.length < 2 || buf[0] !== 0x50 || buf[1] !== 0x4b)
       return `유효한 ${e.toUpperCase()} 파일이 아닙니다.`;
   }

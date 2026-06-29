@@ -550,7 +550,12 @@ export async function POST(
             code: err.code,
             message: err.message,
           });
-          return new Response(err.message, { status: 400 });
+          // ZIP 하나의 추출 실패로 배치 전체를 400 중단시키지 않는다 — 그 ZIP 만
+          // 제외하고 나머지(정상 이력서 등)는 계속 처리. processGroup 과 동일한 항목별 격리.
+          // (코드/CAD 프로젝트처럼 처리 가능한 문서가 없는 ZIP 이 섞여도 정상 이력서까지
+          //  버려지던 회귀 차단 — 2026-06-29.)
+          skippedUnsupported.push(`${leafName} — ${err.message}`);
+          continue;
         }
         throw err;
       }
