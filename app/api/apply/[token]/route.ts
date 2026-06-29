@@ -74,7 +74,7 @@ export async function POST(
   const fileName = fileEntry.name;
   const e = ext(fileName);
   if (!RESUME_EXTS.has(e))
-    return bad("이력서는 PDF 또는 DOCX 파일만 업로드할 수 있습니다.");
+    return bad("이력서는 PDF · DOCX · HWPX 파일만 업로드할 수 있습니다.");
   if (fileEntry.size > MAX_ATTACHMENT_SIZE)
     return bad(`이력서 파일은 최대 ${MAX_ATTACHMENT_SIZE / 1024 / 1024}MB 까지 업로드할 수 있습니다.`, 413);
 

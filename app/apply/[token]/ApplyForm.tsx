@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { FileText, Paperclip, X } from "lucide-react";
 
 const MAX_FILE_MB = 10;
-const ACCEPT = ".pdf,.docx";
+const ACCEPT = ".pdf,.docx,.hwpx";
 const ATTACH_ACCEPT =
   ".pdf,.docx,.doc,.hwp,.hwpx,.png,.jpg,.jpeg,.pptx,.xlsx,.txt,.md";
 
@@ -181,7 +181,7 @@ export default function ApplyForm({
             </div>
           )}
           <p className="mt-1 text-xs text-ink-muted">
-            PDF 또는 DOCX, 최대 {MAX_FILE_MB}MB
+            PDF · DOCX · HWPX, 최대 {MAX_FILE_MB}MB
           </p>
         </Field>
         <Field label="첨부파일 (선택)">
