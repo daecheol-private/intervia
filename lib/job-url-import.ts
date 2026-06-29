@@ -334,6 +334,45 @@ function extractMainText(html: string): { text: string; imageUrls: string[] } {
   return { text, imageUrls: dedup(imageUrls).slice(0, MAX_IMAGES * 3) };
 }
 
+/**
+ * 페이지 메타데이터에서 '정식 공고 제목' 후보 추출.
+ * 사람인 등은 상세 본문을 이미지/JS iframe 으로 올려서, 본문(이미지)에 박힌 제목이
+ * 실제 공고 제목과 다를 수 있다 (회사가 옛 공고 이미지를 재사용하고 제목만 새로 설정 등).
+ * og:title/<title>/og:description 는 사이트가 보장하는 공식 제목이므로 본문보다 우선 신뢰한다.
+ */
+function extractTitleHint(html: string): { title: string; description: string } {
+  const $ = cheerio.load(html);
+  const attr = (sel: string) => ($(sel).attr("content") || "").trim();
+  const rawTitle =
+    attr('meta[property="og:title"]') ||
+    attr('meta[name="title"]') ||
+    $("title").first().text().trim();
+  const rawDesc =
+    attr('meta[property="og:description"]') || attr('meta[name="description"]');
+  // 사이트명 suffix·마감일(D-n) 표시 제거 (사람인/잡코리아 등 공통 패턴)
+  const clean = (s: string) =>
+    s
+      .replace(
+        /\s*[-|]\s*(사람인|잡코리아|원티드|점핏|로켓펀치|saramin|jobkorea|wanted)\s*$/i,
+        ""
+      )
+      .replace(/\(\s*D[-+]?\s*\d+\s*\)/gi, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  return { title: clean(rawTitle), description: clean(rawDesc) };
+}
+
+/** 메타 제목 힌트를 프롬프트 fragment 로. 비어 있으면 빈 문자열(기존 동작 유지). */
+function buildTitleHintBlock(h: { title: string; description: string }): string {
+  if (!h.title && !h.description) return "";
+  const lines = [
+    "[정식 공고 제목 — 페이지 메타데이터에서 추출한 공식 정보. 본문 텍스트·이미지의 제목보다 우선한다]",
+  ];
+  if (h.title) lines.push(`제목: ${h.title}`);
+  if (h.description) lines.push(`요약: ${h.description}`);
+  return lines.join("\n");
+}
+
 function dedup<T>(arr: T[]): T[] {
   return [...new Set(arr)];
 }
@@ -379,6 +418,7 @@ const EXTRACTION_SCHEMA_HINT = `
 - 광고·추천공고·복리후생·회사 소개는 제외 (요구된 필드에 포함시키지 말 것).
 - **학력·전공 요건은 추출하지 말 것** (블라인드 채용 — 채용절차 공정화법). requirements·idealProfile 에서 최종학력(고졸/초대졸/대졸/석사/박사 등) 조건과 전공(관련 전공 우대 등) 항목은 제외한다. 나이·성별·출신지역 등 차별 금지 항목도 동일하게 제외.
 - title~idealProfile 은 추측·날조 X. 페이지에 없으면 빈 문자열.
+- **title 은 아래에 '정식 공고 제목'이 주어지면 그것을 근거로 작성한다.** 본문 텍스트나 이미지 안에 다른 제목·배너 문구(회사가 이전 공고에서 남긴 제목 등)가 있어도 무시하고 정식 공고 제목을 따른다. 사이트명·마감일(D-n) 표시는 제외.
 - preferredTraits 는 위 규칙의 예외 — 담당 업무·자격 요건을 분석해 직무 성격에서 추론한다 (공고에 명시되지 않아도 됨). 키는 영어 그대로, 아래 5개 중에서만 선택:
   - "openness" (개방성·도전): 새로운 기술·방식을 시도하고 변화가 잦은 환경에 강함. 예) 신규 서비스 개발, 기획, R&D, 신기술 도입.
   - "conscientiousness" (성실성·꼼꼼함): 계획적이고 세부를 꼼꼼히 챙겨 끝까지 마무리. 예) 회계·재무, QA, 운영, 품질·정확성이 중요한 직무.
@@ -391,9 +431,12 @@ const EXTRACTION_SCHEMA_HINT = `
 /**
  * 텍스트만으로 1차 추출.
  */
-async function extractFromText(text: string): Promise<ImportedJob | null> {
+async function extractFromText(
+  text: string,
+  titleHint: string
+): Promise<ImportedJob | null> {
   const prompt = `${EXTRACTION_SCHEMA_HINT}
-
+${titleHint ? `\n${titleHint}\n` : ""}
 다음은 채용 공고 페이지에서 추출한 본문 텍스트입니다.
 
 ---
@@ -412,10 +455,11 @@ ${text}
  */
 async function extractFromMultimodal(
   text: string,
-  imageParts: Array<{ inlineData: { mimeType: string; data: string } }>
+  imageParts: Array<{ inlineData: { mimeType: string; data: string } }>,
+  titleHint: string
 ): Promise<ImportedJob | null> {
   const prompt = `${EXTRACTION_SCHEMA_HINT}
-
+${titleHint ? `\n${titleHint}\n` : ""}
 다음은 채용 공고 페이지에서 추출한 본문 텍스트와, 본문에 첨부된 이미지들입니다.
 이미지 안에 담당 업무·지원 자격·우대사항이 그림으로 표시되어 있을 수 있으니 이미지 내용도 함께 읽어 통합 정리하세요.
 
@@ -502,6 +546,9 @@ export async function importJobFromUrl(rawUrl: string): Promise<ImportedJob> {
   }
   const html = htmlBuf.toString("utf8");
 
+  // 정식 공고 제목 — 메인 페이지 메타데이터에서만 추출 (iframe/추가 본문은 신뢰하지 않음).
+  const titleHint = buildTitleHintBlock(extractTitleHint(html));
+
   let { text, imageUrls } = extractMainText(html);
 
   // 사이트별 추가 본문 (iframe) 추적 — 잡코리아 등 메인이 SUMMARY 만 노출하는 경우.
@@ -526,7 +573,7 @@ export async function importJobFromUrl(rawUrl: string): Promise<ImportedJob> {
   if (text.length < 100)
     throw new Error("본문 텍스트를 충분히 추출하지 못했습니다.");
 
-  let result = (await extractFromText(text)) ?? finalize({});
+  let result = (await extractFromText(text, titleHint)) ?? finalize({});
   let usedImageFallback = false;
   let imageCount = 0;
 
@@ -534,7 +581,7 @@ export async function importJobFromUrl(rawUrl: string): Promise<ImportedJob> {
     // 절대 URL 보정 (이미 절대만 받음)
     const imageParts = await downloadAsInlineParts(imageUrls);
     if (imageParts.length > 0) {
-      const multi = await extractFromMultimodal(text, imageParts);
+      const multi = await extractFromMultimodal(text, imageParts, titleHint);
       if (multi && multi.confidence >= result.confidence) {
         result = multi;
         usedImageFallback = true;
