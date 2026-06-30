@@ -26,12 +26,15 @@ export function AttachmentsPanel({
   candidateId,
   screeningDone,
   canModify,
+  onCountChange,
 }: {
   candidateId: number;
   // true = 서류평가가 이미 완료됨 → 추가/삭제는 재평가 전까지 평가에 미반영
   screeningDone: boolean;
   // false = 합·불 결정됨 또는 원본 폐기됨 → 추가/삭제 UI 숨김
   canModify: boolean;
+  // 첨부(이력서 제외) 갯수가 바뀔 때 부모(탭 배지)에 알린다. 추가/삭제 시 동기화용.
+  onCountChange?: (n: number) => void;
 }) {
   const [list, setList] = useState<Attachment[] | null>(null);
   const [kind, setKind] = useState<string>("portfolio");
@@ -43,7 +46,9 @@ export function AttachmentsPanel({
 
   const load = async () => {
     const r = await fetch(`/api/candidates/${candidateId}/attachments`);
-    setList(r.ok ? ((await r.json()) as Attachment[]) : []);
+    const next = r.ok ? ((await r.json()) as Attachment[]) : [];
+    setList(next);
+    onCountChange?.(next.filter((a) => a.kind !== "resume").length);
   };
   useEffect(() => {
     void load();

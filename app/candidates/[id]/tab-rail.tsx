@@ -21,6 +21,8 @@ export type TabItem = {
   Icon: LucideIcon;
   on: boolean;
   hint: string;
+  // 탭 라벨/아이콘 옆에 표시할 갯수 배지(예: 첨부파일 수). 0·미정(undefined)이면 숨김.
+  count?: number;
 };
 
 /**
@@ -127,10 +129,12 @@ export function CandidateTabRail({
             disabled={!t.on}
             onClick={() => t.on && onSelect(t.key)}
             aria-current={active ? "page" : undefined}
-            aria-label={t.label}
+            aria-label={
+              t.count ? `${t.label} (${t.count})` : t.label
+            }
             title={t.on ? t.label : t.hint || t.label}
             className={
-              "flex items-center justify-center w-9 h-9 rounded-xl transition-colors " +
+              "relative flex items-center justify-center w-9 h-9 rounded-xl transition-colors " +
               (!t.on
                 ? "text-ink-muted/40 cursor-not-allowed"
                 : active
@@ -139,6 +143,19 @@ export function CandidateTabRail({
             }
           >
             <t.Icon className="w-[18px] h-[18px]" />
+            {t.on && !!t.count && (
+              <span
+                aria-hidden
+                className={
+                  "absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-semibold leading-none ring-2 ring-card " +
+                  (active
+                    ? "bg-white text-primary"
+                    : "bg-primary text-white")
+                }
+              >
+                {t.count}
+              </span>
+            )}
           </button>
         );
       })}

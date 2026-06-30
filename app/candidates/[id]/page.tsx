@@ -148,6 +148,9 @@ export default function CandidateDetailPage() {
   const [screening, setScreening] = useState(false);
   const [screenErr, setScreenErr] = useState("");
   const [tab, setTab] = useState<TabKey>("overview");
+  // 첨부파일 탭 배지용 갯수(이력서 제외). 탭에 들어가기 전에도 보이도록 페이지에서 선조회하고,
+  // 패널 내 추가/삭제 시 onCountChange 로 동기화한다. null=미조회.
+  const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
   // 세로 탭 레일 — 상단 탭바가 사라졌는지 감지(sentinel)해 노출 여부 판정.
   const tabBarRef = useRef<HTMLDivElement>(null);
   // 비동기 fetch 탭(1차/2차/첨부)은 한 번 열면 언마운트하지 않고 숨겨 유지 —
@@ -210,6 +213,25 @@ export default function CandidateDetailPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // 첨부파일 탭 배지용 갯수 선조회(이력서 kind 제외). 탭에 들어가기 전에도 배지가 보이게 한다.
+  // 실패해도 배지만 안 뜨고 그만이므로 조용히 무시.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/candidates/${id}/attachments`);
+        if (!alive || !r.ok) return;
+        const arr = (await r.json()) as { kind: string }[];
+        setAttachmentCount(arr.filter((a) => a.kind !== "resume").length);
+      } catch {
+        /* 배지 비표시로 graceful degrade */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, [id]);
 
   // 평가/재평가가 진행 중(큐 대기 또는 처리중)이면 완료될 때까지 폴링.
@@ -488,7 +510,14 @@ export default function CandidateDetailPage() {
       on: hasRound2,
       hint: "1차 합격 후 활성화됩니다",
     },
-    { key: "files", label: "첨부파일", Icon: Paperclip, on: true, hint: "" },
+    {
+      key: "files",
+      label: "첨부파일",
+      Icon: Paperclip,
+      on: true,
+      hint: "",
+      count: attachmentCount ?? undefined,
+    },
   ];
 
   // 진행단계 스테퍼 — 후보자의 현재 위치를 5단계로. 종결(불합격/취소)도 반영.
@@ -759,6 +788,18 @@ export default function CandidateDetailPage() {
           >
             <t.Icon className="w-4 h-4 shrink-0" />
             {t.label}
+            {t.on && !!t.count && (
+              <span
+                className={
+                  "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold leading-none " +
+                  (tab === t.key
+                    ? "bg-primary text-white"
+                    : "bg-surface-alt text-ink-soft")
+                }
+              >
+                {t.count}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -1171,6 +1212,7 @@ export default function CandidateDetailPage() {
           !candidate.outcome &&
           !!(candidate.resumeFilePath || candidate.resumeMaskedText)
         }
+        onCountChange={setAttachmentCount}
       />
       <AppealsPanel candidateId={candidate.id} />
         </div>
