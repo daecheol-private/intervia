@@ -1452,7 +1452,7 @@ export default function JobDetailPage() {
                 className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-surface hover:bg-primary-deep text-sm font-medium shadow-sm"
               >
                 <Inbox className="w-4 h-4" />
-                이력서 받기
+                이력서 등록
               </button>
             )}
             {/* 역량평가(면접 전 객관식 사전문항) — '이력서 받기' 옆 라벨 버튼.
@@ -1569,7 +1569,7 @@ export default function JobDetailPage() {
           >
             <div className="flex items-start justify-between gap-3 mb-5">
               <div>
-                <h2 className="text-lg font-bold text-ink">이력서 받기</h2>
+                <h2 className="text-lg font-bold text-ink">이력서 등록</h2>
                 <p className="text-sm text-ink-muted mt-1">
                   지원 링크를 공유하거나, 보유한 이력서 파일을 직접 올려 평가를 시작하세요.
                 </p>
@@ -1578,7 +1578,7 @@ export default function JobDetailPage() {
                 <button
                   data-tour="resume-intake-close"
                   onClick={() => setIntakeOpen(false)}
-                  aria-label="이력서 받기 닫기"
+                  aria-label="이력서 등록 닫기"
                   className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt"
                 >
                   <X className="w-4 h-4" />
