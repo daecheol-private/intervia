@@ -29,7 +29,7 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
 - 충전 paid tier 활성화 확인 — `scripts/test-gemini.mjs` 3개 모델 호출 성공.
 - 코드 분기: `lib/gemini.ts` `MODELS` — screening=flash / interview=pro / interviewEval=pro.
 
-### [ ] A-2. 사업자등록 (수수료 0원, 30분) ⭐
+### [x] A-2. 사업자등록 (완료 2026-06-22) ⭐
 - **왜**: 비용 0원의 행정 절차. 그러나 안 되어 있으면:
   - 처리방침 사업자번호 빈칸 → PIPA §30 위반 (법적 검토 자체가 흠)
   - DPA 서명 시 사업자 정보 기재 불가
@@ -95,7 +95,7 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
 
 > 비용 ~$10 (도메인 1회). stage 환경 외부 인원 테스트 가능 상태.
 
-### [ ] B-1. 도메인 구매 ⭐
+### [x] B-1. 도메인 구매 (완료 — www.intervia.kr) ⭐
 - **왜**: stage 외부 테스트의 prerequisite. Resend verify, B2B 신뢰도, 세금계산서 발송 모두 도메인 필요.
 - **추천 등록처**:
   - **Cloudflare Registrar** (마진 0%, ~$10/년) — `.com` 권장
@@ -113,7 +113,7 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
   - 처리방침 §5 PROCESSORS 표에 Resend Inc. (미국) 추가
   - `CONSENT_VERSION` bump → 기존 후보자 재동의 (현 로컬 DB 비어 있어 영향 없음)
 
-### [ ] B-2. data.go.kr 사업자등록정보 API 키 발급 (10분, 무료)
+### [x] B-2. data.go.kr 사업자등록정보 API 키 발급 (완료 2026-06-14)
 - **왜**: 가입 시 신규 법인이 입력한 사업자번호 외부 검증 (활성 사업자인지). 누락돼도 기능 동작하나 신뢰도 ↑.
 - **할 일**:
   1. https://www.data.go.kr 회원가입
@@ -131,9 +131,10 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
   5. 면접 평가 결과 검토 → 점수 캘리브레이션 합리적인지 체감
 - **검증**: 후보자가 면접 마치고 "AI 면접 같지 않다" 라고 느낄 정도면 합격
 
-### [ ] B-4. GitHub Dependabot 활성화 (5분, 무료)
+### [x] B-4. GitHub Dependabot 활성화 (완료 2026-07-01)
 - **왜**: pdf-parse 등 취약점 자동 알림.
 - **할 일**: GitHub 리포 → Settings → Code security and analysis → Dependabot alerts + security updates 활성화.
+- **완료 (2026-07-01)**: Dependency graph + alerts + security updates + malware alerts + grouped security updates 전부 ON. (Automatic dependency submission·version updates는 의도적으로 OFF — lock 파일이 의존성 커버 + PR 노이즈 방지)
 
 ### [ ] B-5. 카카오 알림톡 — 알리고 가입 + 채널/템플릿 (지원자 알림 병행) ⭐
 - **왜**: 지원자 핵심 알림 5종(AI면접 초대 / 미응답 리마인더 / 대면 일정제안 / 대면 D-1 / 합격)을 이메일과 **병행**해 카카오톡으로도 발송 → 지원자는 이메일을 잘 안 봐서 면접 **완료율↑**. **코드는 이미 완성(게이트 상태)** — env만 채우면 켜지고, 미설정 시 이메일만 발송(영향 없음).
@@ -151,21 +152,21 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
 
 > 비용 0원. 법적 검토는 **실 운영 데이터 기반** 이라 가치 큼.
 
-### [ ] C-1. Google Cloud DPA 다운로드·보관 (5분, 무료)
+### [x] C-1. Google Cloud DPA 다운로드·보관 (완료 2026-07-01)
 - **왜**: PIPA §26 위탁계약 서면 보관 의무. paid tier 등록 시 자동 적용되지만 사본 보관 필요.
 - **할 일**:
   1. https://cloud.google.com/terms/data-processing-addendum 접속
   2. PDF 다운로드 → `legal/dpa/google-dpa-YYYYMMDD.pdf` 로 저장
   3. 폴더 `legal/dpa/` 는 `.gitignore` 처리 (민감정보 아니나 git 제외 권장)
 
-### [ ] C-2. Vercel DPA 다운로드·서명·보관 (15분, 무료)
+### [x] C-2. Vercel DPA 다운로드·서명·보관 (완료 2026-07-01)
 - **왜**: 위와 동일. Vercel 은 별도 서명 form 제공.
 - **할 일**:
   1. https://vercel.com/legal/dpa 접속
   2. 사업자 정보 입력 후 양방 서명본 다운로드
   3. `legal/dpa/vercel-dpa-YYYYMMDD.pdf` 보관
 
-### [ ] C-3. Turso DPA 요청·서명·보관 (1일 — 메일 응답 대기)
+### [x] C-3. Turso DPA 요청·서명·보관 (완료 2026-07-01)
 - **왜**: 위와 동일.
 - **할 일**:
   1. sales@turso.tech 또는 support@turso.tech 에 메일:
@@ -173,7 +174,7 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
   2. 24~48시간 내 회신 → 서명 → 양방 사본 보관
   3. `legal/dpa/turso-dpa-YYYYMMDD.pdf`
 
-### [ ] C-4. Resend DPA 다운로드·보관 (5분, 무료)
+### [x] C-4. Resend DPA 다운로드·보관 (완료 2026-07-01)
 - **왜**: 도메인 verify 후 Resend 가 메일 수탁자로 추가됨 (Phase B 에서 Claude 가 처리방침 갱신).
 - **할 일**:
   1. https://resend.com/legal/dpa 또는 대시보드 → Settings → Legal → DPA
@@ -203,7 +204,7 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
   - Cron 무제한 → `vercel.json` cron 5개 네이티브 실행, **cron-job.org 외부 의존 제거 완료**
   - DDoS 보호
 
-### [ ] D-2. 통신판매업 신고 (45,000원, 1일)
+### [x] D-2. 통신판매업 신고 (완료 — 2026-서울강서-1773)
 - **왜**: 결제 받기 시작하는 순간 의무 (전자상거래법 §12). 미신고 시 1000만원 이하 과태료.
 - **할 일**:
   1. 정부24 → 통신판매업 신고
@@ -225,7 +226,7 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
   3. 승인 후 테스트 키 + 운영 키 발급
   4. 키 받으면 Claude 에게 전달 → Phase E 코드 개발
 
-### [ ] D-5. system_admin 2FA 등록 (10분, 무료)
+### [x] D-5. system_admin 2FA 등록 (완료 2026-07-01)
 - **왜**: system_admin 계정 탈취 = 전 법인 데이터 접근 가능. TOTP 2FA 필수.
 - **할 일**:
   1. `/account` 페이지 → "2단계 인증 (TOTP)" 섹션 → "설정 시작"
@@ -275,13 +276,13 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
 
 | Phase | 의미 | 항목 수 | 완료 |
 |---|---|---|---|
-| A | 무료 셋업 + 사업자등록 | 6 | 4 (△ A-3 Phase D 연기) |
-| B | 도메인 + stage 외부 테스트 | 5 | 0 |
-| C | DPA + 법적 마무리 | 5 | 0 |
-| D | 첫 고객 약속 시점 | 6 | 2 (D-1 Pro 전환 완료) |
+| A | 무료 셋업 + 사업자등록 | 6 | 6 |
+| B | 도메인 + stage 외부 테스트 | 5 | 3 (B-1 도메인·B-2 API·B-4 Dependabot) |
+| C | DPA + 법적 마무리 | 5 | 4 (C-5 변호사만 선택 보류) |
+| D | 첫 고객 약속 시점 | 6 | 4 (D-1·D-2·D-5·D-6) |
 | E | 결제 시스템 (Claude 처리) | 3 | 0 |
 | 상시 | 운영 안정화 | 4 | 1 |
-| **합계** | | **29** | **7** |
+| **합계** | | **29** | **18** |
 
 ---
 
@@ -299,4 +300,4 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
 
 ---
 
-마지막 업데이트: 2026-06-16 (B-5 카카오 알림톡 알리고 가입 추가 — 지원자 알림 병행, 코드는 게이트 완료)
+마지막 업데이트: 2026-07-01 (C-1~4 DPA 4건·D-5 2FA·B-4 Dependabot 완료 반영. A-2 사업자등록·B-1 도메인·B-2 국세청API·D-2 통신판매업도 기(旣) 완료라 stale 체크 정리 — 메모리 기준)
