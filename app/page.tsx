@@ -40,6 +40,7 @@ import {
 import {
   ArrowRight,
   BarChart3,
+  Bell,
   Building2,
   CalendarClock,
   CheckCircle2,
@@ -60,7 +61,6 @@ import {
   Mic,
   Paperclip,
   ScrollText,
-  Send,
   Server,
   Share2,
   ShieldAlert,
@@ -1838,7 +1838,7 @@ const FEATURES: {
   { Icon: Building2, title: "법인 분리 · 권한", detail: "이메일 도메인으로 법인을 자동 분리하고, 관리자 승인제 + 3역할로 권한을 나눕니다.", tone: "beige", size: "wide", place: "lg:col-start-3 lg:col-span-2 lg:row-start-3" },
   { Icon: BarChart3, title: "결과 리포트", detail: "단계별 후보 분포와 평균 점수를 펀널로 보여주고 CSV로 내보냅니다.", tone: "white", size: "wide", place: "lg:col-start-8 lg:col-span-2 lg:row-start-3" },
   { Icon: Columns3, title: "후보자 비교", detail: "여러 후보의 점수·강점·우려를 한 화면에서 나란히 비교합니다.", tone: "beige", size: "wide", place: "lg:col-start-4 lg:col-span-2 lg:row-start-4" },
-  { Icon: Send, title: "합·불 통보 메일", detail: "합격·불합격·보류 결정을 자사 도메인 메일로 후보자에게 통보합니다.", tone: "forest", size: "wide", place: "lg:col-start-1 lg:col-span-2 lg:row-start-5" },
+  { Icon: Bell, title: "지원자 알림", sub: "메일 · 카카오톡", detail: "면접 안내·일정 조율·합격 통보를 자사 메일과 카카오톡 알림톡으로 함께 보내 응답률을 높입니다.", tone: "forest", size: "wide", place: "lg:col-start-1 lg:col-span-2 lg:row-start-5" },
   { Icon: LayoutDashboard, title: "채용 대시보드", detail: "진행 중인 공고와 지금 내가 해야 할 일을 한눈에 모아 봅니다.", tone: "white", size: "wide", place: "lg:col-start-6 lg:col-span-2 lg:row-start-5" },
   // 보조 — 1×1
   { Icon: Lock, title: "공고 PIN", detail: "공고별 PIN으로 외부 지원 링크를 잠급니다.", tone: "white", size: "mini", place: "lg:col-start-5 lg:row-start-3" },
