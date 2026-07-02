@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import Link from "next/link";
-import { ExternalLink, MessageSquare } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 
 import { formatKstDateTime } from "@/lib/utils";
 import { CandidateScores } from "./candidate-scores";
@@ -16,41 +16,6 @@ import {
   stageGroupBorder,
 } from "./badges";
 import type { Candidate } from "./types";
-
-// 카드 전체가 <Link>라 같은 탭으로 이동한다. 이 버튼은 Link 바깥(형제)에 두고
-// 새 탭을 백그라운드로 연다. 행 hover 시에만 나타나 평소엔 점수 영역을 가리지 않음.
-// window.open 은 항상 새 탭으로 포커스를 옮기므로(전경), 브라우저가 백그라운드 탭을
-// 여는 유일한 경로인 Ctrl/⌘+클릭을 합성해 <a> 에 dispatch 한다 (Chrome/Edge 기준).
-function OpenInNewTabButton({ candidateId }: { candidateId: number }) {
-  return (
-    <button
-      type="button"
-      title="새 탭(백그라운드)에서 열기"
-      aria-label="새 탭(백그라운드)에서 열기"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        const a = document.createElement("a");
-        a.href = `/candidates/${candidateId}`;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.dispatchEvent(
-          new MouseEvent("click", {
-            ctrlKey: !isMac,
-            metaKey: isMac,
-            bubbles: false,
-            cancelable: true,
-            view: window,
-          })
-        );
-      }}
-      className="absolute right-2 top-2 z-10 rounded-md border border-border-default bg-card/90 p-1.5 text-ink-muted shadow-sm backdrop-blur transition opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-primary hover:border-primary/40 focus:outline-none"
-    >
-      <ExternalLink className="w-4 h-4" />
-    </button>
-  );
-}
 
 // 면접관 토론 배지 — 코멘트가 있으면 표시. 내가 안 읽은 남의 글이 있으면 그 개수를 빨강(강조)으로,
 // 다 읽었으면 전체 개수를 회색으로. 안읽음 수는 서버 읽음선 기준이라 기기 무관하게 정확하다.
@@ -112,7 +77,6 @@ function CandidateCardImpl({
           className="rounded border-border-strong"
         />
       </div>
-      <OpenInNewTabButton candidateId={c.id} />
       <Link
         href={`/candidates/${c.id}`}
         className={`card-hover ${VARIANT_CLASS[variant]} rounded-xl p-4 pl-10 flex flex-col block ${stageGroupBorder(c.stage, c.outcome)} ${dimIfClosed(c.outcome)}`}
