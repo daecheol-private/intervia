@@ -95,7 +95,7 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
 
 > 비용 ~$10 (도메인 1회). stage 환경 외부 인원 테스트 가능 상태.
 
-### [x] B-1. 도메인 구매 (완료 — www.intervia.kr) ⭐
+### [x] B-1. 도메인 구매 (완료 — https://intervia.kr) ⭐
 - **왜**: stage 외부 테스트의 prerequisite. Resend verify, B2B 신뢰도, 세금계산서 발송 모두 도메인 필요.
 - **추천 등록처**:
   - **Cloudflare Registrar** (마진 0%, ~$10/년) — `.com` 권장
@@ -103,8 +103,8 @@ Phase E — 결제 시스템 개발           (PG 가맹 후, Claude 가 코드)
   - 후이즈 `intervia.co.kr` ~30,000원/년 (사업자등록 필요)
 - **할 일**:
   1. 등록처 가입·로그인
-  2. `intervia.com` (또는 선택한 도메인) 검색·결제
-  3. Claude 에게 알리기: **"도메인 샀어, intervia.com 이야"**
+  2. `intervia.kr` (또는 선택한 도메인) 검색·결제
+  3. Claude 에게 알리기: **"도메인 샀어, intervia.kr 이야"**
 - **완료 후 Claude 가 자동 처리**:
   - Vercel 도메인 연결 가이드 (DNS A/CNAME)
   - Resend Dashboard 도메인 verify 절차 안내 (DKIM/SPF/DMARC TXT)

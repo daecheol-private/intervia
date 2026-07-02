@@ -34,7 +34,7 @@
 
 ### A. 즉시 결정 필요 (Phase 1 차단)
 - [x] **A-1**: 서비스 이름 → **Intervia** (2026-05-16 결정) — 리브랜딩 작업 1-0 로 추가됨
-- [x] **A-2**: 도메인 → Vercel 기본 (`xxx.vercel.app`)으로 시작, 추후 자체 도메인 연결 (2026-05-16 결정)
+- [x] **A-2**: 도메인 → Vercel 기본으로 시작 후 자체 도메인 `https://intervia.kr` 연결 (2026-05-16 결정)
 - [x] **A-3**: 사업자 정보 (2026-05-16 결정)
   ```
   상호      : Intervia
@@ -97,7 +97,7 @@
 - [ ] **K-6-2**: **BUSINESS_REGISTRY_API_KEY** — data.go.kr 국세청 사업자등록정보 진위확인 API
   - dev: 활용신청 시 "개발" 선택 → 자동승인 → 일 1,000건. (가이드: `DEPLOY.md` §3-1)
   - **운영 전환 시**: 동일 API를 "운영" 구분으로 재신청 (사람 검토 1-3 영업일) → 운영 키 발급되면 Vercel 환경변수 교체
-- [ ] **K-7**: **APP_BASE_URL** — 배포된 프로덕션 도메인 (예: `https://intervia.vercel.app`)
+- [ ] **K-7**: **APP_BASE_URL** — 배포된 프로덕션 도메인 (예: `https://intervia.kr`)
 - [ ] **K-8**: **마스터 암호화 키** (`MASTER_ENCRYPTION_KEY`) — 32바이트 임의값. SMTP 비밀번호 등 민감 정보 AES-256 암호화에 사용
 
 ### Phase 1 진행 중 필요
@@ -458,7 +458,7 @@
 ## 변경 이력
 
 - 2026-05-16 — 초안 작성. 4 Phase / 45 작업 / 사용자 결정 8건 / 외부 발급 12건.
-- 2026-05-16 — 사용자 결정 반영: 서비스명 Intervia / 도메인 vercel.app / 사업자정보 / DPO 대표자겸직 / 보유기간 합·불결정시 즉시폐기 / 비번 12자+3종 / sysadmin 항상가능 / 처리방침 PIPA 템플릿 / DB Turso 유지.
+- 2026-05-16 — 사용자 결정 반영: 서비스명 Intervia / 도메인 intervia.kr / 사업자정보 / DPO 대표자겸직 / 보유기간 합·불결정시 즉시폐기 / 비번 12자+3종 / sysadmin 항상가능 / 처리방침 PIPA 템플릿 / DB Turso 유지.
 - 2026-05-16 — 시크릿 3개(.env.local) 자동 생성. **1-0-1 리브랜딩 완료**.
 - 2026-05-16 — 호스팅 결정: Vercel Hobby + cron-job.org. `vercel.json` 을 daily 2개로 축소, `DEPLOY.md` §5 외부 cron 가이드 추가.
 - 2026-05-16 — env 파일 분리 패턴 도입: `.env.local`=로컬 dev / `.env.production.local`=운영 마이그레이션. `@next/env` + `scripts/_load-env.mjs` 로 모든 마이그레이션 스크립트가 자동 로드. **Turso DB (도쿄) 셋업 + 시드 완료**.

@@ -140,7 +140,7 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `TURSO_DATABASE_URL` | `libsql://xxx.turso.io` |
 | `TURSO_AUTH_TOKEN` | `eyJhbGc...` |
 | `BLOB_READ_WRITE_TOKEN` | (Blob 생성 시 자동) |
-| `APP_BASE_URL` | `https://your-app.vercel.app` |
+| `APP_BASE_URL` | `https://intervia.kr` |
 | `SMTP_HOST` | `smtp.resend.com` (운영 권장) 또는 `smtp.gmail.com` |
 | `SMTP_PORT` | `465` |
 | `SMTP_USER` | `resend` (Resend 사용 시 문자 그대로) / Gmail 주소 |
@@ -226,7 +226,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## 4. 배포
 
-`Deploy` 버튼 → 빌드 완료 후 `https://your-app.vercel.app` 접속.
+`Deploy` 버튼 → 빌드 완료 후 `https://intervia.kr` 접속.
 
 ---
 
@@ -243,7 +243,7 @@ Vercel Hobby 는 daily cron 만 지원하므로, 분당/시간당 cron 은 외�
 | 항목 | 값 |
 |---|---|
 | Title | Intervia — Screening Queue Worker |
-| URL | `https://your-app.vercel.app/api/cron/process-screenings` |
+| URL | `https://intervia.kr/api/cron/process-screenings` |
 | Schedule | Every 1 minute |
 | Method | POST |
 | Auth Header | `Authorization: Bearer ${CRON_SECRET}` |
@@ -252,7 +252,7 @@ Vercel Hobby 는 daily cron 만 지원하므로, 분당/시간당 cron 은 외�
 | 항목 | 값 |
 |---|---|
 | Title | Intervia — Expire Interviews |
-| URL | `https://your-app.vercel.app/api/cron/expire-interviews` |
+| URL | `https://intervia.kr/api/cron/expire-interviews` |
 | Schedule | Every 1 hour |
 | Method | POST |
 | Auth Header | `Authorization: Bearer ${CRON_SECRET}` |
@@ -261,7 +261,7 @@ Vercel Hobby 는 daily cron 만 지원하므로, 분당/시간당 cron 은 외�
 | 항목 | 값 |
 |---|---|
 | Title | Intervia — Ops Alerts |
-| URL | `https://your-app.vercel.app/api/cron/ops-alerts` |
+| URL | `https://intervia.kr/api/cron/ops-alerts` |
 | Schedule | Every 1 hour |
 | Method | POST |
 | Auth Header | `Authorization: Bearer ${CRON_SECRET}` |
