@@ -9,7 +9,7 @@ env 미설정이면 조용히 skip(이메일만 발송), 전화번호 없으면 
 | type | 알림 | 발송 지점 | 링크 버튼 |
 |---|---|---|---|
 | `interview_invite` | AI 면접 초대 | `interview-sessions/send-email`, `jobs/interview-links` | ✅ 면접 시작 |
-| `interview_reminder` | AI 면접 미응답(24h/48h) | `lib/interview-reminders.ts` | ✅ 이어서 진행 |
+| `interview_reminder` | AI 면접 미응답(24h/48h) | `lib/interview-reminders.ts` | ✅ 면접 진행 |
 | `schedule_propose` | 대면 면접 일정 제안 | `jobs/schedule-propose` | ✅ 일정 선택 |
 | `interview_day_reminder` | 대면 면접 D-1 | `lib/interview-reminders.ts` | — |
 | `decision_pass` | **합격** 통보(불합격 제외) | `candidates/stage`, `candidates/decision-mail` | — |
@@ -50,12 +50,13 @@ env 미설정이면 조용히 skip(이메일만 발송), 전화번호 없으면 
 ※ 본 면접은 비밀번호·결제·금융정보를 절대 요구하지 않습니다.
 ```
 
-**2) AI 면접 미응답 (interview_reminder)** — 버튼: 웹링크 "면접 이어서 진행하기" → `#{링크}`
+**2) AI 면접 미응답 (interview_reminder)** — 버튼: 웹링크 "면접 진행하기" → `#{링크}`
+> ⚠️ 구 본문("AI 면접 미완료 안내" + "이어서 진행해 주세요")은 카카오 검수에서 **광고·공지성(요청 없는 리마인드)으로 반려**(2026-06-30, UJ_0795). 아래는 "링크 유효기간 안내"로 프레이밍을 바꾼 재심사용 본문.
 ```
-[#{회사명}] AI 면접 미완료 안내
+[#{회사명}] AI 면접 링크 유효기간 안내
 
-#{이름}님, #{공고} 포지션 AI 면접이 아직 완료되지 않았습니다.
-아래 버튼으로 이어서 진행해 주세요. (이미 완료하셨다면 무시하셔도 됩니다.)
+#{이름}님, 지원하신 #{공고} 포지션 AI 면접 링크의 유효기간을 안내드립니다.
+면접을 아직 완료하지 않으신 경우, 만료 전 아래 버튼에서 진행하실 수 있습니다.
 
 링크 만료: #{만료}
 ```

@@ -59,7 +59,9 @@ function buildMessage(type: AlimtalkType, v: AlimtalkVars): string {
     case "interview_invite":
       return `[${org}] AI 면접 안내\n\n${v.candidateName}님, ${v.jobTitle} 포지션 AI 면접을 안내드립니다.\n아래 버튼으로 면접을 진행해 주세요. (약 10~30분, 채팅 방식)\n\n링크 만료: ${v.expiresAt ?? "-"}\n\n※ 본 면접은 비밀번호·결제·금융정보를 절대 요구하지 않습니다.`;
     case "interview_reminder":
-      return `[${org}] AI 면접 미완료 안내\n\n${v.candidateName}님, ${v.jobTitle} 포지션 AI 면접이 아직 완료되지 않았습니다.\n아래 버튼으로 이어서 진행해 주세요. (이미 완료하셨다면 무시하셔도 됩니다.)\n\n링크 만료: ${v.expiresAt ?? "-"}`;
+      // 카카오 알림톡 검수: "미완료 재촉"은 광고·공지성으로 반려됨(2026-06-30, UJ_0795).
+      // → "링크 유효기간 안내"라는 정보성 이벤트로 프레이밍 전환(거래 관계 기반 정보 고지).
+      return `[${org}] AI 면접 링크 유효기간 안내\n\n${v.candidateName}님, 지원하신 ${v.jobTitle} 포지션 AI 면접 링크의 유효기간을 안내드립니다.\n면접을 아직 완료하지 않으신 경우, 만료 전 아래 버튼에서 진행하실 수 있습니다.\n\n링크 만료: ${v.expiresAt ?? "-"}`;
     case "schedule_propose":
       return `[${org}] 면접 일정 선택 안내\n\n${v.candidateName}님, ${v.jobTitle} 면접 일정을 선택해 주세요.\n아래 버튼에서 가능한 시간을 골라 회신해 주시면 일정이 확정됩니다.`;
     case "interview_day_reminder":
@@ -76,7 +78,7 @@ function buildButton(type: AlimtalkType, v: AlimtalkVars): string | undefined {
     type === "interview_invite"
       ? "면접 시작하기"
       : type === "interview_reminder"
-        ? "면접 이어서 진행하기"
+        ? "면접 진행하기"
         : type === "schedule_propose"
           ? "면접 일정 선택하기"
           : null;
@@ -104,6 +106,16 @@ function normalizeMobile(raw: string | null | undefined): string | null {
   if (d.startsWith("82")) d = "0" + d.slice(2); // 국가코드 → 로컬
   if (/^01[016789]\d{7,8}$/.test(d)) return d;
   return null;
+}
+
+/**
+ * 로컬/비운영 강제 리다이렉트 수신번호 (mailer 의 LOCAL_DEV_FALLBACK 과 동일 정책).
+ * NODE_ENV != production(로컬 dev·테스트 스크립트) 이면 실제 후보자 번호 대신 항상 이 번호로만 발송한다.
+ * → 로컬 테스트 중 실제 지원자에게 알림톡이 나가는 사고를 원천 차단. 운영에선 null(실번호 발송).
+ */
+const LOCAL_DEV_MOBILE = "01074962696";
+function resolveAlimtalkOverride(): string | null {
+  return process.env.NODE_ENV !== "production" ? LOCAL_DEV_MOBILE : null;
 }
 
 // 토큰 캐시 — 발송마다 토큰을 새로 받으면 느리고 한도 낭비. 유효시간(600s) 내 재사용.
@@ -153,8 +165,14 @@ export async function sendCandidateAlimtalk(
   const tplCode = process.env[TEMPLATE_ENV[type]];
   if (!tplCode) return { ok: false, skipped: true, reason: "template_not_set" };
 
-  const mobile = normalizeMobile(args.phone);
-  if (!mobile) return { ok: false, skipped: true, reason: "no_phone" };
+  const realMobile = normalizeMobile(args.phone);
+  if (!realMobile) return { ok: false, skipped: true, reason: "no_phone" };
+  // 로컬/비운영: 실제 후보자 번호로 알림톡이 나가는 사고 방지 — 항상 본인 번호로 리다이렉트.
+  const override = resolveAlimtalkOverride();
+  if (override && override !== realMobile) {
+    console.warn(`[alimtalk] 로컬 리다이렉트: ${realMobile} → ${override} (type=${type})`);
+  }
+  const mobile = override ?? realMobile;
 
   const token = await getToken();
   if (!token) return { ok: false, skipped: false, reason: "token_failed" };
