@@ -115,11 +115,9 @@ which we have contracted as a data processor, as follows:
   // 받고, 인프라 국외이전 명시 동의는 면접 시작 전 동의 화면에서 별도 취득.
   const koreanShort = `■ AI 평가 활용 안내
 
-본 채용은 지원 서류 및 (해당 시) 면접 평가에 AI(자동 분석)를 활용하며, 최종 합격 여부는 채용 담당자가 직접 결정합니다. AI 평가의 기준·절차·처리 방식은 다음에서 확인하실 수 있습니다: ${SITE_INFO.baseUrl}/legal/ai-evaluation-disclosure
+본 채용은 서류·면접 평가에 AI를 활용하되, 최종 합격 여부는 채용 담당자가 결정합니다(평가 기준·절차: ${SITE_INFO.baseUrl}/legal/ai-evaluation-disclosure).
 
-AI 평가를 원하지 않으시는 경우, 지원 시 또는 ${contactForNotice}로 알려주시면 AI 평가 없이 일반 채용 절차로 진행됩니다. AI 평가 결과에 대한 설명 요청·이의제기도 하실 수 있습니다.
-
-제출하신 서류는 본 채용 목적으로만 이용되며, 합격 여부 결정 시 파기됩니다(최종 합격자 정보는 입사 절차 목적으로 보유).`;
+AI 평가를 원하지 않으시면 ${contactForNotice}로 알려 주시면 AI 없이 일반 절차로 진행되며, 평가 결과에 대한 설명·이의제기도 하실 수 있습니다.`;
 
   return { koreanShort, korean, english };
 }
