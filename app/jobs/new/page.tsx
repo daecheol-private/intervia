@@ -452,6 +452,7 @@ export default function NewJobPage() {
         </Field>
 
         <Field
+          dataTour="eval-focus"
           label="🤖 AI 평가 중점 사항 (HR 전용)"
           hint="후보자에게는 공개되지 않습니다. AI 서류·면접 평가에서 가중치를 두고 싶은 포인트를 자유롭게 작성하세요. 예: 보안 솔루션 연동 경력 최우선, Python 미사용 후보 감점, SOAR 경험자 가산점."
         >
@@ -494,7 +495,7 @@ export default function NewJobPage() {
           )}
         </Field>
 
-        <Field label="공고 비밀번호 (선택)">
+        <Field dataTour="job-password" label="공고 비밀번호 (선택)">
           <PasswordInput
             className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm font-mono tracking-widest placeholder:font-sans placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             placeholder="4자리 숫자 (예: 1234)"
@@ -548,14 +549,17 @@ function Field({
   required,
   hint,
   children,
+  dataTour,
 }: {
   label: string;
   required?: boolean;
   hint?: string;
   children: React.ReactNode;
+  /** 가이드(투어) 스포트라이트 앵커. 없으면 속성 자체가 렌더되지 않음. */
+  dataTour?: string;
 }) {
   return (
-    <div>
+    <div data-tour={dataTour}>
       <label className="block text-sm font-medium text-ink-soft mb-1.5">
         {label}
         {required && <span className="text-danger ml-1">*</span>}

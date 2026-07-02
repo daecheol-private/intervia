@@ -14,7 +14,7 @@ import { requireUser } from "@/lib/tenant";
 export const runtime = "nodejs";
 
 // 화이트리스트 — 임의 키 누적 방지. 가이드 추가 시 여기에 키를 더한다.
-const VALID_KEYS = ["job_page", "candidate_page", "org_settings"];
+const VALID_KEYS = ["job_new", "job_page", "candidate_page", "org_settings"];
 
 function parseSeen(raw: string | null): string[] {
   if (!raw) return [];

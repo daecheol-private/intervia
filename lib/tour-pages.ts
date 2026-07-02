@@ -27,6 +27,16 @@ export type PageGuide = {
 
 export const PAGE_GUIDES: PageGuide[] = [
   {
+    // 새 공고 등록 — 지원 링크 생성 → 기존 공고 URL 자동 채우기 안내.
+    key: "job_new",
+    scenario: "member-job-new",
+    match: (p) => (p === "/jobs/new" ? {} : null),
+    // '지원링크 생성' 영역은 데스크톱 폼에 항상 렌더된다 → 진입 시 항상 자동 시작.
+    // (모바일은 폼 대신 안내만 뜨는 데스크톱 전용 화면이라 desktopOnly.)
+    awaitTarget: '[data-tour="apply-link-new"]',
+    desktopOnly: true,
+  },
+  {
     key: "job_page",
     scenario: "member-job-page",
     match: (p) => {

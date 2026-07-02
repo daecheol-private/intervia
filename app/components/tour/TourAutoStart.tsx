@@ -8,6 +8,7 @@
  * 정한다. 노출 즉시 기록하지 않고, 가이드 끝의 '다시 보지 않기'를 체크하고 종료해야만
  * 기록(끄기)된다 — 그 전까진 진입할 때마다 다시 안내한다(검토·반복 학습에 유리).
  *
+ *  - /jobs/new         → 공고 만들기 (member-job-new)
  *  - /jobs/{id}        → 공고 둘러보기 (member-job-page)
  *  - /candidates/{id}  → 이력서 검토하기 (member-candidate-page)
  *
