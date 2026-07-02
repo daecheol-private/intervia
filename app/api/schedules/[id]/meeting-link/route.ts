@@ -184,14 +184,22 @@ export async function POST(
     }
   }
 
-  // in-app 알림 — 공고 면접관 전원
+  // in-app 알림 — 공고 면접관 전원.
+  // 제시 면접관(proposedByUserId)은 위에서 buildMeetingLinkEmail 풍부한 메일을 이미 받았고,
+  // 등록 주체(me) 본인도 방금 등록한 행동이라 알림 메일 불필요 — 둘 다 이메일에서만 제외(인앱 알림은 발송).
   try {
-    await notifyJobInterviewers(sched.jobId, {
-      type: "schedule_confirmed",
-      title: `${cand?.name ?? "후보자"} 님 온라인 미팅 링크가 등록되었습니다`,
-      href: `/candidates/${sched.candidateId}`,
-      payload: { scheduleId: sched.id, slot: selected, hasMeetingUrl: true },
-    });
+    await notifyJobInterviewers(
+      sched.jobId,
+      {
+        type: "schedule_confirmed",
+        title: `${cand?.name ?? "후보자"} 님 온라인 미팅 링크가 등록되었습니다`,
+        href: `/candidates/${sched.candidateId}`,
+        payload: { scheduleId: sched.id, slot: selected, hasMeetingUrl: true },
+      },
+      sched.proposedByUserId
+        ? { excludeEmailUserIds: [sched.proposedByUserId, me!.id] }
+        : { excludeEmailUserIds: [me!.id] }
+    );
   } catch (e) {
     console.error("meeting link notify interviewers failed", e);
   }
