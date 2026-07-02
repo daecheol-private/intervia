@@ -97,10 +97,14 @@ export async function GET(
           ${latestScreenJob} IN ('failed','paused')
           OR (${latestScreenJob} IS NULL AND ${candidates.screeningReport} IS NULL)
         ) THEN 1 ELSE 0 END), 0)`,
+      // ⚠️ GOTCHAS §5-1 — 인라인 상관 서브쿼리에선 ${candidates.id} 가 접두어를 잃어
+      // bare "id" 로 렌더되고 interview_sessions.id 로 오결합돼 s.candidate_id = s.id
+      // (거의 항상 false) → aiLinkExpired 가 항상 0 이었다. toSQL() 로 실측 확인.
+      // 외부 참조는 리터럴 candidates.id (SQLite 가 외부 테이블로 정확히 상관) 로 써야 한다.
       aiLinkExpired: sql<number>`COALESCE(SUM(CASE
         WHEN ${candidates.stage} = 'ai_pending'
-          AND EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status = 'expired')
-          AND NOT EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = ${candidates.id} AND s.status IN ('pending','in_progress','completed'))
+          AND EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = candidates.id AND s.status = 'expired')
+          AND NOT EXISTS (SELECT 1 FROM interview_sessions s WHERE s.candidate_id = candidates.id AND s.status IN ('pending','in_progress','completed'))
         THEN 1 ELSE 0 END), 0)`,
       resultDue: sql<number>`COALESCE(SUM(CASE
         WHEN ${candidates.stage} = 'round1_waiting' AND ${latestSched("round1")} = 'selected' AND datetime(${latestSchedEnd("round1")}) <= datetime(${nowIso}) THEN 1
