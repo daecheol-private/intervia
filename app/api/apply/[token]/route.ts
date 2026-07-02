@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { jobPostings, candidates, candidateAttachments } from "@/lib/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { saveFile } from "@/lib/storage";
 import {
@@ -124,6 +124,32 @@ export async function POST(
       })
       .returning();
     candidateId = inserted.id;
+
+    // 동시 제출 레이스 방어 — 위 이메일 dup 체크(:87)와 이 INSERT 사이에 같은 이메일의
+    // 다른 동시 지원이 끼어들면(파일 바이트가 달라 resume_hash 유니크도 못 막음) 후보자
+    // 2행 + 평가 2회 = 과금 2회가 된다. 삽입 후 같은 (jobId,email)의 더 작은 id 가 있으면
+    // 이 행이 레이스 패자이므로 자기 행을 지우고 already_applied 응답(승자=최소 id 1명만 유지).
+    if (email) {
+      const [earlier] = await db
+        .select({ id: candidates.id })
+        .from(candidates)
+        .where(
+          and(
+            eq(candidates.jobId, job.id),
+            eq(candidates.email, email),
+            lt(candidates.id, candidateId)
+          )
+        )
+        .limit(1);
+      if (earlier) {
+        await db.delete(candidates).where(eq(candidates.id, candidateId));
+        return bad(
+          "이미 이 공고에 지원하셨습니다. 지원서는 한 번만 제출할 수 있습니다.",
+          409,
+          "already_applied"
+        );
+      }
+    }
 
     await db.insert(candidateAttachments).values({
       candidateId,

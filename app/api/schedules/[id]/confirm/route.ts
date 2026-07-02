@@ -25,7 +25,7 @@ import {
   organizations,
   users,
 } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import {
@@ -88,7 +88,10 @@ export async function POST(
 
   // 같은 시간대 다수 면접 허용 — 동시간 다른 지원자 확정 여부는 검사하지 않음 (2026-06-12).
   const now = new Date().toISOString();
-  await db
+  // 원자적 claim — pending/counter_proposed 일 때만 전이. 위 체크(:74)와 UPDATE 사이의
+  // 레이스(HR 더블클릭·후보자 select 와 HR confirm 교차)에서 둘 다 통과해 Zoom 회의 2개·
+  // 확정 메일 2통이 나가는 것을 차단. 0행 = 이미 확정 → 409.
+  const claimed = await db
     .update(interviewSchedules)
     .set({
       status: "selected",
@@ -96,7 +99,15 @@ export async function POST(
       respondedAt: now,
       updatedAt: now,
     })
-    .where(eq(interviewSchedules.id, sched.id));
+    .where(
+      and(
+        eq(interviewSchedules.id, sched.id),
+        inArray(interviewSchedules.status, ["pending", "counter_proposed"])
+      )
+    )
+    .returning({ id: interviewSchedules.id });
+  if (claimed.length === 0)
+    return new Response("이미 처리된 일정입니다.", { status: 409 });
 
   // 후보자 stage 전환 — round1 만 round1_waiting 으로. round2 는 stage 변경 없음(round1_passed 유지).
   if (sched.round === "round1") {
