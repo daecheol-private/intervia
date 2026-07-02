@@ -40,13 +40,13 @@ export async function POST(req: Request) {
   if (ids.length > 500)
     return new Response("한 번에 500개 초과 enqueue 불가", { status: 400 });
 
+  // 권한(orgId)·동의 게이트(consentAt·createdAt) 판정에 필요한 컬럼만 — name·
+  // screeningReport·resumeMaskedText(마스킹 이력서 전문)는 이 라우트에서 안 쓰는데
+  // 최대 500행분을 끌어오던 죽은 fetch 였다. 파싱·평가는 워커(ensureParsed)가 수행.
   const rows = await db
     .select({
       id: candidates.id,
       orgId: candidates.orgId,
-      name: candidates.name,
-      screeningReport: candidates.screeningReport,
-      maskedLen: candidates.resumeMaskedText,
       consentAt: candidates.applicantConsentConfirmedAt,
       createdAt: candidates.createdAt,
     })

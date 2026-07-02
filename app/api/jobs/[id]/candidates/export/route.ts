@@ -66,15 +66,36 @@ export async function GET(
     return new Response("잠긴 공고입니다.", { status: 403 });
   }
 
+  // CSV 에 실제 쓰는 컬럼만 — 전체 select() 는 resume_text·resume_masked_text(이력서 원문,
+  // 후보자당 수십 KB)를 전 후보분 끌어왔다(GOTCHAS §0-0-5 금지 패턴). 대형 공고 export 시
+  // 응답 지연·함수 메모리 스파이크(OOM) 원인.
   const rows = await db
-    .select()
+    .select({
+      id: candidates.id,
+      name: candidates.name,
+      email: candidates.email,
+      phone: candidates.phone,
+      careerYears: candidates.careerYears,
+      screeningScore: candidates.screeningScore,
+      screeningReport: candidates.screeningReport,
+      stage: candidates.stage,
+      decisionNote: candidates.decisionNote,
+      decidedAt: candidates.decidedAt,
+      createdAt: candidates.createdAt,
+    })
     .from(candidates)
     .where(eq(candidates.jobId, jobId))
     .orderBy(desc(candidates.createdAt));
   const ids = rows.map((r) => r.id);
+  // 세션도 CSV 에 쓰는 것만 — messages(면접 대화록 전문, 세션당 수십 KB)는 제외.
   const sessions = ids.length
     ? await db
-        .select()
+        .select({
+          candidateId: interviewSessions.candidateId,
+          status: interviewSessions.status,
+          evaluation: interviewSessions.evaluation,
+          createdAt: interviewSessions.createdAt,
+        })
         .from(interviewSessions)
         .where(inArray(interviewSessions.candidateId, ids))
         .orderBy(desc(interviewSessions.createdAt))

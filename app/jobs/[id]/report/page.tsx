@@ -52,8 +52,26 @@ export default async function JobReportPage({
         .where(eq(organizations.id, job.orgId))
     : [{ name: null }];
 
+  // 리포트가 실제 쓰는 소형 컬럼만 — 전체 select() 는 resume_text·resume_masked_text
+  // (이력서 원문, 후보자당 수십 KB)를 전 후보분 끌어왔다(GOTCHAS §0-0-5 금지 패턴).
+  // 400명 공고 리포트에서 수십 MB 전송. 누락 컬럼은 tsc 가 사용처에서 잡는다.
   const cands = await db
-    .select()
+    .select({
+      id: candidates.id,
+      name: candidates.name,
+      outcome: candidates.outcome,
+      outcomeReason: candidates.outcomeReason,
+      decisionFromStage: candidates.decisionFromStage,
+      stage: candidates.stage,
+      screeningScore: candidates.screeningScore,
+      screeningReport: candidates.screeningReport,
+      careerYears: candidates.careerYears,
+      educationLevel: candidates.educationLevel,
+      decidedAt: candidates.decidedAt,
+      createdAt: candidates.createdAt,
+      lastInterviewEmailSentAt: candidates.lastInterviewEmailSentAt,
+      interviewEmailCount: candidates.interviewEmailCount,
+    })
     .from(candidates)
     .where(eq(candidates.jobId, jobId))
     .orderBy(desc(candidates.screeningScore));
