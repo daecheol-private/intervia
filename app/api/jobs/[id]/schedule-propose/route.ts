@@ -151,9 +151,18 @@ export async function POST(
       .where(eq(organizations.id, job.orgId));
   }
 
-  // 대상 후보자 로드 + 검증
+  // 대상 후보자 로드 + 검증 — 일정 제시에 쓰는 컬럼만(id·name·email·phone·stage·outcome).
+  // 전체 select() 는 resume_text·resume_masked_text·screening_report 까지 최대 50명분을
+  // 끌어왔다(GOTCHAS §0-0-5). 누락 컬럼은 tsc 가 사용처에서 잡는다.
   const targets = await db
-    .select()
+    .select({
+      id: candidates.id,
+      name: candidates.name,
+      email: candidates.email,
+      phone: candidates.phone,
+      stage: candidates.stage,
+      outcome: candidates.outcome,
+    })
     .from(candidates)
     .where(
       and(
