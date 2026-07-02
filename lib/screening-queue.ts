@@ -363,23 +363,30 @@ export async function getQueueStats(orgId?: number | null): Promise<{
   processing: number;
   failed: number;
 }> {
-  const rows = orgId
-    ? await db
-        .select({
-          status: screeningJobs.status,
-          count: sql<number>`COUNT(*)`,
-        })
-        .from(screeningJobs)
-        .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
-        .where(eq(candidates.orgId, orgId))
-        .groupBy(screeningJobs.status)
-    : await db
-        .select({
-          status: screeningJobs.status,
-          count: sql<number>`COUNT(*)`,
-        })
-        .from(screeningJobs)
-        .groupBy(screeningJobs.status);
+  // 순수 멱등 읽기 — Turso 원격 소켓 일시 끊김(fetch failed / other side closed)에
+  // 짧게 재시도. 매분 cron 워커 self-chain + health 가 호출하므로 blip 이 그대로
+  // throw 되면 Sentry 노이즈가 쌓인다. (참조: lib/db-retry.ts)
+  const rows = await withDbRetry(
+    async () =>
+      orgId
+        ? db
+            .select({
+              status: screeningJobs.status,
+              count: sql<number>`COUNT(*)`,
+            })
+            .from(screeningJobs)
+            .innerJoin(candidates, eq(candidates.id, screeningJobs.candidateId))
+            .where(eq(candidates.orgId, orgId))
+            .groupBy(screeningJobs.status)
+        : db
+            .select({
+              status: screeningJobs.status,
+              count: sql<number>`COUNT(*)`,
+            })
+            .from(screeningJobs)
+            .groupBy(screeningJobs.status),
+    { label: "getQueueStats" }
+  );
   const out = { queued: 0, processing: 0, failed: 0 };
   for (const r of rows) {
     if (r.status === "queued") out.queued = Number(r.count);

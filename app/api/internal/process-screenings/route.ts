@@ -201,12 +201,24 @@ export async function POST(req: Request) {
   // 남은 queued 있으면 self-chain.
   // 단, 이번 실행이 한 건도 처리 못했으면(전역 슬롯 만석 등) 체인 안 함 —
   // 슬롯을 점유 중인 다른 실행이 끝나며 체인하고, cron 이 안전망. (즉시 재호출 busy-spin 방지)
+  // self-chain 판단용 큐 카운트. 본 작업(workerLoop)은 이미 끝났으므로, Turso 일시
+  // 끊김으로 이 조회가 실패해도 워커를 throw 시키지 않는다 — 체인만 건너뛰고 다음
+  // cron 이 남은 큐를 잇는다(안전망). getQueueStats 내부 재시도까지 뚫린 persistent
+  // transient 만 여기 도달. 비-transient(진짜 버그)는 그대로 전파해 Sentry 가시성 유지.
   const { getQueueStats } = await import("@/lib/screening-queue");
-  const q = await getQueueStats();
-  stats.remaining = q.queued;
-  if (q.queued > 0 && stats.processed > 0) {
-    stats.chained = true;
-    chainSelf(req);
+  try {
+    const q = await getQueueStats();
+    stats.remaining = q.queued;
+    if (q.queued > 0 && stats.processed > 0) {
+      stats.chained = true;
+      chainSelf(req);
+    }
+  } catch (e) {
+    if (!isTransientDbError(e)) throw e;
+    log.warn("process_screenings.queue_stats_skip", {
+      workerId,
+      reason: e instanceof Error ? e.message : String(e),
+    });
   }
 
   return Response.json({ ok: true, workerId, ...stats });
