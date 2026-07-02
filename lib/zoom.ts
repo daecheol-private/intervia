@@ -71,6 +71,8 @@ async function getAccessToken(creds: ZoomCredentials): Promise<string> {
       Authorization: `Basic ${basic}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
+    // 토큰 발급 hang 방지 — 호출부(schedule-zoom·verifyZoomCredentials)가 실패를 폴백 처리.
+    signal: AbortSignal.timeout(10000),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -139,6 +141,8 @@ export async function createMeeting(opts: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
+    // 회의 생성 hang 방지 — tryAutoCreateZoomMeeting 이 실패 시 확정 메일로 폴백.
+    signal: AbortSignal.timeout(10000),
     body: JSON.stringify({
       topic: topic.slice(0, 200),
       type: 2, // scheduled meeting

@@ -64,6 +64,10 @@ export async function confirmTossPayment(args: {
         orderId: args.orderId,
         amount: args.amount,
       }),
+      // 응답 지연에 무한 대기(함수 hang) 방지. abort 시 아래 catch 가 NETWORK 로 변환하고,
+      // confirm 라우트는 이를 '승인 여부 불확실'로 처리해 주문을 pending 으로 유지한다
+      // (failed 확정 금지) → reconcile 워커가 토스 조회로 DONE 이면 자가치유.
+      signal: AbortSignal.timeout(15000),
     });
   } catch {
     // 네트워크 장애 — 결제 미확정. 멱등이라 사용자가 재시도하면 됨.
@@ -119,6 +123,8 @@ export async function getTossPaymentByOrderId(
     res = await fetch(TOSS_LOOKUP_URL(orderId), {
       method: "GET",
       headers: { Authorization: `Basic ${auth}` },
+      // 조회 hang 방지 — reconcile 워커 경로. abort 는 NETWORK 로 변환돼 다음 회차 재시도.
+      signal: AbortSignal.timeout(10000),
     });
   } catch {
     throw new TossError(
@@ -172,6 +178,8 @@ export async function cancelTossPayment(args: {
           : {}),
       },
       body: JSON.stringify({ cancelReason: args.cancelReason }),
+      // 취소(환불) hang 방지. Idempotency-Key 로 abort 후 재시도해도 중복 취소 안전.
+      signal: AbortSignal.timeout(15000),
     });
   } catch {
     throw new TossError(

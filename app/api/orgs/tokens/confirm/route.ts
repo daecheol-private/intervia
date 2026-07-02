@@ -2,7 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { db } from "@/lib/db";
 import { paymentOrders } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { applyChargePayment } from "@/lib/tokens";
 import { confirmTossPayment, parseTossOrderId, TossError } from "@/lib/toss";
 import { withVat } from "@/lib/beta";
@@ -85,11 +85,45 @@ export async function POST(req: Request) {
     const code = e instanceof TossError ? e.code : "UNKNOWN";
     const message =
       e instanceof TossError ? e.message : "결제 승인에 실패했습니다.";
-    // 승인 실패 — 주문을 failed 로 기록(재결제 시 새 주문 생성). 토큰 미지급.
+
+    // 승인 도달·성공 여부가 불확실한 오류는 절대 failed 로 확정하지 않는다.
+    // reconcile 워커는 pending 주문만 토스에 조회해 자가치유하므로(DONE 이면 지급),
+    // 여기서 failed 로 박으면 "카드는 결제됐는데 토큰 미지급"이 영구화된다.
+    //   - NETWORK/타임아웃: 요청이 토스에 도달·처리됐는지 불명
+    //   - ALREADY_PROCESSED_PAYMENT: 이미(동시 요청·이전 타임아웃으로) 승인된 결제
+    //   - UNKNOWN: 분류 불가
+    // → 주문을 pending 으로 유지하고 "재결제 말고 대기" 안내. 동시 confirm 이 이미
+    //   paid 로 확정했다면 그 결과에 멱등 합류한다.
+    const ambiguous =
+      code === "NETWORK" ||
+      code === "ALREADY_PROCESSED_PAYMENT" ||
+      code === "UNKNOWN";
+    if (ambiguous) {
+      const [fresh] = await db
+        .select()
+        .from(paymentOrders)
+        .where(eq(paymentOrders.id, order.id));
+      if (fresh?.status === "paid") return applyAndRespond(fresh, me!.id);
+      return Response.json(
+        {
+          ok: false,
+          code,
+          pending: true,
+          message:
+            "결제 확인이 지연되고 있습니다. 카드가 승인되었다면 잠시 후 토큰 페이지에 자동 반영됩니다. 재결제하지 말고 잠시 후 새로고침해 주세요.",
+        },
+        { status: 402 }
+      );
+    }
+
+    // 명확한 승인 거부(카드 거절 등) — pending 일 때만 failed 로 확정.
+    // (동시 confirm 이 먼저 paid 로 확정한 주문을 failed 로 덮어쓰지 않도록 조건부.)
     await db
       .update(paymentOrders)
       .set({ status: "failed", providerRef: paymentKey })
-      .where(eq(paymentOrders.id, order.id));
+      .where(
+        and(eq(paymentOrders.id, order.id), eq(paymentOrders.status, "pending"))
+      );
     return Response.json({ ok: false, code, message }, { status: 402 });
   }
 
