@@ -118,16 +118,6 @@ export async function saveFile(
 }
 
 /**
- * @deprecated `/api/uploads/candidate/[id]` 를 직접 사용하세요.
- * 이 함수는 Blob URL 을 외부에 직접 노출시켜 인증 우회가 가능합니다.
- */
-export function getDownloadUrl(key: string | null | undefined): string | null {
-  if (!key) return null;
-  if (/^https?:\/\//i.test(key)) return key;
-  return `/api/uploads/${encodeURIComponent(key)}`;
-}
-
-/**
  * 파일을 삭제. 키가 어떤 형식이든 자동 처리.
  */
 export async function deleteFile(

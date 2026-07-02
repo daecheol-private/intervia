@@ -531,7 +531,7 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 - 세션 + ownsOrg + 부모 공고 PIN 잠금 검증
 - Blob URL 이어도 server-side fetch 해서 stream proxy → Blob 의 public URL 외부 노출 X
 
-⚠️ `lib/storage.ts` 의 `getDownloadUrl` 은 deprecated. 직접 사용 금지.
+⚠️ `lib/storage.ts` 의 `getDownloadUrl` 은 제거됨 (2026-07-03, 인증 우회 footgun). 다운로드 URL 을 직접 만들지 말고 항상 위 프록시 라우트 사용.
 
 ⚠️ **content-type 필수 — octet-stream 으로 저장하면 PDF 가 inline 대신 다운로드됨** (2026-06-03):
 - 다운로드 라우트는 `Content-Disposition: inline` 을 보내지만, `Content-Type: application/octet-stream` 이면 브라우저는 inline 무시하고 무조건 다운로드한다.
