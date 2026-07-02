@@ -31,8 +31,20 @@ export async function GET(
     .where(eq(interviewSessions.accessToken, token));
   if (!session) return new Response("세션 없음", { status: 404 });
 
+  // 후보자(무인증 토큰)에게 내려보내는 세션 필드 화이트리스트.
+  // evaluation(AI 평가 전문)·mcqResponses(객관식 정답 포함)·mcqScore·personalityProfile·
+  // personalityResponses 등 민감 필드는 절대 응답에 넣지 않는다. raw session 을 그대로
+  // 반환하면 면접 완료 직후(stage=ai_evaluated, 아직 superseded 아님) 재접속 시 평가 전문·
+  // 정답지가 무인증 토큰으로 유출된다(§37의2 리스크 + MCQ 문제은행 정답 유출).
+  const publicSession = {
+    id: session.id,
+    status: session.status,
+    messages: session.messages,
+    startedAt: session.startedAt,
+  };
+
   if (new Date(session.expiresAt) < new Date()) {
-    return Response.json({ session, expired: true }, { status: 200 });
+    return Response.json({ session: publicSession, expired: true }, { status: 200 });
   }
 
   const [candidate] = await db
@@ -47,7 +59,7 @@ export async function GET(
   if (candidate.outcome) {
     return Response.json(
       {
-        session,
+        session: publicSession,
         withdrawn: candidate.outcome === "withdrawn",
         terminated: true,
         expired: false,
@@ -60,7 +72,7 @@ export async function GET(
   // (수동 단계 전진은 pending 세션을 정리하지 않으므로 파생 판정으로 차단 — 불필요한 응시·과금 방지.)
   if (isAiInterviewSuperseded({ stage: candidate.stage, outcome: candidate.outcome })) {
     return Response.json(
-      { session, superseded: true, expired: false },
+      { session: publicSession, superseded: true, expired: false },
       { status: 200 }
     );
   }
@@ -109,15 +121,6 @@ export async function GET(
     session.messages.length === 0 &&
     session.status !== "completed";
 
-  // 세션 원본에는 인성검사·객관식 응답/점수가 포함 — 후보자에게 점수류는 비노출
-  const {
-    personalityResponses: _pr,
-    personalityProfile: _pp,
-    mcqResponses: _mr,
-    mcqScore: _ms,
-    ...safeSession
-  } = session;
-
   // 객관식 단계 표시 데이터 — 영어 면접이면 번역 캐시(mcqSetEn)를 쓰고, 아직 없으면
   // translating 신호를 주고 백그라운드 번역을 (재)트리거한다(PATCH prefetch 의 백업).
   let mcqField: {
@@ -139,7 +142,7 @@ export async function GET(
   }
 
   return Response.json({
-    session: safeSession,
+    session: publicSession,
     candidate: { id: candidate.id, name: candidate.name },
     organization: orgName ? { name: orgName } : null,
     job: {

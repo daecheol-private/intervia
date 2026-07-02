@@ -6,7 +6,7 @@ import {
   organizations,
   type InterviewEvaluation,
 } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { generateJSON } from "@/lib/gemini";
 import { buildSummaryPrompt, type CultureFitProfile } from "@/lib/prompts";
 import { parseTraitProfile } from "@/lib/personality";
@@ -107,14 +107,26 @@ export async function POST(
   // 후보자 발언 통계 + 외부 LLM 보조 의심 신호 — complete·reevaluate 공용 헬퍼.
   const stats = computeTranscriptStats(session.messages);
 
-  // 1) 세션 상태부터 completed 로 마킹. LLM 평가가 실패해도 면접 자체는 종결로 유지.
-  await db
+  // 1) 세션을 원자적으로 claim — 아직 completed 가 아닐 때만 completed 로 조건부 전이.
+  //    LLM 평가(~30-40초) 전에 status 만 먼저 completed 로 바꾸는 구조라, 이 claim 이 없으면
+  //    그 윈도우에 들어온 두 번째 POST(무인증 토큰·병렬)가 status=completed·evaluation=null 로
+  //    위 멱등 게이트(:39)를 통과해 LLM 재실행 + chargeRepeatable 재과금이 발생한다.
+  //    0행 = 이미 다른 요청이 완료 처리 중/완료 → 즉시 안전 응답(첫 claim 승자만 평가·과금).
+  //    실패로 evaluation 이 비어도 재시도는 인증된 reevaluate 라우트로 (여기선 재실행 금지).
+  const claimed = await db
     .update(interviewSessions)
     .set({
       status: "completed",
       completedAt: new Date().toISOString(),
     })
-    .where(eq(interviewSessions.id, session.id));
+    .where(
+      and(
+        eq(interviewSessions.id, session.id),
+        ne(interviewSessions.status, "completed")
+      )
+    )
+    .returning({ id: interviewSessions.id });
+  if (claimed.length === 0) return Response.json(DONE_RESPONSE);
 
   // 2) 후보자 전형 단계 자동 전환 — AI면접 전 단계만 ai_evaluated 로.
   const autoAdvance: ("applied" | "screened" | "ai_pending")[] = [

@@ -6,7 +6,7 @@ import {
   organizations,
   type InterviewMessage,
 } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createChat, startChatStreamWithRetry } from "@/lib/gemini";
 import {
   buildSystemPrompt,
@@ -257,10 +257,28 @@ export async function POST(
         { role: "model", content },
       ];
       try {
-        await db
+        // 낙관적 잠금 — 요청 시작 시 읽은 메시지 개수(session.messages.length)가 그대로일 때만
+        // 덮어쓴다. 동시 턴(다중 탭·재시도·병렬 호출)이 먼저 저장해 개수가 늘었으면 이 쓰기는
+        // 앞 턴을 통째로 지우게 되므로 저장을 포기한다(이 턴만 유실, 저장된 대화는 보존).
+        // messages 를 쓰는 경로는 이 라우트뿐이라 개수 변화 = 동시 턴 충돌로 판정 가능.
+        const saved = await db
           .update(interviewSessions)
           .set({ messages: finalHistory })
-          .where(eq(interviewSessions.id, session.id));
+          .where(
+            and(
+              eq(interviewSessions.id, session.id),
+              sql`json_array_length(messages) = ${session.messages.length}`
+            )
+          )
+          .returning({ id: interviewSessions.id });
+        if (saved.length === 0) {
+          log.warn("interview_persist_conflict", {
+            sessionId: session.id,
+            candidateId: candidate.id,
+            expectedLen: session.messages.length,
+          });
+          return;
+        }
         if (truncated) {
           log.warn("interview_stream_truncated", {
             sessionId: session.id,
