@@ -2,7 +2,7 @@
 
 정의: `lib/schema.ts` (Drizzle, libSQL/SQLite 호환).
 
-스키마 변경 → `npm run db:push` (로컬). 데이터가 있어 푸시가 막히면 `scripts/migrate-multitenant.mjs` 처럼 raw ALTER 스크립트 작성.
+스키마 변경 워크플로우는 CLAUDE.md "새 기능 추가 시 체크리스트" 참조: `lib/schema.ts` 수정 → `npm run db:generate` → 생성된 `drizzle/NNNN_*.sql` 검토(DROP/DELETE 있으면 운영 데이터 보호 규칙 적용) → `npm run db:migrate`. 로컬 빠른 실험만 `npm run db:push`.
 
 ## organizations
 
@@ -781,12 +781,11 @@ coupon_groups ─< coupons  (글로벌 시스템 자원 — organizations 아래
 
 ## 마이그레이션 스크립트
 
-기존 단일테넌트 → 멀티테넌트 이관: `scripts/migrate-multitenant.mjs`.
-- 기본 법인 생성 (이름: `DEFAULT_ORG_NAME` 환경변수 또는 `default-org`)
-- is_admin=1 → role='system_admin'
-- 나머지 사용자 → 기본 법인 멤버, 가장 오래된 사용자 → org_admin
-- 기존 job/candidate 모두 기본 법인에 귀속
-- 기본 법인 wallet 10000 토큰
+현재 마이그레이션은 drizzle-kit(`drizzle/NNNN_*.sql`) + `scripts/db-migrate.ts` 단일 체계.
+pre-drizzle 시절의 수동 raw-ALTER 스크립트(단일테넌트→멀티테넌트 이관 등)는 `scripts/_legacy/`
+에 있었으나 실행 불가(폴더 이동 시 `_load-env.mjs` 경로가 깨져 `ERR_MODULE_NOT_FOUND`)이고
+`ALLOW_DESTRUCTIVE_MIGRATION` 가드 없는 destructive DDL 이라 2026-07-03 제거했다. 단일테넌트
+이관은 이미 완료된 1회성 작업이고, 스크립트 이력은 git history 에 보존된다.
 - 단가 시드 (`job_post=10`, `resume_upload=5`, `interview=30`)
 
 테스트 시드: `scripts/seed-test.mjs` — `test-company-a` / `test-company-b` 2법인 + 4역할 사용자.

@@ -35,9 +35,6 @@ export const VAT_RATE = 0.1;
 export function withVat(supplyKrw: number): number {
   return Math.round(supplyKrw * (1 + VAT_RATE));
 }
-export function vatOf(supplyKrw: number): number {
-  return withVat(supplyKrw) - supplyKrw;
-}
 
 /** 정가(앵커) — 베타 종료 후 복귀 단가. */
 export const LIST_PRICING: Record<Key, number> = {
@@ -67,11 +64,6 @@ export const BETA_PRICING: Record<Key, number> = {
 export const EFFECTIVE_PRICING: Record<Key, number> = BETA.active
   ? BETA_PRICING
   : LIST_PRICING;
-
-/** 정가 대비 베타 할인 중인 기능인지 (UI 취소선 판단용). */
-export function isBetaDiscounted(key: Key): boolean {
-  return BETA.active && EFFECTIVE_PRICING[key] < LIST_PRICING[key];
-}
 
 // ──────────────── 토큰 충전 패키지 / 충전 보너스 ────────────────
 // 결제(토스) 충전 시 선택 가능한 KRW 금액 + 구간별 보너스 % — 단일 소스.

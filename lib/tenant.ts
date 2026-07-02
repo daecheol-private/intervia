@@ -35,13 +35,6 @@ export function candidateOrgFilter(user: CurrentUser) {
   return eq(candidates.orgId, user.orgId ?? -1);
 }
 
-export function interviewSessionOrgFilter(user: CurrentUser) {
-  if (user.role === "system_admin") return undefined;
-  return sql`${interviewSessions.candidateId} IN (
-    SELECT id FROM candidates WHERE org_id = ${user.orgId ?? -1}
-  )`;
-}
-
 export function ownsOrg(user: CurrentUser, orgId: number | null | undefined): boolean {
   if (user.role === "system_admin") return true;
   if (orgId == null) return false;
