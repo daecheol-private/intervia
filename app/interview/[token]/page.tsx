@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useVoiceInput } from "./use-voice-input";
 import { LogoMark, Logo } from "@/app/components/Logo";
 import { MicHelpModal } from "@/app/components/MicHelpModal";
@@ -746,7 +746,7 @@ export default function InterviewPage() {
   );
 }
 
-function ChatBubble({
+const ChatBubble = memo(function ChatBubble({
   role,
   content,
   lang,
@@ -773,7 +773,7 @@ function ChatBubble({
       </div>
     </div>
   );
-}
+});
 
 /**
  * 매우 가벼운 인라인 마크다운 렌더. LLM 응답의 **굵게** / *기울임* / `code` 만 지원.
@@ -1261,11 +1261,20 @@ function McqPreparing({
         /* 다음 틱에 재시도 */
       }
     };
-    const timer = setInterval(() => void poll(), 2500);
+    // 백그라운드 탭에선 폴링 중단(GOTCHAS §0-0-5 ①) — 면접 토큰 라우트는 rate-limit
+    // 미적용이라 백그라운드 폴링이 그대로 서버 호출로 쌓인다. 복귀 시 즉시 1회 갱신.
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void poll();
+    }, 2500);
     void poll();
+    const onVis = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       alive = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [token, onReady]);
 

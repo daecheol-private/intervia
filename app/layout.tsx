@@ -35,6 +35,8 @@ export default async function RootLayout({
   return (
     <html lang="ko" className="h-full antialiased">
       <head>
+        {/* 폰트 CDN 핸드셰이크 선행 — 렌더 블로킹 스타일시트의 DNS+TLS 왕복을 앞당겨 FCP 단축. */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.min.css"

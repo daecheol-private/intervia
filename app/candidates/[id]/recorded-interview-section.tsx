@@ -201,10 +201,19 @@ export function RecordedInterviewPanel({
   );
   useEffect(() => {
     if (!hasActive) return;
+    // 백그라운드 탭에선 폴링 중단(GOTCHAS §0-0-5 ①) — 전사·평가는 수 분 걸려 사용자가
+    // 탭을 두고 자리를 뜨는 게 기본 시나리오. 복귀 시 즉시 1회 갱신해 놓친 진행상태 따라잡기.
     const t = window.setInterval(() => {
-      void load();
+      if (document.visibilityState === "visible") void load();
     }, 4000);
-    return () => window.clearInterval(t);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasActive]);
 

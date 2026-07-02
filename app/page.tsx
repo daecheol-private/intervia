@@ -1432,11 +1432,14 @@ async function Landing() {
       <section className="bg-surface">
         <Container width="xl" className="py-16 sm:py-24">
           <div className="relative overflow-hidden rounded-3xl bg-cta-gradient px-7 py-12 text-surface shadow-xl reveal sm:px-14 sm:py-16">
-            {/* 장식용 일러스트(고정 에셋) — next/image 불필요 */}
+            {/* 장식용 일러스트(고정 에셋) — next/image 불필요. lazy: 페이지 하단 CTA 섹션이라
+                모바일(hidden, display:none)은 아예 안 받고 데스크톱도 스크롤 근접 시에만 로드. */}
             <img
               src="/landing.png"
               alt=""
               aria-hidden
+              loading="lazy"
+              decoding="async"
               className="pointer-events-none absolute right-0 top-1/2 hidden w-[560px] max-w-[52%] -translate-y-1/2 select-none lg:block"
             />
             <div className="relative z-10 max-w-lg">
