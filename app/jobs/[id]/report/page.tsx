@@ -16,6 +16,19 @@ import { ownsOrg } from "@/lib/tenant";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import {
+  Users,
+  Trophy,
+  FileCheck2,
+  CalendarClock,
+  MessagesSquare,
+  CheckCircle2,
+  Sparkles,
+  Award,
+  Briefcase,
+  GraduationCap,
+  ClipboardList,
+} from "lucide-react";
 import { formatKstDateTime, formatLocalDate } from "@/lib/utils";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import { PrintButton } from "./PrintButton";
@@ -25,6 +38,35 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const DAY = 86_400_000;
+
+// AI 면접 역량 점수(evaluation.scores)는 LLM 이 만든 영문 스네이크 키다. 자주 나오는 것은
+// 한글 라벨로, 나머지는 사람이 읽게 변환(_ → 공백 + 첫 글자 대문자).
+const AI_COMP_LABEL: Record<string, string> = {
+  technical_competency: "기술 역량",
+  technical: "기술 역량",
+  problem_solving: "문제 해결",
+  communication: "의사소통",
+  collaboration: "협업",
+  teamwork: "협업",
+  leadership: "리더십",
+  ownership: "오너십",
+  execution: "실행력",
+  domain_knowledge: "도메인 이해",
+  learning_agility: "학습 민첩성",
+  growth: "성장 태도",
+  culture_fit: "컬처핏",
+  logical_thinking: "논리적 사고",
+};
+const aiCompLabel = (k: string) =>
+  AI_COMP_LABEL[k] ??
+  k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+const REC_STYLE: Record<string, { bg: string; text: string }> = {
+  강력추천: { bg: "bg-primary", text: "text-white" },
+  추천: { bg: "bg-primary-soft", text: "text-primary-deep" },
+  보류: { bg: "bg-surface-alt", text: "text-ink-soft" },
+  비추천: { bg: "bg-surface-alt", text: "text-ink-muted" },
+};
 
 export default async function JobReportPage({
   params,
@@ -66,7 +108,9 @@ export default async function JobReportPage({
       screeningScore: candidates.screeningScore,
       screeningReport: candidates.screeningReport,
       careerYears: candidates.careerYears,
+      age: candidates.age,
       educationLevel: candidates.educationLevel,
+      educationMajor: candidates.educationMajor,
       decidedAt: candidates.decidedAt,
       createdAt: candidates.createdAt,
       lastInterviewEmailSentAt: candidates.lastInterviewEmailSentAt,
@@ -148,6 +192,22 @@ export default async function JobReportPage({
       evaluation: s.evaluation,
     });
   }
+  const aiCompletedCount = sessions.length;
+  const aiScores = sessions
+    .map((s) => s.evaluation?.overall_score)
+    .filter((v): v is number => v != null);
+  const avgAiScore =
+    aiScores.length > 0
+      ? Math.round(aiScores.reduce((a, b) => a + b, 0) / aiScores.length)
+      : null;
+  const avgHiredAiScore = (() => {
+    const vs = hired
+      .map((c) => sessionByCand.get(c.id)?.overall)
+      .filter((v): v is number => v != null);
+    return vs.length > 0
+      ? Math.round(vs.reduce((a, b) => a + b, 0) / vs.length)
+      : null;
+  })();
 
   // ───────── 사람(대면) 면접 평가 → 후보별 평균 ─────────
   const notes = await db
@@ -175,6 +235,7 @@ export default async function JobReportPage({
     ck.n++;
     humanByCand.set(nt.candidateId, ck);
   }
+  const hasHumanNotes = humanByCand.size > 0;
 
   // ───────── 처리 기간 ─────────
   const decidedCands = cands.filter((c) => c.decidedAt != null);
@@ -231,6 +292,25 @@ export default async function JobReportPage({
     }
   }
 
+  // ───────── 현재 전형 진행 현황 (진행 중 후보 단계별) ─────────
+  const STAGE_BUCKETS: { label: string; stages: Stage[] }[] = [
+    { label: "서류 심사", stages: ["applied", "screened", "ai_pending"] },
+    { label: "AI 면접", stages: ["ai_evaluated", "round1_candidate"] },
+    {
+      label: "1차 면접",
+      stages: ["round1_scheduling", "round1_waiting"],
+    },
+    { label: "1차 합격", stages: ["round1_passed"] },
+    { label: "2차 면접", stages: ["round2_passed"] },
+  ];
+  const stageFlow = STAGE_BUCKETS.map((b) => ({
+    label: b.label,
+    count: cands.filter(
+      (c) => c.outcome == null && b.stages.includes(c.stage as Stage)
+    ).length,
+  }));
+  const hasStageFlow = inProgressCount > 0;
+
   // ───────── AI 응답률 ─────────
   const reached = (stages: string[]) =>
     cands.filter((c) => stages.includes(c.stage)).length;
@@ -277,6 +357,41 @@ export default async function JobReportPage({
   });
   const hasScores = scoreBars.some((b) => b.value > 0);
 
+  // ───────── 서류 추천도 분포 (도넛) ─────────
+  const REC_ORDER = ["강력추천", "추천", "보류", "비추천"] as const;
+  const REC_COLOR: Record<string, string> = {
+    강력추천: C.primary,
+    추천: C.blue,
+    보류: "#b8bcc9",
+    비추천: "#d7dae2",
+  };
+  const recCounts: Record<string, number> = {};
+  for (const c of cands) {
+    const r = c.screeningReport?.recommendation;
+    if (r) recCounts[r] = (recCounts[r] ?? 0) + 1;
+  }
+  const recData = REC_ORDER.filter((k) => recCounts[k]).map((k) => ({
+    label: k,
+    value: recCounts[k],
+    color: REC_COLOR[k],
+  }));
+  const hasRec = recData.length > 0;
+
+  // ───────── 강점 키워드 TOP (matched_keywords 집계) ─────────
+  const kwCount: Record<string, number> = {};
+  for (const c of cands) {
+    for (const k of c.screeningReport?.matched_keywords ?? []) {
+      const key = k.trim();
+      if (key) kwCount[key] = (kwCount[key] ?? 0) + 1;
+    }
+  }
+  const keywordTop = Object.entries(kwCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([label, value]) => ({ label, value }));
+  const kwMax = Math.max(1, ...keywordTop.map((k) => k.value));
+  const hasKeywords = keywordTop.length > 0;
+
   // ───────── 지원자 풀: 최종학력 ─────────
   const eduBucket = (level: string | null) => {
     if (!level) return "미상";
@@ -295,12 +410,12 @@ export default async function JobReportPage({
   const EDU_ORDER = ["박사", "석사", "학사", "전문학사", "고졸", "기타", "미상"];
   const EDU_COLOR: Record<string, string> = {
     박사: C.primary,
-    석사: C.good,
-    학사: "#7faf9b",
-    전문학사: "#a9c2b6",
-    고졸: "#cfc7b5",
-    기타: "#d3d1c7",
-    미상: "#e6e0d3",
+    석사: C.blue,
+    학사: "#7f93c0",
+    전문학사: "#a9b6d4",
+    고졸: "#c7cbdc",
+    기타: "#d9dbe4",
+    미상: "#e6e8ee",
   };
   const eduData = EDU_ORDER.filter((k) => eduCounts[k]).map((k) => ({
     label: k,
@@ -325,6 +440,27 @@ export default async function JobReportPage({
     hi: hired.filter((c) => b.f(c.careerYears)).length,
   }));
   const hasCareer = cands.some((c) => c.careerYears != null);
+
+  // ───────── 지원자 풀: 연령 분포 ─────────
+  const AGE_BUCKETS: { label: string; f: (a: number) => boolean }[] = [
+    { label: "~29세", f: (a) => a < 30 },
+    { label: "30–34", f: (a) => a >= 30 && a < 35 },
+    { label: "35–39", f: (a) => a >= 35 && a < 40 },
+    { label: "40–44", f: (a) => a >= 40 && a < 45 },
+    { label: "45세+", f: (a) => a >= 45 },
+  ];
+  const ageList = cands
+    .map((c) => c.age)
+    .filter((v): v is number => v != null && v > 0);
+  const ageBars = AGE_BUCKETS.map((b) => ({
+    label: b.label,
+    value: ageList.filter(b.f).length,
+    hi: hired
+      .map((c) => c.age)
+      .filter((v): v is number => v != null && v > 0)
+      .filter(b.f).length,
+  }));
+  const hasAge = ageList.length > 0;
 
   // ───────── 지원자 풀: 서류 4축 (전체 vs 합격자) ─────────
   const SCREEN_AXES: {
@@ -457,15 +593,16 @@ export default async function JobReportPage({
         )}일 — ${gaps[0].cause}.`
       : null;
 
-  const show03 = hasEdu || hasCareer || hasScores || hasScreenBreakdown;
-  const show04 =
+  const show04 = hasEdu || hasCareer || hasAge;
+  const show05 = hasScores || hasRec || hasKeywords || hasScreenBreakdown;
+  const show07 =
     durRows.length > 0 ||
     avgEmail != null ||
     expiredCnt > 0 ||
     respAvg != null ||
     withdrawnCount > 0;
 
-  // ───────── 합격자 dossier ─────────
+  // ───────── 합격자 종합평가 dossier ─────────
   const hiredCards = hired.map((c) => {
     const paper = c.screeningScore ?? null;
     const sess = sessionByCand.get(c.id);
@@ -477,7 +614,9 @@ export default async function JobReportPage({
       present.length > 0
         ? Math.round(present.reduce((a, b) => a + b, 0) / present.length)
         : null;
-    const bd = c.screeningReport?.breakdown;
+    const sr = c.screeningReport;
+    const ev = sess?.evaluation;
+    const bd = sr?.breakdown;
     const axisVals = [
       bd?.tech_fit?.score,
       bd?.experience_depth?.score,
@@ -485,30 +624,50 @@ export default async function JobReportPage({
       bd?.growth_attitude?.score,
     ];
     const hasAxes = axisVals.every((v): v is number => typeof v === "number");
-    const ev = sess?.evaluation;
-    const sr = c.screeningReport;
-    const opinion = ev?.summary?.trim() || sr?.summary?.trim() || null;
-    const strengths = (
-      ev?.strengths?.length ? ev.strengths : sr?.strengths ?? []
-    ).slice(0, 3);
-    const concerns = (
-      ev?.concerns?.length ? ev.concerns : sr?.concerns ?? []
-    ).slice(0, 2);
+    const aiComp = ev?.scores
+      ? Object.entries(ev.scores)
+          .map(([k, v]) => ({
+            label: aiCompLabel(k),
+            score: v?.score ?? null,
+            comment: v?.comment ?? "",
+          }))
+          .filter((x): x is { label: string; score: number; comment: string } =>
+            typeof x.score === "number"
+          )
+      : [];
+    const culture = ev?.culture_fit ?? null;
     return {
       id: c.id,
       name: c.name,
       careerYears: c.careerYears,
       educationLevel: c.educationLevel,
-      rec: sr?.recommendation ?? null,
+      educationMajor: c.educationMajor,
+      screenRec: sr?.recommendation ?? null,
+      aiRec: ev?.recommendation ?? null,
       paper,
       ai,
       human,
       overall,
       axisVals: hasAxes ? (axisVals as number[]) : null,
-      keywords: (sr?.matched_keywords ?? []).slice(0, 6),
-      opinion,
-      strengths,
-      concerns,
+      aiComp,
+      keywords: (sr?.matched_keywords ?? []).slice(0, 8),
+      screenOpinion: sr?.summary?.trim() || null,
+      aiOpinion: ev?.summary?.trim() || null,
+      strengths: (ev?.strengths?.length
+        ? ev.strengths
+        : sr?.strengths ?? []
+      ).slice(0, 4),
+      concerns: (ev?.concerns?.length
+        ? ev.concerns
+        : sr?.concerns ?? []
+      ).slice(0, 3),
+      culture:
+        culture && culture.items?.length
+          ? {
+              items: culture.items.slice(0, 4),
+              note: culture.fit_note?.trim() || null,
+            }
+          : null,
     };
   });
   const hiredOveralls = hiredCards
@@ -520,6 +679,46 @@ export default async function JobReportPage({
           hiredOveralls.reduce((a, b) => a + b, 0) / hiredOveralls.length
         )
       : null;
+
+  // ───────── 합격자 vs 전체 지원자 비교 ─────────
+  const meanBy = <T,>(arr: T[], pick: (x: T) => number | null | undefined) => {
+    const vs = arr
+      .map(pick)
+      .filter((v): v is number => typeof v === "number");
+    return vs.length > 0 ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+  };
+  const compareRows = (
+    [
+      {
+        label: "경력 연차",
+        hiredV: meanBy(hired, (c) => c.careerYears),
+        allV: meanBy(cands, (c) => c.careerYears),
+        unit: "년",
+        digits: 1,
+      },
+      {
+        label: "서류 점수",
+        hiredV: avgHiredScreening,
+        allV: avgScreening,
+        unit: "점",
+        digits: 0,
+      },
+      {
+        label: "AI 면접 점수",
+        hiredV: avgHiredAiScore,
+        allV: avgAiScore,
+        unit: "점",
+        digits: 0,
+      },
+    ] as {
+      label: string;
+      hiredV: number | null;
+      allV: number | null;
+      unit: string;
+      digits: number;
+    }[]
+  ).filter((r) => r.hiredV != null && r.allV != null);
+  const hasCompare = hiredCount > 0 && compareRows.length > 0;
 
   // ───────── 요약 내러티브 (규칙 기반, LLM 미사용) ─────────
   const qualitySentence =
@@ -534,36 +733,57 @@ export default async function JobReportPage({
     bottleneck && bottleneck.conv < 70 && totalCount > 0
       ? `가장 큰 이탈은 ${bottleneck.label} 단계로, 직전 단계 대비 ${bottleneck.conv}%만 통과했습니다.`
       : null;
+
+  // 상단 한 줄 요약 (표지 아래)
   const summaryParts: ReactNode[] = [];
   if (totalCount === 0) {
     summaryParts.push(<>아직 지원자가 없습니다.</>);
+  } else if (hiredCount > 0) {
+    summaryParts.push(
+      <>
+        지원 <b className="font-semibold text-primary">{totalCount}명</b> 가운데{" "}
+        <b className="font-semibold text-primary">{hiredCount}명</b>을 최종
+        선발했습니다(합격률 {hireRate}).
+      </>
+    );
   } else {
-    if (hiredCount > 0) {
-      summaryParts.push(
+    summaryParts.push(
+      <>
+        지원 <b className="font-semibold text-primary">{totalCount}명</b> 중 현재{" "}
+        <b className="font-semibold">{inProgressCount}명</b> 진행 중이며, 최종
+        합격자는 아직 없습니다.
+      </>
+    );
+  }
+  if (totalCount > 0 && avgCycleDays != null)
+    summaryParts.push(
+      <>
+        {" "}
+        평균 처리 기간은 <b className="font-semibold">{avgCycleDays}일</b>.
+      </>
+    );
+
+  // 하단 AI 인사이트 불릿
+  const insights: ReactNode[] = [];
+  if (totalCount > 0) {
+    const topKw = keywordTop.slice(0, 3).map((k) => k.label);
+    insights.push(
+      <>
+        이번 공고에는 총{" "}
+        <b className="font-semibold text-primary">{totalCount}명</b>이
+        지원했으며, {hasCareer ? "경력 분포가 고르게 나타났습니다." : "지원자 풀이 형성되었습니다."}
+      </>
+    );
+    if (qualitySentence) insights.push(<>{qualitySentence}</>);
+    if (topKw.length > 0)
+      insights.push(
         <>
-          지원 <b className="font-medium text-primary">{totalCount}명</b> 가운데{" "}
-          <b className="font-medium text-primary">{hiredCount}명</b>을 최종
-          선발했습니다(합격률 {hireRate}).
+          지원자에게서 가장 자주 확인된 강점 키워드는{" "}
+          <b className="font-semibold">{topKw.join(" · ")}</b> 였습니다.
         </>
       );
-    } else {
-      summaryParts.push(
-        <>
-          지원 <b className="font-medium text-primary">{totalCount}명</b> 중 현재{" "}
-          <b className="font-medium">{inProgressCount}명</b> 진행 중이며, 최종
-          합격자는 아직 없습니다.
-        </>
-      );
-    }
-    if (avgCycleDays != null)
-      summaryParts.push(
-        <>
-          {" "}
-          평균 처리 기간은 <b className="font-medium">{avgCycleDays}일</b>.
-        </>
-      );
-    if (qualitySentence) summaryParts.push(<> {qualitySentence}</>);
-    if (bottleneckSentence) summaryParts.push(<> {bottleneckSentence}</>);
+    if (bottleneckSentence) insights.push(<>{bottleneckSentence}</>);
+    if (timingCause) insights.push(<>{timingCause}</>);
   }
 
   const periodText = `${formatLocalDate(job.createdAt)} — ${
@@ -573,9 +793,14 @@ export default async function JobReportPage({
         ? `${formatLocalDate(job.closesAt)} 예정`
         : "진행 중"
   }`;
+  const respLines = job.responsibilities
+    .split(/\n+/)
+    .map((s) => s.replace(/^[-·•*]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 4);
 
   return (
-    <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 print:px-0 print:py-0 print:max-w-none">
+    <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 print:px-0 print:py-0 print:max-w-none">
       <div className="flex items-center justify-between mb-4 print:hidden">
         <Link
           href={`/jobs/${jobId}`}
@@ -587,81 +812,141 @@ export default async function JobReportPage({
       </div>
 
       <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden print:border-0 print:shadow-none print:rounded-none print:overflow-visible">
-        <div className="h-[3px] bg-primary" />
-        <div className="p-8 sm:p-11 print:p-0">
+        <div className="h-1 bg-primary" />
+        <div className="p-6 sm:p-10 print:p-0">
           {/* ── 표지 ── */}
-          <header className="flex items-start justify-between gap-4 pb-5">
-            <div>
-              <div className="text-[10.5px] tracking-[0.2em] text-primary font-medium">
-                CONFIDENTIAL — 채용 결과 리포트
+          <header className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-1.5 text-[10.5px] tracking-[0.18em] text-primary font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                CONFIDENTIAL · 채용 결과 리포트
               </div>
-              <h1 className="text-[26px] sm:text-3xl font-semibold text-ink leading-tight mt-3">
+              <h1 className="text-[27px] sm:text-[32px] font-bold text-ink leading-tight mt-2.5">
                 {job.title}
               </h1>
+              <div className="text-[13px] text-ink-muted mt-1.5">
+                {job.position} · {job.level} · {job.employmentType}
+              </div>
             </div>
             <div className="text-right text-[11px] text-ink-muted leading-relaxed pt-1 shrink-0">
-              <div className="text-ink-soft font-medium text-[13px]">
+              <div className="text-ink-soft font-semibold text-[14px]">
                 {org?.name ?? "-"}
               </div>
-              <div>{periodText}</div>
-              <div>{job.status === "closed" ? "종결" : "진행 중"}</div>
+              <div className="mt-1">{periodText}</div>
+              <div className="mt-0.5">
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                    job.status === "closed"
+                      ? "bg-surface-alt text-ink-soft"
+                      : "bg-primary-soft text-primary-deep"
+                  }`}
+                >
+                  {job.status === "closed" ? "종결" : "진행 중"}
+                </span>
+              </div>
             </div>
           </header>
-          <div className="flex flex-wrap gap-x-7 gap-y-1 text-[11.5px] text-ink-muted pb-5 border-b border-border-default">
-            <span>
-              <span className="text-ink-muted/70">직무</span>&nbsp;&nbsp;
-              {job.position} · {job.level} · {job.employmentType}
-            </span>
-            <span>
-              <span className="text-ink-muted/70">면접</span>&nbsp;&nbsp;
-              {job.interviewDurationMinutes}분
-            </span>
-            {interviewers.length > 0 && (
-              <span>
-                <span className="text-ink-muted/70">면접관</span>&nbsp;&nbsp;
-                {interviewers.map((i) => i.name).join(", ")}
-              </span>
+
+          {/* ── 공고 개요 ── */}
+          <div className="mt-6 rounded-2xl border border-border-default bg-surface-alt/60 p-5 print:break-inside-avoid">
+            <div className="flex items-center gap-2 text-[10.5px] tracking-[0.14em] text-ink-muted font-semibold mb-3">
+              <ClipboardList className="w-3.5 h-3.5" strokeWidth={2.25} />
+              공고 개요
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-3">
+              <MetaItem label="직무" value={job.position} />
+              <MetaItem label="직급 / 연차" value={job.level} />
+              <MetaItem label="근무형태" value={job.employmentType} />
+              <MetaItem
+                label="면접 시간"
+                value={`${job.interviewDurationMinutes}분`}
+              />
+              {interviewers.length > 0 && (
+                <MetaItem
+                  label="면접관"
+                  value={interviewers.map((i) => i.name).join(", ")}
+                  span
+                />
+              )}
+              <MetaItem label="공고 기간" value={periodText} span />
+            </div>
+            {respLines.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-border-default">
+                <div className="text-[10.5px] text-ink-muted mb-1.5">
+                  주요 담당업무
+                </div>
+                <ul className="space-y-0.5">
+                  {respLines.map((line, i) => (
+                    <li
+                      key={i}
+                      className="flex gap-1.5 text-[12.5px] text-ink-soft leading-relaxed"
+                    >
+                      <span className="text-primary shrink-0">·</span>
+                      <span className="truncate">{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
 
-          {/* ── 요약 ── */}
-          <div className="py-7">
-            <div className="text-[10.5px] tracking-[0.18em] text-primary font-medium mb-3">
-              요약
+          {/* ── Executive Summary — KPI 6 ── */}
+          <section className="mt-8">
+            <SectionLabel>채용 핵심 요약</SectionLabel>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-3">
+              <StatCard
+                icon={<Users className="w-4 h-4" strokeWidth={2.25} />}
+                label="총 지원자"
+                value={`${totalCount}`}
+                unit="명"
+              />
+              <StatCard
+                icon={<Trophy className="w-4 h-4" strokeWidth={2.25} />}
+                label="최종 합격"
+                value={`${hiredCount}`}
+                unit="명"
+                sub={`합격률 ${hireRate}`}
+                accent
+              />
+              <StatCard
+                icon={<FileCheck2 className="w-4 h-4" strokeWidth={2.25} />}
+                label="평균 서류점수"
+                value={avgScreening != null ? `${avgScreening}` : "-"}
+                unit={avgScreening != null ? "점" : ""}
+              />
+              <StatCard
+                icon={<CalendarClock className="w-4 h-4" strokeWidth={2.25} />}
+                label="평균 채용기간"
+                value={avgCycleDays != null ? `${avgCycleDays}` : "-"}
+                unit={avgCycleDays != null ? "일" : ""}
+                sub={`결정 ${decidedCands.length}건`}
+              />
+              <StatCard
+                icon={<MessagesSquare className="w-4 h-4" strokeWidth={2.25} />}
+                label="AI 응답률"
+                value={aiResponseRate != null ? `${aiResponseRate}` : "-"}
+                unit={aiResponseRate != null ? "%" : ""}
+                sub={aiSent > 0 ? `${aiResponded}/${aiSent}명` : undefined}
+              />
+              <StatCard
+                icon={<CheckCircle2 className="w-4 h-4" strokeWidth={2.25} />}
+                label="AI 면접 완료"
+                value={`${aiCompletedCount}`}
+                unit="건"
+                sub={avgAiScore != null ? `평균 ${avgAiScore}점` : undefined}
+              />
             </div>
-            <p className="text-[15px] sm:text-base leading-[1.75] text-ink">
-              {summaryParts}
-            </p>
-          </div>
+            {summaryParts.length > 0 && (
+              <p className="text-[13.5px] leading-[1.7] text-ink-soft mt-4">
+                {summaryParts}
+              </p>
+            )}
+          </section>
 
-          {/* ── KPI 밴드 ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 border-y border-border-default divide-x divide-border-default">
-            <KpiCell label="총 지원자" value={`${totalCount}`} unit="명" />
-            <KpiCell
-              label="최종 합격"
-              value={`${hiredCount}`}
-              unit="명"
-              sub={`합격률 ${hireRate}`}
-              primary
-            />
-            <KpiCell
-              label="평균 처리"
-              value={avgCycleDays != null ? `${avgCycleDays}` : "-"}
-              unit={avgCycleDays != null ? "일" : ""}
-              sub={`결정 ${decidedCands.length}건`}
-            />
-            <KpiCell
-              label="AI 응답률"
-              value={aiResponseRate != null ? `${aiResponseRate}` : "-"}
-              unit={aiResponseRate != null ? "%" : ""}
-              sub={aiSent > 0 ? `${aiSent} → ${aiResponded}명` : undefined}
-            />
-          </div>
-
-          {/* ── 01 최종 합격자 ── */}
+          {/* ── 01 최종 합격자 종합평가 ── */}
           <Section
             n="01"
-            title="최종 합격자"
+            title="최종 합격자 종합평가"
             sub={
               hired.length > 0
                 ? `${hired.length}명${
@@ -671,16 +956,16 @@ export default async function JobReportPage({
                   }`
                 : undefined
             }
-            desc="누구를, 어떤 평가로 선발했는가"
+            desc="서류·AI 면접을 통합한 다면 평가 — 누구를, 어떤 근거로 선발했는가"
           >
             {hired.length === 0 ? (
               <p className="text-sm text-ink-muted">
                 아직 최종 합격자가 없습니다. (진행 중 {inProgressCount}명)
               </p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {hiredCards.map((h) => (
-                  <HiredCard key={h.id} h={h} />
+                  <HiredDossier key={h.id} h={h} showHuman={hasHumanNotes} />
                 ))}
               </div>
             )}
@@ -707,13 +992,13 @@ export default async function JobReportPage({
                     bottleneck != null &&
                     f.label === bottleneck.label &&
                     bottleneck.conv < 70;
-                  const op = 0.95 - 0.6 * (i / (funnel.length - 1));
+                  const op = 0.95 - 0.55 * (i / (funnel.length - 1));
                   return (
                     <div
                       key={f.label}
                       className="flex items-center gap-3.5 text-xs"
                     >
-                      <span className="w-[88px] shrink-0 text-ink-soft">
+                      <span className="w-[92px] shrink-0 text-ink-soft">
                         {f.label}
                       </span>
                       <div className="flex-1 bg-surface-alt rounded h-[26px] relative overflow-hidden">
@@ -726,16 +1011,19 @@ export default async function JobReportPage({
                           }}
                         />
                         <span
-                          className="absolute inset-0 flex items-center pl-2.5 text-[11px] font-medium tabular-nums"
+                          className="absolute inset-0 flex items-center pl-2.5 text-[11px] font-semibold tabular-nums"
                           style={{ color: widthPct > 22 ? "#fff" : C.ink }}
                         >
                           {f.count}명
                         </span>
                       </div>
-                      <span className="w-[120px] shrink-0 text-[11px] tabular-nums text-ink-muted">
+                      <span className="w-[128px] shrink-0 text-[11px] tabular-nums text-ink-muted">
                         {stepConv != null && `전환 ${stepConv}%`}
                         {isBottleneck && (
-                          <span style={{ color: C.warn }}> ← 최대 이탈</span>
+                          <span className="text-accent-deep font-medium">
+                            {" "}
+                            ← 최대 이탈
+                          </span>
                         )}
                       </span>
                     </div>
@@ -749,12 +1037,12 @@ export default async function JobReportPage({
                   total={totalCount}
                   segments={[
                     { label: "최종 합격", count: hiredCount, color: C.primary },
-                    { label: "진행 중", count: inProgressCount, color: C.good },
-                    { label: "불합격", count: rejectedCount, color: "#b4b2a9" },
+                    { label: "진행 중", count: inProgressCount, color: C.blue },
+                    { label: "불합격", count: rejectedCount, color: "#b4b8c4" },
                     {
                       label: "지원 취소",
                       count: withdrawnCount,
-                      color: "#d3d1c7",
+                      color: "#d7dae2",
                     },
                   ]}
                 />
@@ -762,11 +1050,36 @@ export default async function JobReportPage({
             </Section>
           )}
 
-          {/* ── 03 지원자 풀 ── */}
-          {show03 && (
+          {/* ── 03 현재 전형 진행 현황 ── */}
+          {hasStageFlow && (
             <Section
               n="03"
-              title="지원자 풀"
+              title="현재 전형 진행 현황"
+              desc="진행 중인 지원자가 지금 어느 단계에 있는가"
+            >
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+                {stageFlow.map((s) => (
+                  <div
+                    key={s.label}
+                    className="rounded-2xl border border-border-default bg-card px-3 py-4 text-center print:break-inside-avoid"
+                  >
+                    <div className="text-[28px] leading-none font-bold text-primary tabular-nums">
+                      {s.count}
+                    </div>
+                    <div className="text-[11px] text-ink-muted mt-1.5">
+                      {s.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* ── 04 지원자 분포 ── */}
+          {show04 && (
+            <Section
+              n="04"
+              title="지원자 분포"
               desc="어떤 지원자들이 지원했는가 · 합격자 위치"
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-8 [&>div]:print:break-inside-avoid">
@@ -785,7 +1098,7 @@ export default async function JobReportPage({
                     </div>
                     <VBars
                       bars={careerBars}
-                      color={C.primarySoft}
+                      color={C.blueSoft}
                       hiColor={C.primary}
                       baseLabel="전체"
                       hiLabel="최종 합격"
@@ -793,6 +1106,33 @@ export default async function JobReportPage({
                     />
                   </div>
                 )}
+                {hasAge && (
+                  <div>
+                    <div className="text-[11px] text-ink-muted mb-3">
+                      연령 분포 (합격자 강조)
+                    </div>
+                    <VBars
+                      bars={ageBars}
+                      color={C.blueSoft}
+                      hiColor={C.primary}
+                      baseLabel="전체"
+                      hiLabel="최종 합격"
+                      height={130}
+                    />
+                  </div>
+                )}
+              </div>
+            </Section>
+          )}
+
+          {/* ── 05 AI 평가 결과 ── */}
+          {show05 && (
+            <Section
+              n="05"
+              title="AI 평가 결과"
+              desc="서류 평가 기반 지원자 풀의 강점·품질 분포"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-8 [&>div]:print:break-inside-avoid">
                 {hasScores && (
                   <div>
                     <div className="text-[11px] text-ink-muted mb-3">
@@ -800,11 +1140,35 @@ export default async function JobReportPage({
                     </div>
                     <VBars
                       bars={scoreBars}
-                      color={C.primarySoft}
+                      color={C.blueSoft}
                       hiColor={C.primary}
                       baseLabel="전체"
                       hiLabel="최종 합격"
                       height={140}
+                    />
+                  </div>
+                )}
+                {hasRec && (
+                  <div>
+                    <div className="text-[11px] text-ink-muted mb-3">
+                      서류 추천도 분포
+                    </div>
+                    <Donut data={recData} />
+                  </div>
+                )}
+                {hasKeywords && (
+                  <div>
+                    <div className="text-[11px] text-ink-muted mb-3">
+                      AI가 자주 확인한 강점 키워드 (TOP {keywordTop.length})
+                    </div>
+                    <HBars
+                      rows={keywordTop.map((k) => ({
+                        label: k.label,
+                        value: k.value,
+                        max: kwMax,
+                        display: `${k.value}명`,
+                        color: C.primarySoft,
+                      }))}
                     />
                   </div>
                 )}
@@ -816,7 +1180,7 @@ export default async function JobReportPage({
                     <Radar
                       axes={SCREEN_AXES.map((a) => a.label)}
                       series={[
-                        { label: "전체 평균", color: C.good, values: radarAll },
+                        { label: "전체 평균", color: C.blue, values: radarAll },
                         ...(hiredCount > 0
                           ? [
                               {
@@ -834,10 +1198,68 @@ export default async function JobReportPage({
             </Section>
           )}
 
-          {/* ── 04 전형 소요 시간 ── */}
-          {show04 && (
+          {/* ── 06 합격자 vs 지원자 비교 ── */}
+          {hasCompare && (
             <Section
-              n="04"
+              n="06"
+              title="합격자 · 지원자 비교"
+              desc="최종 합격자 평균이 전체 지원자 대비 어디에 위치하는가"
+            >
+              <div className="overflow-hidden rounded-2xl border border-border-default print:break-inside-avoid">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface-alt text-[11px] text-ink-muted">
+                      <th className="text-left font-medium px-4 py-2.5">지표</th>
+                      <th className="text-right font-medium px-4 py-2.5">
+                        합격자 평균
+                      </th>
+                      <th className="text-right font-medium px-4 py-2.5">
+                        지원자 평균
+                      </th>
+                      <th className="text-right font-medium px-4 py-2.5">차이</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-default">
+                    {compareRows.map((r) => {
+                      const diff = r.hiredV! - r.allV!;
+                      const sign = diff > 0.05 ? "+" : diff < -0.05 ? "" : "±";
+                      const diffColor =
+                        diff > 0.05
+                          ? "text-primary"
+                          : diff < -0.05
+                            ? "text-ink-muted"
+                            : "text-ink-muted";
+                      return (
+                        <tr key={r.label} className="bg-card">
+                          <td className="px-4 py-3 text-ink-soft">{r.label}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-ink tabular-nums">
+                            {r.hiredV!.toFixed(r.digits)}
+                            {r.unit}
+                          </td>
+                          <td className="px-4 py-3 text-right text-ink-muted tabular-nums">
+                            {r.allV!.toFixed(r.digits)}
+                            {r.unit}
+                          </td>
+                          <td
+                            className={`px-4 py-3 text-right font-medium tabular-nums ${diffColor}`}
+                          >
+                            {sign}
+                            {Math.abs(diff).toFixed(r.digits)}
+                            {r.unit}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
+
+          {/* ── 07 전형 소요 시간 ── */}
+          {show07 && (
+            <Section
+              n="07"
               title="전형 소요 시간"
               desc="단계별 누적 소요와 지연 원인"
             >
@@ -848,7 +1270,7 @@ export default async function JobReportPage({
                     value: r.v,
                     max: durMax,
                     display: `${r.v.toFixed(1)}일`,
-                    color: C.good,
+                    color: C.blue,
                   }))}
                 />
               ) : (
@@ -880,6 +1302,29 @@ export default async function JobReportPage({
             </Section>
           )}
 
+          {/* ── AI 인사이트 ── */}
+          {insights.length > 0 && (
+            <section className="mt-10 rounded-2xl bg-primary-soft/50 border border-primary-soft p-5 print:break-inside-avoid">
+              <div className="flex items-center gap-2 text-[11px] tracking-[0.14em] text-primary-deep font-semibold mb-3">
+                <Sparkles className="w-3.5 h-3.5" strokeWidth={2.25} />
+                AI INSIGHT · 종합 인사이트
+              </div>
+              <ul className="space-y-2">
+                {insights.map((node, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-2 text-[13px] leading-relaxed text-ink-soft"
+                  >
+                    <span className="text-primary shrink-0 mt-[3px]">
+                      <Award className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    </span>
+                    <span>{node}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {/* ── 푸터 ── */}
           <footer className="mt-10 pt-4 border-t border-border-default text-[10px] text-ink-muted flex justify-between tracking-wide">
             <span>생성 {formatKstDateTime(new Date().toISOString())}</span>
@@ -892,6 +1337,14 @@ export default async function JobReportPage({
 }
 
 /* ───────────────────────── 하위 컴포넌트 ───────────────────────── */
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="text-[10.5px] tracking-[0.16em] text-primary font-semibold">
+      {children}
+    </div>
+  );
+}
 
 function Section({
   n,
@@ -909,10 +1362,8 @@ function Section({
   return (
     <section className="mt-10">
       <div className="flex items-baseline gap-3">
-        <span className="text-xs font-semibold text-primary tabular-nums">
-          {n}
-        </span>
-        <h2 className="text-[17px] font-semibold text-ink">{title}</h2>
+        <span className="text-xs font-bold text-primary tabular-nums">{n}</span>
+        <h2 className="text-[17px] font-bold text-ink">{title}</h2>
         {sub && <span className="text-xs text-ink-muted">{sub}</span>}
       </div>
       {desc && (
@@ -925,47 +1376,57 @@ function Section({
   );
 }
 
-function KpiCell({
+function MetaItem({
+  label,
+  value,
+  span,
+}: {
+  label: string;
+  value: string;
+  span?: boolean;
+}) {
+  return (
+    <div className={span ? "col-span-2" : ""}>
+      <div className="text-[10.5px] text-ink-muted">{label}</div>
+      <div className="text-[13px] text-ink font-medium mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function StatCard({
+  icon,
   label,
   value,
   unit,
   sub,
-  primary,
+  accent,
 }: {
+  icon: ReactNode;
   label: string;
   value: string;
   unit?: string;
   sub?: string;
-  primary?: boolean;
+  accent?: boolean;
 }) {
   return (
-    <div className="px-4 sm:px-5 py-5">
+    <div className="rounded-2xl border border-border-default bg-card p-3.5 print:break-inside-avoid">
       <div
-        className={`text-[10.5px] tracking-wide ${
-          primary ? "text-primary" : "text-ink-muted"
+        className={`w-7 h-7 rounded-full flex items-center justify-center ${
+          accent
+            ? "bg-accent-soft text-accent-deep"
+            : "bg-primary-soft text-primary-deep"
         }`}
       >
-        {label}
+        {icon}
       </div>
-      <div
-        className={`text-4xl font-semibold tabular-nums tracking-tight mt-1 ${
-          primary ? "text-primary" : "text-ink"
-        }`}
-      >
+      <div className="text-[10.5px] text-ink-muted mt-2.5">{label}</div>
+      <div className="text-[26px] leading-none font-bold text-ink tabular-nums tracking-tight mt-1">
         {value}
         {unit && (
-          <span className="text-base font-normal text-ink-muted"> {unit}</span>
+          <span className="text-[13px] font-medium text-ink-muted"> {unit}</span>
         )}
       </div>
-      {sub && (
-        <div
-          className={`text-[11px] mt-0.5 ${
-            primary ? "text-primary/80" : "text-ink-muted"
-          }`}
-        >
-          {sub}
-        </div>
-      )}
+      {sub && <div className="text-[10.5px] text-ink-muted mt-1">{sub}</div>}
     </div>
   );
 }
@@ -982,31 +1443,61 @@ function OpsCell({
   return (
     <div className="bg-card px-4 py-4">
       <div className="text-[10.5px] text-ink-muted">{label}</div>
-      <div className="text-[22px] font-semibold text-ink tabular-nums mt-1">
+      <div className="text-[22px] font-bold text-ink tabular-nums mt-1">
         {value}
         {unit && (
-          <span className="text-xs font-normal text-ink-muted">{unit}</span>
+          <span className="text-xs font-medium text-ink-muted">{unit}</span>
         )}
       </div>
     </div>
   );
 }
 
-function ScoreRow({ label, score }: { label: string; score: number | null }) {
+function RecBadge({ rec }: { rec: string }) {
+  const st = REC_STYLE[rec] ?? REC_STYLE["보류"];
   return (
-    <div className="flex items-center gap-3 text-xs">
-      <span className="w-16 shrink-0 text-ink-soft">{label}</span>
-      <div className="flex-1 bg-surface-alt rounded h-5 relative overflow-hidden">
-        {score != null && (
-          <div
-            className="absolute inset-y-0 left-0 rounded"
-            style={{ width: `${score}%`, background: C.primary, opacity: 0.85 }}
-          />
-        )}
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-medium ${st.bg} ${st.text}`}
+    >
+      {rec}
+    </span>
+  );
+}
+
+function ScoreRow({
+  label,
+  score,
+  comment,
+}: {
+  label: string;
+  score: number | null;
+  comment?: string;
+}) {
+  return (
+    <div className="text-xs">
+      <div className="flex items-center gap-3">
+        <span className="w-20 shrink-0 text-ink-soft">{label}</span>
+        <div className="flex-1 bg-surface-alt rounded h-5 relative overflow-hidden">
+          {score != null && (
+            <div
+              className="absolute inset-y-0 left-0 rounded"
+              style={{
+                width: `${score}%`,
+                background: C.primary,
+                opacity: 0.85,
+              }}
+            />
+          )}
+        </div>
+        <span className="w-8 shrink-0 text-right tabular-nums font-semibold text-ink">
+          {score ?? "—"}
+        </span>
       </div>
-      <span className="w-8 shrink-0 text-right tabular-nums font-medium text-ink">
-        {score ?? "—"}
-      </span>
+      {comment && (
+        <p className="text-[11px] text-ink-muted leading-snug mt-1 ml-[92px]">
+          {comment}
+        </p>
+      )}
     </div>
   );
 }
@@ -1016,7 +1507,7 @@ function renderBold(text: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => {
     const m = /^\*\*([^*]+)\*\*$/.exec(part);
     return m ? (
-      <strong key={i} className="font-medium text-ink">
+      <strong key={i} className="font-semibold text-ink">
         {m[1]}
       </strong>
     ) : (
@@ -1025,60 +1516,91 @@ function renderBold(text: string): ReactNode[] {
   });
 }
 
-function HiredCard({
+type DossierData = {
+  id: number;
+  name: string;
+  careerYears: number | null;
+  educationLevel: string | null;
+  educationMajor: string | null;
+  screenRec: string | null;
+  aiRec: string | null;
+  paper: number | null;
+  ai: number | null;
+  human: number | null;
+  overall: number | null;
+  axisVals: number[] | null;
+  aiComp: { label: string; score: number; comment: string }[];
+  keywords: string[];
+  screenOpinion: string | null;
+  aiOpinion: string | null;
+  strengths: string[];
+  concerns: string[];
+  culture: {
+    items: {
+      topic: string;
+      self_report: string;
+      verification: "일치" | "불일치" | "미검증";
+      evidence: string;
+    }[];
+    note: string | null;
+  } | null;
+};
+
+function HiredDossier({
   h,
+  showHuman,
 }: {
-  h: {
-    id: number;
-    name: string;
-    careerYears: number | null;
-    educationLevel: string | null;
-    rec: string | null;
-    paper: number | null;
-    ai: number | null;
-    human: number | null;
-    overall: number | null;
-    axisVals: number[] | null;
-    keywords: string[];
-    opinion: string | null;
-    strengths: string[];
-    concerns: string[];
-  };
+  h: DossierData;
+  showHuman: boolean;
 }) {
   const meta = [
-    h.careerYears != null ? `${h.careerYears}년` : null,
-    h.educationLevel,
+    h.careerYears != null
+      ? h.careerYears <= 0
+        ? "신입"
+        : `경력 ${h.careerYears}년`
+      : null,
+    [h.educationMajor, h.educationLevel].filter(Boolean).join(" "),
   ]
     .filter(Boolean)
     .join(" · ");
   const hasQual = h.strengths.length > 0 || h.concerns.length > 0;
+  const stageScores = [
+    { label: "서류", score: h.paper },
+    { label: "AI 면접", score: h.ai },
+    ...(showHuman || h.human != null
+      ? [{ label: "대면", score: h.human }]
+      : []),
+  ];
+
   return (
-    <div className="rounded-2xl border border-border-default bg-card p-6 print:break-inside-avoid">
-      <div className="flex items-center justify-between gap-4">
+    <div className="rounded-2xl border border-border-default bg-card overflow-hidden print:break-inside-avoid">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between gap-4 p-5 bg-surface-alt/50 border-b border-border-default">
         <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-11 h-11 rounded-full bg-primary-soft text-primary-deep flex items-center justify-center text-base font-medium shrink-0">
+          <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center text-lg font-semibold shrink-0">
             {h.name?.[0] ?? "?"}
           </div>
           <div className="min-w-0">
-            <div className="text-[17px] font-medium text-ink truncate">
-              {h.name}
+            <div className="flex items-center gap-2">
+              <span className="text-[18px] font-bold text-ink truncate">
+                {h.name}
+              </span>
+              {h.screenRec && <RecBadge rec={h.screenRec} />}
             </div>
-            <div className="text-xs text-ink-muted mt-0.5 truncate">
-              {meta}
-              {h.rec && (
-                <>
-                  {meta && " · "}
-                  <span className="text-primary">{h.rec}</span>
-                </>
-              )}
-            </div>
+            {meta && (
+              <div className="text-xs text-ink-muted mt-0.5 truncate">
+                {meta}
+              </div>
+            )}
           </div>
         </div>
         <div className="text-right shrink-0">
-          <div className="text-[10.5px] tracking-wide text-ink-muted">종합</div>
-          <div className="text-[32px] leading-none font-semibold text-primary tabular-nums tracking-tight">
+          <div className="text-[10px] tracking-wide text-ink-muted">
+            종합 점수
+          </div>
+          <div className="text-[34px] leading-none font-bold text-primary tabular-nums tracking-tight">
             {h.overall ?? "—"}
-            <span className="text-[13px] font-normal text-ink-muted tracking-normal">
+            <span className="text-[13px] font-medium text-ink-muted tracking-normal">
               {" "}
               /100
             </span>
@@ -1086,70 +1608,156 @@ function HiredCard({
         </div>
       </div>
 
-      <div className="border-t border-border-default my-4" />
-
-      <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-6 items-center">
-        {h.axisVals ? (
-          <Radar
-            axes={["기술", "경험", "직무", "성장"]}
-            series={[
-              { label: "서류 4축", color: C.primary, values: h.axisVals },
-            ]}
-            size={172}
-          />
-        ) : (
-          <div className="text-[11px] text-ink-muted">서류 4축 데이터 없음</div>
-        )}
-        <div>
-          <div className="text-[10.5px] tracking-wide text-ink-muted mb-3">
-            단계별 점수
-          </div>
-          <div className="space-y-2.5">
-            <ScoreRow label="서류" score={h.paper} />
-            <ScoreRow label="AI 면접" score={h.ai} />
-            <ScoreRow label="대면" score={h.human} />
-          </div>
-        </div>
-      </div>
-
-      {h.keywords.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-5">
-          {h.keywords.map((k) => (
-            <span
-              key={k}
-              className="text-[11px] text-primary bg-primary-soft px-2.5 py-0.5 rounded-full"
+      <div className="p-5 space-y-5">
+        {/* 단계별 점수 요약 바 */}
+        <div className="grid grid-cols-3 gap-2.5">
+          {stageScores.map((s) => (
+            <div
+              key={s.label}
+              className="rounded-lg border border-border-default bg-surface-alt/40 px-3 py-2.5 text-center"
             >
-              {k}
-            </span>
+              <div className="text-[10.5px] text-ink-muted">{s.label}</div>
+              <div className="text-[20px] font-bold text-ink tabular-nums mt-0.5">
+                {s.score ?? "—"}
+              </div>
+            </div>
           ))}
         </div>
-      )}
 
-      {(h.opinion || hasQual) && (
-        <div className="mt-5 pt-4 border-t border-border-default space-y-4">
-          {h.opinion && (
+        {/* 서류 4축 레이더 + AI 면접 역량 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {h.axisVals && (
             <div>
-              <div className="text-[10.5px] tracking-wide text-primary mb-1.5">
-                AI 종합 의견
+              <div className="text-[10.5px] tracking-wide text-ink-muted mb-2">
+                서류 4축 프로필
               </div>
-              <p className="text-[13px] leading-relaxed text-ink-soft">
-                {renderBold(h.opinion)}
-              </p>
+              <Radar
+                axes={["기술", "경험", "직무", "성장"]}
+                series={[
+                  { label: "서류 평가", color: C.primary, values: h.axisVals },
+                ]}
+                size={188}
+              />
             </div>
           )}
-          {hasQual && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-              {h.strengths.length > 0 && (
-                <QualList label="강점" items={h.strengths} tone="primary" />
-              )}
-              {h.concerns.length > 0 && (
-                <QualList label="보완점" items={h.concerns} tone="muted" />
-              )}
+          {h.aiComp.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10.5px] tracking-wide text-ink-muted">
+                  AI 면접 역량별
+                </div>
+                {h.aiRec && <RecBadge rec={h.aiRec} />}
+              </div>
+              <div className="space-y-2.5">
+                {h.aiComp.map((c) => (
+                  <ScoreRow
+                    key={c.label}
+                    label={c.label}
+                    score={c.score}
+                    comment={c.comment}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
-      )}
+
+        {/* 매칭 키워드 */}
+        {h.keywords.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {h.keywords.map((k) => (
+              <span
+                key={k}
+                className="text-[11px] text-primary-deep bg-primary-soft px-2.5 py-0.5 rounded-full"
+              >
+                {k}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* 강점 / 보완점 */}
+        {hasQual && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 pt-1">
+            {h.strengths.length > 0 && (
+              <QualList label="핵심 강점" items={h.strengths} tone="primary" />
+            )}
+            {h.concerns.length > 0 && (
+              <QualList label="보완 필요" items={h.concerns} tone="muted" />
+            )}
+          </div>
+        )}
+
+        {/* AI 종합 의견 (서류 + 면접) */}
+        {(h.screenOpinion || h.aiOpinion) && (
+          <div className="pt-4 border-t border-border-default space-y-3">
+            {h.aiOpinion && (
+              <OpinionBlock label="AI 면접 총평" text={h.aiOpinion} />
+            )}
+            {h.screenOpinion && (
+              <OpinionBlock label="서류 평가 요약" text={h.screenOpinion} />
+            )}
+          </div>
+        )}
+
+        {/* 컬처핏 검증 */}
+        {h.culture && (
+          <div className="pt-4 border-t border-border-default">
+            <div className="text-[10.5px] tracking-wide text-primary mb-2">
+              컬처핏 · 정성 검증
+            </div>
+            <div className="space-y-1.5">
+              {h.culture.items.map((it, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 text-[12px] leading-relaxed"
+                >
+                  <VerifyMark v={it.verification} />
+                  <span className="text-ink-soft">
+                    <span className="font-medium text-ink">{it.topic}</span>
+                    {it.evidence ? ` — ${it.evidence}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {h.culture.note && (
+              <p className="text-[11.5px] text-ink-muted leading-relaxed mt-2">
+                {h.culture.note}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+function OpinionBlock({ label, text }: { label: string; text: string }) {
+  return (
+    <div>
+      <div className="text-[10.5px] tracking-wide text-primary mb-1.5">
+        {label}
+      </div>
+      <p className="text-[13px] leading-relaxed text-ink-soft">
+        {renderBold(text)}
+      </p>
+    </div>
+  );
+}
+
+function VerifyMark({ v }: { v: "일치" | "불일치" | "미검증" }) {
+  const style =
+    v === "일치"
+      ? "bg-primary-soft text-primary-deep"
+      : v === "불일치"
+        ? "bg-accent-soft text-accent-deep"
+        : "bg-surface-alt text-ink-muted";
+  return (
+    <span
+      className={`shrink-0 mt-[1px] inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-medium ${style}`}
+    >
+      {v}
+    </span>
   );
 }
 
@@ -1174,7 +1782,13 @@ function QualList({
       <ul className="space-y-1">
         {items.map((s, i) => (
           <li key={i} className="flex gap-1.5 text-[12px] leading-relaxed">
-            <span className="text-ink-muted shrink-0">·</span>
+            <span
+              className={`shrink-0 ${
+                tone === "primary" ? "text-primary" : "text-ink-muted"
+              }`}
+            >
+              ·
+            </span>
             <span className="text-ink-soft">{renderBold(s)}</span>
           </li>
         ))}
