@@ -136,7 +136,6 @@ export default async function JobReportPage({
       id: candidates.id,
       name: candidates.name,
       outcome: candidates.outcome,
-      outcomeReason: candidates.outcomeReason,
       decisionFromStage: candidates.decisionFromStage,
       stage: candidates.stage,
       screeningScore: candidates.screeningScore,
@@ -148,7 +147,6 @@ export default async function JobReportPage({
       decidedAt: candidates.decidedAt,
       createdAt: candidates.createdAt,
       lastInterviewEmailSentAt: candidates.lastInterviewEmailSentAt,
-      interviewEmailCount: candidates.interviewEmailCount,
     })
     .from(candidates)
     .where(eq(candidates.jobId, jobId))
@@ -368,6 +366,23 @@ export default async function JobReportPage({
   const aiResponseRate =
     aiSent > 0 ? Math.round((aiResponded / aiSent) * 100) : null;
 
+  // ───────── AI 자동화 효과 (실측 + 명시 가정) ─────────
+  let aiRunMinutes = 0; // AI 면접 실제 진행 시간 합 (startedAt→completedAt 실측)
+  for (const s of sessions) {
+    if (s.startedAt && s.completedAt) {
+      const m =
+        (new Date(s.completedAt).getTime() - new Date(s.startedAt).getTime()) /
+        60000;
+      if (m > 0 && m < 24 * 60) aiRunMinutes += m;
+    }
+  }
+  // 절감 추정 — 서류 10분/건(가정, UI에 명시) + AI 면접은 공고 설정 면접시간/건
+  const savedMinutes =
+    countWithScreening * 10 + aiCompletedCount * job.interviewDurationMinutes;
+  const fmtMin = (min: number) =>
+    min >= 60 ? `${Math.round(min / 6) / 10}시간` : `${Math.round(min)}분`;
+  const showAutomation = countWithScreening > 0 || aiCompletedCount > 0;
+
   // ───────── 지원자 풀: 서류 점수 분포 (합격자 강조) ─────────
   const SCORE_BUCKETS = [
     { label: "~49", lo: 0, hi: 50 },
@@ -586,18 +601,6 @@ export default async function JobReportPage({
       ? Math.round((respDays.reduce((a, b) => a + b, 0) / respDays.length) * 10) /
         10
       : null;
-  const emailCounts = cands
-    .map((c) => c.interviewEmailCount ?? 0)
-    .filter((n) => n > 0);
-  const avgEmail =
-    emailCounts.length > 0
-      ? Math.round(
-          (emailCounts.reduce((a, b) => a + b, 0) / emailCounts.length) * 10
-        ) / 10
-      : null;
-  const expiredCnt = cands.filter(
-    (c) => c.outcomeReason === "ai_link_expired"
-  ).length;
   const withdrawnRate =
     totalCount > 0 ? Math.round((withdrawnCount / totalCount) * 100) : null;
 
@@ -642,13 +645,17 @@ export default async function JobReportPage({
   const show04 = hasEdu || hasCareer || hasAge;
   const show05 = hasScores || hasRec || hasKeywords || hasScreenBreakdown;
   const show07 =
-    durRows.length > 0 ||
-    avgEmail != null ||
-    expiredCnt > 0 ||
-    respAvg != null ||
-    withdrawnCount > 0;
+    durRows.length > 0 || respAvg != null || withdrawnCount > 0 || aiSent > 0;
 
   // ───────── 합격자 종합평가 dossier ─────────
+  // 서류 점수 상위 백분위 — "얼마나 좋은 지원자를 뽑았나"의 한 줄 근거
+  const paperTopPct = (score: number | null) => {
+    if (score == null || countWithScreening === 0) return null;
+    const below = cands.filter(
+      (c) => c.screeningScore != null && c.screeningScore < score
+    ).length;
+    return Math.max(1, Math.ceil((1 - below / countWithScreening) * 100));
+  };
   const hiredCards = hired.map((c) => {
     const paper = c.screeningScore ?? null;
     const sess = sessionByCand.get(c.id);
@@ -691,6 +698,7 @@ export default async function JobReportPage({
       screenRec: sr?.recommendation ?? null,
       aiRec: ev?.recommendation ?? null,
       paper,
+      paperTop: paperTopPct(paper),
       ai,
       human,
       overall,
@@ -813,14 +821,38 @@ export default async function JobReportPage({
   const insights: ReactNode[] = [];
   if (totalCount > 0) {
     const topKw = keywordTop.slice(0, 3).map((k) => k.label);
+    const topCareer = careerBars
+      .filter((b) => b.label !== "미상" && b.value > 0)
+      .reduce<{ label: string; value: number } | null>(
+        (a, b) => (a == null || b.value > a.value ? b : a),
+        null
+      );
     insights.push(
       <>
         이번 공고에는 총{" "}
         <b className="font-semibold text-primary">{totalCount}명</b>이
-        지원했으며, {hasCareer ? "경력 분포가 고르게 나타났습니다." : "지원자 풀이 형성되었습니다."}
+        지원했으며,{" "}
+        {topCareer
+          ? `${
+              topCareer.label === "신입" ? "신입" : `경력 ${topCareer.label}`
+            } 지원자가 ${topCareer.value}명으로 가장 많았습니다.`
+          : "지원자 풀이 형성되었습니다."}
       </>
     );
     if (qualitySentence) insights.push(<>{qualitySentence}</>);
+    if (showAutomation && savedMinutes > 0) {
+      const autoParts = [
+        ...(countWithScreening > 0 ? [`서류 ${countWithScreening}건`] : []),
+        ...(aiCompletedCount > 0 ? [`면접 ${aiCompletedCount}건`] : []),
+      ];
+      insights.push(
+        <>
+          AI가 {autoParts.join("·")}을 자동 진행해, 직접 검토 대비 약{" "}
+          <b className="font-semibold text-primary">{fmtMin(savedMinutes)}</b>의
+          실무 시간을 절감했습니다(서류 10분/건 기준).
+        </>
+      );
+    }
     if (topKw.length > 0)
       insights.push(
         <>
@@ -862,7 +894,7 @@ export default async function JobReportPage({
 
       <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden print:border-0 print:shadow-none print:rounded-none print:overflow-visible">
         <div className="h-1 bg-primary" />
-        <div className="p-6 sm:p-10 print:p-0">
+        <div className="p-5 sm:p-8 print:p-0">
           {/* ── 표지 ── */}
           <header className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -870,10 +902,10 @@ export default async function JobReportPage({
                 <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                 CONFIDENTIAL · 채용 결과 리포트
               </div>
-              <h1 className="text-[27px] sm:text-[32px] font-bold text-ink leading-tight mt-2.5">
+              <h1 className="text-[24px] sm:text-[28px] font-bold text-ink leading-tight mt-2">
                 {job.title}
               </h1>
-              <div className="text-[13px] text-ink-muted mt-1.5">
+              <div className="text-[13px] text-ink-muted mt-1">
                 {job.position} · {job.level} · {job.employmentType}
               </div>
             </div>
@@ -899,53 +931,47 @@ export default async function JobReportPage({
             </div>
           </header>
 
-          {/* ── 공고 개요 ── */}
-          <div className="mt-6 rounded-2xl border border-border-default bg-surface-alt/60 p-5 print:break-inside-avoid">
-            <div className="flex items-center gap-2 text-[10.5px] tracking-[0.14em] text-ink-muted font-semibold mb-3">
-              <ClipboardList className="w-3.5 h-3.5" strokeWidth={2.25} />
-              공고 개요
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-3">
-              <MetaItem label="직무" value={job.position} />
-              <MetaItem label="직급 / 연차" value={job.level} />
-              <MetaItem label="근무형태" value={job.employmentType} />
-              <MetaItem
-                label="면접 시간"
-                value={`${job.interviewDurationMinutes}분`}
-              />
+          {/* ── 공고 개요 — 표지와 중복되는 직무·직급·기간은 생략, 면접관·담당업무만 ── */}
+          <div className="mt-5 rounded-2xl border border-border-default bg-surface-alt/60 px-4 py-3 print:break-inside-avoid">
+            <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+              <div className="flex items-center gap-1.5 text-[10.5px] tracking-[0.14em] text-ink-muted font-semibold">
+                <ClipboardList className="w-3.5 h-3.5" strokeWidth={2.25} />
+                공고 개요
+              </div>
               {interviewers.length > 0 && (
-                <MetaItem
-                  label="면접관"
-                  value={interviewers.map((i) => i.name).join(", ")}
-                  span
-                />
+                <span className="text-[12px] text-ink-soft">
+                  면접관{" "}
+                  <b className="font-medium text-ink">
+                    {interviewers.map((i) => i.name).join(", ")}
+                  </b>
+                </span>
               )}
-              <MetaItem label="공고 기간" value={periodText} span />
+              <span className="text-[12px] text-ink-soft">
+                AI 면접{" "}
+                <b className="font-medium text-ink">
+                  {job.interviewDurationMinutes}분
+                </b>
+              </span>
             </div>
             {respLines.length > 0 && (
-              <div className="mt-4 pt-3 border-t border-border-default">
-                <div className="text-[10.5px] text-ink-muted mb-1.5">
-                  주요 담당업무
-                </div>
-                <ul className="space-y-0.5">
-                  {respLines.map((line, i) => (
-                    <li
-                      key={i}
-                      className="flex gap-1.5 text-[12.5px] text-ink-soft leading-relaxed"
-                    >
-                      <span className="text-primary shrink-0">·</span>
-                      <span className="truncate">{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0.5 mt-2">
+                {respLines.map((line, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-1.5 text-[12px] text-ink-soft leading-relaxed min-w-0"
+                  >
+                    <span className="text-primary shrink-0">·</span>
+                    <span className="truncate">{line}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 
           {/* ── Executive Summary — KPI 6 ── */}
-          <section className="mt-8">
+          <section className="mt-6">
             <SectionLabel>채용 핵심 요약</SectionLabel>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mt-2.5">
               <StatCard
                 icon={<Users className="w-4 h-4" strokeWidth={2.25} />}
                 label="총 지원자"
@@ -993,8 +1019,49 @@ export default async function JobReportPage({
                 color={RC.teal}
               />
             </div>
+            {showAutomation && (
+              <div className="mt-2.5 rounded-2xl border border-border-default bg-surface-alt/50 px-4 py-2.5 flex flex-wrap items-center gap-x-6 gap-y-1.5 print:break-inside-avoid">
+                <span
+                  className="flex items-center gap-1.5 text-[10.5px] tracking-[0.14em] font-semibold"
+                  style={{ color: RC.teal }}
+                >
+                  <Bot className="w-4 h-4" strokeWidth={2.25} />
+                  AI 자동화 효과
+                </span>
+                <span className="text-[12px] text-ink-soft">
+                  서류 자동 평가{" "}
+                  <b className="font-semibold text-ink tabular-nums">
+                    {countWithScreening}건
+                  </b>
+                </span>
+                {aiCompletedCount > 0 && (
+                  <span className="text-[12px] text-ink-soft">
+                    AI 면접 무인 진행{" "}
+                    <b className="font-semibold text-ink tabular-nums">
+                      {aiCompletedCount}건
+                      {aiRunMinutes > 0 ? ` · ${fmtMin(aiRunMinutes)}` : ""}
+                    </b>
+                  </span>
+                )}
+                {savedMinutes > 0 && (
+                  <span className="text-[12px] text-ink-soft">
+                    실무 시간 절감 추정{" "}
+                    <b
+                      className="font-semibold tabular-nums"
+                      style={{ color: RC.teal }}
+                    >
+                      약 {fmtMin(savedMinutes)}
+                    </b>
+                    <span className="text-[10.5px] text-ink-muted">
+                      {" "}
+                      (서류 10분/건 기준)
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
             {summaryParts.length > 0 && (
-              <p className="text-[13.5px] leading-[1.7] text-ink-soft mt-4">
+              <p className="text-[13.5px] leading-[1.65] text-ink-soft mt-3">
                 {summaryParts}
               </p>
             )}
@@ -1009,7 +1076,7 @@ export default async function JobReportPage({
             >
               <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-x-8 gap-y-6 items-center">
                 {/* 중앙 정렬 퍼널 */}
-                <div className="space-y-1.5 print:break-inside-avoid">
+                <div className="space-y-1 print:break-inside-avoid">
                   {funnel.map((f, i) => {
                     const base = funnel[0].count || 1;
                     const widthPct = Math.max(
@@ -1025,7 +1092,7 @@ export default async function JobReportPage({
                         <span className="w-[80px] shrink-0 text-ink-soft">
                           {f.label}
                         </span>
-                        <div className="flex-1 relative flex items-center justify-center h-[28px]">
+                        <div className="flex-1 relative flex items-center justify-center h-[24px]">
                           <div
                             className="h-full rounded"
                             style={{
@@ -1052,16 +1119,16 @@ export default async function JobReportPage({
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-surface-alt text-[10.5px] text-ink-muted">
-                        <th className="text-left font-medium px-3 py-2">
+                        <th className="text-left font-medium px-3 py-1.5">
                           단계
                         </th>
-                        <th className="text-right font-medium px-3 py-2">
+                        <th className="text-right font-medium px-3 py-1.5">
                           인원
                         </th>
-                        <th className="text-right font-medium px-3 py-2">
+                        <th className="text-right font-medium px-3 py-1.5">
                           전 단계 대비
                         </th>
-                        <th className="text-right font-medium px-3 py-2">
+                        <th className="text-right font-medium px-3 py-1.5">
                           전체 대비
                         </th>
                       </tr>
@@ -1083,7 +1150,7 @@ export default async function JobReportPage({
                           bottleneck.conv < 70;
                         return (
                           <tr key={f.label} className="bg-card">
-                            <td className="px-3 py-2 text-ink-soft">
+                            <td className="px-3 py-1.5 text-ink-soft">
                               <span className="inline-flex items-center gap-1.5">
                                 <span
                                   className="w-2 h-2 rounded-sm shrink-0"
@@ -1092,11 +1159,11 @@ export default async function JobReportPage({
                                 {f.label}
                               </span>
                             </td>
-                            <td className="px-3 py-2 text-right font-semibold text-ink tabular-nums">
+                            <td className="px-3 py-1.5 text-right font-semibold text-ink tabular-nums">
                               {f.count}
                             </td>
                             <td
-                              className={`px-3 py-2 text-right tabular-nums ${
+                              className={`px-3 py-1.5 text-right tabular-nums ${
                                 isBottleneck
                                   ? "text-danger font-semibold"
                                   : "text-ink-muted"
@@ -1109,7 +1176,7 @@ export default async function JobReportPage({
                                 </span>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-right text-ink-muted tabular-nums">
+                            <td className="px-3 py-1.5 text-right text-ink-muted tabular-nums">
                               {Math.round((f.count / base) * 100)}%
                             </td>
                           </tr>
@@ -1120,8 +1187,8 @@ export default async function JobReportPage({
                 </div>
               </div>
 
-              <div className="mt-6">
-                <div className="text-[11px] text-ink-muted mb-2">결과 분포</div>
+              <div className="mt-4">
+                <div className="text-[11px] text-ink-muted mb-1.5">결과 분포</div>
                 <StackBar
                   total={totalCount}
                   segments={[
@@ -1158,14 +1225,14 @@ export default async function JobReportPage({
                         className="h-[3px]"
                         style={{ background: color }}
                       />
-                      <div className="px-3 py-4">
+                      <div className="px-2 py-2.5">
                         <div
-                          className="text-[28px] leading-none font-bold tabular-nums"
+                          className="text-[23px] leading-none font-bold tabular-nums"
                           style={{ color }}
                         >
                           {s.count}
                         </div>
-                        <div className="text-[11px] text-ink-muted mt-1.5">
+                        <div className="text-[10.5px] text-ink-muted mt-1">
                           {s.label}
                         </div>
                       </div>
@@ -1196,7 +1263,7 @@ export default async function JobReportPage({
                 아직 최종 합격자가 없습니다. (진행 중 {inProgressCount}명)
               </p>
             ) : (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {hiredCards.map((h) => (
                   <HiredDossier key={h.id} h={h} showHuman={hasHumanNotes} />
                 ))}
@@ -1211,18 +1278,18 @@ export default async function JobReportPage({
               title="지원자 분포"
               desc="어떤 지원자들이 지원했는가 · 합격자 위치"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-8 [&>div]:print:break-inside-avoid">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 [&>div]:print:break-inside-avoid">
                 {hasEdu && (
                   <div>
-                    <div className="text-[11px] text-ink-muted mb-3">
+                    <div className="text-[11px] text-ink-muted mb-2">
                       최종학력 분포 (전체 지원자)
                     </div>
-                    <Donut data={eduData} />
+                    <Donut data={eduData} size={116} thickness={17} />
                   </div>
                 )}
                 {hasCareer && (
                   <div>
-                    <div className="text-[11px] text-ink-muted mb-3">
+                    <div className="text-[11px] text-ink-muted mb-2">
                       경력년수 분포 (합격자 강조)
                     </div>
                     <VBars
@@ -1231,13 +1298,13 @@ export default async function JobReportPage({
                       hiColor={RC.blue}
                       baseLabel="전체"
                       hiLabel="최종 합격"
-                      height={130}
+                      height={108}
                     />
                   </div>
                 )}
                 {hasAge && (
                   <div>
-                    <div className="text-[11px] text-ink-muted mb-3">
+                    <div className="text-[11px] text-ink-muted mb-2">
                       연령 분포 (합격자 강조)
                     </div>
                     <VBars
@@ -1246,7 +1313,7 @@ export default async function JobReportPage({
                       hiColor={RC.blue}
                       baseLabel="전체"
                       hiLabel="최종 합격"
-                      height={130}
+                      height={108}
                     />
                   </div>
                 )}
@@ -1261,10 +1328,10 @@ export default async function JobReportPage({
               title="AI 평가 결과"
               desc="서류 평가 기반 지원자 풀의 강점·품질 분포"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-8 [&>div]:print:break-inside-avoid">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 [&>div]:print:break-inside-avoid">
                 {hasScores && (
                   <div>
-                    <div className="text-[11px] text-ink-muted mb-3">
+                    <div className="text-[11px] text-ink-muted mb-2">
                       서류 점수 분포 (합격자 강조)
                     </div>
                     <VBars
@@ -1273,21 +1340,21 @@ export default async function JobReportPage({
                       hiColor={RC.blue}
                       baseLabel="전체"
                       hiLabel="최종 합격"
-                      height={140}
+                      height={108}
                     />
                   </div>
                 )}
                 {hasRec && (
                   <div>
-                    <div className="text-[11px] text-ink-muted mb-3">
+                    <div className="text-[11px] text-ink-muted mb-2">
                       서류 추천도 분포
                     </div>
-                    <Donut data={recData} />
+                    <Donut data={recData} size={116} thickness={17} />
                   </div>
                 )}
                 {hasKeywords && (
                   <div>
-                    <div className="text-[11px] text-ink-muted mb-3">
+                    <div className="text-[11px] text-ink-muted mb-2">
                       AI가 자주 확인한 강점 키워드 (TOP {keywordTop.length})
                     </div>
                     <HBars
@@ -1303,11 +1370,12 @@ export default async function JobReportPage({
                 )}
                 {hasScreenBreakdown && (
                   <div>
-                    <div className="text-[11px] text-ink-muted mb-3">
+                    <div className="text-[11px] text-ink-muted mb-2">
                       서류 4축 프로필 (전체 vs 합격자)
                     </div>
                     <Radar
                       axes={SCREEN_AXES.map((a) => a.label)}
+                      size={176}
                       series={[
                         { label: "전체 평균", color: RC.sky, values: radarAll },
                         ...(hiredCount > 0
@@ -1338,20 +1406,20 @@ export default async function JobReportPage({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-surface-alt text-[11px] text-ink-muted">
-                      <th className="text-left font-medium px-4 py-2.5">지표</th>
-                      <th className="text-right font-medium px-4 py-2.5">
+                      <th className="text-left font-medium px-4 py-2">지표</th>
+                      <th className="text-right font-medium px-4 py-2">
                         합격자 평균
                       </th>
-                      <th className="text-right font-medium px-4 py-2.5">
+                      <th className="text-right font-medium px-4 py-2">
                         지원자 평균
                       </th>
-                      <th className="text-right font-medium px-4 py-2.5">차이</th>
+                      <th className="text-right font-medium px-4 py-2">차이</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-default">
                     {compareRows.map((r) => {
                       const diff = r.hiredV! - r.allV!;
-                      const sign = diff > 0.05 ? "+" : diff < -0.05 ? "" : "±";
+                      const sign = diff > 0.05 ? "+" : diff < -0.05 ? "-" : "±";
                       const diffColor =
                         diff > 0.05
                           ? "text-success"
@@ -1360,17 +1428,17 @@ export default async function JobReportPage({
                             : "text-ink-muted";
                       return (
                         <tr key={r.label} className="bg-card">
-                          <td className="px-4 py-3 text-ink-soft">{r.label}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-ink tabular-nums">
+                          <td className="px-4 py-2 text-ink-soft">{r.label}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-ink tabular-nums">
                             {r.hiredV!.toFixed(r.digits)}
                             {r.unit}
                           </td>
-                          <td className="px-4 py-3 text-right text-ink-muted tabular-nums">
+                          <td className="px-4 py-2 text-right text-ink-muted tabular-nums">
                             {r.allV!.toFixed(r.digits)}
                             {r.unit}
                           </td>
                           <td
-                            className={`px-4 py-3 text-right font-medium tabular-nums ${diffColor}`}
+                            className={`px-4 py-2 text-right font-medium tabular-nums ${diffColor}`}
                           >
                             {sign}
                             {Math.abs(diff).toFixed(r.digits)}
@@ -1393,7 +1461,7 @@ export default async function JobReportPage({
               desc="구간별 평균 소요 시간과 지연 원인"
             >
               {speedSegs.length > 0 ? (
-                <div className="rounded-2xl border border-border-default bg-card px-5 py-4 print:break-inside-avoid">
+                <div className="rounded-2xl border border-border-default bg-card px-5 py-3 print:break-inside-avoid">
                   <SpeedTimeline
                     segs={speedSegs}
                     totalDays={avgCycleDays}
@@ -1417,10 +1485,10 @@ export default async function JobReportPage({
                   {timingCause}
                 </p>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-x-8 gap-y-5 items-center mt-5">
+              <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-x-8 gap-y-4 items-center mt-4">
                 {aiSent > 0 && aiResponseRate != null && (
                   <div className="print:break-inside-avoid">
-                    <div className="text-[11px] text-ink-muted mb-2.5">
+                    <div className="text-[11px] text-ink-muted mb-2">
                       AI 면접 응답률
                     </div>
                     <Donut
@@ -1432,29 +1500,29 @@ export default async function JobReportPage({
                           color: RC.slateSoft,
                         },
                       ]}
-                      size={116}
-                      thickness={17}
+                      size={108}
+                      thickness={16}
                       centerTop={`${aiResponseRate}%`}
                       centerSub="응답률"
                     />
                   </div>
                 )}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border-default border border-border-default rounded-2xl overflow-hidden self-start print:break-inside-avoid">
-                  <OpsCell
-                    label="평균 응답 대기"
-                    value={respAvg != null ? `${respAvg}` : "-"}
-                    unit={respAvg != null ? "일" : ""}
-                  />
-                  <OpsCell
-                    label="평균 발송 횟수"
-                    value={avgEmail != null ? `${avgEmail}` : "-"}
-                    unit={avgEmail != null ? "회" : ""}
-                  />
-                  <OpsCell label="링크 만료" value={`${expiredCnt}`} unit="명" />
+                <div
+                  className={`grid ${
+                    respAvg != null ? "grid-cols-2" : "grid-cols-1"
+                  } gap-px bg-border-default border border-border-default rounded-2xl overflow-hidden self-start print:break-inside-avoid`}
+                >
+                  {respAvg != null && (
+                    <OpsCell
+                      label="지원자 평균 응답 대기"
+                      value={`${respAvg}`}
+                      unit="일"
+                    />
+                  )}
                   <OpsCell
                     label="지원자 취소율"
-                    value={withdrawnRate != null ? `${withdrawnRate}` : "-"}
-                    unit={withdrawnRate != null ? "%" : ""}
+                    value={withdrawnRate != null ? `${withdrawnRate}` : "0"}
+                    unit="%"
                   />
                 </div>
               </div>
@@ -1463,7 +1531,7 @@ export default async function JobReportPage({
 
           {/* ── AI 인사이트 ── */}
           {insights.length > 0 && (
-            <section className="mt-10 rounded-2xl bg-primary-soft/50 border border-primary-soft p-5 print:break-inside-avoid">
+            <section className="mt-7 rounded-2xl bg-primary-soft/50 border border-primary-soft p-4 print:break-inside-avoid">
               <div className="flex gap-4">
                 <div
                   className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
@@ -1498,7 +1566,7 @@ export default async function JobReportPage({
           )}
 
           {/* ── 푸터 ── */}
-          <footer className="mt-10 pt-4 border-t border-border-default text-[10px] text-ink-muted flex justify-between tracking-wide">
+          <footer className="mt-7 pt-3 border-t border-border-default text-[10px] text-ink-muted flex justify-between tracking-wide">
             <span>생성 {formatKstDateTime(new Date().toISOString())}</span>
             <span>Intervia · {org?.name ?? ""}</span>
           </footer>
@@ -1532,36 +1600,19 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="mt-10">
+    <section className="mt-7">
       <div className="flex items-baseline gap-3">
         <span className="text-xs font-bold text-primary tabular-nums">{n}</span>
-        <h2 className="text-[17px] font-bold text-ink">{title}</h2>
+        <h2 className="text-[16px] font-bold text-ink">{title}</h2>
         {sub && <span className="text-xs text-ink-muted">{sub}</span>}
       </div>
       {desc && (
-        <div className="text-[11.5px] text-ink-muted mt-1 ml-[27px] mb-4">
+        <div className="text-[11.5px] text-ink-muted mt-0.5 ml-[27px] mb-3">
           {desc}
         </div>
       )}
-      <div className={desc ? "" : "mt-4"}>{children}</div>
+      <div className={desc ? "" : "mt-3"}>{children}</div>
     </section>
-  );
-}
-
-function MetaItem({
-  label,
-  value,
-  span,
-}: {
-  label: string;
-  value: string;
-  span?: boolean;
-}) {
-  return (
-    <div className={span ? "col-span-2" : ""}>
-      <div className="text-[10.5px] text-ink-muted">{label}</div>
-      <div className="text-[13px] text-ink font-medium mt-0.5">{value}</div>
-    </div>
   );
 }
 
@@ -1581,21 +1632,21 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border-default bg-card p-3.5 print:break-inside-avoid">
+    <div className="rounded-2xl border border-border-default bg-card p-3 print:break-inside-avoid">
       <div
-        className="w-8 h-8 rounded-full flex items-center justify-center"
+        className="w-7 h-7 rounded-full flex items-center justify-center"
         style={{ background: soft(color), color }}
       >
         {icon}
       </div>
-      <div className="text-[10.5px] text-ink-muted mt-2.5">{label}</div>
-      <div className="text-[26px] leading-none font-bold text-ink tabular-nums tracking-tight mt-1">
+      <div className="text-[10.5px] text-ink-muted mt-2">{label}</div>
+      <div className="text-[23px] leading-none font-bold text-ink tabular-nums tracking-tight mt-0.5">
         {value}
         {unit && (
-          <span className="text-[13px] font-medium text-ink-muted"> {unit}</span>
+          <span className="text-[12px] font-medium text-ink-muted"> {unit}</span>
         )}
       </div>
-      {sub && <div className="text-[10.5px] text-ink-muted mt-1">{sub}</div>}
+      {sub && <div className="text-[10.5px] text-ink-muted mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -1610,9 +1661,9 @@ function OpsCell({
   unit?: string;
 }) {
   return (
-    <div className="bg-card px-4 py-4">
+    <div className="bg-card px-4 py-2.5">
       <div className="text-[10.5px] text-ink-muted">{label}</div>
-      <div className="text-[22px] font-bold text-ink tabular-nums mt-1">
+      <div className="text-[19px] font-bold text-ink tabular-nums mt-0.5">
         {value}
         {unit && (
           <span className="text-xs font-medium text-ink-muted">{unit}</span>
@@ -1750,6 +1801,7 @@ type DossierData = {
   screenRec: string | null;
   aiRec: string | null;
   paper: number | null;
+  paperTop: number | null;
   ai: number | null;
   human: number | null;
   overall: number | null;
@@ -1789,8 +1841,12 @@ function HiredDossier({
     .filter(Boolean)
     .join(" · ");
   const hasQual = h.strengths.length > 0 || h.concerns.length > 0;
-  const stageScores = [
-    { label: "서류", score: h.paper },
+  const stageScores: { label: string; score: number | null; sub?: string }[] = [
+    {
+      label: "서류",
+      score: h.paper,
+      sub: h.paperTop != null ? `지원자 중 상위 ${h.paperTop}%` : undefined,
+    },
     { label: "AI 면접", score: h.ai },
     ...(showHuman || h.human != null
       ? [{ label: "대면", score: h.human }]
@@ -1800,14 +1856,14 @@ function HiredDossier({
   return (
     <div className="rounded-2xl border border-border-default bg-card overflow-hidden print:break-inside-avoid">
       {/* 헤더 */}
-      <div className="flex items-center justify-between gap-4 p-5 bg-surface-alt/50 border-b border-border-default">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center text-lg font-semibold shrink-0">
+      <div className="flex items-center justify-between gap-4 px-4 py-3 bg-surface-alt/50 border-b border-border-default">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center text-base font-semibold shrink-0">
             {h.name?.[0] ?? "?"}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-[18px] font-bold text-ink truncate">
+              <span className="text-[16px] font-bold text-ink truncate">
                 {h.name}
               </span>
               {h.screenRec && <RecBadge rec={h.screenRec} />}
@@ -1823,7 +1879,7 @@ function HiredDossier({
           <div className="text-[10px] tracking-wide text-ink-muted">
             종합 점수
           </div>
-          <div className="text-[34px] leading-none font-bold text-primary tabular-nums tracking-tight">
+          <div className="text-[28px] leading-none font-bold text-primary tabular-nums tracking-tight">
             {h.overall ?? "—"}
             <span className="text-[13px] font-medium text-ink-muted tracking-normal">
               {" "}
@@ -1833,18 +1889,26 @@ function HiredDossier({
         </div>
       </div>
 
-      <div className="p-5 space-y-5">
+      <div className="p-4 space-y-4">
         {/* 단계별 점수 요약 바 */}
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-3 gap-2">
           {stageScores.map((s) => (
             <div
               key={s.label}
-              className="rounded-lg border border-border-default bg-surface-alt/40 px-3 py-2.5 text-center"
+              className="rounded-lg border border-border-default bg-surface-alt/40 px-3 py-2 text-center"
             >
               <div className="text-[10.5px] text-ink-muted">{s.label}</div>
-              <div className="text-[20px] font-bold text-ink tabular-nums mt-0.5">
+              <div className="text-[18px] font-bold text-ink tabular-nums mt-0.5">
                 {s.score ?? "—"}
               </div>
+              {s.sub && (
+                <div
+                  className="text-[10px] font-medium mt-0.5"
+                  style={{ color: RC.blue }}
+                >
+                  {s.sub}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1861,7 +1925,7 @@ function HiredDossier({
                 series={[
                   { label: "서류 평가", color: RC.blue, values: h.axisVals },
                 ]}
-                size={188}
+                size={168}
               />
             </div>
           )}

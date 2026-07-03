@@ -176,10 +176,16 @@ export function Radar({
     return [cx + rr * Math.cos(angle(i)), cy + rr * Math.sin(angle(i))];
   };
   const rings = [0.25, 0.5, 0.75, 1];
+  // 좌우 축 라벨(3~4자 한글)이 viewBox 밖으로 잘리지 않도록 가로 여백 확장
+  const padX = 26;
 
   return (
     <div className="flex flex-col items-center">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg
+        width={size + padX * 2}
+        height={size}
+        viewBox={`${-padX} 0 ${size + padX * 2} ${size}`}
+      >
         {/* 그리드 링 */}
         {rings.map((f, ri) => (
           <polygon
