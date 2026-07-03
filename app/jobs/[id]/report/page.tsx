@@ -24,15 +24,14 @@ import {
   MessagesSquare,
   CheckCircle2,
   Sparkles,
-  Award,
-  Briefcase,
-  GraduationCap,
+  Bot,
+  ArrowRight,
   ClipboardList,
 } from "lucide-react";
 import { formatKstDateTime, formatLocalDate } from "@/lib/utils";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import { PrintButton } from "./PrintButton";
-import { Donut, Radar, VBars, HBars, C } from "@/components/charts";
+import { Donut, Radar, VBars, HBars } from "@/components/charts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -64,9 +63,44 @@ const aiCompLabel = (k: string) =>
 const REC_STYLE: Record<string, { bg: string; text: string }> = {
   강력추천: { bg: "bg-primary", text: "text-white" },
   추천: { bg: "bg-primary-soft", text: "text-primary-deep" },
-  보류: { bg: "bg-surface-alt", text: "text-ink-soft" },
-  비추천: { bg: "bg-surface-alt", text: "text-ink-muted" },
+  보류: { bg: "bg-warning-soft", text: "text-warning" },
+  비추천: { bg: "bg-danger-soft", text: "text-danger" },
 };
+
+// 리포트 전용 다색 팔레트 — DESIGN_SYSTEM §색규칙 6(데이터 시각화 다색 허용) 범위.
+// 화면 크롬(텍스트·배경·경계)은 토큰 그대로, 차트·수치·아이콘 칩에만 쓴다.
+const RC = {
+  blue: "#2563eb",
+  sky: "#0ea5e9",
+  navy: "#1c3478",
+  amber: "#f59e0b",
+  orange: "#f97316",
+  violet: "#7c3aed",
+  teal: "#0d9488",
+  green: "#16a34a",
+  red: "#dc2626",
+  slate: "#94a3b8",
+  slateSoft: "#e2e8f0",
+} as const;
+const soft = (hex: string) => `${hex}1f`; // 12% 알파 — 아이콘 칩/배지 배경
+const FUNNEL_COLORS = [
+  "#1e3a8a",
+  "#1d4ed8",
+  "#2563eb",
+  "#3b82f6",
+  "#60a5fa",
+  "#93c5fd",
+];
+const KW_COLORS = [
+  RC.blue,
+  RC.sky,
+  RC.teal,
+  RC.amber,
+  RC.violet,
+  RC.orange,
+  RC.green,
+  RC.navy,
+];
 
 export default async function JobReportPage({
   params,
@@ -360,10 +394,10 @@ export default async function JobReportPage({
   // ───────── 서류 추천도 분포 (도넛) ─────────
   const REC_ORDER = ["강력추천", "추천", "보류", "비추천"] as const;
   const REC_COLOR: Record<string, string> = {
-    강력추천: C.primary,
-    추천: C.blue,
-    보류: "#b8bcc9",
-    비추천: "#d7dae2",
+    강력추천: RC.blue,
+    추천: RC.sky,
+    보류: RC.amber,
+    비추천: "#f87171",
   };
   const recCounts: Record<string, number> = {};
   for (const c of cands) {
@@ -409,13 +443,13 @@ export default async function JobReportPage({
   }
   const EDU_ORDER = ["박사", "석사", "학사", "전문학사", "고졸", "기타", "미상"];
   const EDU_COLOR: Record<string, string> = {
-    박사: C.primary,
-    석사: C.blue,
-    학사: "#7f93c0",
-    전문학사: "#a9b6d4",
-    고졸: "#c7cbdc",
-    기타: "#d9dbe4",
-    미상: "#e6e8ee",
+    박사: RC.violet,
+    석사: RC.blue,
+    학사: RC.sky,
+    전문학사: RC.amber,
+    고졸: RC.orange,
+    기타: RC.slate,
+    미상: RC.slateSoft,
   };
   const eduData = EDU_ORDER.filter((k) => eduCounts[k]).map((k) => ({
     label: k,
@@ -592,6 +626,18 @@ export default async function JobReportPage({
           1
         )}일 — ${gaps[0].cause}.`
       : null;
+
+  // 채용 속도 타임라인 구간 — 누적 평균의 차분(음수는 모수 차이로 생길 수 있어 제외)
+  const speedSegs = (
+    [
+      { from: "지원", to: "서류평가", v: g1 },
+      { from: "서류평가", to: "AI 면접", v: g2 },
+      { from: "AI 면접", to: "최종 결정", v: g3 },
+    ] as { from: string; to: string; v: number | null }[]
+  ).filter(
+    (s): s is { from: string; to: string; v: number } =>
+      s.v != null && s.v >= 0
+  );
 
   const show04 = hasEdu || hasCareer || hasAge;
   const show05 = hasScores || hasRec || hasKeywords || hasScreenBreakdown;
@@ -800,7 +846,10 @@ export default async function JobReportPage({
     .slice(0, 4);
 
   return (
-    <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 print:px-0 print:py-0 print:max-w-none">
+    <main
+      className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 print:px-0 print:py-0 print:max-w-none"
+      style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
+    >
       <div className="flex items-center justify-between mb-4 print:hidden">
         <Link
           href={`/jobs/${jobId}`}
@@ -833,6 +882,9 @@ export default async function JobReportPage({
                 {org?.name ?? "-"}
               </div>
               <div className="mt-1">{periodText}</div>
+              <div className="mt-0.5">
+                보고일자 {formatLocalDate(new Date().toISOString())}
+              </div>
               <div className="mt-0.5">
                 <span
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
@@ -899,6 +951,7 @@ export default async function JobReportPage({
                 label="총 지원자"
                 value={`${totalCount}`}
                 unit="명"
+                color={RC.blue}
               />
               <StatCard
                 icon={<Trophy className="w-4 h-4" strokeWidth={2.25} />}
@@ -906,13 +959,14 @@ export default async function JobReportPage({
                 value={`${hiredCount}`}
                 unit="명"
                 sub={`합격률 ${hireRate}`}
-                accent
+                color={RC.amber}
               />
               <StatCard
                 icon={<FileCheck2 className="w-4 h-4" strokeWidth={2.25} />}
                 label="평균 서류점수"
                 value={avgScreening != null ? `${avgScreening}` : "-"}
                 unit={avgScreening != null ? "점" : ""}
+                color={RC.orange}
               />
               <StatCard
                 icon={<CalendarClock className="w-4 h-4" strokeWidth={2.25} />}
@@ -920,6 +974,7 @@ export default async function JobReportPage({
                 value={avgCycleDays != null ? `${avgCycleDays}` : "-"}
                 unit={avgCycleDays != null ? "일" : ""}
                 sub={`결정 ${decidedCands.length}건`}
+                color={RC.sky}
               />
               <StatCard
                 icon={<MessagesSquare className="w-4 h-4" strokeWidth={2.25} />}
@@ -927,6 +982,7 @@ export default async function JobReportPage({
                 value={aiResponseRate != null ? `${aiResponseRate}` : "-"}
                 unit={aiResponseRate != null ? "%" : ""}
                 sub={aiSent > 0 ? `${aiResponded}/${aiSent}명` : undefined}
+                color={RC.violet}
               />
               <StatCard
                 icon={<CheckCircle2 className="w-4 h-4" strokeWidth={2.25} />}
@@ -934,6 +990,7 @@ export default async function JobReportPage({
                 value={`${aiCompletedCount}`}
                 unit="건"
                 sub={avgAiScore != null ? `평균 ${avgAiScore}점` : undefined}
+                color={RC.teal}
               />
             </div>
             {summaryParts.length > 0 && (
@@ -943,9 +1000,185 @@ export default async function JobReportPage({
             )}
           </section>
 
-          {/* ── 01 최종 합격자 종합평가 ── */}
+          {/* ── 01 채용 퍼널 ── */}
+          {totalCount > 0 && (
+            <Section
+              n="01"
+              title="채용 퍼널"
+              desc="단계별 통과 인원 · 직전 단계 대비 전환율"
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-x-8 gap-y-6 items-center">
+                {/* 중앙 정렬 퍼널 */}
+                <div className="space-y-1.5 print:break-inside-avoid">
+                  {funnel.map((f, i) => {
+                    const base = funnel[0].count || 1;
+                    const widthPct = Math.max(
+                      (f.count / base) * 100,
+                      f.count > 0 ? 5 : 1.5
+                    );
+                    const wide = widthPct >= 32;
+                    return (
+                      <div
+                        key={f.label}
+                        className="flex items-center gap-3 text-xs"
+                      >
+                        <span className="w-[80px] shrink-0 text-ink-soft">
+                          {f.label}
+                        </span>
+                        <div className="flex-1 relative flex items-center justify-center h-[28px]">
+                          <div
+                            className="h-full rounded"
+                            style={{
+                              width: `${widthPct}%`,
+                              background: FUNNEL_COLORS[i],
+                            }}
+                          />
+                          <span
+                            className={`text-[11px] font-semibold tabular-nums whitespace-nowrap ${
+                              wide ? "absolute text-white" : "ml-2 text-ink"
+                            }`}
+                          >
+                            {f.count}명 (
+                            {Math.round((f.count / base) * 100)}%)
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 단계 표 */}
+                <div className="overflow-hidden rounded-2xl border border-border-default self-start print:break-inside-avoid">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-surface-alt text-[10.5px] text-ink-muted">
+                        <th className="text-left font-medium px-3 py-2">
+                          단계
+                        </th>
+                        <th className="text-right font-medium px-3 py-2">
+                          인원
+                        </th>
+                        <th className="text-right font-medium px-3 py-2">
+                          전 단계 대비
+                        </th>
+                        <th className="text-right font-medium px-3 py-2">
+                          전체 대비
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-default">
+                      {funnel.map((f, i) => {
+                        const base = funnel[0].count || 1;
+                        const stepConv =
+                          i === 0
+                            ? null
+                            : funnel[i - 1].count > 0
+                              ? Math.round(
+                                  (f.count / funnel[i - 1].count) * 100
+                                )
+                              : 0;
+                        const isBottleneck =
+                          bottleneck != null &&
+                          f.label === bottleneck.label &&
+                          bottleneck.conv < 70;
+                        return (
+                          <tr key={f.label} className="bg-card">
+                            <td className="px-3 py-2 text-ink-soft">
+                              <span className="inline-flex items-center gap-1.5">
+                                <span
+                                  className="w-2 h-2 rounded-sm shrink-0"
+                                  style={{ background: FUNNEL_COLORS[i] }}
+                                />
+                                {f.label}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right font-semibold text-ink tabular-nums">
+                              {f.count}
+                            </td>
+                            <td
+                              className={`px-3 py-2 text-right tabular-nums ${
+                                isBottleneck
+                                  ? "text-danger font-semibold"
+                                  : "text-ink-muted"
+                              }`}
+                            >
+                              {stepConv != null ? `${stepConv}%` : "-"}
+                              {isBottleneck && (
+                                <span className="block text-[9.5px] font-medium">
+                                  최대 이탈
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right text-ink-muted tabular-nums">
+                              {Math.round((f.count / base) * 100)}%
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <div className="text-[11px] text-ink-muted mb-2">결과 분포</div>
+                <StackBar
+                  total={totalCount}
+                  segments={[
+                    { label: "최종 합격", count: hiredCount, color: RC.green },
+                    { label: "진행 중", count: inProgressCount, color: RC.blue },
+                    { label: "불합격", count: rejectedCount, color: RC.slate },
+                    {
+                      label: "지원 취소",
+                      count: withdrawnCount,
+                      color: "#d7dae2",
+                    },
+                  ]}
+                />
+              </div>
+            </Section>
+          )}
+
+          {/* ── 02 현재 전형 진행 현황 ── */}
+          {hasStageFlow && (
+            <Section
+              n="02"
+              title="현재 전형 진행 현황"
+              desc="진행 중인 지원자가 지금 어느 단계에 있는가"
+            >
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+                {stageFlow.map((s, i) => {
+                  const color = FUNNEL_COLORS[i + 1] ?? RC.blue;
+                  return (
+                    <div
+                      key={s.label}
+                      className="rounded-2xl border border-border-default bg-card overflow-hidden text-center print:break-inside-avoid"
+                    >
+                      <div
+                        className="h-[3px]"
+                        style={{ background: color }}
+                      />
+                      <div className="px-3 py-4">
+                        <div
+                          className="text-[28px] leading-none font-bold tabular-nums"
+                          style={{ color }}
+                        >
+                          {s.count}
+                        </div>
+                        <div className="text-[11px] text-ink-muted mt-1.5">
+                          {s.label}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
+
+          {/* ── 03 최종 합격자 종합평가 ── */}
           <Section
-            n="01"
+            n="03"
             title="최종 합격자 종합평가"
             sub={
               hired.length > 0
@@ -971,110 +1204,6 @@ export default async function JobReportPage({
             )}
           </Section>
 
-          {/* ── 02 채용 퍼널 ── */}
-          {totalCount > 0 && (
-            <Section
-              n="02"
-              title="채용 퍼널"
-              desc="단계별 통과 인원 · 직전 단계 대비 전환율"
-            >
-              <div className="space-y-2.5">
-                {funnel.map((f, i) => {
-                  const base = funnel[0].count || 1;
-                  const widthPct = (f.count / base) * 100;
-                  const stepConv =
-                    i === 0
-                      ? null
-                      : funnel[i - 1].count > 0
-                        ? Math.round((f.count / funnel[i - 1].count) * 100)
-                        : 0;
-                  const isBottleneck =
-                    bottleneck != null &&
-                    f.label === bottleneck.label &&
-                    bottleneck.conv < 70;
-                  const op = 0.95 - 0.55 * (i / (funnel.length - 1));
-                  return (
-                    <div
-                      key={f.label}
-                      className="flex items-center gap-3.5 text-xs"
-                    >
-                      <span className="w-[92px] shrink-0 text-ink-soft">
-                        {f.label}
-                      </span>
-                      <div className="flex-1 bg-surface-alt rounded h-[26px] relative overflow-hidden">
-                        <div
-                          className="absolute inset-y-0 left-0 rounded"
-                          style={{
-                            width: `${widthPct}%`,
-                            background: C.primary,
-                            opacity: op,
-                          }}
-                        />
-                        <span
-                          className="absolute inset-0 flex items-center pl-2.5 text-[11px] font-semibold tabular-nums"
-                          style={{ color: widthPct > 22 ? "#fff" : C.ink }}
-                        >
-                          {f.count}명
-                        </span>
-                      </div>
-                      <span className="w-[128px] shrink-0 text-[11px] tabular-nums text-ink-muted">
-                        {stepConv != null && `전환 ${stepConv}%`}
-                        {isBottleneck && (
-                          <span className="text-accent-deep font-medium">
-                            {" "}
-                            ← 최대 이탈
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-6">
-                <div className="text-[11px] text-ink-muted mb-2">결과 분포</div>
-                <StackBar
-                  total={totalCount}
-                  segments={[
-                    { label: "최종 합격", count: hiredCount, color: C.primary },
-                    { label: "진행 중", count: inProgressCount, color: C.blue },
-                    { label: "불합격", count: rejectedCount, color: "#b4b8c4" },
-                    {
-                      label: "지원 취소",
-                      count: withdrawnCount,
-                      color: "#d7dae2",
-                    },
-                  ]}
-                />
-              </div>
-            </Section>
-          )}
-
-          {/* ── 03 현재 전형 진행 현황 ── */}
-          {hasStageFlow && (
-            <Section
-              n="03"
-              title="현재 전형 진행 현황"
-              desc="진행 중인 지원자가 지금 어느 단계에 있는가"
-            >
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
-                {stageFlow.map((s) => (
-                  <div
-                    key={s.label}
-                    className="rounded-2xl border border-border-default bg-card px-3 py-4 text-center print:break-inside-avoid"
-                  >
-                    <div className="text-[28px] leading-none font-bold text-primary tabular-nums">
-                      {s.count}
-                    </div>
-                    <div className="text-[11px] text-ink-muted mt-1.5">
-                      {s.label}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          )}
-
           {/* ── 04 지원자 분포 ── */}
           {show04 && (
             <Section
@@ -1098,8 +1227,8 @@ export default async function JobReportPage({
                     </div>
                     <VBars
                       bars={careerBars}
-                      color={C.blueSoft}
-                      hiColor={C.primary}
+                      color="#93c5fd"
+                      hiColor={RC.blue}
                       baseLabel="전체"
                       hiLabel="최종 합격"
                       height={130}
@@ -1113,8 +1242,8 @@ export default async function JobReportPage({
                     </div>
                     <VBars
                       bars={ageBars}
-                      color={C.blueSoft}
-                      hiColor={C.primary}
+                      color="#93c5fd"
+                      hiColor={RC.blue}
                       baseLabel="전체"
                       hiLabel="최종 합격"
                       height={130}
@@ -1140,8 +1269,8 @@ export default async function JobReportPage({
                     </div>
                     <VBars
                       bars={scoreBars}
-                      color={C.blueSoft}
-                      hiColor={C.primary}
+                      color="#93c5fd"
+                      hiColor={RC.blue}
                       baseLabel="전체"
                       hiLabel="최종 합격"
                       height={140}
@@ -1162,12 +1291,12 @@ export default async function JobReportPage({
                       AI가 자주 확인한 강점 키워드 (TOP {keywordTop.length})
                     </div>
                     <HBars
-                      rows={keywordTop.map((k) => ({
+                      rows={keywordTop.map((k, i) => ({
                         label: k.label,
                         value: k.value,
                         max: kwMax,
                         display: `${k.value}명`,
-                        color: C.primarySoft,
+                        color: `${KW_COLORS[i % KW_COLORS.length]}b3`,
                       }))}
                     />
                   </div>
@@ -1180,12 +1309,12 @@ export default async function JobReportPage({
                     <Radar
                       axes={SCREEN_AXES.map((a) => a.label)}
                       series={[
-                        { label: "전체 평균", color: C.blue, values: radarAll },
+                        { label: "전체 평균", color: RC.sky, values: radarAll },
                         ...(hiredCount > 0
                           ? [
                               {
                                 label: "합격자 평균",
-                                color: C.primary,
+                                color: RC.blue,
                                 values: radarHired,
                               },
                             ]
@@ -1225,9 +1354,9 @@ export default async function JobReportPage({
                       const sign = diff > 0.05 ? "+" : diff < -0.05 ? "" : "±";
                       const diffColor =
                         diff > 0.05
-                          ? "text-primary"
+                          ? "text-success"
                           : diff < -0.05
-                            ? "text-ink-muted"
+                            ? "text-danger"
                             : "text-ink-muted";
                       return (
                         <tr key={r.label} className="bg-card">
@@ -1260,17 +1389,24 @@ export default async function JobReportPage({
           {show07 && (
             <Section
               n="07"
-              title="전형 소요 시간"
-              desc="단계별 누적 소요와 지연 원인"
+              title="채용 속도 · 운영 지표"
+              desc="구간별 평균 소요 시간과 지연 원인"
             >
-              {durRows.length > 0 ? (
+              {speedSegs.length > 0 ? (
+                <div className="rounded-2xl border border-border-default bg-card px-5 py-4 print:break-inside-avoid">
+                  <SpeedTimeline
+                    segs={speedSegs}
+                    totalDays={avgCycleDays}
+                  />
+                </div>
+              ) : durRows.length > 0 ? (
                 <HBars
                   rows={durRows.map((r) => ({
                     label: r.label,
                     value: r.v,
                     max: durMax,
                     display: `${r.v.toFixed(1)}일`,
-                    color: C.blue,
+                    color: RC.blue,
                   }))}
                 />
               ) : (
@@ -1281,23 +1417,46 @@ export default async function JobReportPage({
                   {timingCause}
                 </p>
               )}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border-default border border-border-default rounded-2xl overflow-hidden mt-5 print:break-inside-avoid">
-                <OpsCell
-                  label="평균 응답 대기"
-                  value={respAvg != null ? `${respAvg}` : "-"}
-                  unit={respAvg != null ? "일" : ""}
-                />
-                <OpsCell
-                  label="평균 발송 횟수"
-                  value={avgEmail != null ? `${avgEmail}` : "-"}
-                  unit={avgEmail != null ? "회" : ""}
-                />
-                <OpsCell label="링크 만료" value={`${expiredCnt}`} unit="명" />
-                <OpsCell
-                  label="지원자 취소율"
-                  value={withdrawnRate != null ? `${withdrawnRate}` : "-"}
-                  unit={withdrawnRate != null ? "%" : ""}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-x-8 gap-y-5 items-center mt-5">
+                {aiSent > 0 && aiResponseRate != null && (
+                  <div className="print:break-inside-avoid">
+                    <div className="text-[11px] text-ink-muted mb-2.5">
+                      AI 면접 응답률
+                    </div>
+                    <Donut
+                      data={[
+                        { label: "응답", value: aiResponded, color: RC.blue },
+                        {
+                          label: "미응답",
+                          value: aiSent - aiResponded,
+                          color: RC.slateSoft,
+                        },
+                      ]}
+                      size={116}
+                      thickness={17}
+                      centerTop={`${aiResponseRate}%`}
+                      centerSub="응답률"
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border-default border border-border-default rounded-2xl overflow-hidden self-start print:break-inside-avoid">
+                  <OpsCell
+                    label="평균 응답 대기"
+                    value={respAvg != null ? `${respAvg}` : "-"}
+                    unit={respAvg != null ? "일" : ""}
+                  />
+                  <OpsCell
+                    label="평균 발송 횟수"
+                    value={avgEmail != null ? `${avgEmail}` : "-"}
+                    unit={avgEmail != null ? "회" : ""}
+                  />
+                  <OpsCell label="링크 만료" value={`${expiredCnt}`} unit="명" />
+                  <OpsCell
+                    label="지원자 취소율"
+                    value={withdrawnRate != null ? `${withdrawnRate}` : "-"}
+                    unit={withdrawnRate != null ? "%" : ""}
+                  />
+                </div>
               </div>
             </Section>
           )}
@@ -1305,23 +1464,36 @@ export default async function JobReportPage({
           {/* ── AI 인사이트 ── */}
           {insights.length > 0 && (
             <section className="mt-10 rounded-2xl bg-primary-soft/50 border border-primary-soft p-5 print:break-inside-avoid">
-              <div className="flex items-center gap-2 text-[11px] tracking-[0.14em] text-primary-deep font-semibold mb-3">
-                <Sparkles className="w-3.5 h-3.5" strokeWidth={2.25} />
-                AI INSIGHT · 종합 인사이트
+              <div className="flex gap-4">
+                <div
+                  className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: soft(RC.blue), color: RC.blue }}
+                >
+                  <Bot className="w-6 h-6" strokeWidth={2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 text-[11px] tracking-[0.14em] text-primary-deep font-semibold mb-3">
+                    <Sparkles className="w-3.5 h-3.5" strokeWidth={2.25} />
+                    AI INSIGHT · 종합 인사이트
+                  </div>
+                  <ul className="space-y-2">
+                    {insights.map((node, i) => (
+                      <li
+                        key={i}
+                        className="flex gap-2.5 text-[13px] leading-relaxed text-ink-soft"
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0 mt-[8px]"
+                          style={{
+                            background: KW_COLORS[i % KW_COLORS.length],
+                          }}
+                        />
+                        <span>{node}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <ul className="space-y-2">
-                {insights.map((node, i) => (
-                  <li
-                    key={i}
-                    className="flex gap-2 text-[13px] leading-relaxed text-ink-soft"
-                  >
-                    <span className="text-primary shrink-0 mt-[3px]">
-                      <Award className="w-3.5 h-3.5" strokeWidth={2.5} />
-                    </span>
-                    <span>{node}</span>
-                  </li>
-                ))}
-              </ul>
             </section>
           )}
 
@@ -1399,23 +1571,20 @@ function StatCard({
   value,
   unit,
   sub,
-  accent,
+  color,
 }: {
   icon: ReactNode;
   label: string;
   value: string;
   unit?: string;
   sub?: string;
-  accent?: boolean;
+  color: string;
 }) {
   return (
     <div className="rounded-2xl border border-border-default bg-card p-3.5 print:break-inside-avoid">
       <div
-        className={`w-7 h-7 rounded-full flex items-center justify-center ${
-          accent
-            ? "bg-accent-soft text-accent-deep"
-            : "bg-primary-soft text-primary-deep"
-        }`}
+        className="w-8 h-8 rounded-full flex items-center justify-center"
+        style={{ background: soft(color), color }}
       >
         {icon}
       </div>
@@ -1453,6 +1622,62 @@ function OpsCell({
   );
 }
 
+function SpeedTimeline({
+  segs,
+  totalDays,
+}: {
+  segs: { from: string; to: string; v: number }[];
+  totalDays: string | null;
+}) {
+  return (
+    <div className="flex items-center gap-5">
+      <div className="flex-1 flex items-center min-w-0">
+        {segs.map((s, i) => (
+          <div key={i} className="flex-1 min-w-0 px-1">
+            <div className="text-[10.5px] text-ink-muted text-center truncate">
+              {s.from} → {s.to}
+            </div>
+            <div className="flex items-center mt-2">
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ background: RC.blue }}
+              />
+              <div className="flex-1 border-t border-dashed border-border-strong" />
+              {i === segs.length - 1 ? (
+                <ArrowRight className="w-3.5 h-3.5 shrink-0 text-ink-muted" />
+              ) : (
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ background: RC.blue }}
+                />
+              )}
+            </div>
+            <div className="text-center text-[15px] font-bold text-ink tabular-nums mt-2">
+              {s.v.toFixed(1)}
+              <span className="text-[11px] font-medium text-ink-muted">일</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {totalDays != null && (
+        <div
+          className="shrink-0 rounded-lg px-3.5 py-2 text-center"
+          style={{ background: soft(RC.blue) }}
+        >
+          <div className="text-[10px] text-ink-muted">총 평균</div>
+          <div
+            className="text-[18px] font-bold tabular-nums leading-tight"
+            style={{ color: RC.blue }}
+          >
+            {totalDays}
+            <span className="text-[11px] font-medium">일</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RecBadge({ rec }: { rec: string }) {
   const st = REC_STYLE[rec] ?? REC_STYLE["보류"];
   return (
@@ -1483,7 +1708,7 @@ function ScoreRow({
               className="absolute inset-y-0 left-0 rounded"
               style={{
                 width: `${score}%`,
-                background: C.primary,
+                background: RC.blue,
                 opacity: 0.85,
               }}
             />
@@ -1634,7 +1859,7 @@ function HiredDossier({
               <Radar
                 axes={["기술", "경험", "직무", "성장"]}
                 series={[
-                  { label: "서류 평가", color: C.primary, values: h.axisVals },
+                  { label: "서류 평가", color: RC.blue, values: h.axisVals },
                 ]}
                 size={188}
               />
