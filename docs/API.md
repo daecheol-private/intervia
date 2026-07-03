@@ -149,6 +149,7 @@
 | GET | `/api/candidates/[id]/comments/read` | 🔒 🏢 | 현재 사용자의 이 후보자 토론 읽음선 `{lastReadId}`(없으면 0) |
 | POST | `/api/candidates/[id]/comments/read` | 🔒 🏢 | 이 후보자 코멘트를 "모두 읽음" 처리(서버가 MAX(id) 계산해 upsert). 패널 열람 시 호출. 안읽음 수 = `lastReadId` 보다 큰 남의 코멘트. `candidate_comment_reads` 테이블, 기기 무관 |
 | GET | `/api/jobs/[id]/funnel` | 🔒 🏢 | 공고 채용 깔때기 — `{stages, pendingByStage, hrActions, total, avgScreeningScore, countWithScreeningScore, decisionBreakdown, kpi}`. `hrActions` = 스케줄 row 기반 HR 액션 수(`counterProposed` 역제시 확정 대기, `round1PassedUndecided` 2차 진행 미결정 — "오늘 결정할 일" 용) |
+| GET | `/api/jobs/[id]/timeline` | 🔒 🏢 | 공고 활동 타임라인 — audit_logs 중 채용 진행 이벤트(화이트리스트)만 최신순. `?before=<id>&limit=50` 커서 페이지네이션. 응답 `{events:[{id,action,createdAt,actorRole,actorName,candidateId,candidateName,candidateExists,metadata}], nextCursor}`. 접근권한은 공고 상세와 동일(PIN 포함), member 도 가능 |
 | GET | `/api/jobs/[id]/candidates/export` | 🔒 🏢 | CSV 다운로드 (UTF-8 BOM, 14컬럼) |
 
 ## 서류 평가 큐 (내부/cron)

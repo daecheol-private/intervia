@@ -73,7 +73,8 @@ export async function GET(
   }
 
   const url = new URL(req.url);
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 50), 1), 200);
+  const limitRaw = Number(url.searchParams.get("limit") ?? 50);
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
   const before = Number(url.searchParams.get("before") ?? 0);
 
   const conditions: SQL[] = [

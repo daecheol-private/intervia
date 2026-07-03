@@ -69,6 +69,23 @@ export default function AuditPage() {
     "user.password_reset_email": "비밀번호 리셋 메일 발송",
     "candidate.admin_delete": "후보자 강제 삭제 (cross-org)",
     "org.admin_transfer": "법인 관리자 이전",
+    "candidate.stage_change": "후보자 단계 변경",
+    "interview.create": "면접 링크/녹음 생성",
+    "interview.start": "AI 면접 시작 (지원자)",
+    "interview.complete": "AI 면접 완료 (지원자)",
+    "interview.reevaluate": "AI 면접 재평가",
+    "job.create": "공고 등록",
+    "job.update": "공고 수정",
+    "job.close": "공고 종결",
+    "job.extend": "공고 연장",
+    "job.delete": "공고 삭제",
+    "job.interviewer_add": "면접관 등록",
+    "job.interviewer_remove": "면접관 제외",
+    "schedule.select": "면접 시간 확정 (지원자)",
+    "schedule.counter": "면접 시간 역제안 (지원자)",
+    "schedule.withdraw": "지원 취소 (지원자)",
+    "schedule.hr_confirm": "면접 일정 확정 (HR)",
+    "schedule.manual_confirm": "면접 일정 수동 등록",
   };
 
   return (

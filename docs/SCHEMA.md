@@ -360,6 +360,7 @@ PK 없음 — `(job_id, user_id)` UNIQUE.
 | actor_user_id | INTEGER NULL | null = 비로그인 (후보자/system) |
 | actor_role | TEXT NULL | system_admin/org_admin/member/candidate/system |
 | org_id | INTEGER NULL | 대상 법인 (필터링) |
+| job_id | INTEGER NULL | 관련 공고 (0052, FK 없음 — 공고 삭제 후에도 보존). 공고 타임라인 조회 키 |
 | action | TEXT NOT NULL | 예: 'candidate.delete', 'screen.bulk_trigger' |
 | resource_type | TEXT NULL | candidate/user/org/interview_session/appeal |
 | resource_id | INTEGER NULL | |
@@ -367,9 +368,9 @@ PK 없음 — `(job_id, user_id)` UNIQUE.
 | metadata | TEXT NULL (JSON) | 액션별 부가정보. `cross_org:true` 등 |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
-인덱스: `(org_id, created_at DESC)`, `(actor_user_id, created_at DESC)`.
+인덱스: `(org_id, created_at DESC)`, `(actor_user_id, created_at DESC)`, `(job_id, created_at)`.
 
-`lib/audit.ts` 의 `logAudit(req, entry)` 로 호출. fire-and-forget — 실패해도 본 흐름 영향 X.
+`lib/audit.ts` 의 `logAudit(req, entry)` 로 호출. fire-and-forget — 실패해도 본 흐름 영향 X. `jobId` 를 넘기면 공고 활동 타임라인(`GET /api/jobs/[id]/timeline`)에 노출 대상이 된다 — 채용 진행 이벤트에는 반드시 포함할 것 (0052 마이그레이션이 과거 행도 resource 기준으로 백필).
 
 ## appeal_logs
 

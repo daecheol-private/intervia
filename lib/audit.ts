@@ -100,6 +100,8 @@ export type AuditEntry = {
 const CRITICAL_AUDIT_ACTIONS = new Set<string>([
   "user.role_change",
   "user.status_change",
+  // 합불 결정(outcome) 포함 — §37의2 분쟁 입증용 (구 user.status_change 에서 분리).
+  "candidate.stage_change",
   "user.delete",
   "org.delete",
   "candidate.delete",
