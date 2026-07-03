@@ -882,6 +882,8 @@ export default async function JobReportPage({
       className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 print:px-0 print:py-0 print:max-w-none"
       style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
     >
+      {/* PDF 저장(window.print) 레이아웃 — A4 여백·페이지 규칙은 이 페이지에서만 */}
+      <style>{`@media print { @page { size: A4; margin: 10mm 9mm; } }`}</style>
       <div className="flex items-center justify-between mb-4 print:hidden">
         <Link
           href={`/jobs/${jobId}`}
@@ -971,7 +973,7 @@ export default async function JobReportPage({
           {/* ── Executive Summary — KPI 6 ── */}
           <section className="mt-6">
             <SectionLabel>채용 핵심 요약</SectionLabel>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mt-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 print:grid-cols-6 gap-2 mt-2.5">
               <StatCard
                 icon={<Users className="w-4 h-4" strokeWidth={2.25} />}
                 label="총 지원자"
@@ -1074,7 +1076,7 @@ export default async function JobReportPage({
               title="채용 퍼널"
               desc="단계별 통과 인원 · 직전 단계 대비 전환율"
             >
-              <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-x-8 gap-y-6 items-center">
+              <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] print:grid-cols-[1.15fr_1fr] gap-x-8 gap-y-5 items-center">
                 {/* 중앙 정렬 퍼널 */}
                 <div className="space-y-1 print:break-inside-avoid">
                   {funnel.map((f, i) => {
@@ -1269,6 +1271,68 @@ export default async function JobReportPage({
                 ))}
               </div>
             )}
+            {hasCompare && (
+              <div className="mt-3 max-w-[480px]">
+                <div className="text-[11px] text-ink-muted mb-1.5">
+                  합격자 · 지원자 평균 비교
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-border-default print:break-inside-avoid">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-surface-alt text-[11px] text-ink-muted">
+                        <th className="text-left font-medium px-4 py-2">
+                          지표
+                        </th>
+                        <th className="text-right font-medium px-4 py-2">
+                          합격자
+                        </th>
+                        <th className="text-right font-medium px-4 py-2">
+                          전체
+                        </th>
+                        <th className="text-right font-medium px-4 py-2">
+                          차이
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-default">
+                      {compareRows.map((r) => {
+                        const diff = r.hiredV! - r.allV!;
+                        const sign =
+                          diff > 0.05 ? "+" : diff < -0.05 ? "-" : "±";
+                        const diffColor =
+                          diff > 0.05
+                            ? "text-success"
+                            : diff < -0.05
+                              ? "text-danger"
+                              : "text-ink-muted";
+                        return (
+                          <tr key={r.label} className="bg-card">
+                            <td className="px-4 py-2 text-ink-soft">
+                              {r.label}
+                            </td>
+                            <td className="px-4 py-2 text-right font-semibold text-ink tabular-nums">
+                              {r.hiredV!.toFixed(r.digits)}
+                              {r.unit}
+                            </td>
+                            <td className="px-4 py-2 text-right text-ink-muted tabular-nums">
+                              {r.allV!.toFixed(r.digits)}
+                              {r.unit}
+                            </td>
+                            <td
+                              className={`px-4 py-2 text-right font-medium tabular-nums ${diffColor}`}
+                            >
+                              {sign}
+                              {Math.abs(diff).toFixed(r.digits)}
+                              {r.unit}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </Section>
 
           {/* ── 04 지원자 분포 ── */}
@@ -1278,44 +1342,35 @@ export default async function JobReportPage({
               title="지원자 분포"
               desc="어떤 지원자들이 지원했는가 · 합격자 위치"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 [&>div]:print:break-inside-avoid">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {hasEdu && (
-                  <div>
-                    <div className="text-[11px] text-ink-muted mb-2">
-                      최종학력 분포 (전체 지원자)
-                    </div>
-                    <Donut data={eduData} size={116} thickness={17} />
-                  </div>
+                  <ChartCard title="최종학력 분포 (전체 지원자)">
+                    <Donut data={eduData} size={100} thickness={15} />
+                  </ChartCard>
                 )}
                 {hasCareer && (
-                  <div>
-                    <div className="text-[11px] text-ink-muted mb-2">
-                      경력년수 분포 (합격자 강조)
-                    </div>
+                  <ChartCard title="경력년수 분포 (합격자 강조)">
                     <VBars
                       bars={careerBars}
                       color="#93c5fd"
                       hiColor={RC.blue}
                       baseLabel="전체"
                       hiLabel="최종 합격"
-                      height={108}
+                      height={92}
                     />
-                  </div>
+                  </ChartCard>
                 )}
                 {hasAge && (
-                  <div>
-                    <div className="text-[11px] text-ink-muted mb-2">
-                      연령 분포 (합격자 강조)
-                    </div>
+                  <ChartCard title="연령 분포 (합격자 강조)">
                     <VBars
                       bars={ageBars}
                       color="#93c5fd"
                       hiColor={RC.blue}
                       baseLabel="전체"
                       hiLabel="최종 합격"
-                      height={108}
+                      height={92}
                     />
-                  </div>
+                  </ChartCard>
                 )}
               </div>
             </Section>
@@ -1328,54 +1383,29 @@ export default async function JobReportPage({
               title="AI 평가 결과"
               desc="서류 평가 기반 지원자 풀의 강점·품질 분포"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 [&>div]:print:break-inside-avoid">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {hasScores && (
-                  <div>
-                    <div className="text-[11px] text-ink-muted mb-2">
-                      서류 점수 분포 (합격자 강조)
-                    </div>
+                  <ChartCard title="서류 점수 분포 (합격자 강조)">
                     <VBars
                       bars={scoreBars}
                       color="#93c5fd"
                       hiColor={RC.blue}
                       baseLabel="전체"
                       hiLabel="최종 합격"
-                      height={108}
+                      height={92}
                     />
-                  </div>
+                  </ChartCard>
                 )}
                 {hasRec && (
-                  <div>
-                    <div className="text-[11px] text-ink-muted mb-2">
-                      서류 추천도 분포
-                    </div>
-                    <Donut data={recData} size={116} thickness={17} />
-                  </div>
-                )}
-                {hasKeywords && (
-                  <div>
-                    <div className="text-[11px] text-ink-muted mb-2">
-                      AI가 자주 확인한 강점 키워드 (TOP {keywordTop.length})
-                    </div>
-                    <HBars
-                      rows={keywordTop.map((k, i) => ({
-                        label: k.label,
-                        value: k.value,
-                        max: kwMax,
-                        display: `${k.value}명`,
-                        color: `${KW_COLORS[i % KW_COLORS.length]}b3`,
-                      }))}
-                    />
-                  </div>
+                  <ChartCard title="서류 추천도 분포">
+                    <Donut data={recData} size={100} thickness={15} />
+                  </ChartCard>
                 )}
                 {hasScreenBreakdown && (
-                  <div>
-                    <div className="text-[11px] text-ink-muted mb-2">
-                      서류 4축 프로필 (전체 vs 합격자)
-                    </div>
+                  <ChartCard title="서류 4축 프로필 (전체 vs 합격자)">
                     <Radar
                       axes={SCREEN_AXES.map((a) => a.label)}
-                      size={176}
+                      size={140}
                       series={[
                         { label: "전체 평균", color: RC.sky, values: radarAll },
                         ...(hiredCount > 0
@@ -1389,108 +1419,81 @@ export default async function JobReportPage({
                           : []),
                       ]}
                     />
-                  </div>
+                  </ChartCard>
+                )}
+                {hasKeywords && (
+                  <ChartCard
+                    title={`AI가 자주 확인한 강점 키워드 (TOP ${keywordTop.length})`}
+                    className="sm:col-span-3"
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+                      {[
+                        keywordTop.slice(0, Math.ceil(keywordTop.length / 2)),
+                        keywordTop.slice(Math.ceil(keywordTop.length / 2)),
+                      ].map((col, ci) => (
+                        <HBars
+                          key={ci}
+                          rows={col.map((k, i) => ({
+                            label: k.label,
+                            value: k.value,
+                            max: kwMax,
+                            display: `${k.value}명`,
+                            color: `${
+                              KW_COLORS[
+                                (ci * Math.ceil(keywordTop.length / 2) + i) %
+                                  KW_COLORS.length
+                              ]
+                            }b3`,
+                          }))}
+                        />
+                      ))}
+                    </div>
+                  </ChartCard>
                 )}
               </div>
             </Section>
           )}
 
-          {/* ── 06 합격자 vs 지원자 비교 ── */}
-          {hasCompare && (
-            <Section
-              n="06"
-              title="합격자 · 지원자 비교"
-              desc="최종 합격자 평균이 전체 지원자 대비 어디에 위치하는가"
-            >
-              <div className="overflow-hidden rounded-2xl border border-border-default print:break-inside-avoid">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-surface-alt text-[11px] text-ink-muted">
-                      <th className="text-left font-medium px-4 py-2">지표</th>
-                      <th className="text-right font-medium px-4 py-2">
-                        합격자 평균
-                      </th>
-                      <th className="text-right font-medium px-4 py-2">
-                        지원자 평균
-                      </th>
-                      <th className="text-right font-medium px-4 py-2">차이</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border-default">
-                    {compareRows.map((r) => {
-                      const diff = r.hiredV! - r.allV!;
-                      const sign = diff > 0.05 ? "+" : diff < -0.05 ? "-" : "±";
-                      const diffColor =
-                        diff > 0.05
-                          ? "text-success"
-                          : diff < -0.05
-                            ? "text-danger"
-                            : "text-ink-muted";
-                      return (
-                        <tr key={r.label} className="bg-card">
-                          <td className="px-4 py-2 text-ink-soft">{r.label}</td>
-                          <td className="px-4 py-2 text-right font-semibold text-ink tabular-nums">
-                            {r.hiredV!.toFixed(r.digits)}
-                            {r.unit}
-                          </td>
-                          <td className="px-4 py-2 text-right text-ink-muted tabular-nums">
-                            {r.allV!.toFixed(r.digits)}
-                            {r.unit}
-                          </td>
-                          <td
-                            className={`px-4 py-2 text-right font-medium tabular-nums ${diffColor}`}
-                          >
-                            {sign}
-                            {Math.abs(diff).toFixed(r.digits)}
-                            {r.unit}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Section>
-          )}
-
-          {/* ── 07 전형 소요 시간 ── */}
+          {/* ── 06 채용 속도 · 운영 ── */}
           {show07 && (
             <Section
-              n="07"
-              title="채용 속도 · 운영 지표"
+              n="06"
+              title="채용 속도 · 운영"
               desc="구간별 평균 소요 시간과 지연 원인"
             >
-              {speedSegs.length > 0 ? (
-                <div className="rounded-2xl border border-border-default bg-card px-5 py-3 print:break-inside-avoid">
-                  <SpeedTimeline
-                    segs={speedSegs}
-                    totalDays={avgCycleDays}
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-stretch">
+                <div className="sm:col-span-2 rounded-2xl border border-border-default bg-card px-4 py-3 print:break-inside-avoid">
+                  <div className="text-[11px] font-medium text-ink-soft mb-2">
+                    구간별 평균 소요
+                  </div>
+                  {speedSegs.length > 0 ? (
+                    <SpeedTimeline segs={speedSegs} totalDays={avgCycleDays} />
+                  ) : durRows.length > 0 ? (
+                    <HBars
+                      rows={durRows.map((r) => ({
+                        label: r.label,
+                        value: r.v,
+                        max: durMax,
+                        display: `${r.v.toFixed(1)}일`,
+                        color: RC.blue,
+                      }))}
+                    />
+                  ) : (
+                    <p className="text-xs text-ink-muted">
+                      소요 시간 데이터 없음
+                    </p>
+                  )}
+                  {timingCause && (
+                    <p className="text-[11px] text-ink-muted mt-2.5 leading-relaxed">
+                      {timingCause}
+                    </p>
+                  )}
                 </div>
-              ) : durRows.length > 0 ? (
-                <HBars
-                  rows={durRows.map((r) => ({
-                    label: r.label,
-                    value: r.v,
-                    max: durMax,
-                    display: `${r.v.toFixed(1)}일`,
-                    color: RC.blue,
-                  }))}
-                />
-              ) : (
-                <p className="text-xs text-ink-muted">소요 시간 데이터 없음</p>
-              )}
-              {timingCause && (
-                <p className="text-[11.5px] text-ink-soft mt-3 leading-relaxed">
-                  {timingCause}
-                </p>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-x-8 gap-y-4 items-center mt-4">
-                {aiSent > 0 && aiResponseRate != null && (
-                  <div className="print:break-inside-avoid">
-                    <div className="text-[11px] text-ink-muted mb-2">
-                      AI 면접 응답률
-                    </div>
+                <div className="rounded-2xl border border-border-default bg-card px-4 py-3 print:break-inside-avoid">
+                  <div className="text-[11px] font-medium text-ink-soft mb-2">
+                    응답 지표
+                  </div>
+                  {aiSent > 0 && aiResponseRate != null ? (
                     <Donut
                       data={[
                         { label: "응답", value: aiResponded, color: RC.blue },
@@ -1500,30 +1503,32 @@ export default async function JobReportPage({
                           color: RC.slateSoft,
                         },
                       ]}
-                      size={108}
-                      thickness={16}
+                      size={88}
+                      thickness={13}
                       centerTop={`${aiResponseRate}%`}
                       centerSub="응답률"
                     />
-                  </div>
-                )}
-                <div
-                  className={`grid ${
-                    respAvg != null ? "grid-cols-2" : "grid-cols-1"
-                  } gap-px bg-border-default border border-border-default rounded-2xl overflow-hidden self-start print:break-inside-avoid`}
-                >
-                  {respAvg != null && (
-                    <OpsCell
-                      label="지원자 평균 응답 대기"
-                      value={`${respAvg}`}
-                      unit="일"
-                    />
+                  ) : (
+                    <p className="text-xs text-ink-muted">
+                      AI 면접 발송 이력 없음
+                    </p>
                   )}
-                  <OpsCell
-                    label="지원자 취소율"
-                    value={withdrawnRate != null ? `${withdrawnRate}` : "0"}
-                    unit="%"
-                  />
+                  <div className="text-[11.5px] text-ink-soft mt-2.5 space-y-1">
+                    {respAvg != null && (
+                      <div>
+                        평균 응답 대기{" "}
+                        <b className="font-semibold text-ink tabular-nums">
+                          {respAvg}일
+                        </b>
+                      </div>
+                    )}
+                    <div>
+                      지원자 취소율{" "}
+                      <b className="font-semibold text-ink tabular-nums">
+                        {withdrawnRate ?? 0}%
+                      </b>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Section>
@@ -1600,18 +1605,16 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="mt-7">
-      <div className="flex items-baseline gap-3">
+    <section className="mt-6 print:mt-4">
+      <div className="flex items-baseline gap-2.5 flex-wrap mb-2.5">
         <span className="text-xs font-bold text-primary tabular-nums">{n}</span>
-        <h2 className="text-[16px] font-bold text-ink">{title}</h2>
+        <h2 className="text-[15.5px] font-bold text-ink">{title}</h2>
         {sub && <span className="text-xs text-ink-muted">{sub}</span>}
+        {desc && (
+          <span className="text-[11px] text-ink-muted">· {desc}</span>
+        )}
       </div>
-      {desc && (
-        <div className="text-[11.5px] text-ink-muted mt-0.5 ml-[27px] mb-3">
-          {desc}
-        </div>
-      )}
-      <div className={desc ? "" : "mt-3"}>{children}</div>
+      {children}
     </section>
   );
 }
@@ -1651,24 +1654,23 @@ function StatCard({
   );
 }
 
-function OpsCell({
-  label,
-  value,
-  unit,
+function ChartCard({
+  title,
+  children,
+  className,
 }: {
-  label: string;
-  value: string;
-  unit?: string;
+  title: string;
+  children: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="bg-card px-4 py-2.5">
-      <div className="text-[10.5px] text-ink-muted">{label}</div>
-      <div className="text-[19px] font-bold text-ink tabular-nums mt-0.5">
-        {value}
-        {unit && (
-          <span className="text-xs font-medium text-ink-muted">{unit}</span>
-        )}
-      </div>
+    <div
+      className={`rounded-2xl border border-border-default bg-card px-3.5 py-3 print:break-inside-avoid ${
+        className ?? ""
+      }`}
+    >
+      <div className="text-[11px] font-medium text-ink-soft mb-2">{title}</div>
+      {children}
     </div>
   );
 }
