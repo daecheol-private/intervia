@@ -12,6 +12,10 @@
 5. **운영 DB 대상 검증·조사는 읽기 전용 쿼리만.** 쓰기성 PRAGMA 포함 일체의 변경은 사용자 승인 후. 검증 데이터가 필요하면 로컬(`LOCAL_DB=1`)에서.
 6. 운영 데이터를 지우는 정당한 작업(사용자 요청 시드 정리 등)도 **삭제 전 대상 행을 먼저 보여주고 확인받은 뒤** 실행한다.
 7. **시드/wipe 스크립트는 운영을 절대 대상으로 삼지 않는다.** `scripts/seed-test.mjs`(전 테이블 `DELETE FROM` 후 재시드)는 2026-06-12 운영 Turso 를 wipe 한 실제 사고를 냈다. 그 이후 스크립트 상단에 **`file:` URL 전용 가드**가 있다: 해석된 DB URL 이 `file:` 로 시작하지 않으면(=원격 Turso) `SEED_REMOTE=1` 없이는 아무것도 하지 않고 즉시 `exit(1)`. **로컬 시드는 반드시 `LOCAL_DB=1`**(그래야 `_load-env` 가 TURSO 변수를 지워 `file:./data.db` 로 떨어진다). **`SEED_REMOTE=1` 은 운영 대상으로 절대 사용 금지** — 이 플래그를 켜서 원격을 시드/wipe 하는 것은 사용자의 명시적 승인 + 백업 없이는 금지다. 이 가드를 **우회·완화·삭제 금지**(§4 db-migrate 가드와 동일 원칙). 로컬 `data.db` 가 재시드로 초기화되는 것(계정/후보자 소실)은 **로컬에서만 정상적으로 일어나는 일**이며, 위 가드가 이 사고가 운영으로 번지는 것을 막는다. `npm run dev` 도 dev 모드에서 TURSO_URL 감지 시 `file:./data.db` 로 fallback(`lib/db.ts`)하므로 로컬 개발이 운영 DB 를 건드리는 경로는 이중 차단돼 있다.
+8. **기계 가드 3층 (2026-07-04 도입 — 문서 규칙을 도구/git 레벨에서 물리 강제):**
+   - **Claude Code PreToolUse 훅**: `D:\intervia\.claude\hooks\bash-guard.mjs` (등록: `D:\intervia\.claude\settings.json`). 위험 명령(SEED_REMOTE/ALLOW_DESTRUCTIVE_MIGRATION/ALLOW_MIGRATION_PUSH 설정, turso db destroy, turso shell·libsql URL 쓰기 SQL, LOCAL_DB=1 없는 DB 스크립트, force push, 가드 파일 변조)을 도구 실행 전에 차단한다.
+   - **pre-push 게이트**: `.git/hooks/pre-push` — main push 에 `drizzle/*.sql` 변경이 포함되면 `scripts/check-migration-safety.mjs`(destructive 탐지 + 전체 journal 스크래치 dry-run) + `npx tsc --noEmit` 통과 없이는 push 가 거부된다. tsc 를 함께 도는 이유: vercel-build 가 eslint→migrate→build 순서라 build 실패 시 스키마만 운영에 적용된 채 구버전 코드가 남는다. 우회 변수 `ALLOW_MIGRATION_PUSH=1` 은 **사용자 전용** — Claude 는 훅이 차단한다.
+   - **가드 파일 동결**: bash-guard.mjs / settings.json / pre-push / check-migration-safety.mjs 는 Claude 가 수정·삭제 금지(훅이 강제). 훅이 차단하면 우회 경로(cp, 스크립트 경유 덮어쓰기 등)를 찾지 말고 차단 사실을 사용자에게 보고할 것. 가드 변경은 사용자가 직접 한다.
 
 ## LLM 모델 정책 (2026-05-26)
 
