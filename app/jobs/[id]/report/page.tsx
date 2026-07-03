@@ -232,15 +232,6 @@ export default async function JobReportPage({
     aiScores.length > 0
       ? Math.round(aiScores.reduce((a, b) => a + b, 0) / aiScores.length)
       : null;
-  const avgHiredAiScore = (() => {
-    const vs = hired
-      .map((c) => sessionByCand.get(c.id)?.overall)
-      .filter((v): v is number => v != null);
-    return vs.length > 0
-      ? Math.round(vs.reduce((a, b) => a + b, 0) / vs.length)
-      : null;
-  })();
-
   // ───────── 사람(대면) 면접 평가 → 후보별 평균 ─────────
   const notes = await db
     .select({
@@ -733,46 +724,6 @@ export default async function JobReportPage({
           hiredOveralls.reduce((a, b) => a + b, 0) / hiredOveralls.length
         )
       : null;
-
-  // ───────── 합격자 vs 전체 지원자 비교 ─────────
-  const meanBy = <T,>(arr: T[], pick: (x: T) => number | null | undefined) => {
-    const vs = arr
-      .map(pick)
-      .filter((v): v is number => typeof v === "number");
-    return vs.length > 0 ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
-  };
-  const compareRows = (
-    [
-      {
-        label: "경력 연차",
-        hiredV: meanBy(hired, (c) => c.careerYears),
-        allV: meanBy(cands, (c) => c.careerYears),
-        unit: "년",
-        digits: 1,
-      },
-      {
-        label: "서류 점수",
-        hiredV: avgHiredScreening,
-        allV: avgScreening,
-        unit: "점",
-        digits: 0,
-      },
-      {
-        label: "AI 면접 점수",
-        hiredV: avgHiredAiScore,
-        allV: avgAiScore,
-        unit: "점",
-        digits: 0,
-      },
-    ] as {
-      label: string;
-      hiredV: number | null;
-      allV: number | null;
-      unit: string;
-      digits: number;
-    }[]
-  ).filter((r) => r.hiredV != null && r.allV != null);
-  const hasCompare = hiredCount > 0 && compareRows.length > 0;
 
   // ───────── 요약 내러티브 (규칙 기반, LLM 미사용) ─────────
   const qualitySentence =
@@ -1269,68 +1220,6 @@ export default async function JobReportPage({
                 {hiredCards.map((h) => (
                   <HiredDossier key={h.id} h={h} showHuman={hasHumanNotes} />
                 ))}
-              </div>
-            )}
-            {hasCompare && (
-              <div className="mt-3 max-w-[480px]">
-                <div className="text-[11px] text-ink-muted mb-1.5">
-                  합격자 · 지원자 평균 비교
-                </div>
-                <div className="overflow-hidden rounded-2xl border border-border-default print:break-inside-avoid">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-surface-alt text-[11px] text-ink-muted">
-                        <th className="text-left font-medium px-4 py-2">
-                          지표
-                        </th>
-                        <th className="text-right font-medium px-4 py-2">
-                          합격자
-                        </th>
-                        <th className="text-right font-medium px-4 py-2">
-                          전체
-                        </th>
-                        <th className="text-right font-medium px-4 py-2">
-                          차이
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border-default">
-                      {compareRows.map((r) => {
-                        const diff = r.hiredV! - r.allV!;
-                        const sign =
-                          diff > 0.05 ? "+" : diff < -0.05 ? "-" : "±";
-                        const diffColor =
-                          diff > 0.05
-                            ? "text-success"
-                            : diff < -0.05
-                              ? "text-danger"
-                              : "text-ink-muted";
-                        return (
-                          <tr key={r.label} className="bg-card">
-                            <td className="px-4 py-2 text-ink-soft">
-                              {r.label}
-                            </td>
-                            <td className="px-4 py-2 text-right font-semibold text-ink tabular-nums">
-                              {r.hiredV!.toFixed(r.digits)}
-                              {r.unit}
-                            </td>
-                            <td className="px-4 py-2 text-right text-ink-muted tabular-nums">
-                              {r.allV!.toFixed(r.digits)}
-                              {r.unit}
-                            </td>
-                            <td
-                              className={`px-4 py-2 text-right font-medium tabular-nums ${diffColor}`}
-                            >
-                              {sign}
-                              {Math.abs(diff).toFixed(r.digits)}
-                              {r.unit}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             )}
           </Section>
