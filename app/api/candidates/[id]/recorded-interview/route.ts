@@ -127,6 +127,7 @@ export async function POST(
     resourceType: "candidate",
     resourceId: cid,
     orgId: candidate.orgId,
+    jobId: candidate.jobId,
     metadata: {
       kind: "recorded_interview_upload",
       recordedInterviewId: ri.id,
@@ -292,6 +293,7 @@ export async function PATCH(
     resourceType: "candidate",
     resourceId: cid,
     orgId: ri.orgId,
+    jobId: ri.jobId,
     metadata: { kind: "recorded_interview_confirm", recordedInterviewId: riId },
   });
 

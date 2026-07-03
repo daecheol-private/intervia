@@ -112,6 +112,7 @@ export async function POST(
       resourceType: "candidate",
       resourceId: cid,
       orgId: candidate.orgId,
+      jobId: candidate.jobId,
     });
     return Response.json({ ok: true, status: "retry_kicked", jobId: lastJob.id });
   }
@@ -132,6 +133,7 @@ export async function POST(
     resourceType: "candidate",
     resourceId: cid,
     orgId: candidate.orgId,
+    jobId: candidate.jobId,
   });
 
   return Response.json({ ok: true, ...result });

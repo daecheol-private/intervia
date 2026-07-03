@@ -179,6 +179,8 @@ export async function POST(
       resourceType: "interview_session",
       resourceId: session.id,
       orgId: candidate.orgId,
+      jobId: candidate.jobId,
+      metadata: { candidateId: candidate.id },
     });
 
     return Response.json({ ok: true, evaluation });

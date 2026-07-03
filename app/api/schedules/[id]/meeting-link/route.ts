@@ -210,6 +210,7 @@ export async function POST(
     resourceType: "candidate",
     resourceId: sched.candidateId,
     orgId: sched.orgId,
+    jobId: sched.jobId,
     metadata: {
       kind: "meeting_link_sent",
       scheduleId: sched.id,

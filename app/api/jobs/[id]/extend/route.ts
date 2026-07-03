@@ -92,10 +92,11 @@ export async function POST(
 
   logAudit(req, {
     actor: me!,
-    action: "user.status_change" as const,
-    resourceType: "org" as const,
+    action: "job.extend" as const,
+    resourceType: "job" as const,
     resourceId: jobId,
     orgId: job.orgId,
+    jobId,
     metadata: {
       kind: "job_extend",
       candidateCount: result.candidateCount,

@@ -7,6 +7,7 @@ import { candidates, interviewSchedules } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { validateSlots } from "@/lib/schedules";
 import { notifyJobInterviewers } from "@/lib/notifications";
+import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -44,6 +45,20 @@ export async function POST(
       updatedAt: new Date().toISOString(),
     })
     .where(eq(interviewSchedules.id, sched.id));
+
+  logAudit(req, {
+    actorRole: "candidate",
+    action: "schedule.counter",
+    resourceType: "interview_schedule",
+    resourceId: sched.id,
+    orgId: sched.orgId,
+    jobId: sched.jobId,
+    metadata: {
+      candidateId: sched.candidateId,
+      round: sched.round,
+      slots: check.slots,
+    },
+  });
 
   const [cand] = await db
     .select({ name: candidates.name })

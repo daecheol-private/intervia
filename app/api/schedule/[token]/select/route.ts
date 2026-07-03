@@ -19,6 +19,7 @@ import {
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
+import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -70,6 +71,16 @@ export async function POST(
     .returning({ id: interviewSchedules.id });
   if (claimed.length === 0)
     return new Response("이미 처리된 일정입니다.", { status: 409 });
+
+  logAudit(req, {
+    actorRole: "candidate",
+    action: "schedule.select",
+    resourceType: "interview_schedule",
+    resourceId: sched.id,
+    orgId: sched.orgId,
+    jobId: sched.jobId,
+    metadata: { candidateId: sched.candidateId, round: sched.round, slot: selected },
+  });
 
   // 후보자 stage 전환 — round1 만 round1_waiting 으로. round2 는 stage 변경 없음(round1_passed 유지).
   if (sched.round === "round1") {

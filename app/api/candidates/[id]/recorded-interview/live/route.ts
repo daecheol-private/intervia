@@ -107,6 +107,7 @@ export async function POST(
       resourceType: "candidate",
       resourceId: cid,
       orgId: candidate.orgId,
+      jobId: candidate.jobId,
       metadata: {
         kind: "recorded_interview_live_start",
         recordedInterviewId: ri.id,

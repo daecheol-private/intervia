@@ -348,6 +348,7 @@ export async function POST(
         resourceType: "candidate",
         resourceId: cid,
         orgId: candidate.orgId,
+        jobId: candidate.jobId,
         metadata: {
           round,
           basedOnScreening: !!screening,

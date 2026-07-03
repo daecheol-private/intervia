@@ -230,6 +230,7 @@ export async function PATCH(
     resourceType: "candidate" as const,
     resourceId: cid,
     orgId: row.orgId,
+    jobId: row.jobId,
     metadata: {
       kind: "candidate_edit",
       fields: Object.keys(updates),
@@ -264,6 +265,7 @@ export async function DELETE(
     resourceType: "candidate",
     resourceId: cid,
     orgId: row.orgId,
+    jobId: row.jobId,
     metadata: {
       name: row.name,
       deletedFiles: fileResult.deletedFiles,

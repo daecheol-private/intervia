@@ -250,6 +250,7 @@ export async function POST(
     resourceType: "interview_schedule",
     resourceId: sched.id,
     orgId: job.orgId,
+    jobId: job.id,
     metadata: { candidateId: cid, round, slot, notified: !!candidateMail?.sent },
   });
 

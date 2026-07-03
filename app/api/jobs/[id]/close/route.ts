@@ -88,6 +88,7 @@ export async function POST(
     resourceType: "job_posting",
     resourceId: jobId,
     orgId: job.orgId,
+    jobId,
     metadata: {
       rejectedCount: result.rejectedCount,
       sendNotification,

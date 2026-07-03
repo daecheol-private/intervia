@@ -325,6 +325,7 @@ export async function POST(
     resourceType: "job" as const,
     resourceId: jobId,
     orgId: job.orgId,
+    jobId,
     metadata: {
       kind: "schedule_propose",
       round,

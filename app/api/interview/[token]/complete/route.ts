@@ -15,6 +15,7 @@ import { notifyJobInterviewers } from "@/lib/notifications";
 import { chargeRepeatable } from "@/lib/tokens";
 import { computeTranscriptStats } from "@/lib/interview-signals";
 import { isAiInterviewSuperseded } from "@/lib/stage-meta";
+import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -127,6 +128,19 @@ export async function POST(
     )
     .returning({ id: interviewSessions.id });
   if (claimed.length === 0) return Response.json(DONE_RESPONSE);
+
+  logAudit(_req, {
+    actorRole: "candidate",
+    action: "interview.complete",
+    resourceType: "interview_session",
+    resourceId: session.id,
+    orgId: candidate!.orgId,
+    jobId: candidate!.jobId,
+    metadata: {
+      candidateId: candidate!.id,
+      candidateTurns: stats.candidateTurns,
+    },
+  });
 
   // 2) 후보자 전형 단계 자동 전환 — AI면접 전 단계만 ai_evaluated 로.
   const autoAdvance: ("applied" | "screened" | "ai_pending")[] = [

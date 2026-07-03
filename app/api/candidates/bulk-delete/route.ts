@@ -22,6 +22,7 @@ export async function POST(req: Request) {
     .select({
       id: candidates.id,
       orgId: candidates.orgId,
+      jobId: candidates.jobId,
     })
     .from(candidates)
     .where(inArray(candidates.id, ids));
@@ -44,10 +45,13 @@ export async function POST(req: Request) {
   const fileResult = await deleteCandidateFiles(allowedIds);
   await db.delete(candidates).where(inArray(candidates.id, allowedIds));
 
+  // 실사용상 벌크는 공고 상세에서 단일 공고 대상 — 전원 같은 공고일 때만 jobId 기록.
+  const jobIds = new Set(allowed.map((r) => r.jobId));
   logAudit(req, {
     actor: me!,
     action: "candidate.bulk_delete",
     resourceType: "candidate",
+    jobId: jobIds.size === 1 ? allowed[0].jobId : null,
     metadata: {
       count: allowed.length,
       ids: allowedIds,

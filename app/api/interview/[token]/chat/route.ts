@@ -20,6 +20,7 @@ import {
 } from "@/lib/personality";
 import { hasMcqQuestions } from "@/lib/mcq";
 import { hasValidConsent } from "@/lib/consent";
+import { logAudit } from "@/lib/audit";
 import { sanitizeUserInput, detectSystemPromptLeak } from "@/lib/prompt-safety";
 import { maskText } from "@/lib/mask";
 import { log } from "@/lib/logger";
@@ -78,6 +79,8 @@ export async function POST(
       .select({
         candidate: {
           id: candidates.id,
+          jobId: candidates.jobId,
+          orgId: candidates.orgId,
           name: candidates.name,
           email: candidates.email,
           phone: candidates.phone,
@@ -232,6 +235,17 @@ export async function POST(
           .set({ status: "in_progress", startedAt: new Date().toISOString() })
           .where(eq(interviewSessions.id, session.id))
       : null;
+  if (session.status === "pending") {
+    logAudit(req, {
+      actorRole: "candidate",
+      action: "interview.start",
+      resourceType: "interview_session",
+      resourceId: session.id,
+      orgId: candidate.orgId,
+      jobId: candidate.jobId,
+      metadata: { candidateId: candidate.id },
+    });
+  }
 
   try {
     // 스트리밍 시작 단계 transient 503/429 자동 재시도 2회.

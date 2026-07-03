@@ -97,10 +97,11 @@ export async function POST(
 
   logAudit(req, {
     actor: me!,
-    action: "user.status_change" as const,
+    action: "job.interviewer_add" as const,
     resourceType: "job" as const,
     resourceId: jobId,
     orgId: job.orgId,
+    jobId,
     metadata: { kind: "interviewer_self_assign" },
   });
 
@@ -147,10 +148,11 @@ export async function DELETE(
 
   logAudit(req, {
     actor: me!,
-    action: "user.status_change" as const,
+    action: "job.interviewer_remove" as const,
     resourceType: "job" as const,
     resourceId: jobId,
     orgId: job.orgId,
+    jobId,
     metadata: { kind: "interviewer_remove", targetUserId },
   });
 

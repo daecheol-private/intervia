@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { purgeOnDecision } from "@/lib/candidate-stage";
 import { maybeAutoCloseJob } from "@/lib/job-lifecycle";
 import { notifyJobInterviewers } from "@/lib/notifications";
+import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -84,6 +85,16 @@ export async function POST(
       decisionFromStage: prev?.stage ?? null,
     })
     .where(eq(candidates.id, sched.candidateId));
+
+  logAudit(req, {
+    actorRole: "candidate",
+    action: "schedule.withdraw",
+    resourceType: "interview_schedule",
+    resourceId: sched.id,
+    orgId: sched.orgId,
+    jobId: sched.jobId,
+    metadata: { candidateId: sched.candidateId, round: sched.round, fromStage: prev?.stage ?? null },
+  });
 
   // 본문 폐기 (PIPA)
   await purgeOnDecision(sched.candidateId).catch((e) =>

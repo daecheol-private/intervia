@@ -119,6 +119,7 @@ export async function POST(
       resourceType: "candidate",
       resourceId: cid,
       orgId: candidate.orgId,
+      jobId: candidate.jobId,
       metadata: {
         kind: "decision_notify_resend",
         to: candidate.email,

@@ -181,7 +181,13 @@ export async function POST(
       resourceType: "interview_session",
       resourceId: session.id,
       orgId: candidate.orgId,
-      metadata: { to: recipient, sent: candidate.interviewEmailCount + 1 },
+      jobId: candidate.jobId,
+      metadata: {
+        kind: "interview_link",
+        candidateId: candidate.id,
+        to: recipient,
+        sent: candidate.interviewEmailCount + 1,
+      },
     });
     return Response.json({
       ok: true,

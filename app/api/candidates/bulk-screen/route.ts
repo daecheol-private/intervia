@@ -47,6 +47,7 @@ export async function POST(req: Request) {
     .select({
       id: candidates.id,
       orgId: candidates.orgId,
+      jobId: candidates.jobId,
       consentAt: candidates.applicantConsentConfirmedAt,
       createdAt: candidates.createdAt,
     })
@@ -119,10 +120,13 @@ export async function POST(req: Request) {
 
   triggerWorker(req);
 
+  // 실사용상 벌크는 공고 상세에서 단일 공고 대상 — 전원 같은 공고일 때만 jobId 기록.
+  const jobIds = new Set(rows.map((r) => r.jobId));
   logAudit(req, {
     actor: me!,
     action: "screen.bulk_trigger",
     resourceType: "candidate",
+    jobId: jobIds.size === 1 ? rows[0].jobId : null,
     metadata: { enqueued: enqueued.length, kicked, skipped: skipped.length },
   });
 

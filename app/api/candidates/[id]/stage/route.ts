@@ -168,10 +168,11 @@ export async function PATCH(
 
   logAudit(req, {
     actor: me!,
-    action: "user.status_change" as const,
+    action: "candidate.stage_change" as const,
     resourceType: "candidate",
     resourceId: cid,
     orgId: candidate.orgId,
+    jobId: candidate.jobId,
     metadata: {
       stage_change: stageRequested
         ? { from: prevStage, to: stageRequested }
@@ -261,6 +262,7 @@ export async function PATCH(
           resourceType: "candidate",
           resourceId: cid,
           orgId: candidate.orgId,
+          jobId: candidate.jobId,
           metadata: { kind: "decision_notify", to: candidate.email, decision: outcomeRequested },
         });
       } catch (e) {

@@ -644,6 +644,7 @@ export async function POST(
         resourceType: "candidate",
         resourceId: r.candidateId,
         orgId: job.orgId,
+        jobId,
         metadata: {
           name: r.name,
           attachments: r.attachments,

@@ -16,6 +16,7 @@ import { chargeFeature } from "@/lib/tokens";
 import { requireSpendableBalance, insufficientTokensResponse } from "@/lib/wallet-guard";
 import { defaultClosesAt } from "@/lib/job-lifecycle";
 import { stripBiasedLines } from "@/lib/job-bias-filter";
+import { logAudit } from "@/lib/audit";
 import {
   generateRequirementChecklist,
   serializeChecklist,
@@ -186,6 +187,16 @@ export async function POST(req: Request) {
       memo: row.title,
     });
   }
+
+  logAudit(req, {
+    actor: me!,
+    action: "job.create",
+    resourceType: "job",
+    resourceId: row.id,
+    orgId,
+    jobId: row.id,
+    metadata: { title: row.title },
+  });
 
   // 응답을 먼저 돌려주고(공고 즉시 등록 + 페이지 이동), JD 요건 체크리스트는
   // 백그라운드에서 생성해 행을 업데이트한다. 실패해도 평가는 폴백되므로 무시.

@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
 import { generateToken, addDays } from "@/lib/utils";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
+import { logAudit } from "@/lib/audit";
 import {
   requireSpendableBalance,
   insufficientTokensResponse,
@@ -139,6 +140,16 @@ export async function POST(
       .set({ stage: "ai_pending" })
       .where(eq(candidates.id, cid));
   }
+
+  logAudit(req, {
+    actor: me!,
+    action: "interview.create",
+    resourceType: "interview_session",
+    resourceId: session.id,
+    orgId: candidate.orgId,
+    jobId: candidate.jobId,
+    metadata: { candidateId: cid, expiresAt },
+  });
 
   return Response.json(session);
 }

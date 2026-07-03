@@ -190,6 +190,17 @@ export async function PUT(
       resourceType: "job",
       resourceId: jobId,
       orgId: row.orgId,
+      jobId,
+    });
+  } else {
+    logAudit(req, {
+      actor: me!,
+      action: "job.update",
+      resourceType: "job",
+      resourceId: jobId,
+      orgId: row.orgId,
+      jobId,
+      metadata: { title: row.title },
     });
   }
 
@@ -297,6 +308,7 @@ export async function DELETE(
     resourceType: "job",
     resourceId: jobId,
     orgId: existing.orgId,
+    jobId,
     metadata: {
       title: existing.title,
       candidatesDeleted: candidateIds.length,

@@ -202,6 +202,7 @@ export async function POST(
     resourceType: "candidate",
     resourceId: candidateId,
     orgId: job.orgId,
+    jobId: job.id,
     metadata: {
       version: CONSENT_VERSION,
       source: "apply_link",

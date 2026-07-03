@@ -224,8 +224,10 @@ export async function POST(
     resourceType: "interview_schedule",
     resourceId: sched.id,
     orgId: sched.orgId,
+    jobId: sched.jobId,
     metadata: {
       candidateId: sched.candidateId,
+      round: sched.round,
       slot: matched,
       fromStatus: sched.status,
     },

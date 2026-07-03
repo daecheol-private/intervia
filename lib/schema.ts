@@ -825,6 +825,8 @@ export const auditLogs = sqliteTable("audit_logs", {
   actorUserId: integer("actor_user_id"), // null = 비로그인 액터 (후보자 등)
   actorRole: text("actor_role"), // system_admin / org_admin / member / candidate / system
   orgId: integer("org_id"), // 대상 법인 (필터링용)
+  // 관련 공고 — 공고 단위 활동 타임라인 조회용. FK 없음(공고 삭제 후에도 감사 행 보존).
+  jobId: integer("job_id"),
   action: text("action").notNull(),
   resourceType: text("resource_type"), // candidate / user / org / interview_session / appeal 등
   resourceId: integer("resource_id"),
@@ -842,6 +844,8 @@ export const auditLogs = sqliteTable("audit_logs", {
     t.resourceType,
     t.resourceId
   ),
+  // 공고 타임라인 조회.
+  jobIdx: index("idx_audit_logs_job").on(t.jobId, t.createdAt),
 }));
 
 /**

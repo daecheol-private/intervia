@@ -315,6 +315,7 @@ export async function POST(
         resourceType: "job" as const,
         resourceId: jobId,
         orgId,
+        jobId,
         metadata: { kind: "interview_link_bulk", sent, failed, skipped: skippedCount },
       });
     });
@@ -325,6 +326,7 @@ export async function POST(
       resourceType: "job" as const,
       resourceId: jobId,
       orgId,
+      jobId,
       metadata: { kind: "interview_link_bulk", sent: 0, failed: 0, skipped: skippedCount },
     });
   }

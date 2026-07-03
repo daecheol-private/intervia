@@ -60,6 +60,7 @@ import { FunnelPanel } from "./funnel-panel";
 import { InterviewersInline, LifecyclePanel } from "./lifecycle-panel";
 import { fmtSlotRange, groupRound1Schedule } from "./round1-schedule";
 import { ShareButton } from "./share-button";
+import { TimelineButton } from "./timeline-drawer";
 import { UnlockPanel } from "./unlock-panel";
 import type { Candidate, Job, Round1ScheduleItem } from "./types";
 
@@ -1489,9 +1490,10 @@ export default function JobDetailPage() {
               );
             })()}
 
-            {/* 유틸리티 아이콘 묶음 — 공유 · 리포트 · 수정 · 삭제. */}
+            {/* 유틸리티 아이콘 묶음 — 공유 · 타임라인 · 리포트 · 수정 · 삭제. */}
             <div className="flex items-center gap-1">
               <ShareButton jobId={Number(jobId)} jobTitle={job.title} iconOnly />
+              <TimelineButton jobId={Number(jobId)} />
               <Link
                 href={`/jobs/${jobId}/report`}
                 title="채용 결과 리포트 (인쇄/PDF)"

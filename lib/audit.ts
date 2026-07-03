@@ -60,6 +60,17 @@ export type AuditAction =
   | "org.update"
   | "org.suspend"
   | "org.resume"
+  // 공고 타임라인 이벤트 (2026-07)
+  | "candidate.stage_change"
+  | "interview.start"
+  | "interview.complete"
+  | "job.close"
+  | "job.extend"
+  | "job.interviewer_add"
+  | "job.interviewer_remove"
+  | "schedule.select"
+  | "schedule.counter"
+  | "schedule.withdraw"
   | "session.force_logout"
   | "user.password_reset_email"
   | "candidate.admin_delete"
@@ -79,6 +90,8 @@ export type AuditEntry = {
   resourceType?: string;
   resourceId?: number;
   orgId?: number | null;
+  // 관련 공고 — 공고 단위 활동 타임라인(GET /api/jobs/[id]/timeline)에 노출하려면 필수.
+  jobId?: number | null;
   metadata?: Record<string, unknown>;
 };
 
@@ -122,6 +135,7 @@ export function logAudit(req: Request | null, entry: AuditEntry): void {
       actorUserId: entry.actor?.id ?? null,
       actorRole,
       orgId: entry.orgId ?? entry.actor?.orgId ?? null,
+      jobId: entry.jobId ?? null,
       action: entry.action,
       resourceType: entry.resourceType ?? null,
       resourceId: entry.resourceId ?? null,
