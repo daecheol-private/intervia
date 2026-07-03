@@ -7,6 +7,7 @@ import {
   RecordedInterviewError,
 } from "@/lib/recorded-interview-queue";
 import { getCurrentUser } from "@/lib/auth";
+import { workerBaseUrl } from "@/lib/worker-trigger";
 import { isTransientDbError } from "@/lib/db-retry";
 import { captureError } from "@/lib/error-reporter";
 import { log } from "@/lib/logger";
@@ -33,7 +34,7 @@ async function authorize(req: Request): Promise<Response | null> {
 }
 
 function chainSelf(req: Request) {
-  const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+  const base = workerBaseUrl(req);
   void fetch(`${base}/api/internal/process-recorded-interviews`, {
     method: "POST",
     headers: { "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "" },

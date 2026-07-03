@@ -33,6 +33,7 @@ import {
 } from "./recorded-interview";
 import { deleteFile, readStoredFile } from "./storage";
 import { withDbRetry } from "./db-retry";
+import { workerBaseUrl } from "./worker-trigger";
 import { captureError } from "./error-reporter";
 
 // 전사·평가를 별도 함수 실행으로 분리(아래 processRecordedInterview)하면서 둘이 attempts 카운터를
@@ -316,9 +317,7 @@ export async function getQueuedRecordedCount(): Promise<number> {
 
 /** 워커를 즉시 깨우는 fire-and-forget 트리거 (업로드 직후·cron 안전망에서 호출). */
 export function triggerRecordedWorker(req?: Request): void {
-  const base =
-    process.env.APP_BASE_URL ??
-    (req ? new URL(req.url).origin : "http://localhost:3003");
+  const base = workerBaseUrl(req);
   void fetch(`${base}/api/internal/process-recorded-interviews`, {
     method: "POST",
     headers: { "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "" },

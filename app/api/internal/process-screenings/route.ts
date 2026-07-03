@@ -16,6 +16,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { captureError } from "@/lib/error-reporter";
 import { isTransientDbError } from "@/lib/db-retry";
 import { log } from "@/lib/logger";
+import { workerBaseUrl } from "@/lib/worker-trigger";
 
 export const runtime = "nodejs";
 // 최대 실행 시간 120s. 제약: LOCK_STALE_SECONDS(300) 보다 작아야 정상 워커가
@@ -135,9 +136,7 @@ async function processOne(workerId: string): Promise<
 
 async function chainSelf(req: Request) {
   // self-chain: 응답 본문 안 기다리고 fire-and-forget. INTERNAL_API_SECRET 동행.
-  const base =
-    process.env.APP_BASE_URL ?? new URL(req.url).origin;
-  const url = `${base}/api/internal/process-screenings`;
+  const url = `${workerBaseUrl(req)}/api/internal/process-screenings`;
   void fetch(url, {
     method: "POST",
     headers: {

@@ -1,4 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
+import { workerBaseUrl } from "@/lib/worker-trigger";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
   const denied = await authorize(req);
   if (denied) return denied;
 
-  const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+  const base = workerBaseUrl(req);
   // 대면 면접 녹음(업로드 모드) 워커 안전망 — 별도 cron 추가 없이 같은 매분 틱에 끼워
   // 트리거(fire-and-forget). stuck 복구 + 남은 queued 처리. self-chain 으로 이어짐.
   void fetch(`${base}/api/internal/process-recorded-interviews`, {
