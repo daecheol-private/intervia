@@ -1,5 +1,5 @@
 /**
- * 고객센터 문의 처리 — 상태 변경 / 운영팀 답변 메모.
+ * 고객센터 문의 처리 — 상태 변경 / 운영팀 답변 메모 / 삭제.
  *
  * 권한: **system_admin 전용** (운영자 지원 데스크). org_admin·member 차단.
  * adminNote 는 고객의 "내 문의 내역"에 답변으로 노출되므로 신중히 작성.
@@ -123,6 +123,51 @@ export async function PATCH(
       status: next.status,
       has_note: typeof next.adminNote === "string",
       replied: shouldReply,
+    },
+  });
+
+  return new Response(null, { status: 204 });
+}
+
+// 스팸·무가치 문의 정리용. 고객의 "내 문의 내역"에서도 사라지므로 복구 불가.
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const me = await getCurrentUser();
+  const guard = requireUser(me);
+  if (guard) return guard;
+  if (me!.role !== "system_admin")
+    return new Response("권한 없음", { status: 403 });
+  const pwGuard = requirePasswordChanged(me);
+  if (pwGuard) return pwGuard;
+
+  const { id } = await params;
+  const iid = Number(id);
+
+  const [row] = await db
+    .select({
+      orgId: inquiries.orgId,
+      source: inquiries.source,
+      category: inquiries.category,
+      contactEmail: inquiries.contactEmail,
+    })
+    .from(inquiries)
+    .where(eq(inquiries.id, iid));
+  if (!row) return new Response("Not found", { status: 404 });
+
+  await db.delete(inquiries).where(eq(inquiries.id, iid));
+
+  logAudit(req, {
+    actor: me!,
+    action: "inquiry.delete",
+    resourceType: "inquiry",
+    resourceId: iid,
+    orgId: row.orgId,
+    metadata: {
+      source: row.source,
+      category: row.category,
+      contact_email: row.contactEmail,
     },
   });
 

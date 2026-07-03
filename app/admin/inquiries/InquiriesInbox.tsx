@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { Modal } from "@/app/components/Modal";
 import { formatLocalDateTime } from "@/lib/utils";
 import {
@@ -243,6 +244,22 @@ function InquiryDetailModal({
     if (res.ok) onSaved();
   };
 
+  const remove = async () => {
+    if (!row) return;
+    if (
+      !confirm(
+        "이 문의를 삭제합니까?\n고객의 문의 내역에서도 사라지며 복구할 수 없습니다."
+      )
+    )
+      return;
+    setBusy(true);
+    const res = await fetch(`/api/admin/inquiries/${row.id}`, {
+      method: "DELETE",
+    });
+    setBusy(false);
+    if (res.ok) onSaved();
+  };
+
   return (
     <Modal
       open={row !== null}
@@ -324,6 +341,14 @@ function InquiryDetailModal({
               ))}
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={remove}
+                disabled={busy}
+                className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-danger/30 text-danger hover:bg-danger-soft disabled:opacity-40"
+              >
+                <Trash2 size={13} />
+                삭제
+              </button>
               <button
                 onClick={onClose}
                 className="text-xs px-4 py-1.5 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt"
