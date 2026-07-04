@@ -1,13 +1,18 @@
 import { db } from "@/lib/db";
-import { candidates, screeningJobs } from "@/lib/schema";
+import { candidates, screeningJobs, jobPostings } from "@/lib/schema";
 import { inArray, and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { isJobUnlocked } from "@/lib/job-lock";
 import { enqueueScreening } from "@/lib/screening-queue";
 import { triggerWorker } from "@/lib/worker-trigger";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { parseDbTimestamp } from "@/lib/utils";
+import {
+  requireSpendableBalance,
+  insufficientTokensResponse,
+} from "@/lib/wallet-guard";
 
 export const runtime = "nodejs";
 
@@ -62,6 +67,35 @@ export async function POST(req: Request) {
       });
   }
 
+  // 잔액 가드 — 단건 평가(screen/route.ts)와 동일. 후차감 구조라 여기선 차감하지 않지만
+  // 0 이하면 신규 유료 요청을 막아야 한다(단건엔 있고 벌크엔 빠져 우회되던 구멍).
+  // 비(非)system_admin 배치는 ownsOrg 통과로 전원 me.orgId 소속이므로 org 단위 1회 검사면 충분.
+  const balanceGuard = await requireSpendableBalance(me!.orgId ?? null, {
+    isSystemAdmin: me!.role === "system_admin",
+  });
+  if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);
+
+  // PIN 잠금 가드 — 단건 평가와 동일. 잠긴 공고의 후보는 enqueue 대상에서 제외(우회 방지).
+  // 배치가 여러 공고에 걸쳐 있어도 공고별 1회 판정. system_admin·org_admin·면접관·PIN해제는
+  // isJobUnlocked 가 통과시키므로 실제로는 PIN 미입력 member 의 잠긴 공고만 걸린다.
+  const lockedJobIds = new Set<number>();
+  if (me!.role !== "system_admin") {
+    const distinctJobIds = [...new Set(rows.map((r) => r.jobId))];
+    const jobRows = distinctJobIds.length
+      ? await db
+          .select({
+            id: jobPostings.id,
+            passwordHash: jobPostings.passwordHash,
+          })
+          .from(jobPostings)
+          .where(inArray(jobPostings.id, distinctJobIds))
+      : [];
+    for (const j of jobRows) {
+      if (j.passwordHash && !(await isJobUnlocked(j.id, me!)))
+        lockedJobIds.add(j.id);
+    }
+  }
+
   // 평가 가능: 동의 확인됨 (legacy row 면제). 리포트 유무는 보지 않는다 — 재평가 허용.
   // NOTE: 마스킹 텍스트가 비어 있어도 제외하지 않는다 — 파싱은 워커(ensureParsed)가
   // 평가 직전에 수행하므로 미파싱/파싱실패 후보도 enqueue 대상.
@@ -77,6 +111,13 @@ export async function POST(req: Request) {
   const kickCandidateIds: number[] = [];
 
   for (const r of rows) {
+    if (lockedJobIds.has(r.jobId)) {
+      skipped.push({
+        candidateId: r.id,
+        reason: "잠긴 공고 (PIN 입력 필요)",
+      });
+      continue;
+    }
     if (isConsentMissing(r)) {
       skipped.push({
         candidateId: r.id,
