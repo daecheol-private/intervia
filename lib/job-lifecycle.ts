@@ -28,7 +28,7 @@ import { deleteFile } from "./storage";
 import { deleteCandidateFiles } from "./candidate-files";
 import { createNotification } from "./notifications";
 import { getBalance, getPricing, writeLedgerIdempotent } from "./tokens";
-import { buildDecisionEmail, purgeOnDecision } from "./candidate-stage";
+import { buildDecisionEmail, purgeOnDecision, resolveCandidateEmailLang } from "./candidate-stage";
 import { sendMail } from "./mailer";
 import { redactCandidateAuditPii } from "./audit";
 import { after } from "next/server";
@@ -392,6 +392,7 @@ export async function closeJob(args: {
               jobTitle: job.title,
               decision: "rejected",
               companyName: org?.name ?? null,
+              lang: await resolveCandidateEmailLang(t.id),
             });
             await sendMail({
               to: t.email!,

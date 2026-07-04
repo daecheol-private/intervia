@@ -19,8 +19,8 @@
  * 평가 결과는 공고 종결 +14일 라이프사이클 cron 이 candidate row 통째 삭제.
  */
 import { db } from "./db";
-import { candidates, candidateAttachments } from "./schema";
-import { eq } from "drizzle-orm";
+import { candidates, candidateAttachments, interviewSessions } from "./schema";
+import { desc, eq } from "drizzle-orm";
 import { deleteFile } from "./storage";
 import { wrapEmailCard } from "./mailer";
 
@@ -228,44 +228,72 @@ export async function purgeOnDecision(candidateId: number): Promise<void> {
     .where(eq(candidates.id, candidateId));
 }
 
-/** 합·불 통보 메일 템플릿. */
+/**
+ * 후보자의 AI 면접 진행 언어를 조회 — 결정/이의제기 통보 메일의 언어 분기용.
+ * 완료 세션을 우선하고, 없으면 최신 세션 기준. 세션이 아예 없으면(서류 단계 탈락 등) 'ko'.
+ * 평가 리포트는 이 값과 무관하게 항상 한국어지만, 후보자에게 직접 가는 메일은 면접 언어를 따른다.
+ */
+export async function resolveCandidateEmailLang(
+  candidateId: number
+): Promise<"ko" | "en"> {
+  const rows = await db
+    .select({
+      language: interviewSessions.language,
+      status: interviewSessions.status,
+    })
+    .from(interviewSessions)
+    .where(eq(interviewSessions.candidateId, candidateId))
+    .orderBy(desc(interviewSessions.createdAt));
+  if (rows.length === 0) return "ko";
+  const picked = rows.find((r) => r.status === "completed") ?? rows[0];
+  return picked.language === "en" ? "en" : "ko";
+}
+
+/** 합·불 통보 메일 템플릿. lang='en' 이면 영어 후보자용 템플릿(제목·헤더·기본본문·푸터). */
 export function buildDecisionEmail(opts: {
   candidateName: string;
   jobTitle: string;
   decision: "hired" | "rejected";
   customMessage?: string;
   companyName?: string | null;
+  /** 후보자 면접 언어. 후보자 대면 메일이라 분기(평가 리포트와 별개). 기본 'ko'. */
+  lang?: "ko" | "en";
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, decision, customMessage, companyName } = opts;
+  const en = opts.lang === "en";
   // 법인명 접두 — 단, 공고 제목에 이미 법인명이 포함돼 있으면 중복을 피해 생략.
   const coName = companyName?.trim() ?? "";
-  const co = coName && !jobTitle.includes(coName) ? `${coName} ` : "";
-  const headerMap = {
-    hired: "🎉 합격을 축하드립니다",
-    rejected: "지원해 주셔서 감사합니다",
-  };
-  const subjectLabelMap = {
-    hired: "합격 안내",
-    rejected: "전형 결과 안내",
-  };
+  const hasCo = !!coName && !jobTitle.includes(coName);
+  const coKo = hasCo ? `${coName} ` : "";
+  const coEn = hasCo ? ` at ${coName}` : "";
+  const headerMap = en
+    ? { hired: "🎉 Congratulations", rejected: "Thank you for applying" }
+    : { hired: "🎉 합격을 축하드립니다", rejected: "지원해 주셔서 감사합니다" };
   const cleanTitle = jobTitle
     .replace(/\s*(채용\s*공고|채용)\s*$/, "")
     .trim();
-  const subject = `[Intervia] ${cleanTitle} ${subjectLabelMap[decision]}`;
-  const body =
-    customMessage ??
-    (decision === "hired"
-      ? `${candidateName}님, ${co}${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
-      : `${candidateName}님, ${co}${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`);
+  const subject = en
+    ? `[Intervia] ${cleanTitle} — ${decision === "hired" ? "Offer" : "Application update"}`
+    : `[Intervia] ${cleanTitle} ${decision === "hired" ? "합격 안내" : "전형 결과 안내"}`;
+  const defaultBody = en
+    ? decision === "hired"
+      ? `Dear ${candidateName},\n\nCongratulations! We are delighted to offer you the ${jobTitle} position${coEn}. Our hiring team will reach out to you shortly with the next steps.\n\nThank you.`
+      : `Dear ${candidateName},\n\nThank you for your interest in the ${jobTitle} position${coEn} and for the time you invested in your application. After careful consideration, we are unable to move forward with your application at this time. We sincerely appreciate your effort and wish you every success in your future endeavors.`
+    : decision === "hired"
+      ? `${candidateName}님, ${coKo}${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
+      : `${candidateName}님, ${coKo}${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`;
+  const body = customMessage ?? defaultBody;
 
-  const text = `${body}\n\nIntervia 채용팀`;
+  const text = `${body}\n\n${en ? "The Intervia Recruiting Team" : "Intervia 채용팀"}`;
   const escaped = body.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
   const html = wrapEmailCard({
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 16px;color:#0f172a;">${headerMap[decision]}</h1>
       <div style="font-size:14px;line-height:1.7;color:#475569;white-space:pre-wrap;">${escaped}</div>
     `,
-    footer: "본 메일은 Intervia 채용 플랫폼에서 발송되었습니다.",
+    footer: en
+      ? "This email was sent from the Intervia recruitment platform."
+      : "본 메일은 Intervia 채용 플랫폼에서 발송되었습니다.",
   });
   return { subject, html, text };
 }

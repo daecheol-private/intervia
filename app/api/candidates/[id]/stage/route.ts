@@ -19,6 +19,7 @@ import {
   isOutcome,
   purgeOnDecision,
   buildDecisionEmail,
+  resolveCandidateEmailLang,
 } from "@/lib/candidate-stage";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { sendCandidateAlimtalk } from "@/lib/alimtalk";
@@ -232,6 +233,7 @@ export async function PATCH(
           decision: outcomeRequested as "hired" | "rejected",
           customMessage: body.customMessage,
           companyName: org?.name ?? null,
+          lang: await resolveCandidateEmailLang(cid),
         });
         await sendMail({
           to: candidate.email,

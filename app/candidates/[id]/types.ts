@@ -116,6 +116,8 @@ export type PersonalityProfileView = {
 export type Session = {
   id: number;
   accessToken: string;
+  // 지원자가 면접 시작 화면에서 선택한 진행 언어 — 후보자 대면 메일(결정 통보)의 기본 언어에 반영.
+  language?: "ko" | "en";
   status: "pending" | "in_progress" | "completed" | "expired";
   messages: { role: string; content: string }[];
   evaluation: InterviewEvaluation | null;

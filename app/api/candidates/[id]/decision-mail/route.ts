@@ -11,7 +11,7 @@ import { sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
-import { buildDecisionEmail } from "@/lib/candidate-stage";
+import { buildDecisionEmail, resolveCandidateEmailLang } from "@/lib/candidate-stage";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { logAudit } from "@/lib/audit";
@@ -93,6 +93,7 @@ export async function POST(
     decision: candidate.outcome,
     customMessage: body.customMessage,
     companyName: org?.name ?? null,
+    lang: await resolveCandidateEmailLang(cid),
   });
 
   try {

@@ -473,6 +473,9 @@ export default function CandidateDetailPage() {
     (s) => s.round === "round2" && s.status === "selected"
   );
   const completedSession = sessions.find((s) => s.status === "completed");
+  // 후보자에게 직접 가는 결정 통보 메일의 기본 언어 — 완료 세션(없으면 최신) 면접 언어를 따른다.
+  const interviewLang: "ko" | "en" =
+    (completedSession?.language ?? sessions[0]?.language) === "en" ? "en" : "ko";
   const interviewScore = completedSession?.evaluation?.overall_score ?? null;
   const composite = compositeScore(candidate.screeningScore, interviewScore);
   const rec = composite != null ? recommendationFromScore(composite) : null;
@@ -752,6 +755,7 @@ export default function CandidateDetailPage() {
             candidate={candidate}
             jobTitle={job.title}
             companyName={companyName ?? null}
+            interviewLang={interviewLang}
             onChanged={() => load()}
             showFullResume={showFullResume}
             setShowFullResume={setShowFullResume}

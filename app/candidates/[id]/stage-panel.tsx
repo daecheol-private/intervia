@@ -188,14 +188,23 @@ export function OutcomeBadge({
 
 // lib/candidate-stage.ts 의 buildDecisionEmail 본문과 동일한 기본 템플릿.
 // 변경 시 양쪽을 함께 수정해야 사용자가 본 미리보기와 실제 발송 본문이 일치.
+// 영어 면접 후보자(lang='en')는 영어 기본 본문 — 서버 buildDecisionEmail 영어 분기와 정합.
 function defaultDecisionBody(
   decision: "hired" | "rejected",
   candidateName: string,
   jobTitle: string,
-  companyName?: string | null
+  companyName?: string | null,
+  lang: "ko" | "en" = "ko"
 ): string {
   const coName = companyName?.trim() ?? "";
-  const co = coName && !jobTitle.includes(coName) ? `${coName} ` : "";
+  const hasCo = !!coName && !jobTitle.includes(coName);
+  if (lang === "en") {
+    const coEn = hasCo ? ` at ${coName}` : "";
+    return decision === "hired"
+      ? `Dear ${candidateName},\n\nCongratulations! We are delighted to offer you the ${jobTitle} position${coEn}. Our hiring team will reach out to you shortly with the next steps.\n\nThank you.`
+      : `Dear ${candidateName},\n\nThank you for your interest in the ${jobTitle} position${coEn} and for the time you invested in your application. After careful consideration, we are unable to move forward with your application at this time. We sincerely appreciate your effort and wish you every success in your future endeavors.`;
+  }
+  const co = hasCo ? `${coName} ` : "";
   return decision === "hired"
     ? `${candidateName}님, ${co}${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
     : `${candidateName}님, ${co}${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`;
@@ -205,6 +214,7 @@ export function StagePanel({
   candidate,
   jobTitle,
   companyName,
+  interviewLang = "ko",
   onChanged,
   showFullResume,
   setShowFullResume,
@@ -215,6 +225,8 @@ export function StagePanel({
   candidate: Candidate;
   jobTitle: string;
   companyName?: string | null;
+  /** 후보자 면접 언어 — 결정 통보 메일 기본 본문 언어. 기본 'ko'. */
+  interviewLang?: "ko" | "en";
   onChanged: () => void | Promise<void>;
   showFullResume: boolean;
   setShowFullResume: (v: boolean) => void;
@@ -231,7 +243,7 @@ export function StagePanel({
   const [reason, setReason] = useState<string>("");
   const [note, setNote] = useState("");
   const [customMessage, setCustomMessage] = useState(() =>
-    defaultDecisionBody("rejected", candidate.name, jobTitle, companyName)
+    defaultDecisionBody("rejected", candidate.name, jobTitle, companyName, interviewLang)
   );
   // 사용자가 한 번이라도 본문을 직접 수정하면 더 이상 decision 변경 시 덮어쓰지 않음.
   const [messageEdited, setMessageEdited] = useState(false);
@@ -241,15 +253,17 @@ export function StagePanel({
   // decide 모달: decision 또는 후보자 정보 바뀌면 기본 템플릿 재생성 (사용자가 직접 수정하지 않은 경우만).
   useEffect(() => {
     if (open === "decide" && !messageEdited) {
-      setCustomMessage(defaultDecisionBody(decision, candidate.name, jobTitle, companyName));
+      setCustomMessage(
+        defaultDecisionBody(decision, candidate.name, jobTitle, companyName, interviewLang)
+      );
     }
-  }, [open, decision, candidate.name, jobTitle, companyName, messageEdited]);
+  }, [open, decision, candidate.name, jobTitle, companyName, interviewLang, messageEdited]);
 
   // notify 모달 열 때 — 이미 확정된 outcome 기반으로 기본 템플릿 채움 + edit 플래그 리셋.
   const openNotify = () => {
     if (candidate.outcome === "hired" || candidate.outcome === "rejected") {
       setCustomMessage(
-        defaultDecisionBody(candidate.outcome, candidate.name, jobTitle, companyName)
+        defaultDecisionBody(candidate.outcome, candidate.name, jobTitle, companyName, interviewLang)
       );
       setMessageEdited(false);
     }

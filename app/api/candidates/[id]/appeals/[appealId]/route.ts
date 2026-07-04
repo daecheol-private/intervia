@@ -2,7 +2,7 @@
  * 이의제기 검토 상태/답변 업데이트 (채용담당자/시스템관리자).
  */
 import { db } from "@/lib/db";
-import { appealLogs, jobPostings, organizations } from "@/lib/schema";
+import { appealLogs, jobPostings, organizations, interviewSessions } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
@@ -36,6 +36,7 @@ export async function PATCH(
       status: appealLogs.status,
       response: appealLogs.response,
       email: appealLogs.email,
+      interviewSessionId: appealLogs.interviewSessionId,
     })
     .from(appealLogs)
     .where(and(eq(appealLogs.id, aid), eq(appealLogs.candidateId, cid)));
@@ -99,12 +100,18 @@ export async function PATCH(
           .from(organizations)
           .where(eq(organizations.id, candidate.orgId))
       : [];
+    // 이의제기가 걸린 그 세션의 면접 언어로 통지 — 영어로 면접한 후보자는 영어 통지.
+    const [sess] = await db
+      .select({ language: interviewSessions.language })
+      .from(interviewSessions)
+      .where(eq(interviewSessions.id, prev.interviewSessionId));
     const mail = buildAppealResponseEmail({
       candidateName: candidate.name ?? "지원자",
       jobTitle: job?.title ?? null,
       status: finalStatus,
       response: next.response ?? prev.response,
       orgName: org?.name ?? null,
+      lang: sess?.language === "en" ? "en" : "ko",
     });
     try {
       await sendMail({
