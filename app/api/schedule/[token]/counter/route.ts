@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { validateSlots } from "@/lib/schedules";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,10 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  // 공개(토큰 인증) 엔드포인트 — 매 호출이 면접관 전원에게 알림을 발송하므로 플러드 방어. IP당 분당 5회.
+  const limited = await rateLimit(req, "schedule-counter", { limit: 5, windowSec: 60 });
+  if (limited) return limited;
+
   const { token } = await params;
   const body = (await req.json().catch(() => null)) as {
     slots?: Array<{ start: string; end: string }>;

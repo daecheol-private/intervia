@@ -33,6 +33,8 @@ import {
 import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
+// 면접 재평가 LLM(generateJSON) 동기 호출 — 수십 초. 기본 타임아웃(~15s)에서 잘리지 않게 한도 확보.
+export const maxDuration = 120;
 
 export async function POST(
   req: Request,

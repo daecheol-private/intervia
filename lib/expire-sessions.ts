@@ -75,19 +75,26 @@ export async function expireInterviewSessions(): Promise<{
         )
       );
     for (const c of cands) {
-      await db
-        .update(candidates)
-        .set({
-          outcome: "rejected",
-          outcomeReason: "ai_link_expired",
-          decidedAt: new Date().toISOString(),
-          decisionFromStage: sql`stage`,
-        })
-        .where(and(eq(candidates.id, c.id), isNull(candidates.outcome)));
-      await purgeOnDecision(c.id).catch((e) =>
-        console.error("purgeOnDecision after ai expire failed", e)
-      );
-      aiAutoRejected++;
+      // 후보 1건 처리 실패가 배치 전체를 끊지 않도록 격리. 세션은 이미 expired 로 전이됐으므로
+      // (위 batch UPDATE) 여기서 throw 가 루프를 중단시키면 나머지 후보는 다음 cron 에서
+      // 재검출되지 않아(status!='pending') 영구 미처리로 남는다.
+      try {
+        await db
+          .update(candidates)
+          .set({
+            outcome: "rejected",
+            outcomeReason: "ai_link_expired",
+            decidedAt: new Date().toISOString(),
+            decisionFromStage: sql`stage`,
+          })
+          .where(and(eq(candidates.id, c.id), isNull(candidates.outcome)));
+        await purgeOnDecision(c.id).catch((e) =>
+          console.error("purgeOnDecision after ai expire failed", e)
+        );
+        aiAutoRejected++;
+      } catch (e) {
+        console.error("ai expire auto-reject failed", { candidateId: c.id, e });
+      }
     }
   }
 
@@ -124,19 +131,24 @@ export async function expireInterviewSessions(): Promise<{
         and(inArray(candidates.id, candidateIds), isNull(candidates.outcome))
       );
     for (const c of candsToReject) {
-      await db
-        .update(candidates)
-        .set({
-          outcome: "rejected",
-          outcomeReason: "schedule_link_expired",
-          decidedAt: new Date().toISOString(),
-          decisionFromStage: sql`stage`,
-        })
-        .where(and(eq(candidates.id, c.id), isNull(candidates.outcome)));
-      await purgeOnDecision(c.id).catch((e) =>
-        console.error("purgeOnDecision after schedule expire failed", e)
-      );
-      scheduleAutoRejected++;
+      // 후보 1건 실패가 배치 전체를 끊지 않도록 격리(위 AI 만료 루프와 동일 이유).
+      try {
+        await db
+          .update(candidates)
+          .set({
+            outcome: "rejected",
+            outcomeReason: "schedule_link_expired",
+            decidedAt: new Date().toISOString(),
+            decisionFromStage: sql`stage`,
+          })
+          .where(and(eq(candidates.id, c.id), isNull(candidates.outcome)));
+        await purgeOnDecision(c.id).catch((e) =>
+          console.error("purgeOnDecision after schedule expire failed", e)
+        );
+        scheduleAutoRejected++;
+      } catch (e) {
+        console.error("schedule expire auto-reject failed", { candidateId: c.id, e });
+      }
     }
   }
 

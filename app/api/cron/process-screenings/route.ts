@@ -2,7 +2,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { workerBaseUrl } from "@/lib/worker-trigger";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 이 cron 은 워커(internal/process-screenings)를 fetch 로 동기 await 한다. 워커는
+// maxDuration=120 + 벽시계 예산 70s 라 큐가 밀리면 응답까지 최대 ~110s 걸린다.
+// 60s 로 두면 부하 시 이 cron 이 매분 헛되이 타임아웃(워커는 분리 실행이라 작업은
+// 유실 안 되지만 메트릭·로그에 오류가 쌓임). 워커 한도에 맞춰 120s 로 올린다.
+// (60s 간격 cron 이 겹쳐도 워커의 atomicClaimNext 가 동시성을 안전하게 처리.)
+export const maxDuration = 120;
 
 /**
  * 분당 한 번 워커를 깨우는 안전망.

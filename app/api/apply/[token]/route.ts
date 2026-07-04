@@ -57,6 +57,12 @@ export async function POST(
   const name = ((form.get("name") as string) || "").trim();
   const email = ((form.get("email") as string) || "").trim().toLowerCase();
   const phone = ((form.get("phone") as string) || "").trim();
+
+  // 입력 길이 상한 — 공개(비로그인) 엔드포인트라 텍스트 필드가 무제한이면 거대 페이로드
+  // 저장 + 다운스트림(LLM 프롬프트·UI) 오염 위험. 이름 100 / 이메일 254(RFC 5321) / 전화 40.
+  if (name.length > 100 || email.length > 254 || phone.length > 40)
+    return bad("이름·이메일·연락처 입력값이 너무 깁니다. 다시 확인해 주세요.");
+
   const consentCollection = form.get("consent_collection_use") === "true";
   const consentAi = form.get("consent_ai_decision") === "true";
 

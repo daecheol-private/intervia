@@ -27,6 +27,8 @@ import { log } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+// 면접 대화 매 턴이 LLM 스트리밍(재시도 포함) — 기본 타임아웃(~15s)이면 긴 응답·재시도에서 잘린다.
+export const maxDuration = 120;
 
 export async function POST(
   req: Request,

@@ -9,6 +9,7 @@ import { purgeOnDecision } from "@/lib/candidate-stage";
 import { maybeAutoCloseJob } from "@/lib/job-lifecycle";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,11 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  // 공개(토큰 인증) 엔드포인트 — 지원 취소는 본문 폐기(purgeOnDecision)를 부르는 파괴적 액션.
+  // 본인 이메일 확인 가드가 있으나 무차별 시도 방어로 IP당 분당 5회 상한.
+  const limited = await rateLimit(req, "schedule-withdraw", { limit: 5, windowSec: 60 });
+  if (limited) return limited;
+
   const { token } = await params;
   const body = (await req.json().catch(() => null)) as {
     note?: string;

@@ -21,6 +21,8 @@ import { generateJSON } from "@/lib/gemini";
 import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
+// 가입 시 법인 매칭에 LLM(generateJSON) 동기 호출 — 기본 타임아웃(~15s)에서 잘리지 않게 한도 확보.
+export const maxDuration = 120;
 
 // /api/orgs/search 와 동일 규칙 — 표기 변동(공백·(주)·법인형태)에 강건.
 function normalize(s: string): string {

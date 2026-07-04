@@ -20,6 +20,7 @@ import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
 import { logAudit } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,10 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  // 공개(토큰 인증) 엔드포인트 — 더블클릭·봇 방어. IP당 분당 10회.
+  const limited = await rateLimit(req, "schedule-select", { limit: 10, windowSec: 60 });
+  if (limited) return limited;
+
   const { token } = await params;
   const body = (await req.json().catch(() => null)) as {
     slotIndex?: number;

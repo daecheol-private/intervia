@@ -18,6 +18,9 @@ import { isAiInterviewSuperseded } from "@/lib/stage-meta";
 import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
+// 면접 종료 시 인터뷰 평가 LLM(generateJSON)을 동기 호출 — Vertex 서울 기준 수십 초.
+// maxDuration 미설정 시 Vercel 기본값(~15s)에서 잘려 후보자 면접 종료가 실패한다.
+export const maxDuration = 120;
 
 // 후보자(무인증 토큰)에게 돌려주는 안전 응답 — 평가 결과(점수·추천·concerns)는 절대 노출하지 않는다.
 // 자동화 의사결정(PIPA §37의2)은 채용 담당자의 인간 검토를 거쳐 통보되므로, 후보자 면접 종료 응답엔
