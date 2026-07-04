@@ -303,10 +303,13 @@ export async function finalizeRecordedInterview(
       .orderBy(asc(interviewTranscriptSegments.seq));
     if (segs.length === 0) throw new Error("전사 세그먼트가 없습니다.");
 
-    // 1) 역할 배정. 라이브(STT)는 진행 중 점진 정리에서 이미 발화별 역할이 박혀 있으므로
-    //    그대로 사용. 업로드(음향 다이어리제이션)만 라벨→역할 배정 후 일괄 반영(N UPDATE 회피).
+    // 1) 역할 배정. 라이브 진행 중 점진 정리(Web Speech 초안)는 발화별 역할이 이미 박혀 있으므로
+    //    그대로 사용. 업로드·라이브 오디오 재전사(A안)는 음향 라벨만 있고 역할이 비어 있어(role=null)
+    //    라벨→역할 배정 후 일괄 반영(N UPDATE 회피). mode 가 아니라 '역할 미배정' 여부로 판단해야
+    //    라이브 행을 오디오로 재전사한 경우(mode='live' 인데 역할 없음)도 배정이 돈다.
+    const needsRoleAssignment = segs.every((s) => s.role == null);
     const roleMap: Record<string, SpeakerRole> = {};
-    if (ri.mode !== "live") {
+    if (needsRoleAssignment) {
       Object.assign(roleMap, await assignSpeakerRoles(segs));
       const byRole: Record<SpeakerRole, string[]> = {
         candidate: [],
@@ -363,12 +366,11 @@ export async function finalizeRecordedInterview(
 
     const segWithRole = segs.map((s) => ({
       seq: s.seq,
-      role:
-        ri.mode === "live"
-          ? ((s.role ?? "unknown") as SpeakerRole)
-          : s.speakerLabel
-            ? roleMap[s.speakerLabel] ?? "unknown"
-            : ("unknown" as SpeakerRole),
+      role: needsRoleAssignment
+        ? s.speakerLabel
+          ? roleMap[s.speakerLabel] ?? "unknown"
+          : ("unknown" as SpeakerRole)
+        : ((s.role ?? "unknown") as SpeakerRole),
       text: s.text,
     }));
 

@@ -4,11 +4,46 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Mic, Square } from "lucide-react";
 import { notify } from "@/app/components/Dialog";
 import { useVoiceInput } from "@/app/interview/[token]/use-voice-input";
+import {
+  idbAppendChunk,
+  idbCompleteSession,
+  idbStartSession,
+  uploadLiveRecording,
+  type LiveRecSession,
+} from "./live-recording-store";
 
 // 준실시간 라이브 면접 레코더 — 브라우저 STT(Web Speech API) 로 말하는 즉시 받아쓰기하고,
 // 잠깐 멈출 때마다(=발화 경계) 그 사이 쌓인 원문만 서버→LLM 으로 보내 화자(면접관/지원자)별로
 // 정리한다. 즉시 보이는 원문 위에 정리된 전사가 몇 초 간격으로 따라붙는다.
-// 오디오는 브라우저 밖(Intervia)으로 나가지 않는다 — 텍스트만 저장. 설계: docs/LIVE_INTERVIEW_PLAN.md
+//
+// A안: 화면 받아쓰기(Web Speech)와 **병행**으로 오디오를 MediaRecorder 로 녹음해 IndexedDB 에
+// 청크로 쌓는다. 종료 시 그 오디오를 서버에 올려 Gemini 로 **재전사**한 결과가 최종 리포트의
+// 근거가 된다 — 라이브 인식이 뭉개져도(말 많음·화자 다수) 리포트 품질은 영향받지 않는다.
+// IndexedDB 에 있으므로 업로드 도중 새로고침해도 유실 없이 재개된다. 설계: docs/LIVE_INTERVIEW_PLAN.md
+
+// Opus 24kbps mono — 1시간 ≈ 11MB(서버 18MB 한도 여유). 음성 전사엔 충분한 음질.
+const AUDIO_BITS_PER_SECOND = 24_000;
+// 5초마다 청크 → IndexedDB 적재(새로고침을 견디게). 마지막 청크는 stop 시 flush.
+const CHUNK_TIMESLICE_MS = 5_000;
+
+// 브라우저가 지원하는 오디오 컨테이너 선택 (Chrome/Edge=webm/opus, Safari=mp4).
+function pickAudioMime(): string {
+  if (typeof MediaRecorder === "undefined") return "";
+  const prefs = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/ogg;codecs=opus",
+  ];
+  for (const m of prefs) {
+    try {
+      if (MediaRecorder.isTypeSupported(m)) return m;
+    } catch {
+      /* isTypeSupported 미구현 브라우저 — 무시 */
+    }
+  }
+  return "";
+}
 
 type CleanSeg = {
   seq: number;
@@ -77,6 +112,13 @@ export function LiveRecorder({
   const elapsedTimerRef = useRef<number | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const suggestionsRef = useRef<string[]>([]); // 폴링(인터벌 클로저)에서 현재 질문 읽기용
+
+  // A안 병행 오디오 녹음.
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioOkRef = useRef(false); // 병행 녹음 성공 여부(실패 시 텍스트 폴백)
+  const audioMimeRef = useRef("audio/webm");
+  const appendChainRef = useRef<Promise<void>>(Promise.resolve()); // 청크 IndexedDB 적재 순차 체인
 
   const beforeUnload = useCallback((e: BeforeUnloadEvent) => {
     e.preventDefault();
@@ -181,6 +223,18 @@ export function LiveRecorder({
     elapsedTimerRef.current = null;
     void wakeLockRef.current?.release().catch(() => {});
     wakeLockRef.current = null;
+    // 마이크·레코더 해제 (언마운트 시). 진행 중이던 오디오는 IndexedDB 에 남는다.
+    try {
+      const mr = mediaRecorderRef.current;
+      if (mr && mr.state !== "inactive") mr.stop();
+    } catch {
+      /* 비치명적 */
+    }
+    mediaRecorderRef.current = null;
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
     window.removeEventListener("beforeunload", beforeUnload);
   };
 
@@ -215,6 +269,81 @@ export function LiveRecorder({
       });
     } catch {
       /* 비치명적 */
+    }
+  };
+
+  // 병행 오디오 녹음 시작 — 실패(권한 거부 등)해도 라이브 화면은 계속되고, 종료 시 텍스트로 폴백.
+  const startAudioCapture = async (riId: number) => {
+    audioOkRef.current = false;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia)
+      return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      });
+      mediaStreamRef.current = stream;
+      const chosen = pickAudioMime();
+      const mr = new MediaRecorder(
+        stream,
+        chosen
+          ? { mimeType: chosen, audioBitsPerSecond: AUDIO_BITS_PER_SECOND }
+          : { audioBitsPerSecond: AUDIO_BITS_PER_SECOND }
+      );
+      audioMimeRef.current = mr.mimeType || chosen || "audio/webm";
+      appendChainRef.current = Promise.resolve();
+      mr.ondataavailable = (e: BlobEvent) => {
+        if (e.data && e.data.size > 0) {
+          // 순차 체인 — 마지막 청크까지 커밋 순서 보존(종료 시 이 체인을 await).
+          appendChainRef.current = appendChainRef.current
+            .then(() => idbAppendChunk(riId, e.data))
+            .catch(() => {});
+        }
+      };
+      const session: LiveRecSession = {
+        riId,
+        candidateId,
+        round,
+        mime: audioMimeRef.current,
+        state: "recording",
+        durationSeconds: 0,
+        createdAt: Date.now(),
+      };
+      await idbStartSession(session);
+      mr.start(CHUNK_TIMESLICE_MS);
+      mediaRecorderRef.current = mr;
+      audioOkRef.current = true;
+    } catch {
+      audioOkRef.current = false;
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+      }
+      mediaRecorderRef.current = null;
+    }
+  };
+
+  // 녹음 중지 + 마지막 청크(dataavailable)까지 IndexedDB 커밋 완료 대기 + 마이크 해제.
+  const stopAudioCapture = async (): Promise<void> => {
+    const mr = mediaRecorderRef.current;
+    mediaRecorderRef.current = null;
+    if (mr && mr.state !== "inactive") {
+      await new Promise<void>((resolve) => {
+        mr.onstop = () => resolve();
+        try {
+          mr.stop();
+        } catch {
+          resolve();
+        }
+      });
+    }
+    try {
+      await appendChainRef.current;
+    } catch {
+      /* 비치명적 */
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
     }
   };
 
@@ -266,6 +395,8 @@ export function LiveRecorder({
       pendingRef.current = "";
       doneRef.current = false;
       cleanChainRef.current = Promise.resolve();
+      // 병행 오디오 녹음 시작(A안). 마이크 권한을 여기서 먼저 받아 Web Speech 와 공유.
+      await startAudioCapture(riIdRef.current);
       setPhase("recording");
       voice.start(); // 브라우저 STT 시작
 
@@ -321,6 +452,54 @@ export function LiveRecorder({
     const durationSeconds = Math.round(
       (Date.now() - sessionStartRef.current) / 1000
     );
+
+    // ── A안 주 경로: 병행 녹음한 오디오를 올려 재전사·평가 ──────────────────────
+    // 라이브 화면의 Web Speech 초안이 아니라 이 오디오가 최종 리포트의 근거가 된다.
+    // 업로드는 백그라운드 큐로 넘어가므로, 이후 화면을 닫거나 새로고침해도 된다.
+    if (audioOkRef.current) {
+      await stopAudioCapture();
+      await idbCompleteSession(riId, durationSeconds);
+      const session: LiveRecSession = {
+        riId,
+        candidateId,
+        round,
+        mime: audioMimeRef.current,
+        state: "complete",
+        durationSeconds,
+        createdAt: Date.now(),
+      };
+      let result: Awaited<ReturnType<typeof uploadLiveRecording>>;
+      try {
+        result = await uploadLiveRecording(session);
+      } catch {
+        result = "retry";
+      }
+      if (result !== "empty") {
+        if (result === "uploaded") {
+          notify(
+            "녹음 업로드 완료 — 전사·평가는 백그라운드에서 진행됩니다. 이 화면을 닫거나 새로고침해도 됩니다.",
+            { title: "완료", tone: "success" }
+          );
+        } else if (result === "retry") {
+          // 오디오는 IndexedDB 에 안전하게 남아, 이 페이지를 다시 열면 자동 재개된다.
+          notify(
+            "녹음은 저장됐지만 업로드가 지연되고 있습니다 — 이 페이지를 다시 열면 자동으로 업로드를 재개합니다.",
+            { title: "업로드 지연", tone: "info" }
+          );
+        } else {
+          notify(
+            "녹음 업로드에 실패했습니다(파일 문제). 위 '녹음 업로드' 로 파일을 다시 올려 주세요.",
+            { title: "업로드 실패", tone: "danger" }
+          );
+        }
+        onFinished();
+        onClose();
+        return;
+      }
+      // result === "empty" — 오디오가 비어 있음(캡처 실패) → 아래 텍스트 폴백.
+    }
+
+    // ── 폴백: 오디오가 없으면 라이브 초안 세그먼트로 즉시 평가(기존 동작) ────────────
     try {
       const r = await fetch(
         `/api/candidates/${candidateId}/recorded-interview/live`,
@@ -376,8 +555,8 @@ export function LiveRecorder({
           </p>
           <p className="text-[11px] text-ink-muted">
             음성 인식은 브라우저 기능을 사용합니다 — Chrome·Edge·Safari 권장
-            (Firefox 미지원). 녹음 파일은 만들지 않으며, 음성은 기기 밖으로
-            저장되지 않습니다.
+            (Firefox 미지원). 정확한 평가를 위해 음성이 함께 녹음되어 전사에만 쓰이며,
+            전사 직후 폐기됩니다(보관하지 않음).
           </p>
           {err && <p className="text-sm text-danger">{err}</p>}
           <div className="flex gap-2">
@@ -510,8 +689,9 @@ export function LiveRecorder({
           {voice.error && <p className="text-xs text-warning">{voice.error}</p>}
 
           <p className="text-[11px] text-ink-muted">
-            실시간 인식은 즉시, 화자 구분 정리는 몇 초 간격으로 따라붙습니다. 음성은
-            저장하지 않으며, 종료 시 전체를 한 번 더 정리해 평가합니다.{" "}
+            실시간 인식은 즉시, 화자 구분 정리는 몇 초 간격으로 따라붙습니다. 종료 시
+            녹음된 음성을 다시 전사해 더 정확한 평가 리포트를 만들며, 음성은 전사 직후
+            폐기됩니다.{" "}
             <strong>최대 1시간까지 녹음되며, 지나면 자동 종료됩니다.</strong>
           </p>
         </div>

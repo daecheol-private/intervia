@@ -188,19 +188,12 @@ export async function processRecordedInterview(riId: number): Promise<void> {
     .where(eq(recordedInterviews.id, riId));
   if (!ri) throw new RecordedInterviewError(`recorded_interview ${riId} 없음`, true);
 
-  const [seg] = await db
-    .select({ c: sql<number>`COUNT(*)` })
-    .from(interviewTranscriptSegments)
-    .where(eq(interviewTranscriptSegments.recordedInterviewId, riId));
-  const hasSegments = Number(seg?.c ?? 0) > 0;
-
-  // ── 1단계: 전사 (세그먼트가 아직 없을 때만) ──────────────────────────────────
-  if (!hasSegments) {
-    if (!ri.audioBlobKey)
-      throw new RecordedInterviewError(
-        "전사할 오디오가 없습니다. 다시 업로드해 주세요.",
-        true
-      );
+  // ── 1단계: 전사 (오디오가 있을 때). 전사 성공 시 audioBlobKey=null 로 되므로 멱등하다.
+  // 게이트를 '세그먼트 없음'이 아니라 '오디오 있음'으로 두는 이유: 라이브(A안)는 화면용
+  // Web Speech 초안 세그먼트가 이미 있는 채로 오디오를 attach 하므로, 세그먼트 유무로 판단하면
+  // 전사를 건너뛰고 저품질 초안으로 평가하게 된다. 오디오가 있으면 재전사해 초안을 교체한다.
+  // (업로드 모드는 초안 세그먼트가 없어 삭제가 no-op — 동작 동일.)
+  if (ri.audioBlobKey) {
     const buf = await readStoredFile(ri.audioBlobKey);
     if (!buf)
       throw new RecordedInterviewError(
@@ -226,9 +219,16 @@ export async function processRecordedInterview(riId: number): Promise<void> {
         true
       );
 
-    const durationSeconds = Math.round(
-      (segments[segments.length - 1]?.endMs ?? 0) / 1000
-    );
+    // 라이브 실측 길이가 있으면 유지, 없으면 전사 endMs 로 산출.
+    const durationSeconds =
+      ri.durationSeconds && ri.durationSeconds > 0
+        ? ri.durationSeconds
+        : Math.round((segments[segments.length - 1]?.endMs ?? 0) / 1000);
+    // 재전사는 기존 초안 세그먼트를 **교체**한다(라이브 초안 삭제 후 재삽입). transcribeAudio 가
+    // 성공한 뒤에만 삭제하므로, 전사가 throw 하면 초안이 보존돼 폴백(수동 재평가) 여지가 남는다.
+    await db
+      .delete(interviewTranscriptSegments)
+      .where(eq(interviewTranscriptSegments.recordedInterviewId, riId));
     await db.insert(interviewTranscriptSegments).values(
       segments.map((s, i) => ({
         recordedInterviewId: riId,
@@ -242,7 +242,7 @@ export async function processRecordedInterview(riId: number): Promise<void> {
     );
     // 전사 끝 — 오디오 즉시 폐기(미보관 원칙) + status='queued' 로 되돌려 평가를 다음 실행에 맡긴다.
     // startedAt=null 로 두면 cleanupStuck 의 stale 윈도우 계산에서도 깔끔하다(다음 claim 이 재설정).
-    if (ri.audioBlobKey) await deleteFile(ri.audioBlobKey).catch(() => {});
+    await deleteFile(ri.audioBlobKey).catch(() => {});
     await db
       .update(recordedInterviews)
       .set({
@@ -255,15 +255,16 @@ export async function processRecordedInterview(riId: number): Promise<void> {
     return;
   }
 
-  // ── 2단계: 평가 (세그먼트 존재) ─────────────────────────────────────────────
-  // 1단계에서 오디오를 폐기하지만, 만일 남아 있으면(폐기 실패 등) 방어적으로 한 번 더 폐기.
-  if (ri.audioBlobKey) {
-    await deleteFile(ri.audioBlobKey).catch(() => {});
-    await db
-      .update(recordedInterviews)
-      .set({ audioBlobKey: null })
-      .where(eq(recordedInterviews.id, riId));
-  }
+  // ── 2단계: 평가 (오디오 없음 = 전사 완료 상태). 세그먼트가 있어야 평가 가능. ──────────
+  const [seg] = await db
+    .select({ c: sql<number>`COUNT(*)` })
+    .from(interviewTranscriptSegments)
+    .where(eq(interviewTranscriptSegments.recordedInterviewId, riId));
+  if (Number(seg?.c ?? 0) === 0)
+    throw new RecordedInterviewError(
+      "전사할 오디오가 없습니다. 다시 업로드해 주세요.",
+      true
+    );
 
   // 역할 배정 → 평가 → 리포트 저장 → 멱등 후차감(once). finalize 가 status='ready' 설정.
   await finalizeRecordedInterview(riId, { charge: "once" });

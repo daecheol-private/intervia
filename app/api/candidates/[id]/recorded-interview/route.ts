@@ -13,7 +13,7 @@ import {
 } from "@/lib/wallet-guard";
 import { finalizeRecordedInterview } from "@/lib/recorded-interview";
 import { triggerRecordedWorker } from "@/lib/recorded-interview-queue";
-import { saveFile } from "@/lib/storage";
+import { deleteFile, saveFile } from "@/lib/storage";
 import { logAudit } from "@/lib/audit";
 import { after } from "next/server";
 
@@ -100,6 +100,69 @@ export async function POST(
     return new Response("오디오 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.", {
       status: 502,
     });
+  }
+
+  // ── 라이브 세션 오디오 attach (A안) ─────────────────────────────────────────
+  // recordedInterviewId 가 오면 새 행을 만들지 않고 **기존 라이브 행**에 오디오를 붙여
+  // 재전사(초안 세그먼트 교체)·평가하도록 큐에 넣는다. 라이브 화면은 Web Speech 초안이지만
+  // 최종 리포트는 이 오디오를 Gemini 로 재전사한 결과로 만든다(품질 = 업로드 모드와 동일).
+  const attachIdRaw = formData.get("recordedInterviewId");
+  const attachId = Number(attachIdRaw);
+  if (attachIdRaw != null && Number.isInteger(attachId) && attachId > 0) {
+    const [existing] = await db
+      .select()
+      .from(recordedInterviews)
+      .where(
+        and(
+          eq(recordedInterviews.id, attachId),
+          eq(recordedInterviews.candidateId, cid)
+        )
+      );
+    if (!existing) {
+      await deleteFile(audioBlobKey).catch(() => {});
+      return new Response("Not found", { status: 404 });
+    }
+    // 아직 종료 처리 안 된 라이브 행(recording)이나 실패 행만 새 오디오를 받는다.
+    // 이미 queued/processing/ready 면 복구가 중복 발사한 것 — 이번 오디오는 버리고 멱등 ack.
+    if (existing.status !== "recording" && existing.status !== "failed") {
+      await deleteFile(audioBlobKey).catch(() => {});
+      return Response.json(
+        { id: attachId, status: existing.status },
+        { status: 200 }
+      );
+    }
+    const durRaw = Number(formData.get("durationSeconds"));
+    await db
+      .update(recordedInterviews)
+      .set({
+        audioBlobKey,
+        audioMime: mime,
+        durationSeconds:
+          Number.isFinite(durRaw) && durRaw > 0
+            ? Math.round(durRaw)
+            : existing.durationSeconds,
+        status: "queued",
+        error: null,
+        startedAt: null,
+        attempts: 0,
+      })
+      .where(eq(recordedInterviews.id, attachId));
+
+    logAudit(req, {
+      actor: me!,
+      action: "interview.create",
+      resourceType: "candidate",
+      resourceId: cid,
+      orgId: candidate.orgId,
+      jobId: candidate.jobId,
+      metadata: {
+        kind: "recorded_interview_live_audio",
+        recordedInterviewId: attachId,
+        round,
+      },
+    });
+    triggerRecordedWorker(req);
+    return Response.json({ id: attachId, status: "queued" }, { status: 202 });
   }
 
   // 큐 적재 — status='queued'. 전사·평가는 백그라운드 워커가 수행.

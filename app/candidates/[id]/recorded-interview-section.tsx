@@ -13,6 +13,11 @@ import {
   withLeadEmphasis,
 } from "./shared";
 import { LiveRecorder } from "./recorded-interview-live";
+import {
+  idbDeleteSession,
+  idbListSessions,
+  uploadLiveRecording,
+} from "./live-recording-store";
 
 // ── 대면(오프라인) 면접 녹음 → AI 평가 리포트 ──────────────────────────
 // 업로드 모드: 녹음 파일을 올리면 전사 → 화자 역할배정 → 평가 → 리포트.
@@ -169,6 +174,47 @@ export function RecordedInterviewPanel({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId]);
+
+  // A안 업로드 복구 — 새로고침/이탈로 업로드가 중단된 라이브 녹음이 IndexedDB 에 남아 있으면,
+  // 페이지 로드 시 자동으로 재업로드해 완료시킨다(사용자 조작 불필요). 오디오가 IndexedDB 에
+  // 있으므로 업로드 도중 새로고침해도 유실이 없다. (라운드로 필터 — 두 패널 인스턴스 중복발사 방지.)
+  const recoveredRef = useRef(false);
+  useEffect(() => {
+    if (recoveredRef.current) return;
+    recoveredRef.current = true;
+    void (async () => {
+      try {
+        const sessions = (await idbListSessions()).filter(
+          (s) => s.candidateId === candidateId && s.round === round
+        );
+        let anyUploaded = false;
+        for (const s of sessions) {
+          if (s.state === "complete") {
+            const res = await uploadLiveRecording(s);
+            if (res === "uploaded") anyUploaded = true;
+            else if (res === "permanent")
+              notify(
+                "이전 라이브 녹음 업로드에 실패했습니다(파일 문제). 다시 녹음하거나 파일을 업로드해 주세요.",
+                { title: "복구 실패", tone: "danger" }
+              );
+          } else if (Date.now() - s.createdAt > 65 * 60 * 1000) {
+            // 녹음 중 이탈로 남은 오래된(1시간 초과) 세션 정리 — 녹음 중 복구는 범위 밖.
+            await idbDeleteSession(s.riId);
+          }
+        }
+        if (anyUploaded) {
+          notify(
+            "이전에 종료한 라이브 녹음을 업로드했습니다 — 백그라운드에서 평가합니다.",
+            { title: "업로드 재개", tone: "success" }
+          );
+          await load();
+        }
+      } catch {
+        /* best-effort 복구 */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateId, round]);
 
   // 이 라운드 건만 표시.
   const roundInterviews = (interviews ?? []).filter((i) => i.round === round);
