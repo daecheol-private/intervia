@@ -53,7 +53,9 @@ const STAGE_TRANSITIONS_MAP: Record<string, StageOption[]> = {
     { stage: "ai_pending", label: "서류 스킵하고 AI면접 대기로", variant: "secondary" },
   ],
   screened: [
-    { stage: "ai_pending", variant: "primary" },
+    // ai_pending 진입은 AI면접 링크 생성 + 지원자 발송이 실제 동작이라 상태 라벨('대기')이
+    // 아니라 액션 문구로 노출한다 (후보자 상세의 'AI면접 요청' 버튼과 동일 흐름).
+    { stage: "ai_pending", label: "AI면접 요청", variant: "primary" },
     { stage: "round1_candidate", label: "AI면접 스킵하고 1차 후보로", variant: "secondary" },
   ],
   ai_pending: [
