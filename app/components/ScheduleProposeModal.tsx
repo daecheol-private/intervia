@@ -47,7 +47,7 @@ export function ScheduleProposeModal({
   const [slots, setSlots] = useState<Array<{ start: string; end: string }>>([]);
   const [durationMin, setDurationMin] = useState(60);
   const [notify, setNotify] = useState(false);
-  const [modeOnline, setModeOnline] = useState(true);
+  const [modeOnline, setModeOnline] = useState(false);
   const [address, setAddress] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
   const [busy, setBusy] = useState(false);
