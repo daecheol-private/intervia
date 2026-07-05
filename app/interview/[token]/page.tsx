@@ -97,9 +97,8 @@ export default function InterviewPage() {
   const params = useParams<{ token: string }>();
   const token = params.token;
   const [info, setInfo] = useState<SessionInfo | null>(null);
-  // 면접 진행 언어 — info fetch 로 서버값 반영, 언어 게이트에서 확정.
+  // 면접 진행 언어 — info fetch 로 서버값 반영(기본 ko), 동의 화면 우상단 토글로 전환.
   const [lang, setLang] = useState<Lang>("ko");
-  const [langChosen, setLangChosen] = useState(false);
   const [error, setError] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -310,6 +309,28 @@ export default function InterviewPage() {
     setFinalizing(false);
   };
 
+  // 동의 화면 언어 토글 — 선택 언어를 저장하고 동의 항목을 그 언어로 다시 받아 반영.
+  // (기존 별도 언어 선택 게이트를 없애고 동의 화면 우상단 토글로 대체.)
+  const changeLanguage = async (chosen: Lang) => {
+    try {
+      await fetch(`/api/interview/${token}/language`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: chosen }),
+      });
+      // 선택 언어로 동의 항목·사전 문항을 다시 받기 위해 GET 재요청.
+      const r = await fetch(`/api/interview/${token}`);
+      const d = (await r.json()) as SessionInfo;
+      const nl = normalizeLang(d.language);
+      setInfo({ ...d, language: nl });
+      setLang(nl);
+    } catch {
+      // 실패 시 화면 정지 방지 — 언어만 로컬 반영(동의 항목은 이전 언어로 남을 수 있음).
+      setInfo((prev) => (prev ? { ...prev, language: chosen } : prev));
+      setLang(chosen);
+    }
+  };
+
   if (error) {
     return (
       <CenteredCard>
@@ -389,22 +410,8 @@ export default function InterviewPage() {
     );
   }
 
-  // 언어 선택 게이트 — 동의가 필요한(아직 시작 전) 세션에서, 언어를 아직 안 골랐으면
-  // 동의 화면 앞에 한/영 선택을 먼저 받는다. 선택 후 동의 항목을 그 언어로 다시 받아온다.
-  if (info.consentRequired && !langChosen) {
-    return (
-      <LanguageGate
-        token={token}
-        current={info}
-        onChoose={(d) => {
-          setInfo(d);
-          setLang(normalizeLang(d.language));
-          setLangChosen(true);
-        }}
-      />
-    );
-  }
-
+  // 동의 화면 — 지원자가 링크를 열면 바로 이 화면(회사·공고 맥락 노출)을 보여준다.
+  // 언어는 화면 우상단 토글로 전환한다(기존 별도 언어 선택 게이트 제거). 기본은 ko.
   if (info.consentRequired && info.consentItems) {
     return (
       <ConsentGate
@@ -415,6 +422,7 @@ export default function InterviewPage() {
         jobTitle={info.job.title}
         items={info.consentItems}
         steps={steps}
+        onLanguageChange={changeLanguage}
         onAccepted={() => {
           setInfo({ ...info, consentRequired: false });
         }}
@@ -1546,64 +1554,45 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * 면접 언어 선택 게이트 — 동의 화면 앞 단계. 언어가 아직 확정되지 않은 화면이라
- * 이 화면만 한/영을 병기한다(lang.* 키는 ko·en 사전이 동일). 선택 시 언어를 저장하고
- * 동의 항목을 그 언어로 다시 받아와(onChoose) 다음 단계(동의)로 넘긴다.
+ * 동의 화면 우상단 언어 토글 — 한국어 / English. 언어 이름은 어느 언어에서 봐도 자국어
+ * 표기가 표준이라 라벨은 하드코딩한다. 선택 시 상위(onSelect)가 그 언어로 동의 항목을
+ * 다시 받아온다. 전환 중(busy)에는 비활성 버튼만 흐리게 표시.
  */
-function LanguageGate({
-  token,
-  current,
-  onChoose,
+function LangToggle({
+  lang,
+  busy,
+  onSelect,
 }: {
-  token: string;
-  current: SessionInfo;
-  onChoose: (d: SessionInfo) => void;
+  lang: Lang;
+  busy: boolean;
+  onSelect: (l: Lang) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-
-  const choose = async (chosen: Lang) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await fetch(`/api/interview/${token}/language`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language: chosen }),
-      });
-      // 선택 언어로 동의 항목을 다시 받기 위해 GET 재요청.
-      const r = await fetch(`/api/interview/${token}`);
-      const d = (await r.json()) as SessionInfo;
-      onChoose({ ...d, language: normalizeLang(d.language) });
-    } catch {
-      // 네트워크 등 실패 — 화면이 멈추지 않게 기존 info 를 유지하고 언어만 반영해 진행.
-      // (동의 항목은 이전 언어로 남을 수 있으나 화면 정지보다는 낫다.)
-      onChoose({ ...current, language: chosen });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <CenteredCard>
-      <h1 className="text-xl font-bold text-ink">{t("ko", "lang.title")}</h1>
-      <p className="text-ink-soft mt-2 leading-relaxed">{t("ko", "lang.hint")}</p>
-      <div className="mt-6 flex flex-col gap-3">
-        <button
-          onClick={() => void choose("ko")}
-          disabled={busy}
-          className="w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-surface text-sm font-semibold shadow-sm disabled:opacity-50"
-        >
-          {t("ko", "lang.ko")}
-        </button>
-        <button
-          onClick={() => void choose("en")}
-          disabled={busy}
-          className="w-full px-4 py-3 rounded-xl border border-border-strong text-ink-soft hover:bg-surface-alt text-sm font-semibold disabled:opacity-50"
-        >
-          {t("ko", "lang.en")}
-        </button>
-      </div>
-    </CenteredCard>
+    <div
+      className="inline-flex shrink-0 items-center rounded-lg border border-border-default bg-card/80 p-0.5 text-xs font-semibold"
+      role="group"
+      aria-label="언어 선택 / Language"
+    >
+      {([["ko", "한국어"], ["en", "English"]] as const).map(([l, label]) => {
+        const active = l === lang;
+        return (
+          <button
+            key={l}
+            type="button"
+            onClick={() => onSelect(l)}
+            disabled={busy || active}
+            aria-pressed={active}
+            className={`px-2.5 py-1 rounded-md transition-colors disabled:cursor-default ${
+              active
+                ? "bg-primary text-surface"
+                : "text-ink-soft hover:bg-surface-alt disabled:opacity-50"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1615,6 +1604,7 @@ function ConsentGate({
   jobTitle,
   items,
   steps,
+  onLanguageChange,
   onAccepted,
 }: {
   token: string;
@@ -1624,6 +1614,7 @@ function ConsentGate({
   jobTitle: string;
   items: ConsentItem[];
   steps: Step[];
+  onLanguageChange: (chosen: Lang) => Promise<void>;
   onAccepted: () => void;
 }) {
   const [checks, setChecks] = useState<Record<string, boolean>>(
@@ -1631,6 +1622,14 @@ function ConsentGate({
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // 우상단 언어 토글 전환 중 표시 — 상위가 동의 항목을 다시 받아오는 동안 잠시 busy.
+  const [langBusy, setLangBusy] = useState(false);
+  const switchLang = async (chosen: Lang) => {
+    if (chosen === lang || langBusy) return;
+    setLangBusy(true);
+    await onLanguageChange(chosen);
+    setLangBusy(false);
+  };
   // H5 — 본인 확인용 이메일 (지원 시 등록한 메일과 일치 여부 서버 검증)
   const [email, setEmail] = useState("");
   const [withdrawn, setWithdrawn] = useState(false);
@@ -1707,8 +1706,9 @@ function ConsentGate({
     <main className="max-w-3xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0">
       <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
         <header className="px-6 py-5 border-b border-border-default bg-gradient-to-br from-primary-soft to-primary-soft/60">
-          <div className="mb-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <Logo size={32} />
+            <LangToggle lang={lang} busy={langBusy} onSelect={switchLang} />
           </div>
           <div className="text-xs text-ink-muted mb-1.5">
             {t(lang, "consent.candidateHonorific", { name: candidateName })}

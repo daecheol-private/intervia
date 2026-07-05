@@ -17,7 +17,7 @@ export function normalizeLang(v: unknown): Lang {
 
 type Dict = Record<string, string>;
 
-// 키 그룹: gate.*(상태 카드) · lang.*(언어 게이트) · step.*(단계 라벨)
+// 키 그룹: gate.*(상태 카드) · step.*(단계 라벨)
 //          · personality.* · mcq.* · interview.*(헤더·입력·타이머·종료카드) · consent.*(동의 UI 칩)
 //          · common.*(공용 버튼·문구)
 const ko: Dict = {
@@ -90,12 +90,6 @@ const ko: Dict = {
   "interview.timer.elapsedAria": "면접 경과 {time}",
   // 공통 맥락 라벨 (게이트 헤더)
   "interview.aiInterview": "AI 면접",
-
-  // ── 언어 선택 게이트 (lang) — 이 화면만 한/영 병기 ──
-  "lang.title": "면접 언어 선택 / Choose interview language",
-  "lang.hint": "원하는 언어를 선택하세요. / Please choose your language.",
-  "lang.ko": "한국어",
-  "lang.en": "English",
 
   // ── 인성검사 (personality) ───────────────────────────
   "personality.start.title": "면접 전 사전 문항",
@@ -246,12 +240,6 @@ const en: Dict = {
   "interview.timer.elapsedAria": "Interview elapsed {time}",
   // 공통 맥락 라벨 (게이트 헤더)
   "interview.aiInterview": "AI interview",
-
-  // ── 언어 선택 게이트 (lang) — 이 화면만 한/영 병기 ──
-  "lang.title": "면접 언어 선택 / Choose interview language",
-  "lang.hint": "원하는 언어를 선택하세요. / Please choose your language.",
-  "lang.ko": "한국어",
-  "lang.en": "English",
 
   // ── 인성검사 (personality) ───────────────────────────
   "personality.start.title": "Pre-interview questionnaire",
