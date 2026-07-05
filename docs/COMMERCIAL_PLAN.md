@@ -15,9 +15,9 @@
 | 3. 운영 안정성 | 8 | 7 | 88% |
 | 4. UX / 차별화 | 7 | 5 | 71% |
 | 6. 시스템 관리자 운영 기능 | 16 | 11 | 69% |
-| 7. 디자인 시스템 리뉴얼 (Forest+Ivory) | 4 | 1 | 25% |
+| 7. 디자인 시스템 리뉴얼 (→ Graphite & Signal v3.1) | 4 | 3 | 75% |
 | 8. 고객센터 / 문의 접수 | 5 | 5 | 100% |
-| **합계** | **72** | **57** | **79%** |
+| **합계** | **72** | **59** | **82%** |
 
 마일스톤:
 - **M1 — Phase 1 완료** = 외부 후보자에게 링크 뿌릴 수 있는 법적·보안 최소선
@@ -517,9 +517,13 @@
 
 ---
 
-## Phase 7 — 디자인 시스템 리뉴얼 (Forest + Ivory, 2026-05-21)
+## Phase 7 — 디자인 시스템 리뉴얼 (Forest+Ivory → **Graphite & Signal v3.1**, 2026-05-21 착수)
 
-**결정**: 옵션 B (Deep Forest #0D4F3C + Ivory #FBF9F5 + Apricot accent). 시리프 X, Pretendard 산세리프만. 미리보기 페이지 `/preview/option-a` `/preview/option-b` 제공 후 사용자가 B 선택.
+> ⚠️ **이 Phase 의 초기 방향(Forest + Ivory)은 이후 두 차례 리디자인으로 대체됨.** 현재 운영 디자인 시스템은 **Graphite & Signal v3.1** — 쿨 그래파이트 표면 + **네이비(`#1c3478`) 단일 포인트** + 코랄(`accent #fb7185`)/하늘(`azure`) 보조. 진실의 원천은 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) + [app/globals.css](../app/globals.css). 아래 옛 "Deep Forest + Ivory" 결정은 **역사 기록으로만** 남김.
+> - 전환 경로: Forest 그린(v1) → 일렉트릭 인디고(v2) → **네이비 톤다운(v3.1)**, 아이보리 → 쿨 그래파이트.
+> - 앱 전면 리스킨 + 좌측 레일 셸(`AppShell`)·프리미티브(`app/components/ui`) 배포 완료(2026-06-25, commit 1807a9b, www.intervia.kr 라이브).
+
+**결정 (superseded 2026-06-25)**: ~~옵션 B (Deep Forest #0D4F3C + Ivory #FBF9F5 + Apricot accent)~~. 시리프 X, Pretendard 산세리프만은 유지. 미리보기 페이지 `/preview/option-a` `/preview/option-b` 제공 후 B 선택 → 이후 Graphite & Signal 로 재전환.
 
 **참고 사이트**: Linear customers, Stripe, Anthropic, Ashby, Greenhouse, Lever — 공통점: 시그니처 컬러 절제 사용 + 풍부한 여백 + 타이포 hierarchy + 데이터 dense UI도 숨 쉬게.
 
@@ -527,19 +531,21 @@
 
 - [x] **7-A** 디자인 토큰 (2026-05-21) — `app/globals.css` 전면 재정의 (브랜드 컬러 9종 + semantic 8종 + shadow/radius 스케일 + Tailwind v4 `@theme inline` 토큰 등록 `bg-primary` `text-ink-soft` 등 유틸리티). Pretendard 가변폰트 `<link>` 로드 (CSS `@import` 는 tailwindcss 인라인 전개 충돌). `app/layout.tsx` Geist 제거 + 네비/푸터 토큰 적용. 랜딩 hero 톤 적용 (forest 강조 + ivory 배경 + 둥근 사각 CTA).
 
-### Phase 7-B — 코어 화면 리뉴얼 (남음)
+### Phase 7-B — 코어 화면 리뉴얼 (완료 — v3.1 전면 리스킨 2026-06-25)
 
-- [ ] **7-B-1** 랜딩 페이지 나머지 섹션 (가격·기능·동작방식·CTA) — 옵션 B 톤 적용. 가격 카드는 forest 반전 배경 패턴 사용.
-- [ ] **7-B-2** 로그인 / 회원가입 / 비번 리셋 / 이메일 인증 페이지 — 카드형 폼, 둥근 사각 입력, primary 버튼.
-- [ ] **7-B-3** 메인 대시보드 (`/`) + 내 법인 페이지들 (`/org/*`) — 기존 KPI 카드·공고 카드 톤 통일.
-- [ ] **7-B-4** Admin 페이지 전체 (`/admin/*`) — 테이블·배지·버튼 토큰 일관 적용, 운영 대시보드 시각 강화.
-- [ ] **7-B-5** 공고/후보자 페이지 (`/jobs/*`, `/candidates/*`) — 데이터 dense 화면. 표/카드 일관성, 단계 배지 컬러 정리.
-- [ ] **7-B-6** 후보자 채팅 면접 화면 (`/interview/*`) — 차분한 톤, 메시지 버블 정돈.
+> 개별 화면 톤 적용을 넘어 앱 전체가 Graphite & Signal v3.1 로 재스킨됨(좌측 레일 `AppShell` 셸 + globals.css 토큰화). 아래 6개 화면군 모두 신 디자인 시스템 위에서 렌더. 레퍼런스 구현: 홈 대시보드·공고 상세·후보자 상세(DESIGN_SYSTEM.md 명시).
+
+- [x] **7-B-1** 랜딩 페이지 — v3.1 히어로(반사 헤딩 `.text-reflect` + GET STARTED 라운드 배너) + 섹션·가격 카드 톤 적용.
+- [x] **7-B-2** 로그인 / 회원가입 / 비번 리셋 / 이메일 인증 — 카드형 폼 + `app/components/ui` 프리미티브 적용.
+- [x] **7-B-3** 메인 대시보드 (`/`) + 법인 페이지 (`/org/*`) — KPI·공고 카드 토큰 통일.
+- [x] **7-B-4** Admin 페이지 (`/admin/*`) — 테이블·배지·버튼 토큰 일관, 운영 대시보드 반영.
+- [x] **7-B-5** 공고/후보자 페이지 (`/jobs/*`, `/candidates/*`) — 단계 배지 회색조 중립화(색=상태 규칙 §색규칙 4).
+- [x] **7-B-6** 후보자 채팅 면접 (`/interview/*`) — 차분한 톤, azure 말풍선.
 
 ### Phase 7-C — 컴포넌트 추출 + 정리
 
-- [ ] **7-C-1** 자주 쓰는 패턴 추출 — `<Button>`, `<Card>`, `<Badge>`, `<Input>`, `<Table>`, `<Modal>` 을 `app/components/ui/` 에. 페이지에서 인라인 className 반복 줄이기.
-- [ ] **7-C-2** 색·간격 사용 일관성 검증 — `slate-*` `blue-*` `emerald-*` `amber-*` 같은 임시 컬러를 토큰으로 일괄 마이그레이션.
+- [x] **7-C-1** 프리미티브 추출 (완료) — `app/components/ui/` 에 Button/Badge/Card/Container/Input/Field/Checkbox/Alert/SectionHeading 등 + 배럴 `index.ts`. 개발용 쇼케이스 `/design`. 페이지 인라인 className 반복 축소.
+- [ ] **7-C-2** 색·간격 일관성 검증 (**부분** — 잔여 정리 필요) — 대부분 토큰화됐으나 `slate/blue/emerald/indigo-NNN` 임시 팔레트색이 아직 일부 tsx(2026-07-06 기준 ~9개 파일)에 잔존. 신규 화면은 토큰만 사용(DESIGN_SYSTEM 규칙 강제), 잔여는 점진 정리.
 
 ### Phase 7-D — 마이크로카피 + 모션 (선택)
 
@@ -645,3 +651,6 @@
   - **신규**: `lib/toss.ts` `cancelTossPayment`, `lib/tokens.ts` `reverseChargePayment`, `GET /api/admin/orgs/[id]/payments`, `POST /api/admin/payments/[id]/cancel`, `app/admin/orgs/[id]/payments/page.tsx`(결제내역+환불, step-up), orgs 목록에 "결제내역" 링크.
   - **검증**: `tsc` 통과 + 가드(sysadmin step-up 미완 403 `step_up_required` / org_admin 403 / 결제내역 조회 동작). 실 토스 취소+회수는 step-up(비번 재입력) 뒤라 UI 수동 검증 몫. 미배포(결제와 동일 게이트).
   - **중복 "환불" 버튼 제거**(같은 날, 사용자 지적): `/admin/orgs` 의 기존 "환불" 버튼은 돈을 안 움직이고 토큰만 가감(=충전/조정과 중복)인데 이름이 오해를 부름 → **버튼·`/api/admin/orgs/[id]/refund` 라우트·`refundTokens()` 전부 제거**. 토큰 수동 +/− 는 충전/조정(`grant-tokens`), 카드 실환불은 결제취소(`payment.cancel`)로 일원화. (6-A-1 의 standalone refund 는 이로써 폐지.) `refundFeature`(기능 실패 자동환불)는 별개 — 유지.
+- 2026-07-06 — **문서 동기화 (Phase E 결제·Phase 7 디자인 실상 반영)**. 코드/문서 드리프트 해소, 코드 변경 없음(문서만).
+  - **USER_TODO Phase E** — E-1(payment_orders 실연동)·E-2(충전 UI)·E-3(환불)이 미체크 상태였으나, 실제로는 위 2026-06-22 토스 연동으로 **코드 완성 + 운영 배포(dormant, 라이브키만 대기, commit 7340fb6)**. 3건 `[x]` + Phase E 헤더/인트로를 "가맹 후 시작" → "코드 선제 완료, D-4 라이브키 대기"로 정정, 진행 요약 18→21.
+  - **COMMERCIAL_PLAN Phase 7** — 헤더/결정이 옛 "Forest + Ivory" 기준이라 stale(실제는 2026-06-25 Graphite & Signal v3.1 네이비+코랄로 전면 전환·배포). 헤더에 전환 경로·supersession 명시, 7-B 6개 화면군 + 7-C-1(프리미티브 `app/components/ui`) `[x]`, 7-C-2 는 잔여 팔레트색(~9개 파일) 정리 부분완료로 정정. 진행률 25%→75%, 상단 합계 57→59(82%).

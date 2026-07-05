@@ -46,7 +46,7 @@ SDK 단일: **`@google/genai`** (vertexai: true). 분기 없음 — `clientFor(t
 - 아키텍처: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - DB 스키마: [docs/SCHEMA.md](docs/SCHEMA.md)
 - API 엔드포인트: [docs/API.md](docs/API.md)
-- **디자인 시스템**: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) ← **디자인·UI 작업 전 필독** (색 규칙·토큰·프리미티브, Forest+Ivory v2)
+- **디자인 시스템**: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) ← **디자인·UI 작업 전 필독** (색 규칙·토큰·프리미티브, Graphite & Signal v3.1 — 네이비+코랄)
 - 함정 모음: [docs/GOTCHAS.md](docs/GOTCHAS.md) ← **작업 전 한번 훑기**
 - 배포: [DEPLOY.md](DEPLOY.md)
 - 장애 대응: [docs/RUNBOOK.md](docs/RUNBOOK.md) ← **사고 시 무엇을 보고/누르고/복구하는지** + 백업·복구
