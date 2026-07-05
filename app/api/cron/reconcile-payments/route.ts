@@ -1,5 +1,6 @@
 import { reconcilePendingPayments } from "@/lib/payment-reconcile";
 import { getCurrentUser } from "@/lib/auth";
+import { secretEquals } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
 // 주문당 토스 조회 1회 — 배치 50건 상한이라도 외부호출 대기 여유.
@@ -13,7 +14,7 @@ export const maxDuration = 120;
 async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;
   const header = req.headers.get("authorization");
-  if (secret && header === `Bearer ${secret}`) return null;
+  if (secret && secretEquals(header, `Bearer ${secret}`)) return null;
   if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
 
   const me = await getCurrentUser();

@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
-import { candidates } from "@/lib/schema";
+import { candidates, jobPostings } from "@/lib/schema";
 import { inArray } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { isJobUnlocked } from "@/lib/job-lock";
 import { deleteCandidateFiles } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
 
@@ -28,15 +29,37 @@ export async function POST(req: Request) {
     .where(inArray(candidates.id, ids));
 
   // 타 법인 행이 섞여 있으면 전체 거부 (no partial)
-  const allowed: typeof rows = [];
+  const allowedRaw: typeof rows = [];
   for (const r of rows) {
     if (!ownsOrg(me!, r.orgId)) {
       return new Response("권한 없는 후보자가 포함되어 있습니다.", {
         status: 403,
       });
     }
-    allowed.push(r);
+    allowedRaw.push(r);
   }
+
+  // PIN 잠금 가드 — 단건 삭제(guardCandidate)·bulk-screen 과 동일. 잠긴 공고의 후보는
+  // 삭제 대상에서 제외(부서 칸막이 우회 방지). system_admin·org_admin·면접관·PIN 해제는
+  // isJobUnlocked 가 통과시키므로 실제로는 PIN 미입력 member 의 잠긴 공고만 걸린다.
+  const lockedJobIds = new Set<number>();
+  if (me!.role !== "system_admin") {
+    const distinctJobIds = [...new Set(allowedRaw.map((r) => r.jobId))];
+    const jobRows = distinctJobIds.length
+      ? await db
+          .select({
+            id: jobPostings.id,
+            passwordHash: jobPostings.passwordHash,
+          })
+          .from(jobPostings)
+          .where(inArray(jobPostings.id, distinctJobIds))
+      : [];
+    for (const j of jobRows)
+      if (j.passwordHash && !(await isJobUnlocked(j.id, me!)))
+        lockedJobIds.add(j.id);
+  }
+  const allowed = allowedRaw.filter((r) => !lockedJobIds.has(r.jobId));
+
   if (allowed.length === 0)
     return new Response("삭제할 후보자가 없습니다.", { status: 404 });
 

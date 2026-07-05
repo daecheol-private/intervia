@@ -182,6 +182,12 @@ async function assertPublicUrl(raw: string): Promise<string> {
     if (isBlockedIp(host)) throw new Error("내부 주소로의 요청은 차단됩니다.");
     return host;
   }
+  // 비표준 IP 표기(정수/8진수/16진수) 차단 — isIP()는 이들을 IP로 인식하지 못해 아래 DNS
+  // lookup 분기로 빠지는데, getaddrinfo 가 플랫폼에 따라 loopback 으로 해석하면 SSRF 우회가 된다.
+  // 예: 2130706433(=127.0.0.1), 0x7f000001, 0177.0.0.1, 127.1. 정상 도메인은 라벨에 문자가
+  // 있어(예: TLD 'com') 이 패턴에 걸리지 않는다.
+  if (/^(0x[0-9a-f]+|[0-9]+)(\.(0x[0-9a-f]+|[0-9]+))*$/i.test(host))
+    throw new Error("올바르지 않은 호스트입니다.");
   let addrs: Array<{ address: string }>;
   try {
     addrs = await lookup(host, { all: true });

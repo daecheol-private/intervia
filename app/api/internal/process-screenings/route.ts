@@ -13,6 +13,7 @@ import {
   ScreeningError,
 } from "@/lib/screening";
 import { getCurrentUser } from "@/lib/auth";
+import { secretEquals } from "@/lib/secret-compare";
 import { captureError } from "@/lib/error-reporter";
 import { isTransientDbError } from "@/lib/db-retry";
 import { log } from "@/lib/logger";
@@ -63,7 +64,7 @@ const WALL_CLOCK_BUDGET_MS = 70_000;
 async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.INTERNAL_API_SECRET;
   const header = req.headers.get("x-internal-secret");
-  if (secret && header === secret) return null;
+  if (secret && secretEquals(header, secret)) return null;
   // internal 은 cron(X-Internal-Secret)·self-chain 만 호출. 시크릿 설정 시 헤더 위조 우회 차단.
   if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
   const me = await getCurrentUser();

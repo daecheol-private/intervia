@@ -1,4 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
+import { secretEquals } from "@/lib/secret-compare";
 import { collectOpsMetrics, evaluateAlerts, formatOpsReport } from "@/lib/ops-monitor";
 import { notifyOps } from "@/lib/error-reporter";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
@@ -19,7 +20,7 @@ export const runtime = "nodejs";
 async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;
   const header = req.headers.get("authorization");
-  if (secret && header === `Bearer ${secret}`) return null;
+  if (secret && secretEquals(header, `Bearer ${secret}`)) return null;
   // 시크릿 미설정 시에만 Vercel cron 헤더 허용. 운영(시크릿 설정)에선 헤더 위조 우회 차단.
   if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
   const me = await getCurrentUser();

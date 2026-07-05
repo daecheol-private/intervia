@@ -1,5 +1,6 @@
 import { sendDailyDigests } from "@/lib/daily-digest";
 import { getCurrentUser } from "@/lib/auth";
+import { secretEquals } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
 // 면접관 수만큼 순차 발송(페이싱 ~2/s) — 대상이 몰려도 여유 있게.
@@ -12,7 +13,7 @@ export const maxDuration = 120;
 async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;
   const header = req.headers.get("authorization");
-  if (secret && header === `Bearer ${secret}`) return null;
+  if (secret && secretEquals(header, `Bearer ${secret}`)) return null;
   if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
 
   const me = await getCurrentUser();

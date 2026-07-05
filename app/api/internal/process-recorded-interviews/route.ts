@@ -7,6 +7,7 @@ import {
   RecordedInterviewError,
 } from "@/lib/recorded-interview-queue";
 import { getCurrentUser } from "@/lib/auth";
+import { secretEquals } from "@/lib/secret-compare";
 import { workerBaseUrl } from "@/lib/worker-trigger";
 import { isTransientDbError } from "@/lib/db-retry";
 import { captureError } from "@/lib/error-reporter";
@@ -26,7 +27,7 @@ export const maxDuration = 300;
 async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.INTERNAL_API_SECRET;
   const header = req.headers.get("x-internal-secret");
-  if (secret && header === secret) return null;
+  if (secret && secretEquals(header, secret)) return null;
   if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
   const me = await getCurrentUser();
   if (me?.role === "system_admin") return null;

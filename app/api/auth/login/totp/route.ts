@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { users } from "@/lib/schema";
+import { users, organizations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { createSession, setSessionCookie } from "@/lib/auth";
 import { verifyLoginChallenge } from "@/lib/login-challenge";
@@ -70,6 +70,23 @@ export async function POST(req: Request) {
     success: true,
     userAgent,
   });
+
+  // 계정 상태 재검증 (defense in depth) — 1단계 로그인이 이미 disabled/미인증/pending/정지를
+  // 차단한 뒤 challenge 를 발급하지만, challenge 유효시간(수분) 안에 상태가 바뀌는 경합을 막고
+  // login/totp 가 login 라우트의 검사 순서에 의존하지 않도록 세션 발급 직전에 동일 게이트를 건다.
+  // (TOTP 검증까지 통과한 뒤라 계정 상태를 노출해도 무방 — 본인 인증 완료 상태.)
+  if (user.status !== "active" || !user.emailVerifiedAt)
+    return new Response("로그인할 수 없는 계정 상태입니다. 다시 로그인해 주세요.", {
+      status: 403,
+    });
+  if (user.orgId != null && user.role !== "system_admin") {
+    const [org] = await db
+      .select({ suspendedAt: organizations.suspendedAt })
+      .from(organizations)
+      .where(eq(organizations.id, user.orgId));
+    if (org?.suspendedAt)
+      return new Response("소속 법인이 일시 정지 상태입니다.", { status: 403 });
+  }
 
   const token = await createSession(user.id, { ip, userAgent });
   await setSessionCookie(token);

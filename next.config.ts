@@ -1,10 +1,15 @@
 import type { NextConfig } from "next";
 
 // 전역 보안 응답 헤더. 앱 동작에 영향 없는 안전 범위만 적용.
-// (스크립트/스타일 CSP 는 inline 해시·nonce 검증이 필요해 별도 작업으로 분리 — 여기선 frame-ancestors 만)
+// (스크립트/스타일 CSP 는 inline 해시·nonce 검증이 필요해 별도 작업으로 분리 — 여기선
+//  frame-ancestors + object-src/base-uri 처럼 정상 렌더에 영향 없는 지시어만.)
 const securityHeaders = [
-  // 클릭재킹 방어 — 면접/관리 페이지의 cross-origin iframe 임베드 차단.
-  { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+  // 클릭재킹 방어(frame-ancestors) + 플러그인 실행 차단(object-src) + <base> 태그 주입 차단(base-uri).
+  // 세 지시어 모두 정상 앱 동작에 영향 없음. script-src/style-src 는 nonce 작업 후 별도 추가.
+  {
+    key: "Content-Security-Policy",
+    value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
+  },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   // MIME 스니핑 차단 (업로드/다운로드 라우트 보호).
   { key: "X-Content-Type-Options", value: "nosniff" },

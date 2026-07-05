@@ -142,12 +142,40 @@ export async function deleteFile(
 }
 
 /**
+ * 저장된 파일 URL(Blob) 이 허용된 호스트인지 검증 — SSRF 방어.
+ * https + Vercel Blob 도메인(또는 BLOB_ALLOWED_HOSTS)만 통과. 다운로드 라우트와 동일 규칙.
+ * key 는 항상 saveFile 이 생성한 서버 값이지만(사용자가 임의 URL 을 넣을 경로 없음),
+ * fetch 하는 모든 경로에서 동일 allowlist 를 적용해 방어 일관성을 유지한다.
+ */
+export function isAllowedBlobUrl(urlStr: string): boolean {
+  let host = "";
+  try {
+    const u = new URL(urlStr);
+    if (u.protocol !== "https:") return false;
+    host = u.host.toLowerCase();
+  } catch {
+    return false;
+  }
+  const allowedHosts = new Set<string>([
+    "blob.vercel-storage.com",
+    ...(process.env.BLOB_ALLOWED_HOSTS ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  ]);
+  // 정확히 일치하거나 허용 호스트의 서브도메인(.<host>)만 통과.
+  return [...allowedHosts].some((h) => host === h || host.endsWith("." + h));
+}
+
+/**
  * 저장된 파일을 다시 buffer 로 읽는다 — 워커가 비동기 파싱 시 사용.
  * key 가 http(s) URL(Blob)이면 fetch, 아니면 로컬 ./uploads/ 에서 읽음.
  * 못 읽으면 null.
  */
 export async function readStoredFile(key: string): Promise<Buffer | null> {
   if (/^https?:\/\//i.test(key)) {
+    // SSRF 방어 — 허용된 Blob 호스트가 아니면 fetch 하지 않는다(다운로드 라우트와 동일 규칙).
+    if (!isAllowedBlobUrl(key)) return null;
     try {
       const r = await fetch(key);
       if (!r.ok) return null;

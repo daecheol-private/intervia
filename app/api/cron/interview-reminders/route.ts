@@ -3,6 +3,7 @@ import {
   sendAiInterviewReminders,
 } from "@/lib/interview-reminders";
 import { getCurrentUser } from "@/lib/auth";
+import { secretEquals } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
 // 리마인더 메일 발송(페이싱 2/s) — 같은 시간대 면접이 몰린 날 대비.
@@ -17,7 +18,7 @@ export const maxDuration = 120;
 async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;
   const header = req.headers.get("authorization");
-  if (secret && header === `Bearer ${secret}`) return null;
+  if (secret && secretEquals(header, `Bearer ${secret}`)) return null;
   if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
 
   const me = await getCurrentUser();

@@ -123,6 +123,13 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     await db.delete(sessions).where(eq(sessions.token, token));
     return null;
   }
+  // 비활성화된 계정: 세션 즉시 무효화 (법인 정지와 동일 — 관리자가 계정을 disable 하면
+  // 기존 세션 만료를 기다리지 않고 즉시 로그아웃. 로그인 라우트는 이미 disabled 를 차단하므로
+  // 여기서 걸리는 건 "로그인 후 disable 된" 세션뿐이다.)
+  if (row.status === "disabled") {
+    await db.delete(sessions).where(eq(sessions.token, token));
+    return null;
+  }
 
   // last_seen + 만료 슬라이딩 갱신 — throttle 간격 이상 차이날 때만. 매 요청 write 부하 회피.
   // expiresAt 를 now+TTL 로 밀어 "활동하는 한 유지, 비활동 시 TTL 후 만료"(슬라이딩) 구현.

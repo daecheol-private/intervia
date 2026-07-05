@@ -4,13 +4,14 @@ import { cleanupOldRateLog } from "@/lib/rate-limit";
 import { runLifecycleSweep } from "@/lib/job-lifecycle";
 import { expireInterviewSessions } from "@/lib/expire-sessions";
 import { getCurrentUser } from "@/lib/auth";
+import { secretEquals } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
 
 async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;
   const header = req.headers.get("authorization");
-  if (secret && header === `Bearer ${secret}`) return null;
+  if (secret && secretEquals(header, `Bearer ${secret}`)) return null;
   if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
   const me = await getCurrentUser();
   if (me?.role === "system_admin") return null;

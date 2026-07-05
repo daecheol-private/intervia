@@ -135,8 +135,14 @@ export async function GET(
     jobSafe = { ...rest, hasPassword: passwordHash != null };
   }
 
+  // 원본 이력서 텍스트(resumeText)는 항상 서버 전용 — 응답에서 명시적으로 제외한다.
+  // (HR 검수용 마스킹본 resumeMaskedText 만 노출.) candidates 에 새 PII 컬럼을 추가하면
+  //  여기서도 클라이언트 노출 여부를 반드시 검토할 것 — 전체 spread 로 무심코 새지 않도록.
+  const candidateSafe: Record<string, unknown> = { ...candidate, favorited };
+  delete candidateSafe.resumeText;
+
   return Response.json({
-    candidate: { ...candidate, favorited },
+    candidate: candidateSafe,
     job: jobSafe,
     companyName,
     jobTraitProfile,
