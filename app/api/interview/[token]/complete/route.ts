@@ -53,7 +53,7 @@ export async function POST(
   if (session.messages.length < 2)
     return new Response("대화가 충분하지 않음", { status: 400 });
 
-  if (!(await hasValidConsent(session.id))) {
+  if (!(await hasValidConsent(session.id, session.candidateId))) {
     return Response.json(
       { error: "동의 없는 면접은 평가할 수 없습니다.", code: "consent_required" },
       { status: 403 }

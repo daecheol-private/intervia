@@ -83,7 +83,7 @@ export async function GET(
     .where(eq(jobPostings.id, candidate.jobId));
   if (!job) return new Response("공고 없음", { status: 404 });
 
-  const consented = await hasValidConsent(session.id);
+  const consented = await hasValidConsent(session.id, session.candidateId);
 
   // 인성검사 단계 — 법인 컬처핏 설정이 있고, 아직 미실시이며, 채팅이 시작되지 않은
   // 세션만 출제 (도입 전 시작된 진행 중 세션은 소급 차단하지 않음).

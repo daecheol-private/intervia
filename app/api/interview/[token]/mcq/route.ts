@@ -41,7 +41,7 @@ export async function POST(
   // 멱등 — 새로고침 후 재제출 등은 최초 결과 유지
   if (session.mcqResponses) return Response.json({ ok: true, already: true });
 
-  if (!(await hasValidConsent(session.id))) {
+  if (!(await hasValidConsent(session.id, session.candidateId))) {
     return Response.json(
       { error: "문제 풀이 전 개인정보 처리 동의가 필요합니다.", code: "consent_required" },
       { status: 403 }

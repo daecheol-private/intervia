@@ -12,7 +12,7 @@
  */
 import { db } from "./db";
 import { consentLogs } from "./schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import type { Lang } from "./i18n/interview";
 
 // 1.1.0 — Google 국외이전 단독 항목 분리, AI 거부권 영향 명시 (PIPA §28의8, §37의2)
@@ -184,14 +184,31 @@ export function validateConsents(
   return missing.length === 0 ? { ok: true } : { ok: false, missing };
 }
 
-/** 해당 세션에 현재 버전의 유효 동의가 있는지. */
+/**
+ * 해당 세션에 현재 버전의 유효 동의가 있는지.
+ *
+ * candidateId 를 함께 넘기면 "이 후보의" 동의인지도 확인한다. consent_logs 는
+ * interview_session_id 에 FK 가 없어(감사 목적상 세션 삭제 후에도 동의 row 를 보존한다)
+ * 세션이 사라져도 동의 row 가 남는데, 로컬/재시드 환경에서 세션 id 가 재사용되면
+ * 옛 후보의 orphan 동의가 새 세션에 잘못 매칭돼 동의 화면이 건너뛰어질 수 있다.
+ * candidate_id 병행 매칭으로 이 오탐을 차단한다. 동의 저장 시 candidateId =
+ * session.candidateId 로 기록되므로(consent 라우트) 정상 흐름에는 영향이 없다.
+ */
 export async function hasValidConsent(
-  interviewSessionId: number
+  interviewSessionId: number,
+  candidateId?: number
 ): Promise<boolean> {
   const [row] = await db
     .select({ version: consentLogs.consentVersion, consents: consentLogs.consents })
     .from(consentLogs)
-    .where(eq(consentLogs.interviewSessionId, interviewSessionId))
+    .where(
+      candidateId != null
+        ? and(
+            eq(consentLogs.interviewSessionId, interviewSessionId),
+            eq(consentLogs.candidateId, candidateId)
+          )
+        : eq(consentLogs.interviewSessionId, interviewSessionId)
+    )
     .orderBy(desc(consentLogs.id))
     .limit(1);
   if (!row) return false;

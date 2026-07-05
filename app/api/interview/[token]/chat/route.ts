@@ -76,7 +76,7 @@ export async function POST(
   // (기존 3회 순차 왕복). 컬럼도 사용분만 — 전체 select() 는 비마스킹 이력서 원문(수십 KB)
   // 까지 매 턴 끌어왔다. 매 턴 실행되는 first-token 핫패스.
   const [consentOk, ctxRows] = await Promise.all([
-    hasValidConsent(session.id),
+    hasValidConsent(session.id, session.candidateId),
     db
       .select({
         candidate: {

@@ -131,6 +131,7 @@ export async function POST(
     .where(
       and(
         eq(consentLogs.interviewSessionId, session.id),
+        eq(consentLogs.candidateId, session.candidateId),
         eq(consentLogs.consentVersion, CONSENT_VERSION)
       )
     )
