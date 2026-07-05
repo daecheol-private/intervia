@@ -118,6 +118,19 @@ function resolveAlimtalkOverride(): string | null {
   return process.env.NODE_ENV !== "production" ? LOCAL_DEV_MOBILE : null;
 }
 
+/**
+ * 로컬(비운영) 알림톡 발송 스위치.
+ * 이메일과 달리 알림톡은 카카오 과금이 붙고, 매 트리거마다 본인 폰(LOCAL_DEV_MOBILE)으로 카톡이 쌓인다.
+ * 그래서 로컬 dev 에서는 기본적으로 발송하지 않고(skip), "필요할 때만" env 로 켠다:
+ *   .env.local 에 ALIMTALK_LOCAL_ENABLED=1  (값 변경 후 dev 재시작 필요)
+ * 운영(production)에서는 이 스위치와 무관하게 항상 발송한다(아래 sendCandidateAlimtalk 참조).
+ * test-alimtalk 스크립트는 "지금 보낸다"는 명시적 도구라 스스로 이 플래그를 켜서 게이트를 통과한다.
+ */
+function isAlimtalkLocalEnabled(): boolean {
+  const v = process.env.ALIMTALK_LOCAL_ENABLED;
+  return v === "1" || v === "true";
+}
+
 // 토큰 캐시 — 발송마다 토큰을 새로 받으면 느리고 한도 낭비. 유효시간(600s) 내 재사용.
 let tokenCache: { token: string; expiresAtMs: number } | null = null;
 
@@ -161,6 +174,12 @@ export async function sendCandidateAlimtalk(
   args: { phone: string | null | undefined; vars: AlimtalkVars; fallbackText?: string }
 ): Promise<AlimtalkResult> {
   if (!isAlimtalkConfigured()) return { ok: false, skipped: true, reason: "not_configured" };
+
+  // 로컬/비운영: 기본은 발송 안 함. .env.local 에 ALIMTALK_LOCAL_ENABLED=1 을 켰을 때만 발송한다
+  // (수신은 LOCAL_DEV_MOBILE 로 리다이렉트). 운영은 이 게이트를 통과 — 항상 발송.
+  if (process.env.NODE_ENV !== "production" && !isAlimtalkLocalEnabled()) {
+    return { ok: false, skipped: true, reason: "local_disabled" };
+  }
 
   const tplCode = process.env[TEMPLATE_ENV[type]];
   if (!tplCode) return { ok: false, skipped: true, reason: "template_not_set" };

@@ -26,6 +26,11 @@ import {
   type AlimtalkType,
 } from "../lib/alimtalk";
 
+// 이 스크립트는 "지금 발송" 하는 명시적 수동 도구이므로, 로컬 발송 게이트(ALIMTALK_LOCAL_ENABLED)를
+// 스스로 켜서 통과한다. .env.local 에 플래그를 켜두지 않아도 테스트 발송은 항상 동작한다.
+// (alimtalk.ts 는 이 값을 발송 호출 시점에 읽으므로 import 이후 지정으로 충분하다.)
+process.env.ALIMTALK_LOCAL_ENABLED = "1";
+
 const TYPES: AlimtalkType[] = [
   "interview_invite",
   "interview_reminder",
@@ -128,6 +133,7 @@ void (async () => {
       not_configured: "ALIGO_API_KEY / USER_ID / SENDER_KEY / SENDER 4개를 모두 채우세요.",
       template_not_set: `${TPL_ENV[type]} (이 종류의 승인 템플릿 코드)가 env 에 없습니다.`,
       no_phone: "번호 형식이 휴대폰(01x...)이 아닙니다.",
+      local_disabled: "로컬 발송 게이트가 꺼져 있습니다. (이 스크립트는 자동으로 켜므로 정상 경로에선 안 나옴)",
     };
     if (hint[result.reason]) console.log(`   → ${hint[result.reason]}`);
   } else {
