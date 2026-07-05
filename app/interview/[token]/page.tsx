@@ -1710,7 +1710,7 @@ function ConsentGate({
             <Logo size={32} />
             <LangToggle lang={lang} busy={langBusy} onSelect={switchLang} />
           </div>
-          <div className="text-xs text-ink-muted mb-1.5">
+          <div className="text-base sm:text-lg font-semibold text-ink mb-2">
             {t(lang, "consent.candidateHonorific", { name: candidateName })}
           </div>
           {orgName ? (

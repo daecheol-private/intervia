@@ -138,7 +138,7 @@ const ko: Dict = {
   "mcq.preparing.hint": "잠시만 기다려 주세요. 곧 시작됩니다.",
 
   // ── 동의 화면 (consent) ──────────────────────────────
-  "consent.candidateHonorific": "{name} 님",
+  "consent.candidateHonorific": "안녕하세요, {name} 님",
   "consent.title": "{job} AI 면접 — 개인정보 처리 동의",
   "consent.flowTitle": "동의를 완료하면 아래 순서로 진행됩니다",
   "consent.flowSteps": " · 총 {n}단계",
@@ -289,7 +289,7 @@ const en: Dict = {
   "mcq.preparing.hint": "Just a moment — this will start shortly.",
 
   // ── 동의 화면 (consent) ──────────────────────────────
-  "consent.candidateHonorific": "Dear {name}",
+  "consent.candidateHonorific": "Hello, {name}",
   "consent.title": "{job} AI interview — Consent to personal data processing",
   "consent.flowTitle": "Once you consent, the process proceeds in this order",
   "consent.flowSteps": " · {n} steps in total",
