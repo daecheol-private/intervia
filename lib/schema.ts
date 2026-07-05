@@ -1400,6 +1400,7 @@ export const notifications = sqliteTable("notifications", {
       "new_inquiry",
       "inquiry_replied",
       "draft_reminder",
+      "admin_promotion",
     ],
   }).notNull(),
   title: text("title").notNull(),

@@ -32,6 +32,7 @@ export default async function TransferAdminPage({
       email: users.email,
       role: users.role,
       status: users.status,
+      emailVerifiedAt: users.emailVerifiedAt,
     })
     .from(users)
     .where(and(eq(users.orgId, orgId), ne(users.role, "system_admin")))

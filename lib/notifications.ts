@@ -26,7 +26,8 @@ export type NotificationType =
   | "announcement"
   | "new_inquiry"
   | "inquiry_replied"
-  | "draft_reminder";
+  | "draft_reminder"
+  | "admin_promotion";
 
 export type CreateNotificationInput = {
   userId: number;

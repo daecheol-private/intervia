@@ -13,6 +13,7 @@ import {
   Megaphone,
   LifeBuoy,
   Reply,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,7 +26,8 @@ type NotificationType =
   | "candidate_appeal"
   | "announcement"
   | "new_inquiry"
-  | "inquiry_replied";
+  | "inquiry_replied"
+  | "admin_promotion";
 
 type Notification = {
   id: number;
@@ -46,6 +48,7 @@ const ICON_MAP: Record<NotificationType, LucideIcon> = {
   announcement: Megaphone,
   new_inquiry: LifeBuoy,
   inquiry_replied: Reply,
+  admin_promotion: ShieldCheck,
 };
 
 const POLL_MS = 60_000; // 60초마다 폴링

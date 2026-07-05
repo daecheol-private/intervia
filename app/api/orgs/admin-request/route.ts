@@ -15,6 +15,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { DPO_INFO, COMPANY_INFO, SITE_INFO } from "@/lib/site-info";
 import { logAudit } from "@/lib/audit";
+import { notifySystemAdmins } from "@/lib/notifications";
 import { isValidEmail, normalizeEmail } from "@/lib/email-domain";
 import { extractIp } from "@/lib/auth-attempts";
 
@@ -68,6 +69,19 @@ export async function POST(req: Request) {
       ip: extractIp(req),
     },
   });
+
+  // 인앱 알림 — 운영자가 어드민 알림 벨에서 즉시 인지(메일을 놓치거나 SMTP 미설정이어도).
+  // 이메일은 아래에서 신청자 정보·검토 절차를 담은 상세 본문으로 별도 발송하므로,
+  // 여기서는 인앱 알림만 남긴다(email:false — 메일 중복 방지).
+  void notifySystemAdmins(
+    {
+      type: "admin_promotion",
+      title: `「${org.name}」 법인 담당자 권한 요청 — ${requesterName} 님. 신원 확인 후 법인 담당자로 승격해 주세요.`,
+      href: `/admin/orgs/${org.id}/transfer-admin`,
+      payload: { orgId: org.id, requesterEmail: normalizedEmail, requesterName },
+    },
+    { email: false }
+  );
 
   // 운영자 메일 발송 — 시스템 SMTP (env) 사용. 실패해도 감사로그 있으니 응답은 OK.
   if (await isSmtpAvailable(null)) {

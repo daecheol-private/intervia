@@ -9,6 +9,7 @@ type Member = {
   email: string;
   role: "system_admin" | "org_admin" | "member";
   status: "active" | "pending" | "disabled";
+  emailVerifiedAt: string | null;
 };
 
 export default function TransferAdminForm({
@@ -22,8 +23,11 @@ export default function TransferAdminForm({
   const currentAdmins = members.filter(
     (m) => m.role === "org_admin" && m.status === "active"
   );
+  // 승격 대상: system_admin 제외 + disabled 아닌 모두 (active + pending).
+  // pending = 담당자 공석 법인에 합류 요청을 넣고 대기 중인 신청자 — 이 화면이 유일한 승계
+  // 경로이므로 대상에 포함한다. 승격 시 서버가 활성화 + 이메일 인증까지 함께 처리한다.
   const candidates = members.filter(
-    (m) => m.role !== "system_admin" && m.status === "active"
+    (m) => m.role !== "system_admin" && m.status !== "disabled"
   );
 
   const [toUserId, setToUserId] = useState<number | "">("");
@@ -34,6 +38,9 @@ export default function TransferAdminForm({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  const selectedPending =
+    candidates.find((m) => m.id === toUserId)?.status === "pending";
 
   const submit = async () => {
     if (!toUserId) {
@@ -80,10 +87,21 @@ export default function TransferAdminForm({
           <option value="">선택...</option>
           {candidates.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.name} &lt;{m.email}&gt; ({m.role})
+              {m.name} &lt;{m.email}&gt;
+              {m.status === "pending"
+                ? m.emailVerifiedAt
+                  ? " — 합류 승인 대기 (이메일 인증됨)"
+                  : " — 합류 승인 대기 (이메일 미인증)"
+                : ` (${m.role})`}
             </option>
           ))}
         </select>
+        {selectedPending && (
+          <p className="mt-1.5 text-[11px] text-warning">
+            이 신청자는 <strong>합류 승인 대기(pending)</strong> 상태입니다. 승격하면 계정이 즉시
+            활성화·이메일 인증 처리되어 바로 로그인할 수 있으니, 신원·재직을 먼저 확인하세요.
+          </p>
+        )}
       </div>
 
       <div className="border-t border-border-default pt-4">

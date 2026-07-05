@@ -15,8 +15,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
-import { users, organizations } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { users, organizations, orgJoinRequests } from "@/lib/schema";
+import { and, eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
@@ -64,10 +64,11 @@ export async function POST(
     return new Response("시스템 관리자에게는 org_admin 권한이 별도 부여되지 않습니다.", {
       status: 400,
     });
-  if (to.status !== "active")
-    return new Response("비활성 사용자에게는 권한을 이전할 수 없습니다.", {
-      status: 400,
-    });
+  if (to.status === "disabled")
+    return new Response(
+      "비활성(disabled) 계정에는 권한을 이전할 수 없습니다. 먼저 계정을 활성화하세요.",
+      { status: 400 }
+    );
 
   // fromUser 처리 (옵션)
   let fromInfo: { id: number; email: string; previousRole: string } | null = null;
@@ -96,10 +97,36 @@ export async function POST(
   // toUser 승격 + 시작 가이드 재노출 (개인 단위) — 이미 셋업이 끝난 법인이라도
   // 새 담당자가 각 단계 '따라하기'로 사용법을 둘러볼 수 있게 dismiss 를 해제한다.
   // 단계 완료 표시(✓)는 법인 현황 그대로 유지된다.
-  await db
-    .update(users)
-    .set({ role: "org_admin", setupGuideDismissedAt: null })
-    .where(eq(users.id, to.id));
+  //
+  // pending 합류 신청자를 승격하는 경우(담당자 공석 법인의 유일한 정상 승계 경로): 운영자가
+  // 오프라인 신원 검증을 거쳐 담당자로 세우는 강한 관리 행위이므로, 로그인 관문
+  // (status=active + 이메일 인증) 을 함께 통과시킨다. 이메일 소유 확인은 운영자 검증으로
+  // 대체되며 이 행위 전체가 감사 로그에 남는다. (기존 active 유저 승격은 두 값을 건드리지 않음.)
+  const wasPending = to.status === "pending";
+  const now = new Date().toISOString();
+  const setValues: Partial<typeof users.$inferInsert> = {
+    role: "org_admin",
+    setupGuideDismissedAt: null,
+  };
+  if (wasPending) {
+    setValues.status = "active";
+    setValues.emailVerifiedAt = to.emailVerifiedAt ?? now;
+  }
+  await db.update(users).set(setValues).where(eq(users.id, to.id));
+
+  // pending 이었다면 대기 중이던 합류 요청(orgJoinRequests)도 승인으로 정리 —
+  // 안 하면 법인 멤버 화면에 "합류 요청 대기"로 계속 남는다.
+  if (wasPending) {
+    await db
+      .update(orgJoinRequests)
+      .set({ status: "approved", decidedByUserId: me!.id, decidedAt: now })
+      .where(
+        and(
+          eq(orgJoinRequests.userId, to.id),
+          eq(orgJoinRequests.status, "pending")
+        )
+      );
+  }
 
   logAudit(req, {
     actor: me,
@@ -110,7 +137,13 @@ export async function POST(
     metadata: {
       reason,
       orgName: org.name,
-      to: { id: to.id, email: to.email, previousRole: to.role },
+      to: {
+        id: to.id,
+        email: to.email,
+        previousRole: to.role,
+        previousStatus: to.status,
+        promotedFromPending: wasPending,
+      },
       from: fromInfo,
     },
   });

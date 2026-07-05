@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { users, organizations, orgJoinRequests } from "@/lib/schema";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, count } from "drizzle-orm";
 import { hashPassword, getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import {
@@ -12,7 +12,7 @@ import { validatePassword } from "@/lib/password-policy";
 import { rateLimit } from "@/lib/rate-limit";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/site-info";
 import { extractIp } from "@/lib/auth-attempts";
-import { notifyOrgAdmins } from "@/lib/notifications";
+import { notifyOrgAdmins, notifySystemAdmins } from "@/lib/notifications";
 import { sendVerificationMail } from "@/lib/email-verify";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { syncMarketingRecipient } from "@/lib/marketing-consent";
@@ -60,6 +60,7 @@ export async function POST(req: Request) {
   const [org] = await db
     .select({
       id: organizations.id,
+      name: organizations.name,
       verificationStatus: organizations.verificationStatus,
       emailDomain: organizations.emailDomain,
     })
@@ -185,6 +186,32 @@ export async function POST(req: Request) {
     // 승인해야만 신규 직원이 입장 가능 — 매일 로그인 안 하는 관리자도 메일로 인지.
     { email: true }
   );
+
+  // 승인할 법인 담당자(active org_admin)가 하나도 없으면 — 예: 유일 담당자가 탈퇴해
+  // 공석이 된 법인 — 이 합류 요청은 승인해 줄 사람이 없어 무한 대기에 빠진다.
+  // 이 경우 시스템 운영자에게 인앱 + 메일로 에스컬레이션해, 신청자 신원 확인 후
+  // 법인 담당자로 승격(관리자 이전)하도록 안내한다.
+  const [{ c: activeAdmins }] = await db
+    .select({ c: count() })
+    .from(users)
+    .where(
+      and(
+        eq(users.orgId, orgId),
+        eq(users.role, "org_admin"),
+        eq(users.status, "active")
+      )
+    );
+  if (activeAdmins === 0) {
+    void notifySystemAdmins(
+      {
+        type: "admin_promotion",
+        title: `「${org.name}」에 ${name} 님이 합류를 요청했으나 승인할 법인 담당자가 없습니다. 신원 확인 후 법인 담당자로 승격해 주세요.`,
+        href: `/admin/orgs/${orgId}/transfer-admin`,
+        payload: { orgId, requesterUserId: user.id },
+      },
+      { email: true }
+    );
+  }
 
   return Response.json({
     ok: true,
