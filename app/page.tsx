@@ -8,6 +8,7 @@ import {
   screeningJobs,
   jobInterviewers,
   interviewSchedules,
+  users,
 } from "@/lib/schema";
 import { desc, eq, count, sql, and, inArray } from "drizzle-orm";
 import { cookies } from "next/headers";
@@ -183,15 +184,22 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       )
       .then(([r]) => Number(r?.c ?? 0)),
     // -- 합류 요청 (org_admin / system_admin 만) ---------------------------
+    // 요청 행(status=pending) 뿐 아니라 요청한 사용자가 아직 pending 인 것만 센다.
+    // 다른 승인 경로(예: /admin/users 에서 status 만 active 로 토글)로 사용자가 이미
+    // 활성화됐는데 join_request 행이 pending 으로 남는 고아 케이스가 있어(멤버 화면은
+    // user.status=pending 일 때만 승인 대상으로 표시하므로 UI 로 정리 불가), 그 행이
+    // '오늘 할 일' 에 유령으로 남지 않도록 users 를 조인해 실제 대기자만 집계한다.
     (async () => {
       if (me.role === "org_admin" && me.orgId) {
         const [r] = await db
           .select({ c: count() })
           .from(orgJoinRequests)
+          .innerJoin(users, eq(users.id, orgJoinRequests.userId))
           .where(
             and(
               eq(orgJoinRequests.orgId, me.orgId),
-              eq(orgJoinRequests.status, "pending")
+              eq(orgJoinRequests.status, "pending"),
+              eq(users.status, "pending")
             )
           );
         return Number(r?.c ?? 0);
@@ -200,7 +208,13 @@ async function Dashboard({ me }: { me: CurrentUser }) {
         const [r] = await db
           .select({ c: count() })
           .from(orgJoinRequests)
-          .where(eq(orgJoinRequests.status, "pending"));
+          .innerJoin(users, eq(users.id, orgJoinRequests.userId))
+          .where(
+            and(
+              eq(orgJoinRequests.status, "pending"),
+              eq(users.status, "pending")
+            )
+          );
         return Number(r?.c ?? 0);
       }
       return 0;

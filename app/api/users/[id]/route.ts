@@ -249,6 +249,14 @@ export async function PATCH(
     if (activateFromPending) update.status = "active";
   }
 
+  // pending → active 전환이면(경로 무관: 대리 이메일 인증으로 활성화하든, 관리자가
+  // status 만 active 로 토글하든) 이 사용자의 대기 중 합류 요청을 함께 정리해야 한다.
+  // 안 하면 user 는 active 인데 join_request 는 pending 으로 남는 고아 행이 생기고,
+  // 멤버 화면은 user.status=pending 일 때만 승인 대상으로 노출하므로(→ UI 로 정리 불가)
+  // '오늘 할 일' 의 합류 요청 카운트에 유령으로 계속 잡힌다.
+  const becameActiveFromPending =
+    target.status === "pending" && update.status === "active";
+
   if (Object.keys(update).length === 0)
     return new Response("변경할 내용이 없습니다.", { status: 400 });
 
@@ -265,9 +273,9 @@ export async function PATCH(
     await honorJobShareInvites(targetId, updated.orgId);
   }
 
-  // pending 사용자를 인증과 함께 활성화한 경우: 대기 중인 합류 요청도 승인 처리하고
+  // pending 사용자를 활성화한 경우: 대기 중인 합류 요청도 승인 처리하고
   // 관련 'join_request' 알림을 읽음 처리한다 (합류 요청 탭 승인과 동일한 후처리).
-  if (activateFromPending) {
+  if (becameActiveFromPending) {
     const now = new Date().toISOString();
     await db
       .update(orgJoinRequests)
