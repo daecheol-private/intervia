@@ -19,8 +19,27 @@
  *   send:   POST https://kakaoapi.aligo.in/akv10/alimtalk/send/
  */
 
+import { ProxyAgent } from "undici";
+
 const TOKEN_URL = "https://kakaoapi.aligo.in/akv10/token/create/600/s";
 const SEND_URL = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
+
+/**
+ * 고정 아웃바운드 IP(프록시) — 알리고 "허용 IP" 제한 대응.
+ * 알리고는 발신 서버 IP 화이트리스트를 강제하는데 Vercel 함수는 고정 egress IP가 없다.
+ * → Fixie 등 고정 IP 프록시로 "알리고 호출만" 우회한다. FIXIE_URL(운영 Vercel 주입)이
+ *   있을 때만 적용하고, 없으면 직접 호출(로컬: 알리고에 등록된 개발 IP 사용).
+ * ⚠️ setGlobalDispatcher(전역)는 쓰지 않는다 — Gemini/Vertex 등 앱 전체 트래픽까지
+ *    프록시를 타면 안 되므로, 아래 token/send fetch 2곳에만 dispatcher 를 붙인다.
+ */
+const PROXY_URL = process.env.FIXIE_URL ?? process.env.OUTBOUND_PROXY_URL;
+const proxyDispatcher = PROXY_URL ? new ProxyAgent(PROXY_URL) : undefined;
+/** undici 의 dispatcher 옵션은 표준 RequestInit 타입에 없어 캐스팅으로 주입. */
+function withProxy(init: RequestInit): RequestInit {
+  return proxyDispatcher
+    ? ({ ...init, dispatcher: proxyDispatcher } as RequestInit)
+    : init;
+}
 
 /** 병행 발송 대상 — 사용자 확정 "권장 5종". */
 export type AlimtalkType =
@@ -142,11 +161,14 @@ async function getToken(): Promise<string | null> {
     userid: process.env.ALIGO_USER_ID!,
   });
   try {
-    const res = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
+    const res = await fetch(
+      TOKEN_URL,
+      withProxy({
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      })
+    );
     const json = (await res.json()) as { code?: number; token?: string; message?: string };
     if (Number(json.code) !== 0 || !json.token) {
       console.error("[alimtalk] token 발급 실패:", json.message ?? json.code);
@@ -219,11 +241,14 @@ export async function sendCandidateAlimtalk(
   }
 
   try {
-    const res = await fetch(SEND_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
+    const res = await fetch(
+      SEND_URL,
+      withProxy({
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      })
+    );
     const json = (await res.json()) as { code?: number; message?: string };
     if (Number(json.code) !== 0) {
       console.error(`[alimtalk] 발송 실패 (type=${type}):`, json.message ?? json.code);
