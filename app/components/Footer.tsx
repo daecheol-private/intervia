@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { COMPANY_INFO } from "@/lib/site-info";
+import { COMPANY_INFO, SITE_INFO } from "@/lib/site-info";
 
 export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   const pathname = usePathname() ?? "";
@@ -21,6 +21,7 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   const usesAppShell =
     pathname === "/" ||
     pathname.startsWith("/candidates/") ||
+    pathname.startsWith("/insights") ||
     pathname.startsWith("/jobs") ||
     pathname.startsWith("/org") ||
     pathname.startsWith("/admin") ||
@@ -30,8 +31,36 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   if (loggedIn && usesAppShell) {
     return null;
   }
-  // 전자상거래법 §10 사업자 신원정보 — 각 항목을 묶어 두어 줄바꿈 시 구분점(·)이
-  // 줄 앞에 떨어지지 않게 한다. 통신판매업 신고 후 '통신판매업신고 {번호}' 항목 추가.
+
+  // 사이트맵 3그룹 — 로그인 없이 접근 가능한 공개 링크만 노출.
+  //   제품: 랜딩 섹션 앵커가 아니라 독립 상세 페이지로 이동한다
+  //         (/how-it-works · /features · /pricing — 각 페이지가 app/ 아래 별도 라우트).
+  const productLinks = [
+    { label: "작동 방식", href: "/how-it-works" },
+    { label: "전체 기능", href: "/features" },
+    { label: "요금", href: "/pricing" },
+  ];
+  const legalLinks = [
+    { label: "개인정보 처리방침", href: "/privacy" },
+    { label: "이용약관", href: "/terms" },
+    { label: "AI 평가 사전공개", href: "/legal/ai-evaluation-disclosure" },
+    { label: "보안·데이터 보호", href: "/security" },
+    { label: "지원자 동의 템플릿", href: "/legal/applicant-consent-template" },
+  ];
+  // 지원 — 고객센터는 인증 영역이라 로그인 상태에서만. 비로그인 방문자에겐 가입/로그인 유도.
+  const supportLinks = [
+    { label: "자주 묻는 질문", href: "/faq" },
+    { label: "도입 문의", href: `mailto:${COMPANY_INFO.email}` },
+    ...(loggedIn
+      ? [{ label: "고객센터", href: "/support" }]
+      : [
+          { label: "무료로 시작하기", href: "/signup" },
+          { label: "로그인", href: "/login" },
+        ]),
+  ];
+
+  // 전자상거래법 §10 사업자 신원정보. 구분점(·)은 각 항목 '뒤'에 붙여, 줄바꿈 시
+  // 다음 줄 맨 앞에 구분점이 떨어지지 않게 한다. 통신판매업 신고 후 '통신판매업신고 {번호}' 항목 추가.
   const bizFields: ReactNode[] = [
     `상호 ${COMPANY_INFO.name}`,
     `대표 ${COMPANY_INFO.representative}`,
@@ -60,44 +89,35 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
 
   return (
     <footer className="border-t border-border-default bg-surface-alt mt-auto">
-      <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col gap-6 text-xs text-ink-soft">
-        {/* 상단: 브랜드 + 정책 링크 */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="text-sm font-semibold text-ink">
-            {COMPANY_INFO.serviceName}
+      <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col gap-8 text-xs text-ink-soft">
+        {/* 상단: 브랜드 + 사이트맵 3그룹 */}
+        <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
+          <div className="sm:max-w-xs">
+            <div className="text-base font-bold text-ink">
+              {COMPANY_INFO.serviceName}
+            </div>
+            <p className="mt-2 leading-relaxed text-ink-soft">
+              {SITE_INFO.serviceDescription}
+            </p>
           </div>
-          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {loggedIn && (
-              <Link href="/support" className="hover:text-ink hover:underline">
-                고객센터
-              </Link>
-            )}
-            <Link href="/privacy" className="hover:text-ink hover:underline">
-              개인정보 처리방침
-            </Link>
-            <Link href="/terms" className="hover:text-ink hover:underline">
-              이용약관
-            </Link>
-            <Link
-              href="/legal/ai-evaluation-disclosure"
-              className="hover:text-ink hover:underline"
-            >
-              AI 평가 사전공개
-            </Link>
+          <nav className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3 sm:gap-x-12">
+            <FooterColumn title="제품" links={productLinks} />
+            <FooterColumn title="회사·정책" links={legalLinks} />
+            <FooterColumn title="지원" links={supportLinks} />
           </nav>
         </div>
 
         {/* 하단: 사업자 정보 + 저작권 */}
-        <div className="flex flex-col gap-2 border-t border-border-default pt-5 text-ink-muted">
+        <div className="flex flex-col gap-2 border-t border-border-default pt-6 text-ink-muted">
           <div className="flex flex-wrap items-center gap-y-1">
             {bizFields.map((field, i) => (
               <span key={i}>
-                {i > 0 && (
+                {field}
+                {i < bizFields.length - 1 && (
                   <span aria-hidden className="mx-2 text-border-strong">
                     ·
                   </span>
                 )}
-                {field}
               </span>
             ))}
           </div>
@@ -107,5 +127,43 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
         </div>
       </div>
     </footer>
+  );
+}
+
+function FooterColumn({
+  title,
+  links,
+}: {
+  title: string;
+  links: { label: string; href: string }[];
+}) {
+  return (
+    <div>
+      <div className="mb-3 text-xs font-semibold text-ink">{title}</div>
+      <ul className="space-y-2">
+        {links.map((l) => (
+          <li key={l.label}>
+            <FooterLink href={l.href}>{l.label}</FooterLink>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FooterLink({ href, children }: { href: string; children: ReactNode }) {
+  const cls = "text-ink-soft hover:text-ink hover:underline transition-colors";
+  // mailto/외부 링크는 <a>, 내부 경로·해시 앵커는 next/link.
+  if (href.startsWith("mailto:") || href.startsWith("http")) {
+    return (
+      <a href={href} className={cls}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={cls}>
+      {children}
+    </Link>
   );
 }

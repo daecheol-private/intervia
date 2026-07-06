@@ -1238,7 +1238,7 @@ async function Landing() {
 
       <WhyNotJobBoard />
 
-      <section className="relative overflow-hidden">
+      <section id="how" className="relative overflow-hidden scroll-mt-20">
         {/* 배경 — 미세 dot + apricot glow 우측 */}
         <div
           aria-hidden
@@ -1272,7 +1272,10 @@ async function Landing() {
         </Container>
       </section>
 
-      <section className="bg-surface border-y border-border-default">
+      <section
+        id="features"
+        className="bg-surface border-y border-border-default scroll-mt-20"
+      >
         <Container width="lg" className="py-20 sm:py-24">
           <Reveal>
             <SectionHeading
@@ -1292,7 +1295,7 @@ async function Landing() {
         </Container>
       </section>
 
-      <section>
+      <section id="pricing" className="scroll-mt-20">
         <Container width="lg" className="py-20 sm:py-24">
           <div className="text-center reveal">
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink">
@@ -1484,7 +1487,7 @@ async function Landing() {
 
 function WhyNotJobBoard() {
   return (
-    <section className="relative overflow-hidden bg-card border-y border-border-default">
+    <section id="compare" className="relative overflow-hidden bg-card border-y border-border-default scroll-mt-20">
       <div
         aria-hidden
         className="absolute -z-10 -left-40 top-1/3 w-[520px] h-[520px] rounded-full bg-primary-soft/50 blur-3xl"
