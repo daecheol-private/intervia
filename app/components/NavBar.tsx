@@ -28,6 +28,7 @@ import {
   Megaphone,
   Mail,
   Ticket,
+  Target,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 import LogoutButton from "../logout-button";
@@ -63,6 +64,7 @@ function buildSections(role: Role): NavSection[] {
         { href: "/jobs", label: "공고", Icon: ClipboardList },
         { href: "/candidates", label: "후보자", Icon: Users },
         { href: "/interviews", label: "면접 일정", Icon: CalendarClock },
+        { href: "/insights", label: "평가 정확도", Icon: Target },
         { href: "/support", label: "고객센터", Icon: LifeBuoy },
       ],
     });
@@ -133,6 +135,7 @@ export function NavBar({
     pathname === "/" ||
     pathname.startsWith("/candidates") ||
     pathname.startsWith("/interviews") ||
+    pathname.startsWith("/insights") ||
     pathname.startsWith("/jobs") ||
     pathname.startsWith("/org") ||
     pathname.startsWith("/admin") ||
@@ -182,6 +185,7 @@ export function NavBar({
                     label="면접 일정"
                     Icon={CalendarClock}
                   />
+                  <NavLink href="/insights" label="평가 정확도" Icon={Target} />
                 </>
               )}
               {canManageOrg && (

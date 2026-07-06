@@ -287,13 +287,20 @@ type BreakdownKey = (typeof SCREENING_AXES)[number]["key"];
 
 export function FitHexagon({
   breakdown,
+  size = 300,
 }: {
   breakdown: NonNullable<NonNullable<Candidate["screeningReport"]>["breakdown"]>;
+  /** 차트 한 변 픽셀. 기본 300(상세). 비교 화면 등 좁은 곳은 축소해 넘긴다.
+   *  모든 치수를 size 비율로 파생 → 300 이면 기존과 완전히 동일. */
+  size?: number;
 }) {
-  const size = 300;
   const cx = size / 2;
   const cy = size / 2;
-  const r = 90; // 차트 반지름 (라벨 공간 확보)
+  const r = size * 0.3; // 차트 반지름 (라벨 공간 확보) — 90 @ 300
+  const labelGap = size * (22 / 300);
+  const fontMain = size * (11 / 300);
+  const line2Gap = size * (13 / 300);
+  const dotR = size * (3 / 300);
   const N = SCREENING_AXES.length;
 
   // i번째 축의 좌표 — 12시부터 시계방향, ratio=0(중심) ~ 1(외곽).
@@ -377,7 +384,7 @@ export function FitHexagon({
             key={i}
             cx={p.x}
             cy={p.y}
-            r={3}
+            r={dotR}
             fill="rgb(79, 70, 229)"
           />
         );
@@ -387,8 +394,8 @@ export function FitHexagon({
         const p = axisPoint(i, 1);
         const d = breakdown[a.key as BreakdownKey];
         // 라벨을 외곽선에서 22px 더 바깥쪽으로 — 폴리곤과 겹치지 않게.
-        const dx = (p.x - cx) * (1 + 22 / r) + cx - p.x;
-        const dy = (p.y - cy) * (1 + 22 / r) + cy - p.y;
+        const dx = (p.x - cx) * (1 + labelGap / r) + cx - p.x;
+        const dy = (p.y - cy) * (1 + labelGap / r) + cy - p.y;
         const lx = p.x + dx;
         const ly = p.y + dy;
         return (
@@ -398,7 +405,7 @@ export function FitHexagon({
               y={ly}
               textAnchor="middle"
               dominantBaseline="middle"
-              fontSize="11"
+              fontSize={fontMain}
               fill="#475569"
               fontWeight="600"
             >
@@ -406,10 +413,10 @@ export function FitHexagon({
             </text>
             <text
               x={lx}
-              y={ly + 13}
+              y={ly + line2Gap}
               textAnchor="middle"
               dominantBaseline="middle"
-              fontSize="11"
+              fontSize={fontMain}
               fill={d ? "#0f172a" : "#cbd5e1"}
               fontWeight="700"
               className="tabular-nums"

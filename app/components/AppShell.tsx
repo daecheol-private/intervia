@@ -26,6 +26,7 @@ import {
   ChevronLeft,
   Ticket,
   Compass,
+  Target,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 import { matchPageGuide } from "@/lib/tour-pages";
@@ -55,6 +56,8 @@ function buildSections(role: Role): NavSection[] {
         // 공고를 가로지르는 뷰 — member=면접관 공고, org_admin=법인 전체(페이지에서 차등)
         { href: "/candidates", label: "후보자", Icon: Users },
         { href: "/interviews", label: "면접 일정", Icon: CalendarClock },
+        // AI 점수·추천 vs 실제 결정 정확도 (법인 집계).
+        { href: "/insights", label: "평가 정확도", Icon: Target },
       ],
     });
   }
