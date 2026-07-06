@@ -4,13 +4,16 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FitHexagon } from "@/app/candidates/[id]/screening-report";
+import { HL } from "@/app/candidates/[id]/shared";
 import type { Candidate as DetailCandidate } from "@/app/candidates/[id]/types";
 
 type Report = DetailCandidate["screeningReport"];
+type Eval = { score: number | null; summary: string | null };
 
 type Cand = {
   id: number;
   name: string;
+  stage: string;
   age: number | null;
   careerYears: number | null;
   educationLevel: string | null;
@@ -18,7 +21,8 @@ type Cand = {
   educationMajor: string | null;
   screeningScore: number | null;
   screeningReport: Report;
-  stage: string;
+  aiInterview: Eval | null;
+  offline: { round1: Eval | null; round2: Eval | null };
 };
 
 const STAGE_KO: Record<string, string> = {
@@ -38,16 +42,30 @@ const STAGE_KO: Record<string, string> = {
 
 type CoverageStatus = "direct" | "indirect" | "none";
 
-/** 요건 텍스트 정규화 — 공백·대소문자 차이로 같은 요건이 두 줄로 갈리는 것 방지. */
 const normReq = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 
-/** JD 요건 충족도 % — 직접 1.0 · 간접 0.5 가중. requirement_coverage 없으면 null. */
 function fitPct(report: Report): number | null {
   const cov = report?.requirement_coverage;
   if (!cov || cov.length === 0) return null;
   let sum = 0;
-  for (const c of cov) sum += c.status === "direct" ? 1 : c.status === "indirect" ? 0.5 : 0;
+  for (const c of cov)
+    sum += c.status === "direct" ? 1 : c.status === "indirect" ? 0.5 : 0;
   return Math.round((sum / cov.length) * 100);
+}
+
+// 종합평가의견 — 가장 진행된 단계의 요약 우선(대면2 → 대면1 → AI면접 → 서류).
+function overallOpinion(
+  c: Cand
+): { source: string; text: string } | null {
+  if (c.offline?.round2?.summary)
+    return { source: "대면 2차", text: c.offline.round2.summary };
+  if (c.offline?.round1?.summary)
+    return { source: "대면 1차", text: c.offline.round1.summary };
+  if (c.aiInterview?.summary)
+    return { source: "AI면접", text: c.aiInterview.summary };
+  if (c.screeningReport?.summary)
+    return { source: "서류", text: c.screeningReport.summary };
+  return null;
 }
 
 export default function ComparePage() {
@@ -55,26 +73,25 @@ export default function ComparePage() {
   const search = useSearchParams();
   const idsParam = search.get("ids") ?? "";
 
-  const [all, setAll] = useState<Cand[] | null>(null);
+  const [data, setData] = useState<Cand[] | null>(null);
 
   useEffect(() => {
-    void fetch(`/api/jobs/${params.id}/candidates`)
+    if (!idsParam) {
+      setData([]);
+      return;
+    }
+    void fetch(`/api/jobs/${params.id}/compare?ids=${idsParam}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setAll(d));
-  }, [params.id]);
+      .then((d) => setData(d ?? []));
+  }, [params.id, idsParam]);
 
   const selected = useMemo<Cand[]>(() => {
-    if (!all) return [];
-    const ids = idsParam
-      .split(",")
-      .map((s) => Number(s.trim()))
-      .filter(Number.isInteger);
-    return all
-      .filter((c) => ids.includes(c.id))
-      .sort((a, b) => (b.screeningScore ?? -1) - (a.screeningScore ?? -1));
-  }, [all, idsParam]);
+    if (!data) return [];
+    return [...data].sort(
+      (a, b) => (b.screeningScore ?? -1) - (a.screeningScore ?? -1)
+    );
+  }, [data]);
 
-  // JD 요건 합집합(첫 등장 순, 정규화 키로 중복 병합) — 표시엔 첫 원문을 쓴다.
   const reqUnion = useMemo<{ key: string; label: string }[]>(() => {
     const seen = new Map<string, string>();
     const order: string[] = [];
@@ -100,7 +117,7 @@ export default function ComparePage() {
     return m;
   }, [selected]);
 
-  if (!all)
+  if (!data)
     return (
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-ink-muted">
         불러오는 중...
@@ -124,6 +141,12 @@ export default function ComparePage() {
   }
 
   const hasFit = selected.some((c) => fitPct(c.screeningReport) != null);
+  const hasAi = selected.some((c) => c.aiInterview?.score != null);
+  const hasR1 = selected.some((c) => c.offline?.round1?.score != null);
+  const hasR2 = selected.some((c) => c.offline?.round2?.score != null);
+  const hasOpinion = selected.some((c) => overallOpinion(c) != null);
+
+  const span = selected.length + 1;
 
   return (
     <main className="max-w-full mx-auto px-4 sm:px-6 py-6">
@@ -137,7 +160,7 @@ export default function ComparePage() {
         후보자 비교 ({selected.length}명)
       </h1>
       <p className="text-xs text-ink-muted mt-0.5">
-        공고 적합도(6축) 중심 · 적합도 높은 순 정렬
+        서류·AI면접·대면 평가를 한 화면에 · 서류 적합도 높은 순 정렬
       </p>
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-border-default w-fit max-w-full">
@@ -150,7 +173,7 @@ export default function ComparePage() {
               {selected.map((c, i) => (
                 <th
                   key={c.id}
-                  className="bg-surface-alt border-b border-l border-border-default px-3 py-2 text-left align-bottom w-[196px] min-w-[196px]"
+                  className="bg-surface-alt border-b border-l border-border-default px-3 py-2 text-left align-bottom w-[200px] min-w-[200px]"
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-semibold text-ink-muted tabular-nums">
@@ -163,18 +186,8 @@ export default function ComparePage() {
                       {c.name}
                     </Link>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5 font-normal">
-                    <span className="text-[11px] text-ink-muted">
-                      {STAGE_KO[c.stage] ?? c.stage}
-                    </span>
-                    {c.screeningScore != null && (
-                      <span className="text-[11px] text-ink-soft">
-                        적합도{" "}
-                        <b className="text-primary tabular-nums">
-                          {c.screeningScore}
-                        </b>
-                      </span>
-                    )}
+                  <div className="text-[11px] text-ink-muted mt-0.5 font-normal">
+                    {STAGE_KO[c.stage] ?? c.stage}
                   </div>
                 </th>
               ))}
@@ -192,7 +205,10 @@ export default function ComparePage() {
               {selected.map((c) => {
                 const bd = c.screeningReport?.breakdown;
                 return (
-                  <td key={c.id} className="border-l border-border-default px-1 py-1 align-middle">
+                  <td
+                    key={c.id}
+                    className="border-l border-border-default px-1 py-1 align-middle"
+                  >
                     {bd ? (
                       <div className="flex justify-center">
                         <FitHexagon breakdown={bd} size={186} />
@@ -207,7 +223,69 @@ export default function ComparePage() {
               })}
             </tr>
 
-            <GroupRow span={selected.length + 1} label="이력" />
+            {/* 평가 점수 — 서류 / AI면접 / 대면 1·2차 */}
+            <GroupRow span={span} label="평가 점수" />
+            <ScoreRow
+              label="서류 적합도"
+              selected={selected}
+              get={(c) => c.screeningScore}
+            />
+            {hasAi && (
+              <ScoreRow
+                label="AI면접"
+                selected={selected}
+                get={(c) => c.aiInterview?.score ?? null}
+              />
+            )}
+            {hasR1 && (
+              <ScoreRow
+                label="대면 1차"
+                selected={selected}
+                get={(c) => c.offline?.round1?.score ?? null}
+              />
+            )}
+            {hasR2 && (
+              <ScoreRow
+                label="대면 2차"
+                selected={selected}
+                get={(c) => c.offline?.round2?.score ?? null}
+              />
+            )}
+
+            {/* 종합평가의견 */}
+            {hasOpinion && (
+              <>
+                <GroupRow span={span} label="종합평가의견" />
+                <tr className="border-b border-border-default">
+                  <th className="sticky left-0 z-10 bg-card border-r border-border-default px-2.5 py-2" />
+                  {selected.map((c) => {
+                    const op = overallOpinion(c);
+                    return (
+                      <td
+                        key={c.id}
+                        className="border-l border-border-default px-3 py-2 align-top"
+                      >
+                        {op ? (
+                          <div>
+                            <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary-soft text-primary mb-1">
+                              {op.source}
+                            </span>
+                            <p className="text-[11px] text-ink-soft leading-snug">
+                              <HL text={op.text} />
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-ink-muted text-xs">-</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </>
+            )}
+
+            {/* 이력 */}
+            <GroupRow span={span} label="이력" />
             <TextRow
               label="학력"
               selected={selected}
@@ -232,9 +310,10 @@ export default function ComparePage() {
               get={(c) => (c.age != null ? `${c.age}세` : null)}
             />
 
+            {/* JD 요건 */}
             {hasFit && (
               <>
-                <GroupRow span={selected.length + 1} label="JD 요건" />
+                <GroupRow span={span} label="JD 요건" />
                 <tr className="border-b border-border-default">
                   <th className="sticky left-0 z-10 bg-card border-r border-border-default px-2.5 py-1.5 text-left font-medium text-ink-soft">
                     JD 충족도
@@ -242,7 +321,10 @@ export default function ComparePage() {
                   {selected.map((c) => {
                     const pct = fitPct(c.screeningReport);
                     return (
-                      <td key={c.id} className="border-l border-border-default px-3 py-1.5">
+                      <td
+                        key={c.id}
+                        className="border-l border-border-default px-3 py-1.5"
+                      >
                         {pct == null ? (
                           <span className="text-ink-muted text-xs">-</span>
                         ) : (
@@ -279,20 +361,6 @@ export default function ComparePage() {
                 ))}
               </>
             )}
-
-            <GroupRow span={selected.length + 1} label="강점" />
-            <BulletRow
-              selected={selected}
-              tone="good"
-              get={(c) => c.screeningReport?.strengths ?? []}
-            />
-
-            <GroupRow span={selected.length + 1} label="우려" />
-            <BulletRow
-              selected={selected}
-              tone="warn"
-              get={(c) => c.screeningReport?.concerns ?? []}
-            />
           </tbody>
         </table>
       </div>
@@ -306,6 +374,54 @@ export default function ComparePage() {
         </div>
       )}
     </main>
+  );
+}
+
+/** 점수 한 행 — 후보별 막대 + 숫자, 행 최댓값 강조. */
+function ScoreRow({
+  label,
+  selected,
+  get,
+}: {
+  label: string;
+  selected: Cand[];
+  get: (c: Cand) => number | null;
+}) {
+  const values = selected.map(get);
+  const max = Math.max(...values.filter((v): v is number => v != null), -Infinity);
+  return (
+    <tr className="border-b border-border-default">
+      <th className="sticky left-0 z-10 bg-card border-r border-border-default px-2.5 py-1.5 text-left font-medium text-ink-soft">
+        {label}
+      </th>
+      {selected.map((c) => {
+        const v = get(c);
+        const best = v != null && v === max;
+        return (
+          <td key={c.id} className="border-l border-border-default px-3 py-1.5">
+            {v == null ? (
+              <span className="text-ink-muted text-xs">-</span>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-2 rounded-full bg-surface-alt overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${best ? "bg-primary" : "bg-primary/35"}`}
+                    style={{ width: `${Math.max(0, Math.min(100, v))}%` }}
+                  />
+                </div>
+                <span
+                  className={`tabular-nums w-7 text-right ${
+                    best ? "text-primary font-bold" : "text-ink-soft"
+                  }`}
+                >
+                  {v}
+                </span>
+              </div>
+            )}
+          </td>
+        );
+      })}
+    </tr>
   );
 }
 
@@ -386,47 +502,6 @@ function TextRow({
           {get(c) ?? <span className="text-ink-muted">-</span>}
         </td>
       ))}
-    </tr>
-  );
-}
-
-function BulletRow({
-  selected,
-  get,
-  tone,
-}: {
-  selected: Cand[];
-  get: (c: Cand) => string[];
-  tone: "good" | "warn";
-}) {
-  const dotCls = tone === "good" ? "bg-primary" : "bg-warning";
-  return (
-    <tr className="border-b border-border-default">
-      <th className="sticky left-0 z-10 bg-card border-r border-border-default px-2.5 py-1.5" />
-      {selected.map((c) => {
-        const items = get(c) ?? [];
-        return (
-          <td
-            key={c.id}
-            className="border-l border-border-default px-3 py-1.5 align-top"
-          >
-            {items.length === 0 ? (
-              <span className="text-ink-muted text-xs">-</span>
-            ) : (
-              <ul className="space-y-1">
-                {items.slice(0, 5).map((it, i) => (
-                  <li key={i} className="text-[11px] text-ink-soft flex gap-1.5">
-                    <span
-                      className={`w-1 h-1 rounded-full ${dotCls} mt-1.5 shrink-0`}
-                    />
-                    <span className="leading-snug">{it}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </td>
-        );
-      })}
     </tr>
   );
 }
