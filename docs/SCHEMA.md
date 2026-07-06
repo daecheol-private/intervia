@@ -255,7 +255,7 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 | created_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 링크를 발급한 운영자. 면접 완료 토큰 차감 시 ledger `created_by_user_id` 로 전달 — 누가 면접을 결정했는지 추적. (구 세션은 NULL) |
 | personality_responses | TEXT(JSON) NULL | 인성검사(컬처핏 사전 문항) 원응답 `[{itemId, value}]`. NULL = 미실시 (법인 컬처핏 미설정 또는 도입 전 세션) |
 | personality_profile | TEXT(JSON) NULL | 결정적 채점 결과 (`lib/personality.ts` `PersonalityProfile` — Big Five 0~100 + 신뢰 플래그). 합불 점수 합산에 미사용 — 면접 꼬리질문 앵커·리포트 참고용 |
-| reminder24_sent_at / reminder48_sent_at | TEXT NULL | AI 면접 미응답 리마인더 발송 시각 — 링크 발급(created_at) 후 24h/48h 경과 + `pending`/`in_progress` + 미만료일 때 cron 이 후보자에게 1회씩 넛지 후 기록(중복 방지). 48h 가 먼저 due 면 24h 는 skip 처리 |
+| reminder24_sent_at / reminder48_sent_at | TEXT NULL | AI 면접 미응답 리마인더 발송 시각. 링크 발급(created_at) 후 **48h** 경과 + `pending`/`in_progress` + 미만료일 때 cron(KST 09~20시)이 후보자에게 **1회** 넛지 후 `reminder48_sent_at` 기록(중복 방지). `reminder24_sent_at` 은 과거 24h 넛지용 컬럼으로 현재 미사용(운영 데이터 보호상 컬럼만 유지) |
 
 ## interview_schedules
 

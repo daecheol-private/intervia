@@ -1,12 +1,13 @@
 /**
- * 면접 리마인더 — cron(`/api/cron/interview-reminders`, 매시간)이 호출.
+ * 면접 리마인더 — cron(`/api/cron/interview-reminders`)이 호출.
+ * 스케줄은 KST 09~20시 매시간(vercel.json: UTC 0-11) — 야간 알림톡 방지.
  *
  * 두 종류:
  *  1) sendScheduleReminders  — 확정 대면 면접(round1/round2) D-1(24h 전):
  *       · 면접관 전원에게 1회 발송 후 `interviewerReminderSentAt` 기록
  *       · 후보자에게 1회 발송 후 `candidateReminderSentAt` 기록 (독립 추적)
  *  2) sendAiInterviewReminders — AI 면접 미응답(pending/in_progress) 후보자에게
- *       링크 발급 후 24h / 48h 경과 시 각 1회 넛지. 완료/만료 세션은 제외.
+ *       링크 발급 후 48h 경과 시 1회만 넛지. 완료/만료 세션은 제외.
  *
  * 공통: SMTP 미설정이면 발송을 건너뛰고 기록도 남기지 않음(설정 후 다음 주기 재시도).
  * 운영 메일이라 토큰 차감 없음.
@@ -34,7 +35,6 @@ import { formatKstDateTime } from "./utils";
 import { isAiInterviewSuperseded, isScheduleSuperseded } from "./stage-meta";
 
 const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
-const H24_MS = 24 * 60 * 60 * 1000;
 const H48_MS = 48 * 60 * 60 * 1000;
 
 /** 면접 링크용 절대 base URL. APP_BASE_URL 우선, 미설정 시 dev=localhost:3003. */
@@ -275,9 +275,8 @@ export async function sendScheduleReminders(): Promise<{
 
 /**
  * AI 면접 미응답 리마인더 — 후보자.
- * 대상: status in (pending, in_progress) + 미만료 + 후보자 이메일 존재 +
- *       링크 발급(createdAt) 후 24h / 48h 경과 + 해당 tier 미발송.
- * 48h 가 먼저 due 면 24h 는 보내지 않고 함께 처리 완료로 기록(스팸 방지).
+ * 대상: status in (pending, in_progress) + 미만료 + 링크 발급(createdAt) 후
+ *       48h 경과 + 미발송. 48h 경과 시 1회만 넛지(과도한 재촉 방지).
  */
 export async function sendAiInterviewReminders(): Promise<{
   scanned: number;
@@ -292,7 +291,6 @@ export async function sendAiInterviewReminders(): Promise<{
       accessToken: interviewSessions.accessToken,
       expiresAt: interviewSessions.expiresAt,
       createdAt: interviewSessions.createdAt,
-      reminder24SentAt: interviewSessions.reminder24SentAt,
       reminder48SentAt: interviewSessions.reminder48SentAt,
       candidateName: candidates.name,
       candidateEmail: candidates.email,
@@ -310,10 +308,7 @@ export async function sendAiInterviewReminders(): Promise<{
     .where(
       and(
         inArray(interviewSessions.status, ["pending", "in_progress"]),
-        or(
-          isNull(interviewSessions.reminder24SentAt),
-          isNull(interviewSessions.reminder48SentAt)
-        )
+        isNull(interviewSessions.reminder48SentAt)
       )
     );
 
@@ -337,11 +332,8 @@ export async function sendAiInterviewReminders(): Promise<{
 
     const elapsed = now - createdMs;
 
-    // tier 결정 — 48h 가 우선(스팸 방지: 24h+48h 동시 발송 X).
-    let tier: 24 | 48 | null = null;
-    if (elapsed >= H48_MS && !r.reminder48SentAt) tier = 48;
-    else if (elapsed >= H24_MS && !r.reminder24SentAt) tier = 24;
-    if (tier === null) continue;
+    // 링크 발급 후 48h 경과 + 미발송인 세션만 대상 (48h 1회 넛지).
+    if (elapsed < H48_MS || r.reminder48SentAt) continue;
 
     if (!(await isSmtpAvailable(r.orgId))) continue; // 설정 후 다음 주기 재시도
 
@@ -381,15 +373,10 @@ export async function sendAiInterviewReminders(): Promise<{
     });
 
     // 발송 여부와 무관하게 처리 완료로 기록 — 다음 주기 재스캔/중복 방지.
-    // 48h tier 면 24h 도 함께 닫는다(이미 늦었으므로 24h 넛지는 무의미).
     const nowIso = new Date(now).toISOString();
     await db
       .update(interviewSessions)
-      .set(
-        tier === 48
-          ? { reminder48SentAt: nowIso, ...(r.reminder24SentAt ? {} : { reminder24SentAt: nowIso }) }
-          : { reminder24SentAt: nowIso }
-      )
+      .set({ reminder48SentAt: nowIso })
       .where(eq(interviewSessions.id, r.sessionId));
     sessionsProcessed++;
   }

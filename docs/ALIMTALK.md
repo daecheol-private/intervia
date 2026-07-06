@@ -9,7 +9,7 @@ env 미설정이면 조용히 skip(이메일만 발송), 전화번호 없으면 
 | type | 알림 | 발송 지점 | 링크 버튼 |
 |---|---|---|---|
 | `interview_invite` | AI 면접 초대 | `interview-sessions/send-email`, `jobs/interview-links` | ✅ 면접 시작 |
-| `interview_reminder` | AI 면접 미응답(24h/48h) | `lib/interview-reminders.ts` | ✅ 면접 진행 |
+| `interview_reminder` | AI 면접 미응답(48h 경과, 1회) | `lib/interview-reminders.ts` | ✅ 면접 진행 |
 | `schedule_propose` | 대면 면접 일정 제안 | `jobs/schedule-propose` | ✅ 일정 선택 |
 | `interview_day_reminder` | 대면 면접 D-1 | `lib/interview-reminders.ts` | — |
 | `decision_pass` | **합격** 통보(불합격 제외) | `candidates/stage`, `candidates/decision-mail` | — |
