@@ -32,7 +32,6 @@ const Todo = ({ what }: { what?: string }) => (
 );
 const Img = ({ src, alt }: { src: string; alt: string }) => (
   <figure className="overflow-hidden rounded-xl border border-border-default shadow-sm">
-    {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={src} alt={alt} loading="lazy" className="block w-full" />
   </figure>
 );
