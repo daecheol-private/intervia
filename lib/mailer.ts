@@ -443,6 +443,7 @@ ${url}
 
 * 채팅 방식으로 약 10~30분 소요됩니다.
 * 충분한 시간과 집중할 수 있는 환경에서 진행해 주세요.
+* 원활한 진행을 위해 PC(데스크톱/노트북) 접속을 권장합니다.
 
 [안전 안내]
 * 본 면접은 비밀번호·결제·금융정보·주민등록번호·신분증 사본을 절대 요구하지 않습니다.
@@ -463,6 +464,7 @@ Link expires: ${expiresAt}
 
 * Chat-based, about 10-30 minutes.
 * Please use a quiet environment with enough time.
+* We recommend using a PC (desktop/laptop) for the best experience.
 
 [Safety notice]
 * This interview never asks for passwords, payment, financial information, your national ID, or ID copies.
@@ -487,6 +489,7 @@ Thank you.`;
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:13px;color:#475569;line-height:1.6;">
         • 채팅 방식으로 약 10~30분 소요됩니다.<br>
         • <strong>충분한 시간과 집중할 수 있는 환경</strong>에서 진행해 주세요.<br>
+        • 원활한 진행을 위해 <strong>PC(데스크톱/노트북)</strong> 접속을 권장합니다.<br>
         • 링크 만료: <strong>${expiresAt}</strong>
       </div>
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;font-size:12px;color:#92400e;line-height:1.6;margin-top:12px;">
@@ -510,6 +513,7 @@ Thank you.`;
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:13px;color:#475569;line-height:1.6;">
           • Chat-based, about 10–30 minutes.<br>
           • <strong>Use a quiet environment with enough time.</strong><br>
+          • We recommend using a <strong>PC (desktop/laptop)</strong> for the best experience.<br>
           • Link expires: <strong>${expiresAt}</strong>
         </div>
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;font-size:12px;color:#92400e;line-height:1.6;margin-top:12px;">
@@ -551,6 +555,7 @@ ${url}
 * 본 면접은 채팅 방식으로 약 10~30분 소요됩니다.
 * 면접 결과는 채용 담당자에게 전달되며 후속 안내드릴 예정입니다.
 * 충분한 시간과 집중할 수 있는 환경에서 진행해 주세요.
+* 원활한 진행을 위해 PC(데스크톱/노트북) 접속을 권장합니다.
 * 답변에 외부 도구(ChatGPT 등)의 복사·붙여넣기를 다량 사용하면 평가 리포트에 표시될 수 있습니다.
 
 [안전 안내]
@@ -575,6 +580,7 @@ Link expires: ${expiresAt}
 * Chat-based, about 10-30 minutes.
 * Your results are sent to the recruiter; you will be contacted with next steps.
 * Please use a quiet environment with enough time.
+* We recommend using a PC (desktop/laptop) for the best experience.
 * Heavy copy-paste from external tools (e.g., ChatGPT) may be flagged in the evaluation report.
 
 [Safety notice]
@@ -605,6 +611,7 @@ Thank you.`;
         • 채팅 방식으로 약 10~30분 소요됩니다.<br>
         • 평가 결과는 채용 담당자에게 직접 전달됩니다.<br>
         • <strong>충분한 시간과 집중할 수 있는 환경</strong>에서 진행해 주세요.<br>
+        • 원활한 진행을 위해 <strong>PC(데스크톱/노트북)</strong> 접속을 권장합니다.<br>
         • 답변에 <strong>외부 도구(ChatGPT 등)의 복사·붙여넣기</strong>를 다량 사용하면 평가 리포트에 표시될 수 있습니다.<br>
         • 링크 만료: <strong>${expiresAt}</strong>
       </div>
@@ -631,6 +638,7 @@ Thank you.`;
           • Chat-based, about 10–30 minutes.<br>
           • Your results are sent directly to the recruiter.<br>
           • <strong>Use a quiet environment with enough time.</strong><br>
+          • We recommend using a <strong>PC (desktop/laptop)</strong> for the best experience.<br>
           • <strong>Heavy copy-paste from external tools (e.g., ChatGPT)</strong> may be flagged in the report.<br>
           • Link expires: <strong>${expiresAt}</strong>
         </div>
