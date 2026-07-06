@@ -94,7 +94,7 @@ export default function PricingPage() {
           <span className="text-sm opacity-70">≈ {welcomeKrw}원</span>
         </div>
         <p className="mt-2 text-xs opacity-80">
-          신규 법인 최초 1회 · 신용카드 등록 불필요 · 평가 실패는 자동 환불
+          신규 법인 최초 1회 · 신용카드 등록 불필요 · 성공 시에만 차감
         </p>
       </div>
 
@@ -190,7 +190,7 @@ export default function PricingPage() {
               aria-hidden
             />
             <span>
-              평가·면접이 실패하면 토큰을 소모하지 않습니다 (자동 환불).
+              기능이 성공할 때만 토큰이 차감됩니다. 실패 시에는 차감되지 않습니다.
             </span>
           </li>
           <li className="flex items-start gap-2">

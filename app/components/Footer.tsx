@@ -47,16 +47,12 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
     { label: "보안·데이터 보호", href: "/security" },
     { label: "지원자 동의 템플릿", href: "/legal/applicant-consent-template" },
   ];
-  // 지원 — 고객센터는 인증 영역이라 로그인 상태에서만. 비로그인 방문자에겐 가입/로그인 유도.
+  // 지원 — 고객센터는 인증 영역이라 로그인 상태에서만. '무료로 시작하기/로그인'은
+  // 랜딩 히어로·헤더에 이미 있어 중복이라 footer 에선 뺀다.
   const supportLinks = [
     { label: "자주 묻는 질문", href: "/faq" },
     { label: "도입 문의", href: `mailto:${COMPANY_INFO.email}` },
-    ...(loggedIn
-      ? [{ label: "고객센터", href: "/support" }]
-      : [
-          { label: "무료로 시작하기", href: "/signup" },
-          { label: "로그인", href: "/login" },
-        ]),
+    ...(loggedIn ? [{ label: "고객센터", href: "/support" }] : []),
   ];
 
   // 전자상거래법 §10 사업자 신원정보. 구분점(·)은 각 항목 '뒤'에 붙여, 줄바꿈 시
@@ -99,6 +95,16 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
             <p className="mt-2 leading-relaxed text-ink-soft">
               {SITE_INFO.serviceDescription}
             </p>
+            <a
+              href="https://instagram.com/intervia.kr"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Intervia 인스타그램"
+              className="mt-4 inline-flex items-center gap-1.5 text-ink-soft transition-colors hover:text-ink"
+            >
+              <InstagramIcon className="w-4 h-4" />
+              <span className="text-xs">@intervia.kr</span>
+            </a>
           </div>
           <nav className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3 sm:gap-x-12">
             <FooterColumn title="제품" links={productLinks} />
@@ -165,5 +171,26 @@ function FooterLink({ href, children }: { href: string; children: ReactNode }) {
     <Link href={href} className={cls}>
       {children}
     </Link>
+  );
+}
+
+// 인스타그램 글리프 — lucide 1.16 에서 브랜드 아이콘이 제거되어 인라인 SVG 로 유지.
+// (lucide 의 옛 Instagram 과 동일한 stroke path — 나머지 아이콘과 톤 일치)
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
   );
 }

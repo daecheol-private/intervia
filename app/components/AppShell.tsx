@@ -27,6 +27,7 @@ import {
   Ticket,
   Compass,
   Target,
+  BookOpen,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 import { matchPageGuide } from "@/lib/tour-pages";
@@ -313,6 +314,15 @@ function SidebarInner({
               onNavigate={onNavigate}
               collapsed={collapsed}
             />
+            <Link
+              href="/features"
+              onClick={onNavigate}
+              title={collapsed ? "사용 가이드" : undefined}
+              className={navItemClass(isActive(pathname, "/features"), collapsed)}
+            >
+              <BookOpen className="w-[18px] h-[18px] shrink-0" />
+              {!collapsed && <span>사용 가이드</span>}
+            </Link>
             <Link
               href="/support"
               onClick={onNavigate}
