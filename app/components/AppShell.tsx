@@ -421,14 +421,18 @@ export function AppShell({
           pathname={pathname}
           collapsed={collapsed}
         />
-        {/* 세로 구분자에 살짝 튀어나온 토글 손잡이 — 클릭 시 아이콘만 남기고 접기/펼치기 */}
+        {/* 세로 구분자에 살짝 튀어나온 토글 손잡이 — 클릭 시 아이콘만 남기고 접기/펼치기.
+            · z-30: 후보자 세로 탭 레일(fixed z-20)이 좁은 창·접힘 상태에서 이 버튼과 가로로
+              겹쳐도 레일이 버튼을 덮어 클릭을 가로채지 않게(모달 z-[60]보다는 낮아 모달엔 정상적으로 가림).
+            · before(-inset): 손잡이 모양은 얇게(12×56) 두되, 투명 히트영역만 사방으로 넓혀
+              12px 폭 손잡이를 정확히 겨냥하지 않아도 클릭되도록 한다. */}
         <button
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
           aria-expanded={!collapsed}
           title={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
-          className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 flex items-center justify-center w-3 h-14 rounded-r-md bg-card border border-l-0 border-border-default text-ink-muted shadow-sm hover:text-ink hover:bg-surface-alt transition-colors"
+          className="absolute top-1/2 -right-3 -translate-y-1/2 z-30 flex items-center justify-center w-3 h-14 rounded-r-md bg-card border border-l-0 border-border-default text-ink-muted shadow-sm hover:text-ink hover:bg-surface-alt transition-colors before:absolute before:-inset-x-2.5 before:-inset-y-2 before:content-['']"
         >
           <ChevronLeft
             className={
