@@ -208,13 +208,13 @@ export default function EditJobPage() {
 
   if (!form)
     return (
-      <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
+      <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
         불러오는 중...
       </main>
     );
 
   return (
-    <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link
         href={`/jobs/${id}`}
         className="text-sm text-ink-muted hover:text-ink"

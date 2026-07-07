@@ -53,7 +53,7 @@ export default async function ApplicantConsentTemplatePage({
   } = buildApplicantConsentTemplate(contactEmail ?? undefined);
 
   return (
-    <main className="max-w-3xl mx-auto w-full px-6 py-10">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <BackLink fallbackHref="/" label="← 뒤로" />
       <h1 className="text-2xl font-bold text-ink mt-3">
         지원자 안내 문구 — 복사해서 공고에 붙여넣기

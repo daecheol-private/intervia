@@ -782,7 +782,7 @@ export default function JobDetailPage() {
   //  바뀌어 "Rendered more hooks than during the previous render" 로 페이지 전체가 깨진다.)
   if (locked) {
     return (
-      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+      <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         <Link
           href="/"
           className="text-sm text-ink-muted hover:text-ink transition-colors"
@@ -804,7 +804,7 @@ export default function JobDetailPage() {
   if (!job) {
     if (loadError === "not_found")
       return (
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="rounded-lg border border-border-default bg-card p-6 text-center">
             <div className="text-ink-soft font-medium">삭제된 공고입니다.</div>
             <div className="mt-1 text-sm text-ink-muted">
@@ -821,7 +821,7 @@ export default function JobDetailPage() {
       );
     if (loadError === "failed")
       return (
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="rounded-lg border border-danger/40 bg-danger-soft p-6 text-center">
             <div className="text-danger font-medium">불러오기에 실패했습니다.</div>
             <div className="mt-1 text-sm text-danger">
@@ -840,7 +840,7 @@ export default function JobDetailPage() {
         </main>
       );
     return (
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
         불러오는 중...
       </main>
     );
@@ -1375,7 +1375,7 @@ export default function JobDetailPage() {
   const isEmpty = candidatesLoaded && candidatesList.length === 0;
 
   return (
-    <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {/* 만료 결정 모달 — closesAt 지났는데 아직 active 면 노출. 사용자가 닫을 수 있음. */}
       {isExpired && !expiredModalDismissed && (
         <JobExpiredDecisionModal

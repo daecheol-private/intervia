@@ -116,7 +116,7 @@ export default function OrgSmtpPage() {
   const isOutlook = /outlook|office365|hotmail|live/i.test(host);
 
   return (
-    <main className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
         <Link href="/org/settings" className="text-xs text-ink-muted hover:underline">
           ← 법인 설정

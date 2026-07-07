@@ -68,13 +68,13 @@ export default function AccountPage() {
 
   if (!user)
     return (
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-ink-muted">
         불러오는 중...
       </main>
     );
 
   return (
-    <main className="max-w-2xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link href="/" className="text-sm text-ink-muted hover:text-ink">
         ← 대시보드
       </Link>

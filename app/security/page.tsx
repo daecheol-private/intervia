@@ -1,4 +1,4 @@
-import { COMPANY_INFO, SITE_INFO } from "@/lib/site-info";
+import { SITE_INFO } from "@/lib/site-info";
 import Link from "next/link";
 import {
   MapPin,
@@ -54,7 +54,7 @@ const HIGHLIGHTS = [
 
 export default function SecurityPage() {
   return (
-    <main className="max-w-3xl mx-auto w-full px-6 py-10">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link href="/" className="text-xs text-ink-muted hover:underline">
         ← 홈
       </Link>
@@ -198,30 +198,6 @@ export default function SecurityPage() {
         </p>
       </Section>
 
-      <hr className="my-8 border-border-default" />
-      <div className="text-xs text-ink-muted space-y-1">
-        <div>
-          <strong>{COMPANY_INFO.name}</strong> ({COMPANY_INFO.serviceName} 운영)
-          · 개인정보 보호책임자: {COMPANY_INFO.email}
-        </div>
-        <div className="mt-2">
-          관련 문서:{" "}
-          <Link href="/privacy" className="text-primary hover:underline">
-            개인정보 처리방침
-          </Link>{" "}
-          ·{" "}
-          <Link
-            href="/legal/ai-evaluation-disclosure"
-            className="text-primary hover:underline"
-          >
-            AI 평가 사전공개
-          </Link>{" "}
-          ·{" "}
-          <Link href="/terms" className="text-primary hover:underline">
-            이용약관
-          </Link>
-        </div>
-      </div>
     </main>
   );
 }

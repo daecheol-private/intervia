@@ -113,7 +113,7 @@ const STEP_IMAGES = [
 export default function HowItWorksPage() {
   const welcomeKrw = (WELCOME_BONUS_TOKENS * TOKEN_KRW).toLocaleString();
   return (
-    <main className="max-w-3xl mx-auto w-full px-6 py-10">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link href="/" className="text-xs text-ink-muted hover:underline">
         ← 홈
       </Link>

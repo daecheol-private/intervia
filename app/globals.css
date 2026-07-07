@@ -149,6 +149,10 @@
    사용자 브라우저 접근성 배율을 존중하도록 %로 지정. (이전: 브라우저 기본 16px) */
 html {
   font-size: 105%;
+  /* 가로 넘침 차단 — 어떤 콘텐츠도 레이아웃을 가로로 벗어나 가로 스크롤을 만들지
+     못하게. overflow-x: clip 은 hidden 과 달리 새 스크롤 컨테이너를 만들지 않아
+     세로는 visible 로 남고 sticky 사이드바가 정상 동작한다. 넘치는 내용은 세로로 흐른다. */
+  overflow-x: clip;
 }
 
 body {
@@ -162,6 +166,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   touch-action: manipulation;
+  overflow-x: clip; /* html 과 함께 이중 안전망 */
+  /* 긴 URL·토큰·이메일 등 공백 없이 이어지는 문자열이 컨테이너를 가로로 뚫지 않고
+     안에서 줄바꿈되도록 — 가로 확장 대신 세로 확장. */
+  overflow-wrap: break-word;
 }
 
 /* 타이포 hierarchy — 디스플레이/제목/본문.

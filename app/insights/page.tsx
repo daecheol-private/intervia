@@ -129,7 +129,7 @@ export default async function InsightsPage() {
   ).length;
 
   return (
-    <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex items-center gap-2">
         <Target className="w-6 h-6 text-primary" />
         <h1 className="text-2xl font-bold text-ink">평가 정확도</h1>

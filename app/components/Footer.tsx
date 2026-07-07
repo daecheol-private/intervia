@@ -34,11 +34,11 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
 
   // 사이트맵 3그룹 — 로그인 없이 접근 가능한 공개 링크만 노출.
   //   제품: 랜딩 섹션 앵커가 아니라 독립 상세 페이지로 이동한다
-  //         (/how-it-works · /features · /pricing — 각 페이지가 app/ 아래 별도 라우트).
+  //         (/how-it-works · /features — 각 페이지가 app/ 아래 별도 라우트).
+  //   '요금'은 랜딩의 요금 섹션과 중복이라 footer 에선 뺀다(/pricing 라우트 자체는 유지).
   const productLinks = [
     { label: "작동 방식", href: "/how-it-works" },
     { label: "전체 기능", href: "/features" },
-    { label: "요금", href: "/pricing" },
   ];
   const legalLinks = [
     { label: "개인정보 처리방침", href: "/privacy" },

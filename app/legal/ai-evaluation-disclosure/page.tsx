@@ -25,7 +25,7 @@ export const metadata = {
  */
 export default function AiEvaluationDisclosurePage() {
   return (
-    <main className="max-w-3xl mx-auto w-full px-6 py-10">
+    <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <Link href="/" className="text-xs text-ink-muted hover:underline">
         ← 홈
       </Link>
@@ -373,35 +373,6 @@ export default function AiEvaluationDisclosurePage() {
         </p>
       </Section>
 
-      <hr className="my-8 border-border-default" />
-      <div className="text-xs text-ink-muted space-y-1">
-        <div>
-          <strong>{COMPANY_INFO.name}</strong> ({COMPANY_INFO.serviceName} 운영) ·
-          대표 {COMPANY_INFO.representative}
-        </div>
-        <div>
-          사업자등록번호 {COMPANY_INFO.bizRegistrationNo} · 개인정보 보호책임자:{" "}
-          {COMPANY_INFO.email}
-        </div>
-        <div>통신판매업 신고번호 {COMPANY_INFO.mailOrderSalesNo}</div>
-        <div className="mt-2">
-          관련 문서:{" "}
-          <Link href="/privacy" className="text-primary hover:underline">
-            개인정보 처리방침
-          </Link>{" "}
-          ·{" "}
-          <Link href="/terms" className="text-primary hover:underline">
-            이용약관
-          </Link>{" "}
-          ·{" "}
-          <Link
-            href="/legal/applicant-consent-template"
-            className="text-primary hover:underline"
-          >
-            지원자 동의 문구 템플릿
-          </Link>
-        </div>
-      </div>
     </main>
   );
 }
