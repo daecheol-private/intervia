@@ -241,7 +241,9 @@ export function StagePanel({
   const [open, setOpen] = useState<
     null | "decide" | "stage" | "notify" | "schedule" | "schedule2"
   >(null);
-  const [decision, setDecision] = useState<"hired" | "rejected">("rejected");
+  const [decision, setDecision] = useState<"hired" | "rejected" | "withdrawn">(
+    "rejected"
+  );
   const [reason, setReason] = useState<string>("");
   const [note, setNote] = useState("");
   const [customMessage, setCustomMessage] = useState(() =>
@@ -254,7 +256,8 @@ export function StagePanel({
 
   // decide 모달: decision 또는 후보자 정보 바뀌면 기본 템플릿 재생성 (사용자가 직접 수정하지 않은 경우만).
   useEffect(() => {
-    if (open === "decide" && !messageEdited) {
+    // 지원취소(withdrawn)는 후보자에게 통보 메일이 나가지 않으므로 본문 템플릿을 만들지 않는다.
+    if (open === "decide" && !messageEdited && decision !== "withdrawn") {
       setCustomMessage(
         defaultDecisionBody(decision, candidate.name, jobTitle, companyName, interviewLang)
       );
@@ -285,8 +288,8 @@ export function StagePanel({
   const isTerminal = candidate.outcome != null;
 
   // outcome 별 선택 가능 사유. 사용자가 outcome 바꿀 때 default reason 자동 선택.
-  // 지원취소(withdrawn)는 후보자 본인이 면접 링크/일정 페이지에서 처리 — HR 모달에서 제외.
-  const REASONS_BY_OUTCOME: Record<"hired" | "rejected", string[]> = {
+  // 지원취소(withdrawn)는 후보자가 링크에서 직접 취소하거나, 유선 등으로 밝힌 취소 의사를 HR 이 대신 기록.
+  const REASONS_BY_OUTCOME: Record<"hired" | "rejected" | "withdrawn", string[]> = {
     hired: ["passed_final"],
     rejected: [
       "resume_unfit",
@@ -296,6 +299,7 @@ export function StagePanel({
       "offer_declined",
       "other",
     ],
+    withdrawn: ["candidate_withdrew", "other"],
   };
   // 불합격 default 사유 — 현재 후보자의 stage 에 따라 추정.
   const defaultRejectReasonForStage = (stage: string): string => {
@@ -410,7 +414,9 @@ export function StagePanel({
         outcome: decision,
         outcomeReason: reason || undefined,
         note,
-        sendNotification: sendMail,
+        // 지원취소는 통보 메일 대상이 아니다. sendMail 이 켜진 채 withdrawn 을 고른 경우까지
+        // 여기서 차단해 서버의 "메일 실패로 폐기 보류" 오작동을 막는다.
+        sendNotification: sendMail && decision !== "withdrawn",
         customMessage: customMessage || undefined,
       }),
     });
@@ -423,11 +429,15 @@ export function StagePanel({
       purged: boolean;
       mail: { sent: boolean; error?: string };
     };
-    const outcomeLabelMap = { hired: "최종합격", rejected: "불합격" } as const;
+    const outcomeLabelMap = {
+      hired: "최종합격",
+      rejected: "불합격",
+      withdrawn: "지원취소",
+    } as const;
     const parts: string[] = [];
     parts.push(`결과: ${outcomeLabelMap[decision]}`);
     if (data.purged) parts.push("이력서 본문·파일 즉시 폐기됨 (PIPA)");
-    if (sendMail) {
+    if (sendMail && decision !== "withdrawn") {
       parts.push(data.mail.sent ? "메일 발송 완료" : `메일 실패: ${data.mail.error}`);
     }
     setMsg({ kind: "ok", text: parts.join(" · ") });
@@ -704,6 +714,7 @@ export function StagePanel({
               {(
                 [
                   ["rejected", "불합격", "bg-danger-soft border-danger/30 text-danger"],
+                  ["withdrawn", "지원취소", "bg-surface-alt border-border-strong text-ink-soft"],
                   ["hired", "최종합격", "bg-primary-soft border-primary/30 text-primary-deep"],
                 ] as const
               ).map(([val, label, cls]) => (
@@ -816,7 +827,13 @@ export function StagePanel({
               >
                 {busy
                   ? "처리 중..."
-                  : `${decision === "hired" ? "최종합격" : "불합격"} 처리`}
+                  : `${
+                      decision === "hired"
+                        ? "최종합격"
+                        : decision === "withdrawn"
+                          ? "지원취소"
+                          : "불합격"
+                    } 처리`}
               </button>
               <button
                 onClick={() => setOpen(null)}
