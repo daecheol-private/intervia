@@ -15,7 +15,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg } from "@/lib/tenant";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import {
   Users,
   Trophy,
@@ -1015,7 +1015,9 @@ export default async function JobReportPage({
             )}
             {summaryParts.length > 0 && (
               <p className="text-[13.5px] leading-[1.65] text-ink-soft mt-3">
-                {summaryParts}
+                {summaryParts.map((part, i) => (
+                  <Fragment key={i}>{part}</Fragment>
+                ))}
               </p>
             )}
           </section>
