@@ -19,7 +19,7 @@
  *   - LOCK_STALE_SECONDS > 워커 maxDuration 이라, 살아있는 실행을 stuck 으로 오인해
  *     다른 워커가 동시에 같은 건을 처리하는 일이 없다.
  */
-import { and, asc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   interviewTranscriptSegments,
@@ -36,9 +36,11 @@ import { withDbRetry } from "./db-retry";
 import { workerBaseUrl } from "./worker-trigger";
 import { captureError } from "./error-reporter";
 
-// 전사·평가를 별도 함수 실행으로 분리(아래 processRecordedInterview)하면서 둘이 attempts 카운터를
-// 공유한다 — 전사 1회 + 평가 재시도 여유를 위해 상한을 넉넉히. 각 시도는 하드 타임아웃으로
-// 경계가 잡혀(강제종료 없이 깔끔히 실패) 상한이 커도 폭주하지 않는다.
+// 전사·평가를 별도 함수 실행으로 분리(아래 processRecordedInterview). attempts 는 "한 단계의
+// 연속 실패 예산"이다 — 전사가 성공해 평가 단계로 넘어갈 때 attempts 를 0 으로 리셋하므로
+// (claimNextRecorded 는 claim 마다 +1 하지만) 정상 실행이 전사+평가로 카운터를 소진해 멀쩡한
+// 면접이 상한에 닿아 '실패'로 오판되는 일이 없다(2026-07-07 사고: 3분짜리 라이브가 상한 도달).
+// 각 시도는 하드 타임아웃으로 경계가 잡혀(강제종료 없이 깔끔히 실패) 상한이 커도 폭주하지 않는다.
 export const MAX_RECORDED_ATTEMPTS = 5;
 // 워커 maxDuration(300s) 보다 커야 — 전사+평가로 길어진 *살아있는* 실행을 stuck 으로
 // 오인해 재큐하면, 두 워커가 같은 건을 동시에 처리(전사 중복·LLM 낭비)할 수 있다.
@@ -242,6 +244,8 @@ export async function processRecordedInterview(riId: number): Promise<void> {
     );
     // 전사 끝 — 오디오 즉시 폐기(미보관 원칙) + status='queued' 로 되돌려 평가를 다음 실행에 맡긴다.
     // startedAt=null 로 두면 cleanupStuck 의 stale 윈도우 계산에서도 깔끔하다(다음 claim 이 재설정).
+    // attempts=0 리셋: 전사 성공은 '전진'이지 재시도가 아니다. 리셋 안 하면 전사에서 쓴 claim 이
+    // 평가 예산까지 잠식해, 짧은 면접도 claim 몇 번에 상한을 넘겨 '실패'로 오판됐다(2026-07-07 사고).
     await deleteFile(ri.audioBlobKey).catch(() => {});
     await db
       .update(recordedInterviews)
@@ -250,6 +254,7 @@ export async function processRecordedInterview(riId: number): Promise<void> {
         audioBlobKey: null,
         status: "queued",
         startedAt: null,
+        attempts: 0,
       })
       .where(eq(recordedInterviews.id, riId));
     return;
@@ -287,6 +292,8 @@ export async function markRecordedFailedOrRetry(
       .from(recordedInterviews)
       .where(eq(recordedInterviews.id, riId));
     if (ri?.key) await deleteFile(ri.key).catch(() => {});
+    // status 가드: 동시 실행된 다른 finalize(워커 자동평가 + 사용자 재평가)가 이미 성공시켰으면
+    // 이번 실패로 덮어쓰지 않는다 — '성공인데 실패' 표시·이미 완료된 건의 재처리(재과금) 방지.
     await db
       .update(recordedInterviews)
       .set({
@@ -295,15 +302,27 @@ export async function markRecordedFailedOrRetry(
         audioBlobKey: null,
         completedAt: new Date().toISOString(),
       })
-      .where(eq(recordedInterviews.id, riId));
+      .where(
+        and(
+          eq(recordedInterviews.id, riId),
+          ne(recordedInterviews.status, "ready"),
+          ne(recordedInterviews.status, "confirmed")
+        )
+      );
     return { permanent: true };
   }
   // 재시도 — queued 로 되돌림. 자기 자신은 self-chain 하지 않으므로(busy-loop 방지),
-  // 다음 cron(매분)이 ~1분 backoff 후 다시 claim 한다.
+  // 다음 cron(매분)이 ~1분 backoff 후 다시 claim 한다. (이미 성공한 건은 재큐 금지 = 재과금 방지.)
   await db
     .update(recordedInterviews)
     .set({ status: "queued", error: error.slice(0, 500) })
-    .where(eq(recordedInterviews.id, riId));
+    .where(
+      and(
+        eq(recordedInterviews.id, riId),
+        ne(recordedInterviews.status, "ready"),
+        ne(recordedInterviews.status, "confirmed")
+      )
+    );
   return { permanent: false };
 }
 

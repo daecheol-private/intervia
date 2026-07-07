@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   candidates,
@@ -381,9 +381,16 @@ export async function finalizeRecordedInterview(
       screening,
     });
 
+    // error=null: 이전 시도가 남긴 실패 메시지를 지운다 — 성공(ready)인데 error 가 남아
+    // '실패'로 오표시되던 문제 차단(2026-07-07 사고: status=ready 인데 error="stuck…").
     await db
       .update(recordedInterviews)
-      .set({ report, status: "ready", completedAt: sql`CURRENT_TIMESTAMP` })
+      .set({
+        report,
+        status: "ready",
+        error: null,
+        completedAt: sql`CURRENT_TIMESTAMP`,
+      })
       .where(eq(recordedInterviews.id, recordedInterviewId));
 
     // 3) 후차감. orgId 없으면(시스템) skip.
@@ -415,10 +422,18 @@ export async function finalizeRecordedInterview(
       recordedInterviewId,
       error: msg.slice(0, 300),
     });
+    // status 가드: 동시 실행된 다른 finalize(워커 자동평가 + 사용자 재평가가 겹칠 때)가 이미
+    // 성공(ready/confirmed)시켰다면 이번 실패로 덮어쓰지 않는다 — '성공인데 실패' 표시 방지.
     await db
       .update(recordedInterviews)
       .set({ status: "failed", error: msg.slice(0, 500) })
-      .where(eq(recordedInterviews.id, recordedInterviewId));
+      .where(
+        and(
+          eq(recordedInterviews.id, recordedInterviewId),
+          ne(recordedInterviews.status, "ready"),
+          ne(recordedInterviews.status, "confirmed")
+        )
+      );
     throw e;
   }
 }
