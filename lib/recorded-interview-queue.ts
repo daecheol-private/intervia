@@ -75,12 +75,14 @@ export async function claimNextRecorded(): Promise<{
       .limit(1);
     if (!cand) return null;
 
-    const now = new Date().toISOString();
+    // startedAt 은 CURRENT_TIMESTAMP(공백 형식)로 통일 — finalize·reevaluate 와 같은 포맷이라야
+    // cleanupStuckRecorded 의 문자열 비교(startedAt < staleAt)가 정확하다. ISO(toISOString, 'T'
+    // 구분자)를 섞으면 공백(0x20)<'T'(0x54) 라 방금 시작한 처리도 항상 stale 로 오판된다(2026-07-07 사고).
     const updated = await db
       .update(recordedInterviews)
       .set({
         status: "processing",
-        startedAt: now,
+        startedAt: sql`CURRENT_TIMESTAMP`,
         attempts: sql`${recordedInterviews.attempts} + 1`,
         error: null,
       })
@@ -106,7 +108,12 @@ export async function claimNextRecorded(): Promise<{
  * 상한 이내면 queued 로 복구, 상한 초과면 즉시 failed.
  */
 export async function cleanupStuckRecorded(): Promise<number> {
-  const staleAt = new Date(Date.now() - LOCK_STALE_SECONDS * 1000).toISOString();
+  // staleAt 도 startedAt 과 같은 공백 형식("YYYY-MM-DD HH:MM:SS")으로 맞춘다 — 포맷이 다르면
+  // (ISO 'T') 문자열 비교가 깨져 살아있는 처리를 stale 로 오판한다(2026-07-07 사고, 위 claim 주석 참조).
+  const staleAt = new Date(Date.now() - LOCK_STALE_SECONDS * 1000)
+    .toISOString()
+    .replace("T", " ")
+    .slice(0, 19);
   const stuckCond = and(
     eq(recordedInterviews.status, "processing"),
     or(
