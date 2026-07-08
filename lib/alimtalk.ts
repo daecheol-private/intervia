@@ -76,7 +76,7 @@ function buildMessage(type: AlimtalkType, v: AlimtalkVars): string {
   const org = v.orgName?.trim() || "채용";
   switch (type) {
     case "interview_invite":
-      return `[${org}] AI 면접 안내\n\n${v.candidateName}님, ${v.jobTitle} 포지션 AI 면접을 안내드립니다.\n아래 버튼으로 면접을 진행해 주세요. (약 10~30분, 채팅 방식)\n\n링크 만료: ${v.expiresAt ?? "-"}\n\n※ 본 면접은 비밀번호·결제·금융정보를 절대 요구하지 않습니다.`;
+      return `[${org}] AI 면접 안내\n\n${v.candidateName}님, ${v.jobTitle} 포지션 AI 면접을 안내드립니다.\n아래 버튼으로 면접을 진행해 주세요. (약 10~30분, 채팅 방식)\n원활한 진행을 위해 PC 접속을 권장드립니다.\n\n링크 만료: ${v.expiresAt ?? "-"}\n\n※ 본 면접은 비밀번호·결제·금융정보를 절대 요구하지 않습니다.`;
     case "interview_reminder":
       // 카카오 알림톡 검수: "미완료 재촉"은 광고·공지성으로 반려됨(2026-06-30, UJ_0795).
       // → "링크 유효기간 안내"라는 정보성 이벤트로 프레이밍 전환(거래 관계 기반 정보 고지).
