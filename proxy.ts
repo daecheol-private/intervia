@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { subdomainFromHost, applyBaseOrigin } from "@/lib/subdomain";
 
 const SESSION_COOKIE = "session";
 // 슬라이딩 세션 TTL(초) — lib/auth.ts SESSION_TTL_HOURS 와 동기화. (idle 6시간)
@@ -73,6 +74,26 @@ function checkCsrf(req: NextRequest): NextResponse | null {
 }
 
 export function proxy(req: NextRequest) {
+  // 법인 서브도메인({sub}.intervia.kr)은 공개 지원 페이지 전용 — /apply·/api/apply·
+  // 정적 자산은 matcher 에서 제외돼 여기 안 오므로, 매칭된 나머지 경로(로그인·대시보드
+  // ·기타 API)는 전부 본 사이트로 돌려보낸다. 세션·인증 플로우는 apex 에서만.
+  if (subdomainFromHost(req.headers.get("host"))) {
+    // 3xx Location 은 Next 가 자기 호스트 대상일 때 상대경로로 재작성해
+    // 현재 호스트 기준 self-redirect 루프가 된다(dev 실측, 수동 헤더도 동일).
+    // 스트레이 경로 정리 목적이라 HTTP 리다이렉트 대신 meta refresh 로 우회 —
+    // 정작 중요한 지원 페이지 정본 이동은 페이지의 redirect()가 담당한다.
+    const { protocol, host } = applyBaseOrigin();
+    const { pathname, search } = req.nextUrl;
+    // 경로는 요청자 제어값 — HTML 인젝션 방지 이스케이프
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const target = esc(`${protocol}://${host}${pathname}${search}`);
+    return new NextResponse(
+      `<!doctype html><meta http-equiv="refresh" content="0;url=${target}"><p><a href="${target}">Intervia 로 이동</a></p>`,
+      { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
+    );
+  }
+
   // CSRF 검증을 먼저 — 인증된 세션이어도 cross-origin POST 는 차단
   const csrfBlock = checkCsrf(req);
   if (csrfBlock) return csrfBlock;

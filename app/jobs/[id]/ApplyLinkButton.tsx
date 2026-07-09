@@ -32,10 +32,14 @@ export default function ApplyLinkButton({
       try {
         const r = await fetch(`/api/jobs/${jobId}/apply-link`);
         if (r.ok) {
-          const { path } = (await r.json()) as { path: string | null };
+          const { path, url: branded } = (await r.json()) as {
+            path: string | null;
+            url: string | null;
+          };
           if (path) {
             active = true;
-            if (alive) setUrl(`${window.location.origin}${path}`);
+            // 서브도메인 정본 URL 우선 ({sub}.intervia.kr), 미발급이면 현재 origin
+            if (alive) setUrl(branded ?? `${window.location.origin}${path}`);
           }
         }
       } catch {
@@ -58,8 +62,12 @@ export default function ApplyLinkButton({
         notify(await r.text(), { tone: "danger", title: "링크 생성 실패" });
         return;
       }
-      const { path } = (await r.json()) as { token: string; path: string };
-      setUrl(`${window.location.origin}${path}`);
+      const { path, url: branded } = (await r.json()) as {
+        token: string;
+        path: string;
+        url: string | null;
+      };
+      setUrl(branded ?? `${window.location.origin}${path}`);
       onActive?.(true);
     } finally {
       setLoading(false);

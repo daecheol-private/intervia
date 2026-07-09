@@ -230,6 +230,28 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ---
 
+## 4-1. 법인 서브도메인 지원 페이지 활성화 (`{sub}.intervia.kr` — 와일드카드)
+
+코드는 배포돼 있어도 `SUBDOMAIN_APPLY_ENABLED` 미설정이면 **완전 휴면**(기존 apex 링크 그대로).
+활성화는 아래 순서 — Vercel 와일드카드는 **네임서버 방식 검증이 필수**라 DNS 를 Cloudflare → Vercel 로 이관해야 한다.
+
+1. **레코드 인벤토리**: Cloudflare 대시보드 → intervia.kr → DNS Records 전체 캡처
+   (Resend 인증 TXT/`resend._domainkey`·send 서브도메인 MX 등. MX 없음·프록시 미사용 확인됨 2026-07-09).
+2. **Vercel DNS 에 동일 레코드 미리 생성**: Vercel → Domains → intervia.kr → DNS Records.
+   ⚠️ 이 단계 전에 네임서버부터 바꾸면 그 레코드들이 조회 불가 → **Resend 발신(DKIM) 깨짐**.
+3. **레지스트라에서 네임서버 변경**: Cloudflare NS → Vercel 이 안내하는 `ns1/ns2.vercel-dns.com`.
+   Cloudflare 쪽 레코드는 지우지 말 것(롤백 = NS 되돌리기 한 번).
+4. **전파 후 검증**: `Resolve-DnsName intervia.kr -Type NS` 가 vercel-dns 를 반환하는지,
+   `resend._domainkey.intervia.kr` TXT 조회, Resend 대시보드 도메인 상태 Verified, 테스트 메일 발송.
+5. **와일드카드 도메인 추가**: Vercel 프로젝트 → Settings → Domains → `*.intervia.kr` 추가.
+6. **기능 ON**: Vercel 환경변수 `SUBDOMAIN_APPLY_ENABLED=1` (Production) → Redeploy.
+   이후 지원 링크가 `https://{회사}.intervia.kr/apply/...` 로 발급되고, 기존 apex 링크는
+   지원 페이지 진입 시 자동으로 브랜드 주소로 리다이렉트된다. 문제 시 env 를 지우고 Redeploy 하면 즉시 원상복구.
+
+서브도메인 라벨은 법인 email_domain 첫 라벨에서 자동 유도(사칭 방지 — 자유 입력 없음), 발급 로직은 `lib/subdomain.ts` + apply-link 라우트.
+
+---
+
 ## 5. 외부 Cron 설정 (cron-job.org — 무료)
 
 Vercel Hobby 는 daily cron 만 지원하므로, 분당/시간당 cron 은 외부 서비스 사용.

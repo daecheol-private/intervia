@@ -30,6 +30,10 @@ export const organizations = sqliteTable("organizations", {
   // null = 미설정(Intervia 기본 테마).
   logoFileKey: text("logo_file_key"),
   brandColor: text("brand_color"),
+  // 지원 페이지 전용 서브도메인 라벨 ({sub}.intervia.kr). 사칭 방지를 위해 자유 입력이
+  // 아니라 email_domain 첫 라벨에서만 자동 유도(lib/subdomain.ts deriveSubdomain).
+  // null = 미발급(공용 도메인·예약어·미사용 법인). 발급은 apply-link 라우트에서 lazy.
+  subdomain: text("subdomain"),
   // [deprecated] 과거 "법인 단위" 가이드 숨김 시각. 숨김은 users.setupGuideDismissedAt
   // (개인 단위)로 이관됨 — 한 구성원의 숨김이 다른 구성원(특히 인재상 설정 권한자)의
   // 가이드까지 꺼버리던 문제 해소. 컬럼은 백필 소스·이력 보존용으로 유지(DROP 금지).
@@ -59,6 +63,8 @@ export const organizations = sqliteTable("organizations", {
   // 같은 도메인에 여러 법인 허용 (SaaS 메일 공유 케이스 대응).
   // 사칭 방지는 사업자번호·DART·운영자 검증 게이트로 처리.
   domainIdx: index("idx_org_email_domain").on(t.emailDomain),
+  // 서브도메인은 법인당 고유 (NULL 다중 허용 — SQLite unique 는 NULL 을 구분)
+  subdomainIdx: uniqueIndex("idx_org_subdomain").on(t.subdomain),
 }));
 
 export const users = sqliteTable("users", {

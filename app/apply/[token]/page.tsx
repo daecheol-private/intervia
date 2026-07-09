@@ -1,7 +1,14 @@
 import { db } from "@/lib/db";
 import { jobPostings, organizations } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { isJobExpired } from "@/lib/job-lifecycle";
+import {
+  subdomainFromHost,
+  subdomainApplyEnabled,
+  applyUrlFor,
+} from "@/lib/subdomain";
 import { LogoMark } from "@/app/components/Logo";
 import ApplyForm from "./ApplyForm";
 
@@ -52,6 +59,7 @@ export default async function ApplyPage({
       orgName: organizations.name,
       logoFileKey: organizations.logoFileKey,
       brandColor: organizations.brandColor,
+      orgSubdomain: organizations.subdomain,
     })
     .from(jobPostings)
     .leftJoin(organizations, eq(organizations.id, jobPostings.orgId))
@@ -65,6 +73,13 @@ export default async function ApplyPage({
       />
     );
   }
+
+  // 정본 호스트 강제 — 법인 서브도메인이 있으면 {sub}.intervia.kr 로, 없으면 apex 로.
+  // 다른 법인 서브도메인에서 이 토큰을 여는 사칭 조합을 차단하고, 기존 apex 링크는
+  // 자동으로 브랜드 주소로 승격된다. 기능 OFF(운영 기본) 땐 apex 만 정본.
+  const currentSub = subdomainFromHost((await headers()).get("host"));
+  const canonicalSub = subdomainApplyEnabled() ? job.orgSubdomain : null;
+  if (currentSub !== canonicalSub) redirect(applyUrlFor(canonicalSub, token));
 
   if (job.status === "closed" || isJobExpired(job)) {
     return (

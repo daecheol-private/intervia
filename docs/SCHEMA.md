@@ -20,6 +20,7 @@
 | culture_fit_profile | TEXT NULL | 법인 전반의 선호 인재상·정성 평가 기준 (`CultureFitProfile` JSON — 선호 인재상 + 정성 평가 항목 6종). `/org/settings` 에서 입력 — JD 와 별개로 AI 이력서 평가·면접 질문지(1·2차) 생성에 자동 반영. NULL=미설정. **존재 여부가 인성검사 출제 게이트**. JSON 내 `traitProfile` 은 레거시 — Big Five 선호 특성은 `job_postings.trait_profile` 로 이동(2026-06), 읽기 경로는 전부 공고 값 사용 |
 | logo_file_key | TEXT NULL | **지원 페이지 브랜딩** — 회사 로고 파일 키(`saveFile()` 반환: Blob URL 또는 로컬 파일명). 공개 지원 페이지(`/apply/[token]`)와 법인 설정 미리보기에 스트리밍 프록시로 노출(Blob URL 비노출). NULL=미설정 (0053) |
 | brand_color | TEXT NULL | **지원 페이지 브랜딩** — 포인트 컬러 `#rrggbb`. 지원 페이지 헤더 밴드 배경·제출 버튼에 적용, 밴드 위 글자색은 YIQ 밝기로 자동 결정(`lib/brand-color.ts` — 대비 시스템 보장). NULL=기본 테마 (0053) |
+| subdomain | TEXT NULL UNIQUE | **지원 페이지 서브도메인** — `{sub}.intervia.kr` 라벨. 사칭 방지를 위해 자유 입력 불가, email_domain 첫 라벨에서만 자동 유도(`lib/subdomain.ts` — 예약어·공용도메인 제외, 충돌 시 `-{orgId}` 접미사). apply-link 라우트에서 lazy 발급. 운영 활성화는 `SUBDOMAIN_APPLY_ENABLED=1`(와일드카드 DNS 필요, DEPLOY.md) (0054) |
 | setup_guide_dismissed_at | TEXT NULL | **[deprecated]** 과거 "법인 단위" 가이드 숨김 시각. 숨김은 `users.setup_guide_dismissed_at`(개인 단위)로 이관됨(0026). 백필 소스·이력 보존용으로 유지(DROP 금지) |
 | suspended_at | TEXT NULL | 시스템 관리자가 법인을 정지한 시각. NULL=정상. 정지 시 멤버 로그인 차단 + 신규 합류 차단 (진행 중 면접 세션은 종료까지 유지) |
 | suspended_reason | TEXT NULL | 정지 사유 |

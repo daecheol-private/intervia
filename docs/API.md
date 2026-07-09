@@ -60,6 +60,8 @@
 | GET/POST/DELETE | `/api/orgs/me/branding/logo` | 🔒 / 🛡️ / 🛡️ | 지원 페이지 로고 — GET 미리보기 스트리밍(멤버 가능), POST multipart `file`(PNG·JPG·WebP, 2MB, 매직바이트 검증, 교체 시 이전 파일 삭제), DELETE 제거 |
 | GET | `/api/apply/[token]/logo` | 🌐 | 공개 지원 페이지 로고 스트리밍 — apply 토큰→공고→법인 로고. Blob URL 비노출 프록시, `max-age=300` |
 
+지원 링크(`GET/POST /api/jobs/[id]/apply-link`) 응답의 `url` 은 법인 서브도메인 정본 URL(`https://{sub}.intervia.kr/apply/{token}`) — 서브도메인 기능 OFF(운영 기본, `SUBDOMAIN_APPLY_ENABLED` 미설정)거나 미발급 법인이면 null 이고 클라이언트가 origin+path 로 구성. 이 라우트가 법인 서브도메인을 lazy 발급한다(`ensureOrgSubdomain`).
+
 ## 사용자
 
 | 메서드 | 경로 | 권한 | 설명 |
