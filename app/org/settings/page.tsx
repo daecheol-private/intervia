@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { CultureFitProfile, QualItem } from "@/lib/prompts";
+import { isLightColor, textColorOn } from "@/lib/brand-color";
 import {
   NCS_COMPETENCY_KEYS,
   NCS_COMPETENCY_LABELS,
@@ -22,7 +23,19 @@ type Org = {
   officeAddressDetail?: string | null;
   allowScanOcr?: boolean;
   cultureFitProfile?: CultureFitProfile | null;
+  brandColor?: string | null;
+  hasLogo?: boolean;
 };
+
+// 지원 페이지 포인트 컬러 프리셋 — 흰 배경 위 버튼으로 무난한 진한 톤만
+const BRAND_PRESETS = [
+  "#0f4c81",
+  "#15803d",
+  "#b91c1c",
+  "#6d28d9",
+  "#d97706",
+  "#111827",
+];
 
 const QUAL_KEYS = [
   "selfIntro",
@@ -36,7 +49,7 @@ const QUAL_KEYS = [
 type QualKey = (typeof QUAL_KEYS)[number];
 
 // 저장 결과 메시지를 누른 버튼 옆에 표시하기 위한 섹션 구분
-type SaveSection = "biz" | "addr" | "ocr" | "cf";
+type SaveSection = "biz" | "addr" | "ocr" | "cf" | "brand";
 type SaveMsgState = {
   section: SaveSection;
   type: "error" | "success";
@@ -118,6 +131,13 @@ export default function OrgSettingsPage() {
   const [cfProfile, setCfProfile] = useState<CultureFitProfile>(defaultProfile());
   const [cfBusy, setCfBusy] = useState(false);
 
+  // 지원 페이지 브랜딩 로컬 상태
+  const [brandColor, setBrandColor] = useState("");
+  const [hasLogo, setHasLogo] = useState(false);
+  const [logoVer, setLogoVer] = useState(0); // 업로드 후 미리보기 캐시 무효화
+  const [brandBusy, setBrandBusy] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
+
   const load = async () => {
     const [orgRes, statusRes, cfRes] = await Promise.all([
       fetch("/api/orgs/me"),
@@ -130,6 +150,8 @@ export default function OrgSettingsPage() {
       setAddr(o.officeAddress ?? "");
       setDetail(o.officeAddressDetail ?? "");
       setBizNo(o.bizRegistrationNo ?? "");
+      setBrandColor(o.brandColor ?? "");
+      setHasLogo(!!o.hasLogo);
     }
     if (statusRes.ok) {
       const s = await statusRes.json();
@@ -242,6 +264,69 @@ export default function OrgSettingsPage() {
       return;
     }
     setMsg({ section: "cf", type: "success", text: "컬처핏 설정이 저장되었습니다." });
+  };
+
+  const uploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // 같은 파일 재선택 허용
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) {
+      setMsg({
+        section: "brand",
+        type: "error",
+        text: "로고는 최대 2MB 까지 업로드할 수 있습니다.",
+      });
+      return;
+    }
+    setLogoBusy(true);
+    setMsg(null);
+    const fd = new FormData();
+    fd.append("file", f);
+    const r = await fetch("/api/orgs/me/branding/logo", {
+      method: "POST",
+      body: fd,
+    });
+    setLogoBusy(false);
+    if (!r.ok) {
+      setMsg({ section: "brand", type: "error", text: await r.text() });
+      return;
+    }
+    setHasLogo(true);
+    setLogoVer((v) => v + 1);
+    setMsg({ section: "brand", type: "success", text: "로고가 저장되었습니다." });
+  };
+
+  const removeLogo = async () => {
+    setLogoBusy(true);
+    setMsg(null);
+    const r = await fetch("/api/orgs/me/branding/logo", { method: "DELETE" });
+    setLogoBusy(false);
+    if (!r.ok) {
+      setMsg({ section: "brand", type: "error", text: await r.text() });
+      return;
+    }
+    setHasLogo(false);
+    setMsg({ section: "brand", type: "success", text: "로고를 제거했습니다." });
+  };
+
+  const saveBrand = async () => {
+    setBrandBusy(true);
+    setMsg(null);
+    const r = await fetch("/api/orgs/me/branding", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brandColor: brandColor || null }),
+    });
+    setBrandBusy(false);
+    if (!r.ok) {
+      setMsg({ section: "brand", type: "error", text: await r.text() });
+      return;
+    }
+    setMsg({
+      section: "brand",
+      type: "success",
+      text: "포인트 컬러가 저장되었습니다.",
+    });
   };
 
   const updateQualItem = (key: QualKey, patch: Partial<QualItem>) => {
@@ -366,6 +451,156 @@ export default function OrgSettingsPage() {
                 </button>
                 <SaveMsg msg={msg} section="addr" />
               </div>
+            </div>
+          </section>
+
+          {/* 지원 페이지 브랜딩 — 지원 링크로 유입된 지원자에게 자사 채용임을 보여준다 */}
+          <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm">
+            <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1">
+              지원 페이지 브랜딩
+            </h2>
+            <p className="text-[11px] text-ink-muted mb-4 leading-relaxed">
+              지원 링크(공개 지원 페이지)에 회사 로고와 포인트 컬러를
+              적용합니다. 사람인 등 외부 공고에서 넘어온 지원자가 우리 회사
+              채용임을 바로 알아볼 수 있습니다.
+            </p>
+
+            {/* 로고 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-ink-soft">
+                회사 로고
+              </label>
+              {hasLogo && (
+                <div className="flex items-center gap-3">
+                  <img
+                    src={`/api/orgs/me/branding/logo?v=${logoVer}`}
+                    alt="회사 로고"
+                    className="h-12 max-w-[180px] object-contain rounded-lg border border-border-default bg-surface p-1.5"
+                  />
+                  <button
+                    onClick={removeLogo}
+                    disabled={logoBusy}
+                    className="text-xs text-ink-muted hover:text-danger disabled:opacity-50"
+                  >
+                    제거
+                  </button>
+                </div>
+              )}
+              <input
+                type="file"
+                accept=".png,.jpg,.jpeg,.webp"
+                onChange={uploadLogo}
+                disabled={logoBusy}
+                className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-primary-soft file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-primary-soft disabled:opacity-50"
+              />
+              <p className="text-[11px] text-ink-muted">
+                PNG · JPG · WebP, 최대 2MB. 가로형 로고를 권장합니다.
+              </p>
+            </div>
+
+            {/* 포인트 컬러 */}
+            <div className="pt-4 mt-4 border-t border-border-default space-y-2">
+              <label className="text-sm font-medium text-ink-soft">
+                포인트 컬러
+              </label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {BRAND_PRESETS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setBrandColor(c)}
+                    aria-label={`포인트 컬러 ${c}`}
+                    className={`h-7 w-7 rounded-full border transition-shadow ${
+                      brandColor === c
+                        ? "ring-2 ring-primary ring-offset-2"
+                        : "border-border-default hover:ring-1 hover:ring-border-strong"
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+                <input
+                  type="color"
+                  value={brandColor || "#1c3478"}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  aria-label="직접 선택"
+                  className="h-8 w-10 cursor-pointer rounded-lg border border-border-default bg-card p-0.5"
+                />
+                {brandColor && (
+                  <button
+                    type="button"
+                    onClick={() => setBrandColor("")}
+                    className="text-xs text-ink-muted hover:text-danger"
+                  >
+                    기본색으로
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-ink-muted">
+                지원 페이지의 상단 라인과 제출 버튼에 적용됩니다. 글자 색은
+                가독성이 보장되도록 자동으로 정해집니다.
+              </p>
+            </div>
+
+            {/* 미리보기 */}
+            <div className="pt-4 mt-4 border-t border-border-default">
+              <p className="text-[11px] text-ink-muted mb-2">미리보기</p>
+              <div className="rounded-xl bg-surface-alt p-4">
+                <div
+                  className="mx-auto max-w-xs rounded-xl bg-card border border-border-default p-4 shadow-sm"
+                  style={
+                    brandColor
+                      ? { borderTop: `3px solid ${brandColor}` }
+                      : undefined
+                  }
+                >
+                  {hasLogo && (
+                    <img
+                      src={`/api/orgs/me/branding/logo?v=${logoVer}`}
+                      alt=""
+                      className="mb-2 max-h-8 max-w-[140px] object-contain"
+                    />
+                  )}
+                  <p
+                    className="text-xs font-medium text-primary"
+                    style={
+                      brandColor && !isLightColor(brandColor)
+                        ? { color: brandColor }
+                        : undefined
+                    }
+                  >
+                    {org.name}
+                  </p>
+                  <p className="mt-0.5 text-sm font-semibold text-ink">
+                    채용 공고 제목
+                  </p>
+                  <div
+                    className={`mt-3 rounded-lg px-3 py-2 text-center text-xs font-semibold ${
+                      brandColor ? "" : "bg-primary text-surface"
+                    }`}
+                    style={
+                      brandColor
+                        ? {
+                            backgroundColor: brandColor,
+                            color: textColorOn(brandColor),
+                          }
+                        : undefined
+                    }
+                  >
+                    지원서 제출
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button
+                onClick={saveBrand}
+                disabled={brandBusy}
+                className="px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
+              >
+                {brandBusy ? "저장 중..." : "포인트 컬러 저장"}
+              </button>
+              <SaveMsg msg={msg} section="brand" />
             </div>
           </section>
 

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { FileText, Paperclip, X } from "lucide-react";
+import { isValidBrandColor, isLightColor, textColorOn } from "@/lib/brand-color";
 
 const MAX_FILE_MB = 10;
 const ACCEPT = ".pdf,.docx,.hwpx";
@@ -12,10 +13,14 @@ export default function ApplyForm({
   token,
   companyName,
   jobTitle,
+  logoUrl,
+  brandColor,
 }: {
   token: string;
   companyName: string;
   jobTitle: string;
+  logoUrl?: string | null;
+  brandColor?: string | null;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -29,6 +34,23 @@ export default function ApplyForm({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const resumeInputRef = useRef<HTMLInputElement>(null);
+
+  // 법인 브랜딩 — 컬러는 상단 라인·제출 버튼에만, 글자 대비는 자동 보장.
+  const color = brandColor && isValidBrandColor(brandColor) ? brandColor : null;
+  const accentStyle = color ? { borderTop: `3px solid ${color}` } : undefined;
+  // 밝은 색은 흰 카드 위 글자로 못 쓰므로 회사명은 어두운 색일 때만 브랜드 컬러
+  const companyNameStyle =
+    color && !isLightColor(color) ? { color } : undefined;
+  const logoImg = logoUrl && (
+    <img
+      src={logoUrl}
+      alt={`${companyName} 로고`}
+      className="mb-3 max-h-12 max-w-[200px] object-contain"
+      onError={(e) => {
+        e.currentTarget.style.display = "none";
+      }}
+    />
+  );
 
   function removeResume() {
     setFile(null);
@@ -98,7 +120,10 @@ export default function ApplyForm({
 
   if (done) {
     return (
-      <div className="rounded-2xl bg-card shadow-sm border border-border-default p-8 text-center">
+      <div
+        className="rounded-2xl bg-card shadow-sm border border-border-default p-8 text-center"
+        style={accentStyle}
+      >
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary text-2xl">
           ✓
         </div>
@@ -118,9 +143,13 @@ export default function ApplyForm({
     <form
       onSubmit={handleSubmit}
       className="rounded-2xl bg-card shadow-sm border border-border-default p-5 sm:p-6 space-y-4"
+      style={accentStyle}
     >
       <div>
-        <p className="text-xs font-medium text-primary">{companyName}</p>
+        {logoImg}
+        <p className="text-xs font-medium text-primary" style={companyNameStyle}>
+          {companyName}
+        </p>
         <h1 className="mt-1 text-lg font-semibold text-ink">{jobTitle}</h1>
         <p className="mt-1 text-sm text-ink-muted">
           아래 정보를 입력하고 이력서를 첨부해 지원해 주세요.
@@ -261,7 +290,15 @@ export default function ApplyForm({
       <button
         type="submit"
         disabled={!canSubmit}
-        className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-surface hover:bg-primary-deep disabled:cursor-not-allowed disabled:bg-border-strong"
+        // 활성 상태에서만 브랜드 컬러 — 비활성은 기존 disabled 클래스가 그대로 적용
+        style={
+          color && canSubmit
+            ? { backgroundColor: color, color: textColorOn(color) }
+            : undefined
+        }
+        className={`w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-surface disabled:cursor-not-allowed disabled:bg-border-strong ${
+          color ? "hover:brightness-95" : "bg-primary hover:bg-primary-deep"
+        }`}
       >
         {submitting ? "제출 중…" : "지원서 제출"}
       </button>

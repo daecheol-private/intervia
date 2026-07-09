@@ -25,6 +25,11 @@ export const organizations = sqliteTable("organizations", {
   // JD 와 별개로 법인 전반의 선호 인재상·정성 평가 기준을 저장 (CultureFitProfile JSON).
   // AI 이력서 평가·면접 질문 생성에 자동 반영. null = 미설정.
   cultureFitProfile: text("culture_fit_profile"),
+  // 공개 지원 페이지(/apply/[token]) 브랜딩 — 지원자가 "우리 회사 채용"임을 알아보게.
+  // logoFileKey 는 saveFile() 키(Blob URL 또는 로컬 파일명), brandColor 는 #rrggbb.
+  // null = 미설정(Intervia 기본 테마).
+  logoFileKey: text("logo_file_key"),
+  brandColor: text("brand_color"),
   // [deprecated] 과거 "법인 단위" 가이드 숨김 시각. 숨김은 users.setupGuideDismissedAt
   // (개인 단위)로 이관됨 — 한 구성원의 숨김이 다른 구성원(특히 인재상 설정 권한자)의
   // 가이드까지 꺼버리던 문제 해소. 컬럼은 백필 소스·이력 보존용으로 유지(DROP 금지).

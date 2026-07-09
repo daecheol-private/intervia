@@ -29,5 +29,7 @@ export async function GET() {
     officeAddress: org.officeAddress,
     officeAddressDetail: org.officeAddressDetail,
     allowScanOcr: org.allowScanOcr,
+    brandColor: org.brandColor,
+    hasLogo: !!org.logoFileKey,
   });
 }

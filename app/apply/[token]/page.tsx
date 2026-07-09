@@ -50,6 +50,8 @@ export default async function ApplyPage({
       closesAt: jobPostings.closesAt,
       closedAt: jobPostings.closedAt,
       orgName: organizations.name,
+      logoFileKey: organizations.logoFileKey,
+      brandColor: organizations.brandColor,
     })
     .from(jobPostings)
     .leftJoin(organizations, eq(organizations.id, jobPostings.orgId))
@@ -79,6 +81,8 @@ export default async function ApplyPage({
         token={token}
         companyName={job.orgName ?? "채용 기업"}
         jobTitle={job.title}
+        logoUrl={job.logoFileKey ? `/api/apply/${encodeURIComponent(token)}/logo` : null}
+        brandColor={job.brandColor}
       />
     </Shell>
   );

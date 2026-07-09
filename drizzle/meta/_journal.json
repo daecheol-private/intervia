@@ -372,6 +372,13 @@
       "when": 1783099815540,
       "tag": "0052_slippery_morlocks",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1783595877664,
+      "tag": "0053_dusty_dragon_man",
+      "breakpoints": true
     }
   ]
 }
