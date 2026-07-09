@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { FileText, Paperclip, X } from "lucide-react";
-import { isValidBrandColor, isLightColor, textColorOn } from "@/lib/brand-color";
+import { isValidBrandColor, textColorOn } from "@/lib/brand-color";
 
 const MAX_FILE_MB = 10;
 const ACCEPT = ".pdf,.docx,.hwpx";
@@ -35,22 +35,21 @@ export default function ApplyForm({
   const [done, setDone] = useState(false);
   const resumeInputRef = useRef<HTMLInputElement>(null);
 
-  // 법인 브랜딩 — 컬러는 상단 라인·제출 버튼에만, 글자 대비는 자동 보장.
+  // 법인 브랜딩 — 헤더 밴드 배경 + 제출 버튼. 밴드 위 글자 대비는 자동 보장(textColorOn).
   const color = brandColor && isValidBrandColor(brandColor) ? brandColor : null;
-  const accentStyle = color ? { borderTop: `3px solid ${color}` } : undefined;
-  // 밝은 색은 흰 카드 위 글자로 못 쓰므로 회사명은 어두운 색일 때만 브랜드 컬러
-  const companyNameStyle =
-    color && !isLightColor(color) ? { color } : undefined;
-  const logoImg = logoUrl && (
-    <img
-      src={logoUrl}
-      alt={`${companyName} 로고`}
-      className="mb-3 max-h-12 max-w-[200px] object-contain"
-      onError={(e) => {
-        e.currentTarget.style.display = "none";
-      }}
-    />
-  );
+  const bandStyle = color ? { backgroundColor: color } : undefined;
+  const onBand = color ? textColorOn(color) : null;
+  const logoImg = (centered: boolean) =>
+    logoUrl && (
+      <img
+        src={logoUrl}
+        alt={`${companyName} 로고`}
+        className={`${centered ? "mx-auto " : ""}mb-3 max-h-12 max-w-[200px] object-contain`}
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+    );
 
   function removeResume() {
     setFile(null);
@@ -120,21 +119,31 @@ export default function ApplyForm({
 
   if (done) {
     return (
-      <div
-        className="rounded-2xl bg-card shadow-sm border border-border-default p-8 text-center"
-        style={accentStyle}
-      >
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary text-2xl">
-          ✓
+      <div className="rounded-2xl bg-card shadow-sm border border-border-default overflow-hidden text-center">
+        {(logoUrl || color) && (
+          <div className="px-8 pt-6 pb-5" style={bandStyle}>
+            {logoImg(true)}
+            <p
+              className="text-xs font-medium text-primary"
+              style={onBand ? { color: onBand, opacity: 0.85 } : undefined}
+            >
+              {companyName}
+            </p>
+          </div>
+        )}
+        <div className="p-8">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary text-2xl">
+            ✓
+          </div>
+          <h1 className="mt-4 text-lg font-semibold text-ink">
+            지원이 완료되었습니다
+          </h1>
+          <p className="mt-2 text-sm text-ink-soft leading-relaxed">
+            {companyName} · {jobTitle} 에 지원해 주셔서 감사합니다.
+            <br />
+            제출하신 이력서는 채용 절차에 따라 검토됩니다.
+          </p>
         </div>
-        <h1 className="mt-4 text-lg font-semibold text-ink">
-          지원이 완료되었습니다
-        </h1>
-        <p className="mt-2 text-sm text-ink-soft leading-relaxed">
-          {companyName} · {jobTitle} 에 지원해 주셔서 감사합니다.
-          <br />
-          제출하신 이력서는 채용 절차에 따라 검토됩니다.
-        </p>
       </div>
     );
   }
@@ -142,20 +151,32 @@ export default function ApplyForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-2xl bg-card shadow-sm border border-border-default p-5 sm:p-6 space-y-4"
-      style={accentStyle}
+      className="rounded-2xl bg-card shadow-sm border border-border-default overflow-hidden"
     >
-      <div>
-        {logoImg}
-        <p className="text-xs font-medium text-primary" style={companyNameStyle}>
+      {/* 헤더 밴드 — 브랜드 컬러 설정 시 영역 전체를 채운다 */}
+      <div className="px-5 pt-5 pb-4 sm:px-6 sm:pt-6" style={bandStyle}>
+        {logoImg(false)}
+        <p
+          className="text-xs font-medium text-primary"
+          style={onBand ? { color: onBand, opacity: 0.85 } : undefined}
+        >
           {companyName}
         </p>
-        <h1 className="mt-1 text-lg font-semibold text-ink">{jobTitle}</h1>
-        <p className="mt-1 text-sm text-ink-muted">
+        <h1
+          className="mt-1 text-lg font-semibold text-ink"
+          style={onBand ? { color: onBand } : undefined}
+        >
+          {jobTitle}
+        </h1>
+        <p
+          className="mt-1 text-sm text-ink-muted"
+          style={onBand ? { color: onBand, opacity: 0.75 } : undefined}
+        >
           아래 정보를 입력하고 이력서를 첨부해 지원해 주세요.
         </p>
       </div>
 
+      <div className="px-5 pb-5 sm:px-6 sm:pb-6 pt-4 space-y-4">
       <div className="space-y-3">
         <Field label="이메일" required>
           <input
@@ -302,6 +323,7 @@ export default function ApplyForm({
       >
         {submitting ? "제출 중…" : "지원서 제출"}
       </button>
+      </div>
     </form>
   );
 }

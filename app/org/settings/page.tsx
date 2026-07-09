@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { CultureFitProfile, QualItem } from "@/lib/prompts";
-import { isLightColor, textColorOn } from "@/lib/brand-color";
+import { textColorOn } from "@/lib/brand-color";
 import {
   NCS_COMPETENCY_KEYS,
   NCS_COMPETENCY_LABELS,
@@ -536,7 +536,7 @@ export default function OrgSettingsPage() {
                 )}
               </div>
               <p className="text-[11px] text-ink-muted">
-                지원 페이지의 상단 라인과 제출 버튼에 적용됩니다. 글자 색은
+                지원 페이지의 헤더 배경과 제출 버튼에 적용됩니다. 글자 색은
                 가독성이 보장되도록 자동으로 정해집니다.
               </p>
             </div>
@@ -545,48 +545,58 @@ export default function OrgSettingsPage() {
             <div className="pt-4 mt-4 border-t border-border-default">
               <p className="text-[11px] text-ink-muted mb-2">미리보기</p>
               <div className="rounded-xl bg-surface-alt p-4">
-                <div
-                  className="mx-auto max-w-xs rounded-xl bg-card border border-border-default p-4 shadow-sm"
-                  style={
-                    brandColor
-                      ? { borderTop: `3px solid ${brandColor}` }
-                      : undefined
-                  }
-                >
-                  {hasLogo && (
-                    <img
-                      src={`/api/orgs/me/branding/logo?v=${logoVer}`}
-                      alt=""
-                      className="mb-2 max-h-8 max-w-[140px] object-contain"
-                    />
-                  )}
-                  <p
-                    className="text-xs font-medium text-primary"
-                    style={
-                      brandColor && !isLightColor(brandColor)
-                        ? { color: brandColor }
-                        : undefined
-                    }
-                  >
-                    {org.name}
-                  </p>
-                  <p className="mt-0.5 text-sm font-semibold text-ink">
-                    채용 공고 제목
-                  </p>
+                <div className="mx-auto max-w-xs rounded-xl bg-card border border-border-default shadow-sm overflow-hidden">
+                  {/* 헤더 밴드 — 실제 지원 페이지와 동일 구조 */}
                   <div
-                    className={`mt-3 rounded-lg px-3 py-2 text-center text-xs font-semibold ${
-                      brandColor ? "" : "bg-primary text-surface"
-                    }`}
+                    className="p-4"
                     style={
-                      brandColor
-                        ? {
-                            backgroundColor: brandColor,
-                            color: textColorOn(brandColor),
-                          }
-                        : undefined
+                      brandColor ? { backgroundColor: brandColor } : undefined
                     }
                   >
-                    지원서 제출
+                    {hasLogo && (
+                      <img
+                        src={`/api/orgs/me/branding/logo?v=${logoVer}`}
+                        alt=""
+                        className="mb-2 max-h-8 max-w-[140px] object-contain"
+                      />
+                    )}
+                    <p
+                      className="text-xs font-medium text-primary"
+                      style={
+                        brandColor
+                          ? { color: textColorOn(brandColor), opacity: 0.85 }
+                          : undefined
+                      }
+                    >
+                      {org.name}
+                    </p>
+                    <p
+                      className="mt-0.5 text-sm font-semibold text-ink"
+                      style={
+                        brandColor
+                          ? { color: textColorOn(brandColor) }
+                          : undefined
+                      }
+                    >
+                      채용 공고 제목
+                    </p>
+                  </div>
+                  <div className="p-4 pt-3">
+                    <div
+                      className={`rounded-lg px-3 py-2 text-center text-xs font-semibold ${
+                        brandColor ? "" : "bg-primary text-surface"
+                      }`}
+                      style={
+                        brandColor
+                          ? {
+                              backgroundColor: brandColor,
+                              color: textColorOn(brandColor),
+                            }
+                          : undefined
+                      }
+                    >
+                      지원서 제출
+                    </div>
                   </div>
                 </div>
               </div>
