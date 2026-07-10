@@ -39,6 +39,7 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   const productLinks = [
     { label: "작동 방식", href: "/how-it-works" },
     { label: "전체 기능", href: "/features" },
+    { label: "이력서 등록 방법", href: "/resume-guide" },
   ];
   const legalLinks = [
     { label: "개인정보 처리방침", href: "/privacy" },
