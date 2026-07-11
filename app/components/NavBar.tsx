@@ -33,6 +33,7 @@ import {
 import { LogoMark } from "./Logo";
 import LogoutButton from "../logout-button";
 import { NotificationBell } from "./NotificationBell";
+import { usesAppShell } from "@/lib/app-shell-routes";
 
 type Role = "system_admin" | "org_admin" | "member" | null;
 
@@ -129,20 +130,10 @@ export function NavBar({
   ) {
     return null;
   }
-  // AppShell(좌측 레일)을 쓰는 인증 영역에서는 전역 상단바 숨김(중복 방지).
+  // AppShell(좌측 레일)을 쓰는 영역에서는 전역 상단바 숨김(중복 방지).
   // 로그인 상태에서만 — 비로그인(role=null)이면 공개 랜딩/리다이렉트 대상이라 상단바 유지.
-  const usesAppShell =
-    pathname === "/" ||
-    pathname.startsWith("/candidates") ||
-    pathname.startsWith("/interviews") ||
-    pathname.startsWith("/insights") ||
-    pathname.startsWith("/jobs") ||
-    pathname.startsWith("/org") ||
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/account") ||
-    pathname.startsWith("/notifications") ||
-    pathname.startsWith("/support");
-  if (role !== null && usesAppShell) {
+  // 공개 문서·가이드(사용 가이드·약관 등)도 로그인 상태에선 셸을 유지한다 → lib/app-shell-routes.
+  if (role !== null && usesAppShell(pathname)) {
     return null;
   }
   // "법인"(/org/*) 드롭다운은 자기 소속 법인을 운영하는 org_admin 전용.

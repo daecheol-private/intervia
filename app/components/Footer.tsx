@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { COMPANY_INFO, SITE_INFO } from "@/lib/site-info";
+import { usesAppShell } from "@/lib/app-shell-routes";
 
 export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   const pathname = usePathname() ?? "";
@@ -16,19 +17,10 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   ) {
     return null;
   }
-  // AppShell(좌측 레일)을 쓰는 인증 영역에서는 전역 푸터 숨김. 로그인 상태에서만
-  // (비로그인이면 공개 랜딩/리다이렉트 대상이라 푸터 유지).
-  const usesAppShell =
-    pathname === "/" ||
-    pathname.startsWith("/candidates/") ||
-    pathname.startsWith("/insights") ||
-    pathname.startsWith("/jobs") ||
-    pathname.startsWith("/org") ||
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/account") ||
-    pathname.startsWith("/notifications") ||
-    pathname.startsWith("/support");
-  if (loggedIn && usesAppShell) {
+  // AppShell(좌측 레일)을 쓰는 영역에서는 전역 푸터 숨김. 로그인 상태에서만
+  // (비로그인이면 공개 랜딩/리다이렉트 대상이라 푸터 유지). 공개 문서·가이드도 포함 →
+  // NavBar 와 동일한 lib/app-shell-routes 판정을 공유해 두 컴포넌트가 어긋나지 않게 한다.
+  if (loggedIn && usesAppShell(pathname)) {
     return null;
   }
 
