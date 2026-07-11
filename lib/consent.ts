@@ -199,11 +199,13 @@ export function validateConsents(
  * session.candidateId 로 기록되므로(consent 라우트) 정상 흐름에는 영향이 없다.
  */
 // ── 도쿄 폴백 게이트 (마스킹 텍스트 LLM 호출의 국외 임시 처리 — COMPLIANCE_SOP §4) ──
-// ① 처리방침 1.5.0 시행일(2026-07-18 KST, §12 "7일 전 공지" 준수) 이후이고
-// ② 해당 동의가 1.9.0(도쿄 폴백 고지 포함) 이상일 때만 gemini `allowFallback` 을 켤 수 있다.
+// ① 처리방침 1.5.0 시행일 이후이고 ② 해당 동의가 1.9.0(도쿄 폴백 고지 포함) 이상일 때만
+// gemini `allowFallback` 을 켤 수 있다.
+// 시행일: 원래 §12 "7일 전 공지"에 맞춰 07-18 이었으나, 서비스 개시 전(보호할 기존
+// 정보주체 부재)이라 사용자 결정(2026-07-12)으로 게시 즉시 시행.
 const PII_FALLBACK_ACTIVE_FROM = process.env.PII_FALLBACK_FROM
   ? Date.parse(process.env.PII_FALLBACK_FROM)
-  : Date.UTC(2026, 6, 17, 15, 0, 0); // 2026-07-18 00:00 KST
+  : Date.UTC(2026, 6, 11, 15, 0, 0); // 2026-07-12 00:00 KST (처리방침 1.5.0 시행일)
 
 export function piiFallbackActive(): boolean {
   return Date.now() >= PII_FALLBACK_ACTIVE_FROM;
