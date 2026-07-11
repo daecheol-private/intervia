@@ -90,16 +90,23 @@ export async function GET(
   // 회사명(name)도 함께 조회 — 후보자 화면에 "어느 회사의 AI 면접인지" 맥락 표시용.
   let cultureFit: CultureFitProfile | null = null;
   let orgName: string | null = null;
+  // 법인 브랜딩(공개 지원 페이지와 동일 소스) — 면접 화면 헤더 밴드·로고·버튼에 반영.
+  let orgBrandColor: string | null = null;
+  let orgHasLogo = false;
   if (job.orgId) {
     const [orgRow] = await db
       .select({
         name: organizations.name,
         cultureFitProfile: organizations.cultureFitProfile,
+        brandColor: organizations.brandColor,
+        logoFileKey: organizations.logoFileKey,
       })
       .from(organizations)
       .where(eq(organizations.id, job.orgId));
     if (orgRow) {
       orgName = orgRow.name;
+      orgBrandColor = orgRow.brandColor;
+      orgHasLogo = !!orgRow.logoFileKey;
       if (orgRow.cultureFitProfile) {
         try { cultureFit = JSON.parse(orgRow.cultureFitProfile) as CultureFitProfile; } catch { /* ignore */ }
       }
@@ -144,7 +151,9 @@ export async function GET(
   return Response.json({
     session: publicSession,
     candidate: { id: candidate.id, name: candidate.name },
-    organization: orgName ? { name: orgName } : null,
+    organization: orgName
+      ? { name: orgName, brandColor: orgBrandColor, hasLogo: orgHasLogo }
+      : null,
     job: {
       id: job.id,
       title: job.title,

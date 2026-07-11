@@ -6,6 +6,7 @@ import { useVoiceInput } from "./use-voice-input";
 import { LogoMark, Logo } from "@/app/components/Logo";
 import { MicHelpModal } from "@/app/components/MicHelpModal";
 import { t, normalizeLang, type Lang } from "@/lib/i18n/interview";
+import { isValidBrandColor, textColorOn } from "@/lib/brand-color";
 
 type Message = { role: "user" | "model"; content: string };
 
@@ -47,8 +48,16 @@ type SessionInfo = {
     startedAt?: string | null;
   };
   candidate: { id: number; name: string };
-  /** 후보자 화면 맥락 표시용 회사명 (legacy 공고는 orgId 없어 null 가능) */
-  organization?: { name: string } | null;
+  /**
+   * 후보자 화면 맥락 표시용 회사 정보 (legacy 공고는 orgId 없어 null 가능).
+   * brandColor(#rrggbb)/hasLogo 는 공개 지원 페이지와 동일한 법인 브랜딩 소스 —
+   * 면접 화면 헤더 밴드·로고·주요 버튼·채팅에 반영한다.
+   */
+  organization?: {
+    name: string;
+    brandColor?: string | null;
+    hasLogo?: boolean;
+  } | null;
   job: {
     id: number;
     title: string;
@@ -91,6 +100,55 @@ function buildSteps(info: SessionInfo, lang: Lang): Step[] {
   if (hasMcq) steps.push({ key: "mcq", label: t(lang, "step.mcq") });
   steps.push({ key: "interview", label: t(lang, "step.interview") });
   return steps;
+}
+
+/**
+ * 법인 브랜딩 파생값 — 면접 화면 전반(헤더 밴드·로고·버튼·채팅)에서 공유한다.
+ * 공개 지원 페이지(/apply)와 동일한 소스·규칙: 담당자는 포인트 컬러 1개 + 로고만
+ * 지정하고, 밴드 위 글자 대비는 시스템이 YIQ 로 자동 보장(lib/brand-color.ts).
+ *   - color:   검증된 #rrggbb, 미설정이면 Intervia 기본 브랜드색(항상 밴드를 그린다)
+ *   - onBand:  밴드 배경 위 글자색(흰/잉크 자동)
+ *   - logoUrl: 회사 로고 스트리밍 경로(토큰=인증) 또는 null(미설정 법인은 로고 생략)
+ */
+type Brand = {
+  color: string;
+  onBand: string;
+  logoUrl: string | null;
+};
+
+// 색 미설정 법인도 Intervia 기본 브랜드색(globals.css --primary, deep navy)으로 밴드를
+// 그린다 — 담당자가 로고/색을 안 넣어도 화면이 비거나 어색하지 않게 하는 기본값.
+const DEFAULT_BRAND_COLOR = "#1c3478";
+
+function deriveBrand(org: SessionInfo["organization"], token: string): Brand {
+  const raw = org?.brandColor ?? null;
+  const color = raw && isValidBrandColor(raw) ? raw : DEFAULT_BRAND_COLOR;
+  return {
+    color,
+    onBand: textColorOn(color),
+    logoUrl: org?.hasLogo
+      ? `/api/interview/${encodeURIComponent(token)}/logo`
+      : null,
+  };
+}
+
+/**
+ * 회사 로고 — 브랜딩 로고가 있으면 스트리밍 이미지를 렌더하고, 없거나 로드 실패면
+ * 아무것도 렌더하지 않는다. 밴드 위에 Intervia 마크를 억지로 넣지 않기 위함(로고 미설정
+ * 법인은 회사명 텍스트만 노출). 중앙 카드(CenteredCard)만 로고 부재 시 Intervia 로고를 쓴다.
+ */
+function BrandLogo({ brand, height }: { brand: Brand; height: number }) {
+  const [failed, setFailed] = useState(false);
+  if (!brand.logoUrl || failed) return null;
+  return (
+    <img
+      src={brand.logoUrl}
+      alt="회사 로고"
+      style={{ height, maxWidth: height * 5 }}
+      className="object-contain shrink-0"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 export default function InterviewPage() {
@@ -350,11 +408,14 @@ export default function InterviewPage() {
 
   // 이 면접의 진행 단계(인성/객관식/면접) — 동의 화면·게이트·면접 헤더의 프로그레스 표시에 공유.
   const steps = buildSteps(info, lang);
+  // 법인 브랜딩 — 모든 지원자 화면(동의·인성·객관식·면접·완료)에서 공유. info 존재가
+  // 보장된 지점이며 순수 파생이라 hook 규칙과 무관(위 early-return 아래여도 안전).
+  const brand = deriveBrand(info.organization, token);
 
   // 지원취소된 후보 — 토큰이 살아있어도 재진입 시 동의 화면 대신 안내.
   if (info.withdrawn) {
     return (
-      <CenteredCard>
+      <CenteredCard brand={brand}>
         <div className="text-3xl mb-3">🗑️</div>
         <h1 className="text-xl font-bold text-ink">
           {t(lang, "gate.withdrawn.title")}
@@ -371,7 +432,7 @@ export default function InterviewPage() {
   // 그 외 종결(합격·불합격 등) 후보 — 면접 재진입 차단.
   if (info.terminated) {
     return (
-      <CenteredCard>
+      <CenteredCard brand={brand}>
         <div className="text-3xl mb-3">✅</div>
         <h1 className="text-xl font-bold text-ink">
           {t(lang, "gate.terminated.title")}
@@ -386,7 +447,7 @@ export default function InterviewPage() {
   // 종결은 아니지만 다음 전형으로 진행되어 이 AI 면접 링크가 무효화된 경우.
   if (info.superseded) {
     return (
-      <CenteredCard>
+      <CenteredCard brand={brand}>
         <div className="text-3xl mb-3">➡️</div>
         <h1 className="text-xl font-bold text-ink">
           {t(lang, "gate.superseded.title")}
@@ -400,7 +461,7 @@ export default function InterviewPage() {
 
   if (info.expired) {
     return (
-      <CenteredCard>
+      <CenteredCard brand={brand}>
         <div className="text-3xl mb-3">⏱️</div>
         <h1 className="text-xl font-bold text-ink">
           {t(lang, "gate.expired.title")}
@@ -420,6 +481,7 @@ export default function InterviewPage() {
         candidateName={info.candidate.name}
         orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
+        brand={brand}
         items={info.consentItems}
         steps={steps}
         onLanguageChange={changeLanguage}
@@ -438,6 +500,7 @@ export default function InterviewPage() {
         lang={lang}
         orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
+        brand={brand}
         items={info.personality.items}
         steps={steps}
         onDone={() => {
@@ -462,6 +525,7 @@ export default function InterviewPage() {
         lang={lang}
         orgName={info.organization?.name ?? null}
         jobTitle={info.job.title}
+        brand={brand}
         items={info.mcq.items}
         steps={steps}
         onDone={() => {
@@ -476,27 +540,42 @@ export default function InterviewPage() {
       className="max-w-3xl mx-auto w-full px-3 sm:px-4 py-3 sm:py-6 flex flex-col overflow-hidden"
       style={{ height: "100dvh" }}
     >
-      {/* Header card */}
-      <div className="bg-card border border-border-default rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 shadow-sm shrink-0">
-        <div className="flex items-center justify-between gap-3">
+      {/* Header card — 상단 브랜드 밴드(로고·회사·공고) + 하단 흰 영역(단계·타이머·문의) */}
+      <div className="bg-card border border-border-default rounded-2xl mb-3 sm:mb-4 shadow-sm shrink-0 overflow-hidden">
+        <div
+          className="px-3 sm:px-4 pt-3 sm:pt-4 pb-3 flex items-center justify-between gap-3"
+          style={brand.color ? { backgroundColor: brand.color } : undefined}
+        >
           <div className="min-w-0 flex items-center gap-2.5">
-            <LogoMark size={36} className="shrink-0" />
+            <BrandLogo brand={brand} height={36} />
             <div className="min-w-0">
             {info.organization?.name ? (
               <>
-                <h1 className="font-bold text-ink truncate text-lg sm:text-xl leading-tight">
+                <h1
+                  className="font-bold text-ink truncate text-lg sm:text-xl leading-tight"
+                  style={brand.onBand ? { color: brand.onBand } : undefined}
+                >
                   {info.organization.name}
                 </h1>
-                <p className="text-xs sm:text-sm font-medium text-ink-soft truncate leading-tight mt-0.5">
+                <p
+                  className="text-xs sm:text-sm font-medium text-ink-soft truncate leading-tight mt-0.5"
+                  style={brand.onBand ? { color: brand.onBand, opacity: 0.85 } : undefined}
+                >
                   {info.job.title}
                 </p>
               </>
             ) : (
-              <h1 className="font-bold text-ink truncate text-base sm:text-lg leading-tight">
+              <h1
+                className="font-bold text-ink truncate text-base sm:text-lg leading-tight"
+                style={brand.onBand ? { color: brand.onBand } : undefined}
+              >
                 {info.job.title}
               </h1>
             )}
-            <p className="text-[11px] sm:text-xs text-ink-muted mt-0.5 truncate">
+            <p
+              className="text-[11px] sm:text-xs text-ink-muted mt-0.5 truncate"
+              style={brand.onBand ? { color: brand.onBand, opacity: 0.7 } : undefined}
+            >
               {info.job.position} · {info.job.level} · {info.job.employmentType}
               {info.job.interviewDurationMinutes
                 ? ` · ${t(lang, "interview.approxMinutes", { minutes: info.job.interviewDurationMinutes })}`
@@ -509,35 +588,44 @@ export default function InterviewPage() {
               onClick={finalize}
               disabled={finalizing || messages.length < 2}
               aria-label={t(lang, "interview.end")}
-              className="shrink-0 px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-xs sm:text-sm text-ink-soft disabled:opacity-40 min-h-[36px]"
+              className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm disabled:opacity-40 min-h-[36px] ${
+                brand.onBand
+                  ? "hover:opacity-80"
+                  : "border-border-strong hover:bg-surface-alt text-ink-soft"
+              }`}
+              style={
+                brand.onBand
+                  ? { borderColor: `${brand.onBand}66`, color: brand.onBand }
+                  : undefined
+              }
             >
               {t(lang, "interview.end")}
             </button>
           )}
         </div>
 
-        {!ended && steps.length > 1 && (
-          <div className="mt-3 pt-3 border-t border-border-default">
+        <div className="px-3 sm:px-4 pb-3 pt-3">
+          {!ended && steps.length > 1 && (
             <StepProgress steps={steps} current="interview" lang={lang} />
-          </div>
-        )}
+          )}
 
-        {!ended && (
-          <Timer
-            startedAt={info.session.startedAt ?? clientStartedAt}
-            messages={messages}
-            streaming={streaming}
-            lang={lang}
-          />
-        )}
-        {/* 막힌 후보자가 종료 화면에 도달하지 못해도 쓸 수 있는 상시 신고 채널 */}
-        <div className="mt-2 text-right">
-          <a
-            href={`/interview/${token}/inquiry`}
-            className="text-[11px] text-ink-muted hover:text-ink-soft underline"
-          >
-            {t(lang, "interview.report")}
-          </a>
+          {!ended && (
+            <Timer
+              startedAt={info.session.startedAt ?? clientStartedAt}
+              messages={messages}
+              streaming={streaming}
+              lang={lang}
+            />
+          )}
+          {/* 막힌 후보자가 종료 화면에 도달하지 못해도 쓸 수 있는 상시 신고 채널 */}
+          <div className={`text-right ${!ended ? "mt-2" : ""}`}>
+            <a
+              href={`/interview/${token}/inquiry`}
+              className="text-[11px] text-ink-muted hover:text-ink-soft underline"
+            >
+              {t(lang, "interview.report")}
+            </a>
+          </div>
         </div>
       </div>
 
@@ -569,6 +657,8 @@ export default function InterviewPage() {
                 role={m.role}
                 content={m.content.replace("[INTERVIEW_END]", "")}
                 lang={lang}
+                bubbleColor={brand.color}
+                bubbleTextColor={brand.onBand}
               />
             ))}
           {streaming && messages[messages.length - 1]?.role === "user" && (
@@ -690,7 +780,16 @@ export default function InterviewPage() {
                 onClick={handleSend}
                 disabled={streaming || !input.trim()}
                 aria-label={t(lang, "interview.send")}
-                className="bg-primary hover:bg-primary-deep active:bg-primary-deep text-surface px-4 sm:px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-40 shadow-sm min-h-[44px] min-w-[60px]"
+                className={`text-surface px-4 sm:px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-40 shadow-sm min-h-[44px] min-w-[60px] ${
+                  brand.color
+                    ? "hover:brightness-95"
+                    : "bg-primary hover:bg-primary-deep active:bg-primary-deep"
+                }`}
+                style={
+                  brand.color
+                    ? { backgroundColor: brand.color, color: brand.onBand ?? undefined }
+                    : undefined
+                }
               >
                 {t(lang, "interview.send")}
               </button>
@@ -716,6 +815,11 @@ export default function InterviewPage() {
 
       {ended && (
         <div className="mt-4 bg-gradient-to-br from-primary-soft to-accent-soft/40 border border-primary/30 rounded-2xl p-8 text-center">
+          {brand.logoUrl && (
+            <div className="flex justify-center mb-4">
+              <BrandLogo brand={brand} height={28} />
+            </div>
+          )}
           <div className="text-4xl mb-3">✅</div>
           <h2 className="text-lg font-bold text-ink">
             {t(lang, "interview.ended.title")}
@@ -758,15 +862,27 @@ const ChatBubble = memo(function ChatBubble({
   role,
   content,
   lang,
+  bubbleColor,
+  bubbleTextColor,
 }: {
   role: "user" | "model";
   content: string;
   lang: Lang;
+  // 지원자(user) 말풍선 브랜드 컬러 — 원시값으로 받아 memo 비교를 안정화(객체면 매 렌더 무효화).
+  bubbleColor: string | null;
+  bubbleTextColor: string | null;
 }) {
   if (role === "user") {
     return (
       <div className="flex justify-end" role="article" aria-label={t(lang, "interview.bubble.mine")}>
-        <div className="max-w-[85%] sm:max-w-[80%] bg-primary text-surface rounded-2xl rounded-br-md px-3.5 py-2.5 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap shadow-sm break-words">
+        <div
+          className="max-w-[85%] sm:max-w-[80%] bg-primary text-surface rounded-2xl rounded-br-md px-3.5 py-2.5 text-[15px] sm:text-sm leading-relaxed whitespace-pre-wrap shadow-sm break-words"
+          style={
+            bubbleColor
+              ? { backgroundColor: bubbleColor, color: bubbleTextColor ?? undefined }
+              : undefined
+          }
+        >
           {content}
         </div>
       </div>
@@ -979,6 +1095,7 @@ function PersonalityGate({
   lang,
   orgName,
   jobTitle,
+  brand,
   items,
   steps,
   onDone,
@@ -987,6 +1104,7 @@ function PersonalityGate({
   lang: Lang;
   orgName: string | null;
   jobTitle: string;
+  brand: Brand;
   items: Array<{ id: string; a: string; b: string }>;
   steps: Step[];
   onDone: () => void;
@@ -1051,7 +1169,7 @@ function PersonalityGate({
 
   if (!started) {
     return (
-      <CenteredCard>
+      <CenteredCard brand={brand}>
         {orgName && (
           <p className="text-lg font-bold text-ink leading-tight">
             {orgName}
@@ -1084,7 +1202,14 @@ function PersonalityGate({
             startedAtRef.current = Date.now();
             setStarted(true);
           }}
-          className="mt-6 w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-surface text-sm font-semibold shadow-sm"
+          className={`mt-6 w-full px-4 py-3 rounded-xl text-surface text-sm font-semibold shadow-sm ${
+            brand.color ? "hover:brightness-95" : "bg-primary hover:bg-primary-deep"
+          }`}
+          style={
+            brand.color
+              ? { backgroundColor: brand.color, color: brand.onBand ?? undefined }
+              : undefined
+          }
         >
           {t(lang, "common.start")}
         </button>
@@ -1111,23 +1236,40 @@ function PersonalityGate({
   return (
     <main className="max-w-xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0 justify-center">
       <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
-        {/* 브랜드·맥락 헤더 — 어느 회사·공고의 AI 면접인지 + Intervia 로고 (캡처 문의 반영) */}
-        <div className="px-5 py-3.5 border-b border-border-default flex items-center gap-2.5">
-          <LogoMark size={32} className="shrink-0" />
+        {/* 브랜드·맥락 헤더 — 어느 회사·공고의 AI 면접인지 + 회사/Intervia 로고 (캡처 문의 반영) */}
+        <div
+          className="px-5 py-3.5 border-b border-border-default flex items-center gap-2.5"
+          style={brand.color ? { backgroundColor: brand.color } : undefined}
+        >
+          <BrandLogo brand={brand} height={32} />
           <div className="min-w-0 flex-1">
             {orgName ? (
               <>
-                <p className="text-base font-bold text-ink truncate leading-tight">
+                <p
+                  className="text-base font-bold text-ink truncate leading-tight"
+                  style={brand.onBand ? { color: brand.onBand } : undefined}
+                >
                   {orgName}
                 </p>
-                <p className="text-[11px] text-ink-muted truncate leading-tight">
-                  {jobTitle} <span className="text-ink-muted">{t(lang, "interview.aiInterview")}</span>
+                <p
+                  className="text-[11px] text-ink-muted truncate leading-tight"
+                  style={brand.onBand ? { color: brand.onBand, opacity: 0.8 } : undefined}
+                >
+                  {jobTitle}{" "}
+                  <span className={brand.onBand ? "" : "text-ink-muted"}>
+                    {t(lang, "interview.aiInterview")}
+                  </span>
                 </p>
               </>
             ) : (
-              <p className="text-base font-bold text-ink truncate leading-tight">
+              <p
+                className="text-base font-bold text-ink truncate leading-tight"
+                style={brand.onBand ? { color: brand.onBand } : undefined}
+              >
                 {jobTitle}{" "}
-                <span className="font-normal text-ink-muted">{t(lang, "interview.aiInterview")}</span>
+                <span className={`font-normal ${brand.onBand ? "" : "text-ink-muted"}`}>
+                  {t(lang, "interview.aiInterview")}
+                </span>
               </p>
             )}
           </div>
@@ -1302,6 +1444,7 @@ function McqGate({
   lang,
   orgName,
   jobTitle,
+  brand,
   items,
   steps,
   onDone,
@@ -1310,6 +1453,7 @@ function McqGate({
   lang: Lang;
   orgName: string | null;
   jobTitle: string;
+  brand: Brand;
   items: Array<{ id: string; question: string; options: string[] }>;
   steps: Step[];
   onDone: () => void;
@@ -1372,7 +1516,7 @@ function McqGate({
 
   if (!started) {
     return (
-      <CenteredCard>
+      <CenteredCard brand={brand}>
         {orgName && (
           <p className="text-lg font-bold text-ink leading-tight">
             {orgName}
@@ -1398,7 +1542,14 @@ function McqGate({
         </ul>
         <button
           onClick={() => setStarted(true)}
-          className="mt-6 w-full px-4 py-3 rounded-xl bg-primary hover:bg-primary-deep text-surface text-sm font-semibold shadow-sm"
+          className={`mt-6 w-full px-4 py-3 rounded-xl text-surface text-sm font-semibold shadow-sm ${
+            brand.color ? "hover:brightness-95" : "bg-primary hover:bg-primary-deep"
+          }`}
+          style={
+            brand.color
+              ? { backgroundColor: brand.color, color: brand.onBand ?? undefined }
+              : undefined
+          }
         >
           {t(lang, "common.start")}
         </button>
@@ -1422,22 +1573,39 @@ function McqGate({
     <main className="max-w-xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0 justify-center">
       <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
         {/* 브랜드·맥락 헤더 */}
-        <div className="px-5 py-3.5 border-b border-border-default flex items-center gap-2.5">
-          <LogoMark size={32} className="shrink-0" />
+        <div
+          className="px-5 py-3.5 border-b border-border-default flex items-center gap-2.5"
+          style={brand.color ? { backgroundColor: brand.color } : undefined}
+        >
+          <BrandLogo brand={brand} height={32} />
           <div className="min-w-0 flex-1">
             {orgName ? (
               <>
-                <p className="text-base font-bold text-ink truncate leading-tight">
+                <p
+                  className="text-base font-bold text-ink truncate leading-tight"
+                  style={brand.onBand ? { color: brand.onBand } : undefined}
+                >
                   {orgName}
                 </p>
-                <p className="text-[11px] text-ink-muted truncate leading-tight">
-                  {jobTitle} <span className="text-ink-muted">{t(lang, "interview.aiInterview")}</span>
+                <p
+                  className="text-[11px] text-ink-muted truncate leading-tight"
+                  style={brand.onBand ? { color: brand.onBand, opacity: 0.8 } : undefined}
+                >
+                  {jobTitle}{" "}
+                  <span className={brand.onBand ? "" : "text-ink-muted"}>
+                    {t(lang, "interview.aiInterview")}
+                  </span>
                 </p>
               </>
             ) : (
-              <p className="text-base font-bold text-ink truncate leading-tight">
+              <p
+                className="text-base font-bold text-ink truncate leading-tight"
+                style={brand.onBand ? { color: brand.onBand } : undefined}
+              >
                 {jobTitle}{" "}
-                <span className="font-normal text-ink-muted">{t(lang, "interview.aiInterview")}</span>
+                <span className={`font-normal ${brand.onBand ? "" : "text-ink-muted"}`}>
+                  {t(lang, "interview.aiInterview")}
+                </span>
               </p>
             )}
           </div>
@@ -1540,14 +1708,29 @@ function McqGate({
   );
 }
 
-function CenteredCard({ children }: { children: React.ReactNode }) {
+function CenteredCard({
+  children,
+  brand,
+}: {
+  children: React.ReactNode;
+  // 있으면 상단 로고를 회사 로고로 대체(없으면 Intervia). 브랜드 컬러가 있으면 카드 상단에
+  // 얇은 포인트 라인을 얹어 브랜딩 신호를 준다. (에러 화면 등 org 맥락이 없으면 미전달)
+  brand?: Brand;
+}) {
   return (
     <main className="flex-1 flex items-center justify-center p-6">
-      <div className="bg-card border border-border-default rounded-2xl p-10 text-center max-w-md shadow-sm">
-        <div className="flex justify-center mb-5">
-          <Logo size={36} />
+      <div className="bg-card border border-border-default rounded-2xl overflow-hidden max-w-md shadow-sm">
+        {brand?.color && <div className="h-1.5" style={{ backgroundColor: brand.color }} />}
+        <div className="p-10 text-center">
+          <div className="flex justify-center mb-5">
+            {brand?.logoUrl ? (
+              <BrandLogo brand={brand} height={36} />
+            ) : (
+              <Logo size={36} />
+            )}
+          </div>
+          {children}
         </div>
-        {children}
       </div>
     </main>
   );
@@ -1602,6 +1785,7 @@ function ConsentGate({
   candidateName,
   orgName,
   jobTitle,
+  brand,
   items,
   steps,
   onLanguageChange,
@@ -1612,6 +1796,7 @@ function ConsentGate({
   candidateName: string;
   orgName: string | null;
   jobTitle: string;
+  brand: Brand;
   items: ConsentItem[];
   steps: Step[];
   onLanguageChange: (chosen: Lang) => Promise<void>;
@@ -1690,7 +1875,7 @@ function ConsentGate({
 
   if (withdrawn) {
     return (
-      <CenteredCard>
+      <CenteredCard brand={brand}>
         <div className="text-3xl mb-3">🗑️</div>
         <h1 className="text-xl font-bold text-ink">{t(lang, "consent.withdrawn.title")}</h1>
         <p className="text-ink-soft mt-2 leading-relaxed">
@@ -1705,25 +1890,42 @@ function ConsentGate({
   return (
     <main className="max-w-3xl mx-auto w-full px-4 py-6 flex flex-col flex-1 min-h-0">
       <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-hidden">
-        <header className="px-6 py-5 border-b border-border-default bg-gradient-to-br from-primary-soft to-primary-soft/60">
+        <header
+          className={`px-6 py-5 border-b border-border-default ${
+            brand.color ? "" : "bg-gradient-to-br from-primary-soft to-primary-soft/60"
+          }`}
+          style={brand.color ? { backgroundColor: brand.color } : undefined}
+        >
           <div className="mb-3 flex items-center justify-between gap-3">
-            <Logo size={32} />
+            <BrandLogo brand={brand} height={32} />
             <LangToggle lang={lang} busy={langBusy} onSelect={switchLang} />
           </div>
-          <div className="text-base sm:text-lg font-semibold text-ink mb-2">
+          <div
+            className="text-base sm:text-lg font-semibold text-ink mb-2"
+            style={brand.onBand ? { color: brand.onBand, opacity: 0.9 } : undefined}
+          >
             {t(lang, "consent.candidateHonorific", { name: candidateName })}
           </div>
           {orgName ? (
             <>
-              <div className="text-xl sm:text-2xl font-bold text-ink leading-tight">
+              <div
+                className="text-xl sm:text-2xl font-bold text-ink leading-tight"
+                style={brand.onBand ? { color: brand.onBand } : undefined}
+              >
                 {orgName}
               </div>
-              <h1 className="text-sm sm:text-base font-semibold text-ink-soft mt-1">
+              <h1
+                className="text-sm sm:text-base font-semibold text-ink-soft mt-1"
+                style={brand.onBand ? { color: brand.onBand, opacity: 0.85 } : undefined}
+              >
                 {t(lang, "consent.title", { job: jobTitle })}
               </h1>
             </>
           ) : (
-            <h1 className="text-lg sm:text-xl font-bold text-ink">
+            <h1
+              className="text-lg sm:text-xl font-bold text-ink"
+              style={brand.onBand ? { color: brand.onBand } : undefined}
+            >
               {t(lang, "consent.title", { job: jobTitle })}
             </h1>
           )}
@@ -1879,7 +2081,14 @@ function ConsentGate({
             <button
               onClick={submit}
               disabled={!allRequiredChecked || !emailFilled || busy}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`flex-1 px-4 py-2.5 rounded-lg text-surface text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed ${
+                brand.color ? "hover:brightness-95" : "bg-primary hover:bg-primary-deep"
+              }`}
+              style={
+                brand.color
+                  ? { backgroundColor: brand.color, color: brand.onBand ?? undefined }
+                  : undefined
+              }
             >
               {busy
                 ? t(lang, "consent.busy")

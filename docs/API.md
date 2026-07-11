@@ -106,7 +106,7 @@
 
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
-| GET | `/api/interview/[token]` | 🎫 | 세션 + 후보자 + 공고. 미동의 시 `consentRequired:true` + `consentItems[]`. 법인 컬처핏 설정 시 `personality:{required, items:[{id,a,b}]}` (강제선택형 — 진술 쌍만, 특성 태그 비노출). 세션 응답에서 인성검사 원응답·프로필 제거 |
+| GET | `/api/interview/[token]` | 🎫 | 세션 + 후보자 + 공고 + 법인 브랜딩(`organization:{name,brandColor,hasLogo}` — 면접 화면 밴드·로고·버튼·채팅에 반영). 미동의 시 `consentRequired:true` + `consentItems[]`. 법인 컬처핏 설정 시 `personality:{required, items:[{id,a,b}]}` (강제선택형 — 진술 쌍만, 특성 태그 비노출). 세션 응답에서 인성검사 원응답·프로필 제거 |
 | POST | `/api/interview/[token]/consent` | 🎫 | 후보자 동의 기록. **차감 없음** — interview 과금은 여기가 아니라 `complete`/`reevaluate` 평가 성공 시 후차감(`chargeRepeatable`). 필수 항목 누락 시 400 `{code:"consent_missing", missing}`. IP/UA/version 자동 기록 |
 | POST | `/api/interview/[token]/personality` | 🎫 | 인성검사 응답 제출. body: `{responses:[{itemId, value:1\|2}], elapsedMs?}` (강제선택 — 1=a, 2=b). 서버 결정적 채점(`lib/personality.ts`) 후 세션에 저장. 멱등(재제출 시 최초 결과 유지). 동의 없으면 403. Rate limit 토큰 5/분 |
 | POST | `/api/interview/[token]/chat` | 🎫 | 스트리밍 응답. **동의 없으면 403 `{code:"consent_required"}`**. 법인 컬처핏 설정 + 검사 미완료 + 첫 턴이면 403 `{code:"personality_required"}` |
@@ -115,6 +115,7 @@
 | POST | `/api/interview/[token]/inquiry` | 🎫 | 면접 중 문제 신고/문의. body: `{email, category, message}`. 본인 이메일 매칭 **불요**(막힌 후보자 차단 방지) + 내용 5~5000자. 지원 메일 통지 (실패해도 제출 성공). Rate limit IP 3/분 |
 | POST | `/api/interview/[token]/me` | 🎫 | 후보자 본인 데이터 열람 (PIPA §35). body: `{email}` 본인 확인 후 보유 항목 요약 |
 | DELETE | `/api/interview/[token]/me` | 🎫 | 후보자 본인 데이터 즉시 폐기 (PIPA §36). body: `{email}`. 이력서 본문·파일·전화 삭제, 평가 결과 보존 |
+| GET | `/api/interview/[token]/logo` | 🎫 | 면접 화면 로고 스트리밍 — 면접 토큰→세션→후보자→공고→법인 로고. `/api/apply/[token]/logo` 와 동일 프록시 패턴, `max-age=300` |
 | GET | `/api/candidates/[id]/appeals` | 🔒 🏢 | 후보자별 이의제기 목록 |
 | PATCH | `/api/candidates/[id]/appeals/[appealId]` | 🔒 🏢 | 상태/답변 업데이트. status: pending/reviewed/resolved/rejected. resolved/rejected 로 전환 시 후보자에게 답변 메일 자동 발송(§37의2 조치 결과 통지, 감사로그 `appeal.response_sent`/`response_send_failed`). 응답 `{ok, emailSent}` |
 | POST | `/api/support/inquiries` | 🔒 | 로그인 고객 고객센터 문의 접수. body: `{category, message}`. 회신 이메일=계정 이메일. Rate limit 사용자당 5/분 |
