@@ -58,8 +58,10 @@ export const PROCESSORS: readonly Processor[] = [
     purpose: "AI 서류 평가, AI 면접 채팅, 면접 응답 평가",
     items:
       "식별가능정보 자동 마스킹 처리한 이력서 텍스트 및 면접 대화록. " +
-      "스캔(이미지) PDF의 경우 텍스트 추출(OCR)을 위해 마스킹 전 원본이 전달될 수 있음(법인이 OCR을 허용한 경우에 한함)",
-    country: "대한민국 (서울 리전 asia-northeast3) — 국외이전 없음",
+      "스캔(이미지) PDF의 경우 텍스트 추출(OCR)을 위해 마스킹 전 원본이 전달될 수 있음(법인이 OCR을 허용한 경우에 한함). " +
+      "장애 시 일본 임시 처리 대상은 마스킹된 텍스트만이며, 스캔 원본·음성 데이터는 항상 국내에서만 처리됨",
+    country:
+      "대한민국 (서울 리전 asia-northeast3) 원칙 — 서울 리전 장애 시에 한해 일본 (도쿄 리전 asia-northeast1) 임시 처리",
     retention: "API 요청 처리 즉시 (Google 정책: 학습 미사용)",
     contact: "https://policies.google.com/privacy",
   },
@@ -114,9 +116,9 @@ export const PROCESSORS: readonly Processor[] = [
 ] as const;
 
 /** 정책 본문 versioning — 본문 변경 시 effective date 올림. */
-export const PRIVACY_EFFECTIVE_DATE = "2026-06-22";
+export const PRIVACY_EFFECTIVE_DATE = "2026-07-18";
 export const TERMS_EFFECTIVE_DATE = "2026-06-30";
 
 /** 가입 시 동의 시점 기록용 버전 식별자. 본문 개정 시 함께 갱신. */
-export const PRIVACY_VERSION = "1.4.1-2026-06-22"; // 사업자정보 확정 기재(상호 아임인·대표 박은숙·사업자번호 496-57-01198) + 개인정보보호책임자 강대철→박은숙(대표 겸직). 권리·처리내용 변경 없는 경미한 정정(식별정보 보정) → 기존 가입자 재동의 불요. (이전: 1.4.0 — 합격자 보유 예외·파기 절차·쿠키 조항·수탁자 지위·영업양도·수탁자 연락처(§28의8)·OCR 원본 전달 고지 추가)
+export const PRIVACY_VERSION = "1.5.0-2026-07-18"; // AI 처리 장애 폴백 국외이전 고지 신설(§28의8): 서울 리전 장애 시에 한해 마스킹 텍스트만 Google LLC 일본 도쿄 리전 임시 처리 가능, 스캔 원본·음성은 항상 국내. §12 "시행 7일 전 공지" 준수 위해 시행일 2026-07-18 (공지=본 방침 게시 2026-07-11). (이전: 1.4.1 — 사업자정보 확정 기재 + 개인정보보호책임자 박은숙)
 export const TERMS_VERSION = "1.3.0-2026-06-30"; // 제7조에 토큰 유효기간(유상=충전일+5년·경과 시 소멸)·양도/환금 불가 조항 신설 — PG 결제 연동 요건(전자상거래법 표시사항). 결제 라이브 전 확정이라 소급 불리 이슈 없음. (이전: 1.2.3 — 사업자정보 확정 기재)

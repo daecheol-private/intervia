@@ -25,7 +25,7 @@ export function buildApplicantConsentTemplate(contactEmail?: string): {
 
 1) 처리위탁 수탁자
    - ${COMPANY_INFO.name} (대한민국) — 서비스 운영
-   - Google Cloud (서울 리전 asia-northeast3, 대한민국) — 서류 평가·AI 면접 채팅·면접 평가 AI 호출 (Gemini), 응답 처리 후 즉시 폐기 (학습 미사용)
+   - Google Cloud (서울 리전 asia-northeast3, 대한민국 — 장애 시 일본 도쿄 리전 임시 처리) — 서류 평가·AI 면접 채팅·면접 평가 AI 호출 (Gemini), 응답 처리 후 즉시 폐기 (학습 미사용)
    - Vercel Inc. (미국) — 호스팅 및 이력서 파일 보관
    - Turso (일본 도쿄) — 데이터베이스
    - Resend (미국) — 시스템 기본 면접 안내·결과 통보 메일 발송 (지원자 이메일 주소·메일 본문)
@@ -41,7 +41,9 @@ export function buildApplicantConsentTemplate(contactEmail?: string): {
    - 본 채용의 서류 평가 및 면접 평가 보조 (최종 합·불 결정은 사람이 검토)
 
 4) 국외 이전
-   - AI 처리(서류 평가·면접 채팅·면접 평가)는 모두 Google Cloud 서울 리전에서 처리되어 AI 단계의 국외이전이 발생하지 않습니다.
+   - AI 처리(서류 평가·면접 채팅·면접 평가)는 Google Cloud 서울 리전 처리가 원칙이며, 서울 리전 장애 시에 한해
+     마스킹된 텍스트만 일본(도쿄 리전, Google LLC)에서 임시 처리될 수 있습니다 (즉시 폐기·학습 미사용).
+     스캔 이력서 원본·음성 데이터는 항상 국내에서만 처리됩니다.
    - 인프라 단계 이전: Vercel Inc. (미국, 호스팅·이력서 파일), Turso (일본 도쿄, 데이터베이스), Resend (미국, 메일 발송)
    - 이전 시점·방법: 서비스 이용 전 과정에서 HTTPS 로 전송·저장
    - 보유 기간: 합·불 결정 시점 즉시 폐기 (이력서 원본·파일), 공고 종결 +14일 후 자동 삭제 (평가 결과)
@@ -72,7 +74,7 @@ which we have contracted as a data processor, as follows:
 
 1) Processors
    - ${COMPANY_INFO.name} (Republic of Korea) — Service operation
-   - Google Cloud (Seoul region asia-northeast3, Republic of Korea) — Resume screening / AI interview chat / interview evaluation AI (Gemini), no training use, discarded after response
+   - Google Cloud (Seoul region asia-northeast3, Republic of Korea — temporary processing in the Tokyo region, Japan, during a Seoul-region outage) — Resume screening / AI interview chat / interview evaluation AI (Gemini), no training use, discarded after response
    - Vercel Inc. (USA) — Hosting and resume file storage
    - Turso (Tokyo, Japan) — Database
    - Resend (USA) — System default email delivery (interview invitations / result notifications)
@@ -87,8 +89,11 @@ which we have contracted as a data processor, as follows:
      (final hiring decision made by a human reviewer)
 
 4) Cross-Border Transfer
-   - All AI processing (resume screening / interview chat / interview evaluation)
-     is performed in the Seoul region; no cross-border transfer at the AI stage.
+   - AI processing (resume screening / interview chat / interview evaluation) is
+     performed in the Seoul region in principle; only during a Seoul-region outage,
+     masked text may be temporarily processed in Japan (Tokyo region, Google LLC —
+     discarded immediately, no training use). Scanned resume originals and voice
+     data are always processed within Korea.
    - Infrastructure-level transfer: Vercel Inc. (USA, hosting & file storage),
      Turso (Tokyo, Japan, database), Resend (USA, email delivery)
    - Method: HTTPS throughout service usage

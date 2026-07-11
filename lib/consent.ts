@@ -29,7 +29,11 @@ import type { Lang } from "./i18n/interview";
 //         §28의8 국외이전만 보수적으로 동의 유지(belt-and-suspenders). 1차 동의는 고객사가 업로드 전 취득(약관 §5, 동의문구 템플릿).
 // 1.8.0 — 합격자 보유 예외(채용기업 삭제 시까지) 명시 + 부정행위 방지 행태정보를 별도 단락으로 시각 분리(§22① 각 동의사항 인지)
 //         + 문체 분석(외부 AI 대필 가능성 추정) 참고자료 산출 고지 추가.
-export const CONSENT_VERSION = "1.8.0-2026-06-10";
+// 1.9.0 — AI 처리 장애 폴백 국외이전 신설: 서울 리전 장애 시에 한해 마스킹 텍스트만 Google Cloud
+//         도쿄(일본) 리전에서 임시 처리될 수 있음을 cross_border 에 병합(§28의8① 1호 동의 유지 +
+//         처리방침 §5 고지 병행). 스캔 원본(OCR)·음성은 폴백 제외(항상 국내) 명시.
+//         마스킹 텍스트 기능의 실제 폴백 발동은 세션 동의 버전 ≥1.9.0 게이트와 함께만 (COMPLIANCE_SOP §4).
+export const CONSENT_VERSION = "1.9.0-2026-07-11";
 
 export type ConsentItem = {
   key: string;
@@ -69,11 +73,11 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     title: "개인정보 국외이전 동의",
     summary:
       "국외 이전: Vercel(미국)·Turso(일본)·Resend(미국) · " +
-      "AI 평가·면접은 국내(서울) 처리로 이전 제외 · 거부 시 면접 불가",
+      "AI 평가·면접은 국내(서울) 처리 원칙, 국내 장애 시에만 마스킹된 텍스트가 일본(도쿄)에서 임시 처리될 수 있음 · 거부 시 면접 불가",
     description:
       "서비스 운영을 위해 위 개인정보가 다음과 같이 국외로 이전됩니다. 이전받는 자·국가·목적: Vercel Inc.(미국, 호스팅·이력서 파일 저장), Turso(일본 도쿄, 데이터베이스), Resend(미국, 시스템 기본 메일 발송 — 법인이 자체 SMTP 를 등록한 경우 해당 서버). " +
       "이전 항목: 위 수집 항목 및 면접 대화록. 이전 시기·방법: 서비스 이용 전 과정에서 HTTPS 로 전송·저장. 보유기간: 위 수집·이용 동의와 동일. " +
-      "AI 평가·면접은 Google Cloud 서울 리전(asia-northeast3)에서 처리되어 국외이전 대상이 아닙니다. 거부 시 면접 진행이 불가합니다.",
+      "AI 평가·면접은 Google Cloud 서울 리전(asia-northeast3)에서 처리하는 것을 원칙으로 합니다. 다만 서울 리전 장애(일시적 처리 불가) 시에 한해, 식별 가능한 정보를 자동 마스킹 처리한 이력서 텍스트·면접 대화록이 Google LLC 의 일본 도쿄 리전(asia-northeast1)으로 이전되어 임시 처리될 수 있습니다(TLS 암호화 API 전송, 응답 처리 즉시 폐기, AI 학습 미사용, 문의: https://policies.google.com/privacy). 스캔 이력서 원본·음성 데이터는 이 임시 처리 대상이 아니며 항상 국내에서만 처리됩니다. 거부 시 면접 진행이 불가합니다.",
     legalBasis: "PIPA §28의8",
   },
   {
@@ -85,7 +89,7 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
       "AI가 점수·추천을 산출하지만 최종 합·불 결정은 채용 담당자(사람)가 합니다. " +
       "본인은 평가 결과 설명 요청·이의제기·AI 평가 거부 후 일반 채용 절차 요청 권리를 가집니다.",
     description:
-      "이력서·면접 응답에 대해 AI(Google Gemini, Google Cloud 서울 리전)가 점수·추천을 산출하나, 최종 합·불 결정은 채용 담당자의 인간 검토로 이루어지며 AI 단독으로 결정하지 않습니다. " +
+      "이력서·면접 응답에 대해 AI(Google Gemini, Google Cloud 서울 리전 — 장애 시 일본 도쿄 리전 임시 처리)가 점수·추천을 산출하나, 최종 합·불 결정은 채용 담당자의 인간 검토로 이루어지며 AI 단독으로 결정하지 않습니다. " +
       "본인은 (1) AI 평가 결과에 대한 설명 요청, (2) 이의제기(채널 제공), (3) AI 평가 거부 후 지원 법인의 일반 채용 절차(서면 이력서 + 사람 면접) 요청 권리를 가집니다.",
     legalBasis: "PIPA §37의2",
   },
@@ -98,7 +102,7 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
       "Google Cloud Korea·Vercel·Turso·Resend 에 개인정보 처리를 위탁합니다. " +
       "수탁자·위탁업무·국가·보유기간 전체는 개인정보 처리방침 §5 에서 확인하실 수 있습니다.",
     description:
-      "원활한 서비스 제공을 위해 Google Cloud Korea(AI 평가·면접, 서울 asia-northeast3)·Vercel(호스팅·파일 저장)·Turso(DB)·Resend(메일 발송)에 개인정보 처리를 위탁합니다. 수탁자·위탁업무·국가·보유기간 전체와 처리위탁계약(DPA) 안내는 개인정보 처리방침 §5 에서 확인하실 수 있습니다.",
+      "원활한 서비스 제공을 위해 Google Cloud Korea(AI 평가·면접, 서울 asia-northeast3 — 장애 시 일본 도쿄 임시 처리)·Vercel(호스팅·파일 저장)·Turso(DB)·Resend(메일 발송)에 개인정보 처리를 위탁합니다. 수탁자·위탁업무·국가·보유기간 전체와 처리위탁계약(DPA) 안내는 개인정보 처리방침 §5 에서 확인하실 수 있습니다.",
     legalBasis: "PIPA §26",
   },
 ] as const;
@@ -131,11 +135,11 @@ const CONSENT_TEXT_EN: Record<
     title: "Consent to Overseas Transfer of Personal Information",
     summary:
       "Overseas transfer: Vercel (USA)·Turso (Japan)·Resend (USA) · " +
-      "AI evaluation·interview processed in Korea (Seoul), excluded from transfer · Refusal: interview unavailable",
+      "AI evaluation·interview processed in Korea (Seoul) in principle; only during a Korea-region outage, masked text may be temporarily processed in Japan (Tokyo) · Refusal: interview unavailable",
     description:
       "To operate the service, the above personal information is transferred overseas as follows. Recipient·country·purpose: Vercel Inc. (USA — hosting·resume file storage), Turso (Tokyo, Japan — database), Resend (USA — default system email delivery; the company's own SMTP server is used instead if registered). " +
       "Items transferred: the items collected above and the interview transcript. Timing·method: transmitted and stored over HTTPS throughout service use. Retention period: same as the collection·use consent above. " +
-      "AI evaluation·interview is processed in the Google Cloud Seoul region (asia-northeast3) and is not subject to overseas transfer. If you refuse, the interview cannot proceed.",
+      "AI evaluation·interview is processed in the Google Cloud Seoul region (asia-northeast3) in principle. Only during a Seoul-region outage, resume text and interview transcripts with identifiable information automatically masked may be transferred to and temporarily processed in Google LLC's Tokyo region (asia-northeast1) (TLS-encrypted API transmission, discarded immediately after the response, not used for AI training; contact: https://policies.google.com/privacy). Scanned resume originals and voice data are excluded from this temporary processing and are always processed within Korea. If you refuse, the interview cannot proceed.",
   },
   ai_decision: {
     title: "Notice on Automated AI Evaluation and Your Rights",
@@ -143,7 +147,7 @@ const CONSENT_TEXT_EN: Record<
       "AI produces scores·recommendations, but the final hire/reject decision is made by a human recruiter. " +
       "You have the right to request an explanation of the result, to raise an objection, and to refuse AI evaluation and request a standard hiring process.",
     description:
-      "For your resume and interview answers, AI (Google Gemini, Google Cloud Seoul region) produces scores·recommendations, but the final hire/reject decision is made through human review by the recruiter — AI does not decide alone. " +
+      "For your resume and interview answers, AI (Google Gemini, Google Cloud Seoul region — temporarily processed in the Tokyo region, Japan, during a Seoul-region outage) produces scores·recommendations, but the final hire/reject decision is made through human review by the recruiter — AI does not decide alone. " +
       "You have the right to (1) request an explanation of the AI evaluation result, (2) raise an objection (a channel is provided), and (3) refuse AI evaluation and request the applying company's standard hiring process (paper resume + human interview).",
   },
   processors: {
@@ -152,7 +156,7 @@ const CONSENT_TEXT_EN: Record<
       "Personal information processing is entrusted to Google Cloud Korea·Vercel·Turso·Resend. " +
       "The full list of processors·tasks·countries·retention is available in §5 of the Privacy Policy.",
     description:
-      "For smooth service provision, personal information processing is entrusted to Google Cloud Korea (AI evaluation·interview, Seoul asia-northeast3)·Vercel (hosting·file storage)·Turso (database)·Resend (email delivery). " +
+      "For smooth service provision, personal information processing is entrusted to Google Cloud Korea (AI evaluation·interview, Seoul asia-northeast3 — Tokyo, Japan fallback during an outage)·Vercel (hosting·file storage)·Turso (database)·Resend (email delivery). " +
       "The full list of processors·entrusted tasks·countries·retention and the data processing agreement (DPA) details are available in §5 of the Privacy Policy.",
   },
 };

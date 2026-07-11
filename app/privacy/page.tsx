@@ -171,11 +171,17 @@ export default function PrivacyPage() {
           </tbody>
         </Table>
         <p className="mt-3 text-xs text-ink-soft">
-          AI 처리(서류 평가·면접 채팅·면접 평가)는 모두 Google Cloud 서울
-          리전(asia-northeast3) 에서 수행되어 AI 처리 단계에서의 국외이전이
-          발생하지 않습니다. 호스팅(Vercel·미국)·데이터베이스(Turso·일본 도쿄)·
-          메일 발송(Resend·미국) 등 인프라 단계의 국외이전은 PIPA §28의8 에 따라
-          본 처리방침 공개 및 면접 시작 전 동의로 진행됩니다.
+          AI 처리(서류 평가·면접 채팅·면접 평가)는 Google Cloud 서울
+          리전(asia-northeast3) 에서 수행하는 것을 원칙으로 하며, 서울 리전
+          장애 시에 한해 식별가능정보를 자동 마스킹한 텍스트만 Google LLC 일본
+          도쿄 리전(asia-northeast1)으로 이전되어 임시 처리될 수 있습니다(이전
+          방법: TLS 암호화 API 전송·미저장, 목적: AI 평가·면접 처리, 보유: 응답
+          처리 즉시 폐기·학습 미사용, 문의: 위 표의 연락처). 스캔 이력서
+          원본(OCR)·음성 데이터는 항상 국내에서만 처리됩니다. 위 임시 처리 및
+          호스팅(Vercel·미국)·데이터베이스(Turso·일본 도쿄)·메일
+          발송(Resend·미국) 등 인프라 단계의 국외이전은 PIPA §28의8 에 따라 본
+          처리방침 공개 및 면접 시작 전 동의로 진행되며, 동의를 거부할 수
+          있으나 거부 시 AI 면접 진행이 불가합니다.
         </p>
       </Section>
 
