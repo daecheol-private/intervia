@@ -131,7 +131,7 @@ export default function OrgSettingsPage() {
   const [cfProfile, setCfProfile] = useState<CultureFitProfile>(defaultProfile());
   const [cfBusy, setCfBusy] = useState(false);
 
-  // 지원 페이지 브랜딩 로컬 상태
+  // 법인 브랜딩 로컬 상태 (지원 페이지·AI 면접 화면 공통)
   const [brandColor, setBrandColor] = useState("");
   const [hasLogo, setHasLogo] = useState(false);
   const [logoVer, setLogoVer] = useState(0); // 업로드 후 미리보기 캐시 무효화
@@ -454,13 +454,13 @@ export default function OrgSettingsPage() {
             </div>
           </section>
 
-          {/* 지원 페이지 브랜딩 — 지원 링크로 유입된 지원자에게 자사 채용임을 보여준다 */}
+          {/* 법인 브랜딩 — 지원 페이지·AI 면접으로 유입된 지원자에게 자사 채용임을 보여준다 */}
           <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm">
             <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1">
-              지원 페이지 브랜딩
+              법인 브랜딩
             </h2>
             <p className="text-[11px] text-ink-muted mb-4 leading-relaxed">
-              지원 링크(공개 지원 페이지)에 회사 로고와 포인트 컬러를
+              공개 지원 페이지와 AI 면접 화면에 회사 로고와 포인트 컬러를
               적용합니다. 사람인 등 외부 공고에서 넘어온 지원자가 우리 회사
               채용임을 바로 알아볼 수 있습니다.
             </p>
@@ -536,14 +536,14 @@ export default function OrgSettingsPage() {
                 )}
               </div>
               <p className="text-[11px] text-ink-muted">
-                지원 페이지의 헤더 배경과 제출 버튼에 적용됩니다. 글자 색은
-                가독성이 보장되도록 자동으로 정해집니다.
+                지원 페이지·AI 면접 화면의 헤더와 주요 버튼에 적용됩니다. 글자
+                색은 가독성이 보장되도록 자동으로 정해집니다.
               </p>
             </div>
 
             {/* 미리보기 */}
             <div className="pt-4 mt-4 border-t border-border-default">
-              <p className="text-[11px] text-ink-muted mb-2">미리보기</p>
+              <p className="text-[11px] text-ink-muted mb-2">미리보기 (지원 페이지 예시)</p>
               <div className="rounded-xl bg-surface-alt p-4">
                 <div className="mx-auto max-w-xs rounded-xl bg-card border border-border-default shadow-sm overflow-hidden">
                   {/* 헤더 밴드 — 실제 지원 페이지와 동일 구조 */}

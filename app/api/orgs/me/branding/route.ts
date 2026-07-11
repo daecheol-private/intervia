@@ -1,5 +1,5 @@
 /**
- * 본인 법인의 지원 페이지 브랜딩(포인트 컬러) 수정. org_admin / system_admin 만 가능.
+ * 본인 법인의 브랜딩(포인트 컬러) 수정 — 지원 페이지·AI 면접 화면 공통. org_admin / system_admin 만 가능.
  * 로고 업로드/삭제는 ./logo/route.ts.
  */
 import { db } from "@/lib/db";

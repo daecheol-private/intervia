@@ -25,9 +25,9 @@ export const organizations = sqliteTable("organizations", {
   // JD 와 별개로 법인 전반의 선호 인재상·정성 평가 기준을 저장 (CultureFitProfile JSON).
   // AI 이력서 평가·면접 질문 생성에 자동 반영. null = 미설정.
   cultureFitProfile: text("culture_fit_profile"),
-  // 공개 지원 페이지(/apply/[token]) 브랜딩 — 지원자가 "우리 회사 채용"임을 알아보게.
+  // 법인 브랜딩 — 지원 페이지(/apply/[token]) + AI 면접 화면 공통. 지원자가 "우리 회사 채용"임을 알아보게.
   // logoFileKey 는 saveFile() 키(Blob URL 또는 로컬 파일명), brandColor 는 #rrggbb.
-  // null = 미설정(Intervia 기본 테마).
+  // null = 미설정(면접 화면은 Intervia 기본색 밴드, 지원 페이지는 기본 테마).
   logoFileKey: text("logo_file_key"),
   brandColor: text("brand_color"),
   // 지원 페이지 전용 서브도메인 라벨 ({sub}.intervia.kr). 사칭 방지를 위해 자유 입력이

@@ -1,5 +1,5 @@
 /**
- * 본인 법인의 지원 페이지 로고 — 업로드(POST)/미리보기(GET)/삭제(DELETE).
+ * 본인 법인의 브랜딩 로고 — 업로드(POST)/미리보기(GET)/삭제(DELETE). 지원 페이지·AI 면접 화면 공통.
  * 변경은 org_admin / system_admin 만, 미리보기는 법인 멤버 누구나.
  * 공개 지원 페이지에는 /api/apply/[token]/logo 가 같은 파일 키를 스트리밍한다.
  */
