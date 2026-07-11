@@ -455,7 +455,7 @@ export default function OrgSettingsPage() {
           </section>
 
           {/* 법인 브랜딩 — 지원 페이지·AI 면접으로 유입된 지원자에게 자사 채용임을 보여준다 */}
-          <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm">
+          <section data-tour="cfg-branding" className="bg-card border border-border-default rounded-2xl p-6 shadow-sm">
             <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1">
               법인 브랜딩
             </h2>

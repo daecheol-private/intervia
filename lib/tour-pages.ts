@@ -62,7 +62,7 @@ export const PAGE_GUIDES: PageGuide[] = [
     desktopOnly: true,
   },
   {
-    // 법인 설정 — 회사 주소 → 컬처핏 정성평가 → 메일 서버 → 화상 면접 안내.
+    // 법인 설정 — 회사 주소 → 법인 브랜딩 → 컬처핏 정성평가 → 메일 서버 → 화상 면접 안내.
     // /org/settings 는 법인담당자만 접근 → 자연히 org_admin 전용.
     key: "org_settings",
     scenario: "org-settings",

@@ -232,7 +232,7 @@ export const TOUR_SCENARIOS: TourScenario[] = [
     ],
   },
   // 법인 설정(/org/settings) 첫 진입 시 자동 노출 — 법인담당자 전용. 위→아래 순서로
-  // ①회사 주소 ②컬처핏 정성평가 ③메일 서버 ④화상 면접(Zoom)을 스포트라이트만 한다(팝업 없음).
+  // ①회사 주소 ②법인 브랜딩 ③컬처핏 정성평가 ④메일 서버 ⑤화상 면접(Zoom)을 스포트라이트만 한다(팝업 없음).
   {
     id: "org-settings",
     label: "법인 설정 둘러보기",
@@ -244,6 +244,13 @@ export const TOUR_SCENARIOS: TourScenario[] = [
         placement: "bottom",
         title: "회사 주소",
         body: "오프라인(대면) 면접 일정을 지정하면, 여기 등록한 회사 주소가 면접 안내 메일에 자동으로 포함돼 발송됩니다.",
+      },
+      {
+        path: "/org/settings",
+        target: '[data-tour="cfg-branding"]',
+        placement: "top",
+        title: "법인 브랜딩",
+        body: "회사 로고와 포인트 컬러를 넣으면, 지원자가 보는 화면(공개 지원 페이지·AI 면접)의 헤더와 버튼이 우리 회사 브랜드로 바뀝니다. 사람인 등 외부 공고에서 넘어온 지원자도 '우리 회사 채용'임을 바로 알아볼 수 있어, 브랜드 이질감과 중도 이탈을 줄여요. 로고를 안 올리면 회사명만 깔끔하게 보이고, 포인트 컬러를 안 정하면 Intervia 기본색이 적용됩니다.",
       },
       {
         path: "/org/settings",
