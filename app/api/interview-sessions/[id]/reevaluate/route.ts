@@ -32,6 +32,7 @@ import {
 } from "@/lib/wallet-guard";
 import { logAudit } from "@/lib/audit";
 import { newErrorRef, transientErrorMessage } from "@/lib/error-ref";
+import { sessionAllowsPiiFallback } from "@/lib/consent";
 
 export const runtime = "nodejs";
 // 면접 재평가 LLM(generateJSON) 동기 호출 — 수십 초. 기본 타임아웃(~15s)에서 잘리지 않게 한도 확보.
@@ -135,6 +136,10 @@ export async function POST(
   // 재평가도 동일 신호 로직 — 저장된 messages.inputSignals 에서 집계.
   const stats = computeTranscriptStats(session.messages);
 
+  // 과거 세션은 구버전(1.8.0-) 동의일 수 있음 — 세션의 동의가 도쿄 폴백 고지(1.9.0+)를
+  // 포함할 때만 폴백 허용 (구동의 세션은 서울 전용).
+  const allowFallback = await sessionAllowsPiiFallback(session.id);
+
   try {
     const evaluation = await generateJSON<InterviewEvaluation>(
       buildSummaryPrompt(
@@ -156,7 +161,7 @@ export async function POST(
         cultureFit,
         personality
       ),
-      { task: "interviewEval" }
+      { task: "interviewEval", allowFallback }
     );
 
     await db

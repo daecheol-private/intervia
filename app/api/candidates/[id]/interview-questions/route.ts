@@ -34,6 +34,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
+import { candidateAllowsPiiFallback } from "@/lib/consent";
 import { generateJSON } from "@/lib/gemini";
 import {
   buildInterviewQuestionsPrompt,
@@ -304,8 +305,12 @@ export async function POST(
               cultureFit
             );
 
+      // 후보자의 최신 동의가 도쿄 폴백 고지(1.9.0+)를 포함할 때만 폴백 —
+      // AI 면접 동의 이력이 없는 후보(수동 등록 등)는 서울 전용.
+      const allowFallback = await candidateAllowsPiiFallback(cid);
       const sheet = await generateJSON<InterviewQuestionSheet>(prompt, {
         task: "questionGen",
+        allowFallback,
       });
       if (!sheet || !Array.isArray(sheet.sections) || sheet.sections.length === 0)
         throw new Error("생성 결과가 비어 있습니다.");

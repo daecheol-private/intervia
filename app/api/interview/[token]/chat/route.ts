@@ -7,7 +7,7 @@ import {
   type InterviewMessage,
 } from "@/lib/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { createChat, startChatStreamWithRetry } from "@/lib/gemini";
+import { startChatStream } from "@/lib/gemini";
 import {
   buildSystemPrompt,
   type CultureFitProfile,
@@ -19,7 +19,7 @@ import {
   parseTraitProfile,
 } from "@/lib/personality";
 import { hasMcqQuestions } from "@/lib/mcq";
-import { hasValidConsent } from "@/lib/consent";
+import { hasValidConsent, piiFallbackActive } from "@/lib/consent";
 import { logAudit } from "@/lib/audit";
 import { sanitizeUserInput, detectSystemPromptLeak } from "@/lib/prompt-safety";
 import { maskText } from "@/lib/mask";
@@ -201,34 +201,31 @@ export async function POST(
   };
   const history = [...session.messages, newUserMessage];
 
-  const chat = createChat({
-    task: "interview",
-    systemInstruction: buildSystemPrompt(
-      {
-        company: companyName ?? undefined,
-        position: job.position,
-        level: job.level,
-        employmentType: job.employmentType,
-        responsibilities: job.responsibilities,
-        requirements: job.requirements,
-        idealProfile: job.idealProfile,
-        tone: job.tone,
-        interviewDurationMinutes: job.interviewDurationMinutes,
-      },
-      // LLM 에는 항상 마스킹된 텍스트만 전달
-      candidate.resumeMaskedText ?? "",
-      candidate.screeningReport ?? null,
-      cultureFit,
-      personalityAnchors,
-      personalityReliabilityNote,
-      // 지원자가 시작 화면에서 고른 면접 언어 — en 이면 면접관이 영어로 진행(평가 리포트는 한국어 유지).
-      session.language
-    ),
-    history: history.slice(0, -1).map((m) => ({
-      role: m.role,
-      parts: [{ text: m.content }],
-    })),
-  });
+  const systemInstruction = buildSystemPrompt(
+    {
+      company: companyName ?? undefined,
+      position: job.position,
+      level: job.level,
+      employmentType: job.employmentType,
+      responsibilities: job.responsibilities,
+      requirements: job.requirements,
+      idealProfile: job.idealProfile,
+      tone: job.tone,
+      interviewDurationMinutes: job.interviewDurationMinutes,
+    },
+    // LLM 에는 항상 마스킹된 텍스트만 전달
+    candidate.resumeMaskedText ?? "",
+    candidate.screeningReport ?? null,
+    cultureFit,
+    personalityAnchors,
+    personalityReliabilityNote,
+    // 지원자가 시작 화면에서 고른 면접 언어 — en 이면 면접관이 영어로 진행(평가 리포트는 한국어 유지).
+    session.language
+  );
+  const chatHistory = history.slice(0, -1).map((m) => ({
+    role: m.role,
+    parts: [{ text: m.content }],
+  }));
 
   // 첫 턴 상태 전환 — LLM 스트림 시작과 병렬로 처리해 first-token 지연에서 DB 왕복 제거.
   const markStarted =
@@ -251,12 +248,17 @@ export async function POST(
   }
 
   try {
-    // 스트리밍 시작 단계 transient 503/429 자동 재시도 2회.
-    // stream 첫 토큰 도달 후 발생하는 에러는 재시도 안 함 (부분 토큰이 이미 클라이언트에 갔을 수 있음).
+    // 스트리밍 시작 단계 transient 503/429 자동 재시도 + 도쿄 폴백.
+    // consentOk 통과 = 세션 동의가 현재 버전(1.9.0+, 도쿄 폴백 고지 포함)이므로
+    // 시행일 게이트(piiFallbackActive)만 추가 확인. 프롬프트는 전부 마스킹 텍스트.
     const [stream] = await Promise.all([
-      startChatStreamWithRetry(() =>
-        chat.sendMessageStream({ message: newUserMessage.content })
-      ),
+      startChatStream({
+        task: "interview",
+        systemInstruction,
+        history: chatHistory,
+        message: newUserMessage.content,
+        allowFallback: piiFallbackActive(),
+      }),
       markStarted,
     ]);
 

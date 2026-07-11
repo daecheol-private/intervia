@@ -198,6 +198,59 @@ export function validateConsents(
  * candidate_id 병행 매칭으로 이 오탐을 차단한다. 동의 저장 시 candidateId =
  * session.candidateId 로 기록되므로(consent 라우트) 정상 흐름에는 영향이 없다.
  */
+// ── 도쿄 폴백 게이트 (마스킹 텍스트 LLM 호출의 국외 임시 처리 — COMPLIANCE_SOP §4) ──
+// ① 처리방침 1.5.0 시행일(2026-07-18 KST, §12 "7일 전 공지" 준수) 이후이고
+// ② 해당 동의가 1.9.0(도쿄 폴백 고지 포함) 이상일 때만 gemini `allowFallback` 을 켤 수 있다.
+const PII_FALLBACK_ACTIVE_FROM = process.env.PII_FALLBACK_FROM
+  ? Date.parse(process.env.PII_FALLBACK_FROM)
+  : Date.UTC(2026, 6, 17, 15, 0, 0); // 2026-07-18 00:00 KST
+
+export function piiFallbackActive(): boolean {
+  return Date.now() >= PII_FALLBACK_ACTIVE_FROM;
+}
+
+export function consentVersionAllowsFallback(
+  version: string | null | undefined
+): boolean {
+  const m = /^(\d+)\.(\d+)/.exec(version ?? "");
+  if (!m) return false;
+  const major = Number(m[1]);
+  return major > 1 || (major === 1 && Number(m[2]) >= 9);
+}
+
+async function latestConsentAllowsFallback(
+  where: ReturnType<typeof eq>
+): Promise<boolean> {
+  if (!piiFallbackActive()) return false;
+  const [row] = await db
+    .select({
+      version: consentLogs.consentVersion,
+      consents: consentLogs.consents,
+    })
+    .from(consentLogs)
+    .where(where)
+    .orderBy(desc(consentLogs.id))
+    .limit(1);
+  if (!row || !consentVersionAllowsFallback(row.version)) return false;
+  return validateConsents(row.consents).ok;
+}
+
+/** 세션의 최신 유효 동의가 도쿄 폴백 고지(1.9.0+)를 포함하는지 — 재평가 등 과거 세션용. */
+export function sessionAllowsPiiFallback(
+  interviewSessionId: number
+): Promise<boolean> {
+  return latestConsentAllowsFallback(
+    eq(consentLogs.interviewSessionId, interviewSessionId)
+  );
+}
+
+/** 후보자 단위 (세션 무관 — 질문지 생성 등). AI 면접 동의 이력이 없으면 false(서울 전용). */
+export function candidateAllowsPiiFallback(
+  candidateId: number
+): Promise<boolean> {
+  return latestConsentAllowsFallback(eq(consentLogs.candidateId, candidateId));
+}
+
 export async function hasValidConsent(
   interviewSessionId: number,
   candidateId?: number

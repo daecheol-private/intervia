@@ -67,10 +67,6 @@ function vertexClient(location: string) {
   return client;
 }
 
-function clientFor(_task: LlmTask) {
-  return vertexClient(PRIMARY_LOCATION);
-}
-
 /**
  * Thinking budget — Gemini 2.5 는 기본 thinking on.
  * flash 는 thinkingBudget=0 으로 끌 수 있으나, 면접 응답 품질을 위해 최소치 유지.
@@ -333,10 +329,18 @@ export async function generateJSONMultimodal<T>(
   );
 }
 
-export function createChat(opts: {
+/**
+ * 면접 채팅 스트리밍 시작 — generateJSON 과 동일한 서울 우선 + 도쿄 폴백 정책(runWithFallback).
+ * 스트림은 첫 토큰 이후 재시도가 불가(부분 토큰이 이미 클라이언트에 갔을 수 있음)하므로
+ * 재시도·폴백은 "시작 단계"에만 적용된다.
+ * allowFallback 은 호출부가 동의·시행일 게이트(lib/consent.ts piiFallbackActive 등)를 통과시킨 값.
+ */
+export async function startChatStream(opts: {
   task: LlmTask;
   systemInstruction: string;
   history: Array<{ role: string; parts: Array<{ text: string }> }>;
+  message: string;
+  allowFallback?: boolean;
 }) {
   const thinkingBudget = THINKING_BUDGET[opts.task];
   const config: Record<string, unknown> = {
@@ -345,16 +349,15 @@ export function createChat(opts: {
   if (thinkingBudget !== undefined) {
     config.thinkingConfig = { thinkingBudget };
   }
-  return clientFor(opts.task).chats.create({
-    model: MODELS[opts.task],
-    history: opts.history as never,
-    config: config as never,
-  });
-}
-
-export async function startChatStreamWithRetry<T>(
-  fn: () => Promise<T>,
-  task: LlmTask = "interview"
-): Promise<T> {
-  return withRetry(fn, { op: "chatStream", task });
+  return runWithFallback(
+    (client) =>
+      client.chats
+        .create({
+          model: MODELS[opts.task],
+          history: opts.history as never,
+          config: config as never,
+        })
+        .sendMessageStream({ message: opts.message }),
+    { op: "chatStream", task: opts.task, allowFallback: opts.allowFallback }
+  );
 }

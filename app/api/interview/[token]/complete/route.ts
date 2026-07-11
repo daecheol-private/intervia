@@ -10,7 +10,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { generateJSON } from "@/lib/gemini";
 import { buildSummaryPrompt, type CultureFitProfile } from "@/lib/prompts";
 import { parseTraitProfile } from "@/lib/personality";
-import { hasValidConsent } from "@/lib/consent";
+import { hasValidConsent, piiFallbackActive } from "@/lib/consent";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { chargeRepeatable } from "@/lib/tokens";
 import { computeTranscriptStats } from "@/lib/interview-signals";
@@ -220,7 +220,8 @@ export async function POST(
         cultureFit,
         personality
       ),
-      { task: "interviewEval" }
+      // hasValidConsent 통과 = 세션 동의가 현재 버전(1.9.0+, 도쿄 폴백 고지 포함).
+      { task: "interviewEval", allowFallback: piiFallbackActive() }
     );
 
     await db

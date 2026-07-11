@@ -31,7 +31,7 @@ SDK 단일: **`@google/genai`** (vertexai: true). `clientFor(task)` 는 항상 �
 
 **왜 모두 flash 인가**: asia-northeast3 데이터 레지던시는 flash 만 지원 (pro 미지원). 국외이전 동의 항목을 제거하기 위해 flash 통일을 선택.
 
-**도쿄 폴백 (2026-07-11)**: 서울 429/503 장애(transient 재시도 소진) 시 **`allowFallback: true` 호출만** 도쿄(asia-northeast1, 같은 flash)로 우회 + 서킷브레이커(연속 2회 실패 → 60초 폴백 우선). **allowFallback 은 프롬프트에 개인정보가 전혀 없는 호출만 켤 수 있다** — 현재 허용 5곳: MCQ 생성/번역, JD 체크리스트, 법인 매칭, 공고 URL 임포트(연락처 `maskContacts` 마스킹 후). 마스킹 이력서·면접 대화 등 개인정보 호출의 폴백은 동의 v1.9.0·처리방침에 고지 반영 완료(2026-07-11)됐으나 **세션 동의 버전 ≥1.9.0 게이트 구현(Phase 2) 전까지 금지**, 스캔 원본·음성은 영구 금지 — COMPLIANCE_SOP §4. 폴백 발동은 `gemini.fallback_used` 로그로 감사 추적.
+**도쿄 폴백 (2026-07-11, Phase 2 2026-07-12)**: 서울 429/503 장애(transient 재시도 소진) 시 **`allowFallback: true` 호출만** 도쿄(asia-northeast1, 같은 flash)로 우회 + 서킷브레이커(연속 2회 실패 → 60초 폴백 우선). 허용 범위: ① PII 무 5곳(MCQ 생성/번역, JD 체크리스트, 법인 매칭, 공고 URL 임포트 — 연락처 `maskContacts` 후) 무조건, ② 마스킹 텍스트 4곳(면접 채팅 `startChatStream`·종료 평가·재평가·질문지 생성)은 **이중 게이트**(`lib/consent.ts`: `piiFallbackActive()` 시행일 2026-07-18 + 해당 동의 버전 ≥1.9.0) 통과 시만. 서류평가·대면 큐(역할배정·평가)·라이브 2종·스캔 원본·음성은 서울 전용 — 사유는 COMPLIANCE_SOP §4. 대면 전사는 프롬프트 경계에서 `maskText` 적용(저장·화면 원문). 폴백 발동은 `gemini.fallback_used` 로그로 감사 추적. 폴백 발동은 `gemini.fallback_used` 로그로 감사 추적.
 
 **환경변수** (모두 Vertex 용):
 - `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (기본 `asia-northeast3`), `GEMINI_FALLBACK_LOCATION` (기본 `asia-northeast1`)

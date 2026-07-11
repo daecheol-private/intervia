@@ -14,6 +14,7 @@ import {
 } from "./prompts";
 import type { JobInfo, ScreeningContext } from "./prompts";
 import { chargeFeature, chargeRepeatable } from "./tokens";
+import { maskText, type KnownPII } from "./mask";
 import { log } from "./logger";
 
 /**
@@ -116,7 +117,8 @@ ${opts.domainHint}`
  * 라벨이 1개뿐(음향 분리 실패)이면 LLM 없이 unknown.
  */
 export async function assignSpeakerRoles(
-  segments: Array<{ speakerLabel: string | null; text: string }>
+  segments: Array<{ speakerLabel: string | null; text: string }>,
+  maskKnown?: KnownPII
 ): Promise<Record<string, SpeakerRole>> {
   const labels = Array.from(
     new Set(
@@ -126,11 +128,16 @@ export async function assignSpeakerRoles(
   if (labels.length === 0) return {};
   if (labels.length === 1) return { [labels[0]]: "unknown" };
 
-  const labeled = segments
-    .filter((s) => s.speakerLabel)
-    .map((s) => `${s.speakerLabel}: ${s.text}`)
-    .join("\n")
-    .slice(0, 60_000);
+  // 구술 전사도 채팅 면접과 동일하게 마스킹 후 LLM 전달 (§4의3 노출 방지 + 도쿄 폴백 전제).
+  // 저장·화면 표시는 원문 유지 — 마스킹은 프롬프트 경계에서만.
+  const labeled = maskText(
+    segments
+      .filter((s) => s.speakerLabel)
+      .map((s) => `${s.speakerLabel}: ${s.text}`)
+      .join("\n")
+      .slice(0, 60_000),
+    { level: "standard", known: maskKnown }
+  );
 
   const out = await generateJSON<{ roles?: Record<string, string> }>(
     buildRoleAssignmentPrompt(labeled, labels),
@@ -249,8 +256,13 @@ export async function evaluateRecordedInterview(args: {
   resumeMasked: string;
   segments: Array<{ seq: number; role: SpeakerRole | null; text: string }>;
   screening?: ScreeningContext | null;
+  maskKnown?: KnownPII;
 }): Promise<RecordedInterviewReport> {
-  const labeledTranscript = buildLabeledTranscript(args.segments);
+  // 평가 프롬프트의 전사는 마스킹 (assignSpeakerRoles 와 동일 원칙 — 저장본은 원문 유지).
+  const labeledTranscript = maskText(buildLabeledTranscript(args.segments), {
+    level: "standard",
+    known: args.maskKnown,
+  });
   const raw = await generateJSON<RecordedInterviewReport>(
     buildRecordedInterviewEvalPrompt(
       args.job,
@@ -303,6 +315,19 @@ export async function finalizeRecordedInterview(
       .orderBy(asc(interviewTranscriptSegments.seq));
     if (segs.length === 0) throw new Error("전사 세그먼트가 없습니다.");
 
+    // 후보자·공고는 서로 독립 조회 — 병렬로 (원격 DB 왕복 2회 직렬 회피).
+    // 역할 배정 전에 로드 — 전사 마스킹의 known PII(이름·이메일·전화)로 사용.
+    const [[cand], [job]] = await Promise.all([
+      db.select().from(candidates).where(eq(candidates.id, ri.candidateId)),
+      db.select().from(jobPostings).where(eq(jobPostings.id, ri.jobId)),
+    ]);
+    if (!cand || !job) throw new Error("후보자 또는 공고를 찾을 수 없습니다.");
+    const maskKnown: KnownPII = {
+      name: cand.name ?? null,
+      emails: cand.email ? [cand.email] : [],
+      phones: cand.phone ? [cand.phone] : [],
+    };
+
     // 1) 역할 배정. 라이브 진행 중 점진 정리(Web Speech 초안)는 발화별 역할이 이미 박혀 있으므로
     //    그대로 사용. 업로드·라이브 오디오 재전사(A안)는 음향 라벨만 있고 역할이 비어 있어(role=null)
     //    라벨→역할 배정 후 일괄 반영(N UPDATE 회피). mode 가 아니라 '역할 미배정' 여부로 판단해야
@@ -310,7 +335,7 @@ export async function finalizeRecordedInterview(
     const needsRoleAssignment = segs.every((s) => s.role == null);
     const roleMap: Record<string, SpeakerRole> = {};
     if (needsRoleAssignment) {
-      Object.assign(roleMap, await assignSpeakerRoles(segs));
+      Object.assign(roleMap, await assignSpeakerRoles(segs, maskKnown));
       const byRole: Record<SpeakerRole, string[]> = {
         candidate: [],
         interviewer: [],
@@ -337,13 +362,6 @@ export async function finalizeRecordedInterview(
     }
 
     // 2) 평가 (JD + 이력서 마스킹본 + 서류평가 + 역할 배정 전사).
-    // 후보자·공고는 서로 독립 조회 — 병렬로 (원격 DB 왕복 2회 직렬 회피).
-    const [[cand], [job]] = await Promise.all([
-      db.select().from(candidates).where(eq(candidates.id, ri.candidateId)),
-      db.select().from(jobPostings).where(eq(jobPostings.id, ri.jobId)),
-    ]);
-    if (!cand || !job) throw new Error("후보자 또는 공고를 찾을 수 없습니다.");
-
     const jobInfo: JobInfo = {
       position: job.position,
       level: job.level,
@@ -379,6 +397,7 @@ export async function finalizeRecordedInterview(
       resumeMasked: cand.resumeMaskedText ?? "",
       segments: segWithRole,
       screening,
+      maskKnown,
     });
 
     // error=null: 이전 시도가 남긴 실패 메시지를 지운다 — 성공(ready)인데 error 가 남아
