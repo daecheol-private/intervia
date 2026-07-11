@@ -94,6 +94,17 @@ function isTransient(err: unknown): boolean {
   return TRANSIENT_PATTERNS.test(msg);
 }
 
+// 리전 용량 장애(요청이 즉시 거절되는 429/503) — 타임아웃·네트워크 단절과 달리 시도당
+// 비용이 없고 잡 내용과 무관(리전 복구 시 반드시 해소)하다. 큐 워커가 이 오류는
+// 재시도 상한(attempts)에 카운트하지 않고 장애가 끝날 때까지 대기하는 데 쓴다 (Phase 3).
+const OUTAGE_PATTERNS =
+  /\b(429|503)\b|RESOURCE_EXHAUSTED|UNAVAILABLE|high demand|temporarily unavailable/i;
+
+export function isCapacityOutageError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return OUTAGE_PATTERNS.test(msg);
+}
+
 /**
  * LLM 응답 텍스트를 JSON 으로 파싱. 실패 시 *실제 원인* 을 메시지에 담아 throw.
  *

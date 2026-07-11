@@ -333,6 +333,32 @@ export async function markRecordedFailedOrRetry(
   return { permanent: false };
 }
 
+/**
+ * 리전 용량 장애(429/503) 재큐 — 재시도 상한(attempts)에 카운트하지 않는다 (Phase 3).
+ * attempts 는 claim 시 선증가되므로 여기서 되돌린다. notBefore 컬럼이 없어 백오프는
+ * 호출 워커가 self-chain 을 생략하는 것으로 대신한다 — 운영은 매분 cron 이 재시도하고,
+ * 429 는 즉시 거절이라 시도당 비용이 없다. (성공 완료건 보호 가드는 markFailedOrRetry 와 동일.)
+ */
+export async function requeueRecordedOutage(
+  riId: number,
+  error: string
+): Promise<void> {
+  await db
+    .update(recordedInterviews)
+    .set({
+      status: "queued",
+      error: error.slice(0, 500),
+      attempts: sql`MAX(${recordedInterviews.attempts} - 1, 0)`,
+    })
+    .where(
+      and(
+        eq(recordedInterviews.id, riId),
+        ne(recordedInterviews.status, "ready"),
+        ne(recordedInterviews.status, "confirmed")
+      )
+    );
+}
+
 /** 남은 queued 건수 (self-chain 판단·모니터링용). */
 export async function getQueuedRecordedCount(): Promise<number> {
   const [r] = await db

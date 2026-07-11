@@ -5,8 +5,10 @@ import {
   reconcileBalanceHolds,
   markDone,
   markFailedOrRetry,
+  requeueOutage,
   MAX_ATTEMPTS,
 } from "@/lib/screening-queue";
+import { isCapacityOutageError } from "@/lib/gemini";
 import {
   runScreeningOnce,
   chargeScreeningSuccess,
@@ -129,6 +131,12 @@ async function processOne(workerId: string): Promise<
     if (isPermanent) {
       await markFailedOrRetry(claim.jobId, err.message, MAX_ATTEMPTS); // 즉시 영구 처리
       return { error: "permanent", permanent: true };
+    }
+    // 리전 용량 장애(429/503)는 상한에 카운트하지 않고 대기 (Phase 3) — 몇 시간 장애에도
+    // 영구 실패로 박제되지 않고 복구 시 자동 재개. notBefore 백오프라 busy-loop 없음.
+    if (isCapacityOutageError(err)) {
+      await requeueOutage(claim.jobId, err.message);
+      return { error: "transient", permanent: false };
     }
     const r = await markFailedOrRetry(claim.jobId, err.message, claim.attempts);
     return { error: "transient", permanent: r.permanent };

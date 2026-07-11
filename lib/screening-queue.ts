@@ -261,6 +261,35 @@ export async function markFailedOrRetry(
   return { permanent: false };
 }
 
+// 용량 장애 재큐 백오프 — 429 는 즉시 거절이라 시도당 비용이 없어 짧게 유지해도 안전.
+const OUTAGE_BACKOFF_SECONDS = 120;
+
+/**
+ * 리전 용량 장애(429/503) 재큐 — 재시도 상한(attempts)에 카운트하지 않는다 (Phase 3).
+ * 장애가 몇 시간 이어져도 MAX_ATTEMPTS 소진으로 영구 실패에 박제되지 않고, 리전 복구 시
+ * 자동 재개된다. attempts 는 claim 시 선증가되므로 여기서 되돌린다. 타임아웃 등 비용이
+ * 드는 transient 는 기존 markFailedOrRetry 경로로 계속 카운트된다 (무한 루프 방지 유지).
+ */
+export async function requeueOutage(
+  jobId: number,
+  error: string
+): Promise<void> {
+  const notBefore = new Date(
+    Date.now() + OUTAGE_BACKOFF_SECONDS * 1000
+  ).toISOString();
+  await db
+    .update(screeningJobs)
+    .set({
+      status: "queued",
+      lockedAt: null,
+      lockedBy: null,
+      notBefore,
+      lastError: error.slice(0, 1000),
+      attempts: sql`MAX(${screeningJobs.attempts} - 1, 0)`,
+    })
+    .where(eq(screeningJobs.id, jobId));
+}
+
 /**
  * 잔액 기반 일시정지 reconcile — 워커 실행마다 1회 (cleanupStuck 직후).
  *

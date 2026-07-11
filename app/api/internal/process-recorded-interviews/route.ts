@@ -4,8 +4,10 @@ import {
   getQueuedRecordedCount,
   markRecordedFailedOrRetry,
   processRecordedInterview,
+  requeueRecordedOutage,
   RecordedInterviewError,
 } from "@/lib/recorded-interview-queue";
+import { isCapacityOutageError } from "@/lib/gemini";
 import { getCurrentUser } from "@/lib/auth";
 import { secretEquals } from "@/lib/secret-compare";
 import { workerBaseUrl } from "@/lib/worker-trigger";
@@ -80,6 +82,17 @@ export async function POST(req: Request) {
       recordedInterviewId: claim.id,
       attempts: claim.attempts,
     });
+    // 리전 용량 장애(429/503)는 상한에 카운트하지 않고 재큐 (Phase 3). self-chain 도
+    // 생략해 장애 중 busy-loop 를 막는다 — 운영은 매분 cron 이 재시도, 복구 시 자동 재개.
+    if (!permanent && isCapacityOutageError(e)) {
+      await requeueRecordedOutage(claim.id, msg);
+      return Response.json({
+        ok: true,
+        stuckRecovered,
+        processed: 1,
+        result: "failed_outage",
+      });
+    }
     const r = await markRecordedFailedOrRetry(
       claim.id,
       claim.attempts,
