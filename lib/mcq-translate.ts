@@ -38,9 +38,10 @@ STRICT RULES:
 INPUT:
 ${JSON.stringify(payload, null, 2)}`;
 
+  // MCQ 텍스트(JD 유래)만 투입 (후보자 PII 없음) — 서울 장애 시 도쿄 폴백 허용
   const translated = await generateJSON<
     Array<{ id: string; question: string; options: string[] }>
-  >(prompt, { task: "screening", temperature: 0 });
+  >(prompt, { task: "screening", temperature: 0, allowFallback: true });
 
   const byId = new Map(translated.map((t) => [t.id, t]));
 

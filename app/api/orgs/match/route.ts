@@ -123,6 +123,8 @@ export async function POST(req: Request) {
       }>(prompt, {
         task: "orgMatch",
         temperature: 0,
+        // 법인명만 투입 (개인정보 없음) — 서울 장애 시 도쿄 폴백 허용
+        allowFallback: true,
         responseSchema: {
           type: "object",
           properties: {

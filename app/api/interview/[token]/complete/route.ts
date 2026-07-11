@@ -16,6 +16,7 @@ import { chargeRepeatable } from "@/lib/tokens";
 import { computeTranscriptStats } from "@/lib/interview-signals";
 import { isAiInterviewSuperseded } from "@/lib/stage-meta";
 import { logAudit } from "@/lib/audit";
+import { newErrorRef } from "@/lib/error-ref";
 
 export const runtime = "nodejs";
 // 면접 종료 시 인터뷰 평가 LLM(generateJSON)을 동기 호출 — Vertex 서울 기준 수십 초.
@@ -252,15 +253,19 @@ export async function POST(
 
     return Response.json(DONE_RESPONSE);
   } catch (e: unknown) {
+    const ref = newErrorRef();
     const msg = e instanceof Error ? e.message : String(e);
-    console.error(`[interview/complete] LLM 평가 실패 (session ${session.id}):`, msg);
+    console.error(
+      `[interview/complete] LLM 평가 실패 (session ${session.id}, ref ${ref}):`,
+      msg
+    );
     // 후차감 모델 — 평가 실패 시 애초에 과금하지 않았으므로 환불도 불필요(서류평가와 동일).
     //   운영자가 reevaluate 로 재평가에 성공하면 그 시점에 1건 과금된다.
     // 평가 실패해도 면접 자체는 종료 — 면접관에게 재평가 필요 알림.
     if (nextStage === "ai_evaluated") {
       void notifyJobInterviewers(candidate!.jobId, {
         type: "ai_interview_done",
-        title: `${candidate!.name} 후보자의 AI 면접이 종료되었습니다 (자동 평가 실패 — 재평가 필요)`,
+        title: `${candidate!.name} 후보자의 AI 면접이 종료되었습니다 (자동 평가 실패 — 재평가 필요 · 오류 코드 ${ref})`,
         href: `/candidates/${candidate!.id}`,
         payload: { candidateId: candidate!.id, jobId: candidate!.jobId },
       });

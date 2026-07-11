@@ -313,6 +313,14 @@ export function maskText(
 }
 
 /**
+ * 이메일·전화만 마스킹 — 채용공고 본문처럼 회사명·주소·URL 은 보존해야 하고
+ * 개인 연락처(채용 담당자 등)만 걷어내면 되는 텍스트용.
+ */
+export function maskContacts(text: string): string {
+  return text.replace(RE_EMAIL, "[이메일]").replace(RE_PHONE, "[전화]");
+}
+
+/**
  * 텍스트에 등장하는 대학(사전 등재) 목록을 등장 위치 순으로 반환.
  * 학력 추출(lib/education-extract.ts) 에서 학교명 식별에 재활용 — 마스킹 사전과 단일 출처 유지.
  * 긴 이름이 먼저 매칭되도록 정렬되어 있어 "서울대학교" 가 "서울" 보다 우선.

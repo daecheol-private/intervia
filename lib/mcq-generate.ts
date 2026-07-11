@@ -26,9 +26,10 @@ export async function generateMcqSet(
   job: McqJobInput,
   count: number
 ): Promise<McqQuestion[]> {
+  // JD 만 투입 (후보자 PII 없음) — 서울 장애 시 도쿄 폴백 허용
   const gen = await generateJSON<{ questions?: unknown }>(
     buildMcqGenerationPrompt(job, count),
-    { task: "questionGen", temperature: 0.4 }
+    { task: "questionGen", temperature: 0.4, allowFallback: true }
   );
   let set = sanitizeMcqSet(gen.questions);
   if (set.length === 0) {
@@ -42,6 +43,7 @@ export async function generateMcqSet(
     }>(buildMcqVerificationPrompt(toPublicMcq(set)), {
       task: "questionGen",
       temperature: 0,
+      allowFallback: true,
     });
     const byId = new Map((ver.answers ?? []).map((a) => [a.id, a]));
     set = set.map((q) => {

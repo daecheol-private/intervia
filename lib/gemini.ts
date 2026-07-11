@@ -23,27 +23,33 @@ export const MODELS = {
 export type LlmTask = keyof typeof MODELS;
 
 /**
- * Vertex AI 클라이언트 — 모든 task 공통.
+ * Vertex AI 클라이언트 — 리전별 싱글톤.
  *
  * 운영(Vercel): GOOGLE_APPLICATION_CREDENTIALS_JSON (서비스계정 JSON 전체 문자열).
  * 로컬 dev: GOOGLE_APPLICATION_CREDENTIALS (파일 경로 — SDK 자동 인식).
  */
-// 모듈 싱글톤 — GoogleAuth 의 액세스 토큰 캐시가 인스턴스 단위라, 호출마다 새로 만들면
-// 매번 JWT 서명 + 토큰 교환이 발생한다 (모든 LLM 호출에 +100~300ms). env 는 프로세스 불변.
-let cachedVertexClient: GoogleGenAI | null = null;
+// GoogleAuth 의 액세스 토큰 캐시가 인스턴스 단위라 리전별 1개만 만들어 재사용
+// (호출마다 새로 만들면 JWT 서명+토큰 교환으로 +100~300ms). env 는 프로세스 불변.
+const clientCache = new Map<string, GoogleGenAI>();
 
-function vertexClient() {
-  if (cachedVertexClient) return cachedVertexClient;
+const PRIMARY_LOCATION = process.env.GOOGLE_CLOUD_LOCATION ?? "asia-northeast3";
+// 폴백 리전 — 도쿄. §28의8 고지에 이전 "국가"를 특정해야 해서 글로벌 엔드포인트는 부적합하고,
+// 도쿄는 기존 처리방침 고지 국가(일본 — Turso)와 정합 + 국내 지연 최소 (2026-07-11 실측 정상).
+const FALLBACK_LOCATION = process.env.GEMINI_FALLBACK_LOCATION ?? "asia-northeast1";
+
+function vertexClient(location: string) {
+  const cached = clientCache.get(location);
+  if (cached) return cached;
   const project = process.env.GOOGLE_CLOUD_PROJECT;
   if (!project) throw new Error("GOOGLE_CLOUD_PROJECT가 설정되지 않았습니다.");
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? "asia-northeast3";
   const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+  let client: GoogleGenAI;
   if (credentialsJson) {
     const creds = JSON.parse(credentialsJson) as {
       client_email: string;
       private_key: string;
     };
-    cachedVertexClient = new GoogleGenAI({
+    client = new GoogleGenAI({
       vertexai: true,
       project,
       location,
@@ -55,13 +61,14 @@ function vertexClient() {
       },
     });
   } else {
-    cachedVertexClient = new GoogleGenAI({ vertexai: true, project, location });
+    client = new GoogleGenAI({ vertexai: true, project, location });
   }
-  return cachedVertexClient;
+  clientCache.set(location, client);
+  return client;
 }
 
 function clientFor(_task: LlmTask) {
-  return vertexClient();
+  return vertexClient(PRIMARY_LOCATION);
 }
 
 /**
@@ -160,6 +167,74 @@ async function withRetry<T>(
   throw lastErr;
 }
 
+// 서울 장애 서킷브레이커 — 서버리스 웜 인스턴스 단위 best-effort.
+// transient 실패(재시도 소진)가 연속 2회면 60초간 폴백 허용 호출은 서울을 건너뛴다
+// (동기 기능이 매번 서울 재시도·타임아웃을 기다리지 않게). 만료 후 자동으로 서울 복귀.
+let primaryFailStreak = 0;
+let primaryDownUntil = 0;
+
+function notePrimary(ok: boolean) {
+  if (ok) {
+    primaryFailStreak = 0;
+    primaryDownUntil = 0;
+  } else if (++primaryFailStreak >= 2) {
+    primaryDownUntil = Date.now() + 60_000;
+  }
+}
+
+/**
+ * 서울(기본 리전) 우선 실행 + allowFallback 호출만 도쿄 폴백.
+ *
+ * ⚠️ allowFallback 은 프롬프트에 개인정보가 전혀 없는 호출만 켤 것.
+ * 동의서·처리방침이 "AI 단계 국외이전 없음"을 전제하므로, 개인정보(마스킹 포함) 호출의
+ * 폴백은 동의·처리방침 개정 전까지 금지 — docs/COMPLIANCE_SOP.md §4.
+ */
+async function runWithFallback<T>(
+  run: (client: GoogleGenAI) => Promise<T>,
+  ctx: { op: string; task: LlmTask; allowFallback?: boolean }
+): Promise<T> {
+  const { op, task } = ctx;
+  if (ctx.allowFallback && Date.now() < primaryDownUntil) {
+    log.warn("gemini.fallback_used", {
+      op,
+      task,
+      location: FALLBACK_LOCATION,
+      reason: "circuit_open",
+    });
+    try {
+      return await withRetry(() => run(vertexClient(FALLBACK_LOCATION)), {
+        op: `${op}.fallback`,
+        task,
+      });
+    } catch (e) {
+      if (!isTransient(e)) throw e;
+      // 도쿄도 장애 — 마지막으로 서울 1회
+      return await run(vertexClient(PRIMARY_LOCATION));
+    }
+  }
+  try {
+    const result = await withRetry(() => run(vertexClient(PRIMARY_LOCATION)), {
+      op,
+      task,
+    });
+    notePrimary(true);
+    return result;
+  } catch (e) {
+    if (isTransient(e)) notePrimary(false);
+    if (!ctx.allowFallback || !isTransient(e)) throw e;
+    log.warn("gemini.fallback_used", {
+      op,
+      task,
+      location: FALLBACK_LOCATION,
+      reason: e instanceof Error ? e.message.slice(0, 150) : String(e).slice(0, 150),
+    });
+    return withRetry(() => run(vertexClient(FALLBACK_LOCATION)), {
+      op: `${op}.fallback`,
+      task,
+    });
+  }
+}
+
 export async function generateJSON<T>(
   prompt: string,
   opts?: {
@@ -167,12 +242,14 @@ export async function generateJSON<T>(
     responseSchema?: unknown;
     temperature?: number;
     timeoutMs?: number;
+    /** 프롬프트에 개인정보가 전혀 없는 호출만 true — runWithFallback 주석 참조. */
+    allowFallback?: boolean;
   }
 ): Promise<T> {
   const task: LlmTask = opts?.task ?? "screening";
   const thinkingBudget = THINKING_BUDGET[task];
-  return withRetry(
-    async () => {
+  return runWithFallback(
+    async (client) => {
       const config: Record<string, unknown> = {
         responseMimeType: "application/json",
         // 평가 일관성을 위해 호출부가 temperature 를 낮출 수 있음(screening=0). 기본 0.2.
@@ -198,11 +275,11 @@ export async function generateJSON<T>(
         config.abortSignal = ctrl.signal;
       }
       try {
-        const result = await clientFor(task).models.generateContent({
+        const result = await client.models.generateContent({
           model: MODELS[task],
           contents: prompt,
           config: config as Parameters<
-            ReturnType<typeof clientFor>["models"]["generateContent"]
+            GoogleGenAI["models"]["generateContent"]
           >[0]["config"],
         });
         return parseJsonResponse<T>(result);
@@ -210,7 +287,7 @@ export async function generateJSON<T>(
         if (timer) clearTimeout(timer);
       }
     },
-    { op: "generateJSON", task }
+    { op: "generateJSON", task, allowFallback: opts?.allowFallback }
   );
 }
 
@@ -219,15 +296,15 @@ export async function generateJSONMultimodal<T>(
     | { text: string }
     | { inlineData: { mimeType: string; data: string } }
   >,
-  opts?: { task?: LlmTask; timeoutMs?: number }
+  opts?: { task?: LlmTask; timeoutMs?: number; allowFallback?: boolean }
 ): Promise<T> {
   const task: LlmTask = opts?.task ?? "screening";
   // OCR(스캔 PDF) 등 멀티모달 호출은 SDK 기본 타임아웃(1분)이 worker maxDuration(120s)에
   // 근접해, 평가까지 겹치면 함수가 self-chain 전에 강제종료될 수 있다. 호출부가 timeoutMs 를
   // 주면 httpOptions.timeout(서버 인지 타임아웃) + AbortController(클라이언트 하드 실링)를
   // 함께 걸어, 응답이 늦으면 transient 오류로 즉시 끊고 큐가 백오프 재시도하게 한다.
-  return withRetry(
-    async () => {
+  return runWithFallback(
+    async (client) => {
       const config: Record<string, unknown> = {
         responseMimeType: "application/json",
         temperature: 0.2,
@@ -240,11 +317,11 @@ export async function generateJSONMultimodal<T>(
         config.abortSignal = ctrl.signal;
       }
       try {
-        const result = await clientFor(task).models.generateContent({
+        const result = await client.models.generateContent({
           model: MODELS[task],
           contents: [{ role: "user", parts: parts as never }],
           config: config as Parameters<
-            ReturnType<typeof clientFor>["models"]["generateContent"]
+            GoogleGenAI["models"]["generateContent"]
           >[0]["config"],
         });
         return parseJsonResponse<T>(result);
@@ -252,7 +329,7 @@ export async function generateJSONMultimodal<T>(
         if (timer) clearTimeout(timer);
       }
     },
-    { op: "generateJSONMultimodal", task }
+    { op: "generateJSONMultimodal", task, allowFallback: opts?.allowFallback }
   );
 }
 

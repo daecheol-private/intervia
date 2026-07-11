@@ -31,6 +31,7 @@ import {
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { logAudit } from "@/lib/audit";
+import { newErrorRef, transientErrorMessage } from "@/lib/error-ref";
 
 export const runtime = "nodejs";
 // 면접 재평가 LLM(generateJSON) 동기 호출 — 수십 초. 기본 타임아웃(~15s)에서 잘리지 않게 한도 확보.
@@ -187,16 +188,17 @@ export async function POST(
 
     return Response.json({ ok: true, evaluation });
   } catch (e: unknown) {
+    const ref = newErrorRef();
     const msg = e instanceof Error ? e.message : String(e);
     console.error(
-      `[interview/reevaluate] LLM 평가 재실패 (session ${session.id}):`,
+      `[interview/reevaluate] LLM 평가 재실패 (session ${session.id}, ref ${ref}):`,
       msg
     );
     // 후차감 모델 — 재평가 실패 시 과금 자체가 없으므로 환불 불필요. 다시 시도하면 된다.
     return Response.json(
       {
         ok: false,
-        error: "재평가에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        error: `재평가에 실패했습니다. ${transientErrorMessage(ref)}`,
         detail: msg,
       },
       { status: 500 }

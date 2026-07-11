@@ -43,9 +43,10 @@ export async function generateRequirementChecklist(input: {
   if (responsibilities.length + requirements.length < 10) return [];
 
   try {
+    // JD 텍스트만 투입 (후보자 PII 없음) — 서울 장애 시 도쿄 폴백 허용
     const res = await generateJSON<{ checklist?: unknown }>(
       CHECKLIST_PROMPT(responsibilities, requirements),
-      { task: "screening" }
+      { task: "screening", allowFallback: true }
     );
     if (!res || !Array.isArray(res.checklist)) return [];
     const items = res.checklist

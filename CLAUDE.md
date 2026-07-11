@@ -17,7 +17,7 @@
    - **pre-push 게이트**: `.git/hooks/pre-push` — main push 에 `drizzle/*.sql` 변경이 포함되면 `scripts/check-migration-safety.mjs`(destructive 탐지 + 전체 journal 스크래치 dry-run) + `npx tsc --noEmit` 통과 없이는 push 가 거부된다. tsc 를 함께 도는 이유: vercel-build 가 eslint→migrate→build 순서라 build 실패 시 스키마만 운영에 적용된 채 구버전 코드가 남는다. 우회 변수 `ALLOW_MIGRATION_PUSH=1` 은 **사용자 전용** — Claude 는 훅이 차단한다.
    - **가드 파일 동결**: bash-guard.mjs / settings.json / pre-push / check-migration-safety.mjs 는 Claude 가 수정·삭제 금지(훅이 강제). 훅이 차단하면 우회 경로(cp, 스크립트 경유 덮어쓰기 등)를 찾지 말고 차단 사실을 사용자에게 보고할 것. 가드 변경은 사용자가 직접 한다.
 
-## LLM 모델 정책 (2026-05-26)
+## LLM 모델 정책 (2026-05-26, 폴백 2026-07-11)
 
 paid tier. **모든 task 를 Vertex AI 서울 리전 + flash 로 통합** (`lib/gemini.ts` `MODELS`):
 
@@ -27,17 +27,19 @@ paid tier. **모든 task 를 Vertex AI 서울 리전 + flash 로 통합** (`lib/
 | `interview` | gemini-2.5-flash | Vertex AI | 🇰🇷 asia-northeast3 (서울) | 회피 ✅ |
 | `interviewEval` | gemini-2.5-flash | Vertex AI | 🇰🇷 asia-northeast3 (서울) | 회피 ✅ |
 
-SDK 단일: **`@google/genai`** (vertexai: true). 분기 없음 — `clientFor(task)` 는 항상 vertexClient.
+SDK 단일: **`@google/genai`** (vertexai: true). `clientFor(task)` 는 항상 서울 클라이언트.
 
 **왜 모두 flash 인가**: asia-northeast3 데이터 레지던시는 flash 만 지원 (pro 미지원). 국외이전 동의 항목을 제거하기 위해 flash 통일을 선택.
 
+**도쿄 폴백 (2026-07-11)**: 서울 429/503 장애(transient 재시도 소진) 시 **`allowFallback: true` 호출만** 도쿄(asia-northeast1, 같은 flash)로 우회 + 서킷브레이커(연속 2회 실패 → 60초 폴백 우선). **allowFallback 은 프롬프트에 개인정보가 전혀 없는 호출만 켤 수 있다** — 현재 허용 5곳: MCQ 생성/번역, JD 체크리스트, 법인 매칭, 공고 URL 임포트(연락처 `maskContacts` 마스킹 후). 마스킹 이력서·면접 대화 등 개인정보 호출의 폴백은 **동의서·처리방침 개정(§28의8 국외이전 고지) 전까지 금지** — COMPLIANCE_SOP §4. 폴백 발동은 `gemini.fallback_used` 로그로 감사 추적.
+
 **환경변수** (모두 Vertex 용):
-- `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (기본 `asia-northeast3`)
+- `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (기본 `asia-northeast3`), `GEMINI_FALLBACK_LOCATION` (기본 `asia-northeast1`)
 - 로컬: `GOOGLE_APPLICATION_CREDENTIALS` (서비스계정 JSON 파일 경로)
 - Vercel: `GOOGLE_APPLICATION_CREDENTIALS_JSON` (서비스계정 JSON 통문자열)
 - ~~`GOOGLE_API_KEY`~~ — 더 이상 사용 안 함 (직접 API 제거)
 
-새 LLM 호출 추가 시 `task` 파라미터 필수. 모델 직접 지정·엔드포인트 직접 호출 금지.
+새 LLM 호출 추가 시 `task` 파라미터 필수. 모델 직접 지정·엔드포인트 직접 호출 금지. LLM 동기 라우트의 장애 응답은 `lib/error-ref.ts` (오류 코드 + 고객센터 안내) 패턴 사용.
 
 ## 이 폴더 빠른 참조
 

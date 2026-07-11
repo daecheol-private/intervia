@@ -15,6 +15,7 @@ import type { LookupOptions, LookupAddress } from "node:dns";
 import { isIP } from "node:net";
 import { Agent } from "undici";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
+import { maskContacts } from "./mask";
 import { TRAIT_KEYS, MAX_HIGH_TRAITS, type TraitKey } from "./personality";
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -441,15 +442,20 @@ async function extractFromText(
   text: string,
   titleHint: string
 ): Promise<ImportedJob | null> {
+  // 공개 공고 콘텐츠지만 담당자 이메일·전화가 박힌 경우가 있어 연락처만 마스킹 —
+  // PII 제거로 서울 장애 시 도쿄 폴백 허용 (이미지는 마스킹 불가하나 공개 공고 한정).
   const prompt = `${EXTRACTION_SCHEMA_HINT}
 ${titleHint ? `\n${titleHint}\n` : ""}
 다음은 채용 공고 페이지에서 추출한 본문 텍스트입니다.
 
 ---
-${text}
+${maskContacts(text)}
 ---`;
   try {
-    const j = await generateJSON<Partial<ImportedJob>>(prompt, { task: "screening" });
+    const j = await generateJSON<Partial<ImportedJob>>(prompt, {
+      task: "screening",
+      allowFallback: true,
+    });
     return finalize(j);
   } catch {
     return null;
@@ -470,12 +476,13 @@ ${titleHint ? `\n${titleHint}\n` : ""}
 이미지 안에 담당 업무·지원 자격·우대사항이 그림으로 표시되어 있을 수 있으니 이미지 내용도 함께 읽어 통합 정리하세요.
 
 ---본문 텍스트---
-${text}
+${maskContacts(text)}
 ---`;
   try {
     const parts = [{ text: prompt }, ...imageParts];
     const j = await generateJSONMultimodal<Partial<ImportedJob>>(parts, {
       task: "interviewEval",
+      allowFallback: true,
     });
     return finalize(j);
   } catch {

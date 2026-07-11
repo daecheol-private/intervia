@@ -23,6 +23,7 @@ import { hasValidConsent } from "@/lib/consent";
 import { logAudit } from "@/lib/audit";
 import { sanitizeUserInput, detectSystemPromptLeak } from "@/lib/prompt-safety";
 import { maskText } from "@/lib/mask";
+import { newErrorRef, transientErrorMessage } from "@/lib/error-ref";
 import { log } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -349,7 +350,15 @@ export async function POST(
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   } catch (e: unknown) {
+    // 스트림 시작 전 LLM 실패(429/503 등) — 내부 오류 원문 대신 오류 코드 기반 안내로 통일.
+    // 같은 코드를 로그에 남겨 고객센터 문의 시 역추적 가능.
+    const ref = newErrorRef();
     const msg = e instanceof Error ? e.message : String(e);
-    return new Response(`Gemini API 오류: ${msg}`, { status: 500 });
+    log.error("interview_chat_llm_failed", {
+      ref,
+      sessionId: session.id,
+      error: msg.slice(0, 300),
+    });
+    return new Response(transientErrorMessage(ref), { status: 503 });
   }
 }

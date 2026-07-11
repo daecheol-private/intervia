@@ -2,6 +2,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { rateLimit } from "@/lib/rate-limit";
 import { importJobFromUrl } from "@/lib/job-url-import";
+import { newErrorRef } from "@/lib/error-ref";
+import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
 
@@ -28,7 +30,11 @@ export async function POST(req: Request) {
     const result = await importJobFromUrl(url);
     return Response.json(result);
   } catch (e) {
+    // 원인 메시지(SSRF 차단·추출 실패 등)는 그대로 두고 오류 코드만 덧붙임 —
+    // 고객센터 문의 시 코드로 로그 역추적.
+    const ref = newErrorRef();
     const msg = e instanceof Error ? e.message : String(e);
-    return new Response(msg, { status: 502 });
+    log.error("job_import_failed", { ref, url, error: msg.slice(0, 300) });
+    return new Response(`${msg} (오류 코드: ${ref})`, { status: 502 });
   }
 }
