@@ -815,9 +815,22 @@ export default function InterviewPage() {
 
       {ended && (
         <div className="mt-4 bg-gradient-to-br from-primary-soft to-accent-soft/40 border border-primary/30 rounded-2xl p-8 text-center">
-          {brand.logoUrl && (
+          {(brand.logoUrl || info.organization?.name) && (
             <div className="flex justify-center mb-4">
-              <BrandLogo brand={brand} height={28} />
+              {/* 브랜드 포인트색 위에 로고(없으면 회사명 텍스트) — 밝은 완료 카드에서 흰 로고도
+                  보이도록. 헤더 밴드와 동일 원리(포인트색 배경 + YIQ 자동 대비 글자). */}
+              <div
+                className="inline-flex items-center rounded-xl px-4 py-2.5"
+                style={{ backgroundColor: brand.color }}
+              >
+                {brand.logoUrl ? (
+                  <BrandLogo brand={brand} height={28} />
+                ) : (
+                  <span className="text-sm font-bold" style={{ color: brand.onBand }}>
+                    {info.organization?.name}
+                  </span>
+                )}
+              </div>
             </div>
           )}
           <div className="text-4xl mb-3">✅</div>
@@ -1169,13 +1182,7 @@ function PersonalityGate({
 
   if (!started) {
     return (
-      <CenteredCard brand={brand}>
-        {orgName && (
-          <p className="text-lg font-bold text-ink leading-tight">
-            {orgName}
-          </p>
-        )}
-        <p className="text-xs text-ink-muted mt-0.5 mb-4">{jobTitle} {t(lang, "interview.aiInterview")}</p>
+      <IntroBandCard brand={brand} orgName={orgName} jobTitle={jobTitle} lang={lang}>
         <div className="text-3xl mb-3">📝</div>
         <h1 className="text-xl font-bold text-ink">{t(lang, "personality.start.title")}</h1>
         {steps.length > 1 && (
@@ -1213,7 +1220,7 @@ function PersonalityGate({
         >
           {t(lang, "common.start")}
         </button>
-      </CenteredCard>
+      </IntroBandCard>
     );
   }
 
@@ -1516,13 +1523,7 @@ function McqGate({
 
   if (!started) {
     return (
-      <CenteredCard brand={brand}>
-        {orgName && (
-          <p className="text-lg font-bold text-ink leading-tight">
-            {orgName}
-          </p>
-        )}
-        <p className="text-xs text-ink-muted mt-0.5 mb-4">{jobTitle} {t(lang, "interview.aiInterview")}</p>
+      <IntroBandCard brand={brand} orgName={orgName} jobTitle={jobTitle} lang={lang}>
         <div className="text-3xl mb-3">📋</div>
         <h1 className="text-xl font-bold text-ink">{t(lang, "mcq.start.title")}</h1>
         {steps.length > 1 && (
@@ -1553,7 +1554,7 @@ function McqGate({
         >
           {t(lang, "common.start")}
         </button>
-      </CenteredCard>
+      </IntroBandCard>
     );
   }
 
@@ -1713,24 +1714,101 @@ function CenteredCard({
   brand,
 }: {
   children: React.ReactNode;
-  // 있으면 상단 로고를 회사 로고로 대체(없으면 Intervia). 브랜드 컬러가 있으면 카드 상단에
-  // 얇은 포인트 라인을 얹어 브랜딩 신호를 준다. (에러 화면 등 org 맥락이 없으면 미전달)
+  // 회사 로고가 있으면 상단에 브랜드 컬러 밴드를 깔고 그 위에 회사 로고를 얹는다(흰색 로고도
+  // 어두운 밴드 위에서 보이도록 — 흰 본문에 두면 흰 로고가 배경에 묻힌다). 회사 로고가 없으면
+  // Intervia 로고를 본문에 두고, 브랜드 컬러만 있으면 상단에 얇은 포인트 라인만 얹는다.
+  // (에러 화면 등 org 맥락이 없으면 brand 미전달 → Intervia 로고)
   brand?: Brand;
 }) {
+  const hasLogoBand = Boolean(brand?.logoUrl);
   return (
     <main className="flex-1 flex items-center justify-center p-6">
       <div className="bg-card border border-border-default rounded-2xl overflow-hidden max-w-md shadow-sm">
-        {brand?.color && <div className="h-1.5" style={{ backgroundColor: brand.color }} />}
-        <div className="p-10 text-center">
-          <div className="flex justify-center mb-5">
-            {brand?.logoUrl ? (
-              <BrandLogo brand={brand} height={36} />
-            ) : (
-              <Logo size={36} />
-            )}
+        {hasLogoBand ? (
+          <div
+            className="flex justify-center px-6 py-5"
+            style={{ backgroundColor: brand!.color }}
+          >
+            <BrandLogo brand={brand!} height={36} />
           </div>
+        ) : (
+          brand?.color && <div className="h-1.5" style={{ backgroundColor: brand.color }} />
+        )}
+        <div className={`px-10 pb-10 text-center ${hasLogoBand ? "pt-8" : "pt-10"}`}>
+          {!hasLogoBand && (
+            <div className="flex justify-center mb-5">
+              <Logo size={36} />
+            </div>
+          )}
           {children}
         </div>
+      </div>
+    </main>
+  );
+}
+
+/**
+ * 시작(인트로) 화면 카드 — 인성검사·객관식 시작 화면 공용. 상단은 동의 화면·진행 화면과
+ * 동일한 **좌측 정렬 브랜드 밴드**([로고] 회사명 / 공고명 AI면접), 하단은 가운데 정렬 본문.
+ * (이전엔 CenteredCard 를 써서 로고만 밴드 중앙 + 회사명·공고명은 본문에 중복 노출돼
+ *  동의 화면과 로고·회사명·공고명 위치가 어긋나 보였다 — 밴드 헤더로 통일.)
+ */
+function IntroBandCard({
+  brand,
+  orgName,
+  jobTitle,
+  lang,
+  children,
+}: {
+  brand: Brand;
+  orgName: string | null;
+  jobTitle: string;
+  lang: Lang;
+  children: React.ReactNode;
+}) {
+  return (
+    <main className="flex-1 flex items-center justify-center p-6">
+      <div className="w-full max-w-md bg-card border border-border-default rounded-2xl overflow-hidden shadow-sm">
+        <div
+          className={`px-5 py-3.5 border-b border-border-default flex items-center gap-2.5 ${
+            brand.color ? "" : "bg-gradient-to-br from-primary-soft to-primary-soft/60"
+          }`}
+          style={brand.color ? { backgroundColor: brand.color } : undefined}
+        >
+          <BrandLogo brand={brand} height={32} />
+          <div className="min-w-0 flex-1 text-left">
+            {orgName ? (
+              <>
+                <p
+                  className="text-base font-bold text-ink truncate leading-tight"
+                  style={brand.onBand ? { color: brand.onBand } : undefined}
+                >
+                  {orgName}
+                </p>
+                <p
+                  className="text-[11px] text-ink-muted truncate leading-tight mt-0.5"
+                  style={brand.onBand ? { color: brand.onBand, opacity: 0.8 } : undefined}
+                >
+                  {jobTitle}{" "}
+                  <span className={brand.onBand ? "" : "text-ink-muted"}>
+                    {t(lang, "interview.aiInterview")}
+                  </span>
+                </p>
+              </>
+            ) : (
+              <p
+                className="text-base font-bold text-ink truncate leading-tight"
+                style={brand.onBand ? { color: brand.onBand } : undefined}
+              >
+                {jobTitle}{" "}
+                <span className={brand.onBand ? "" : "text-ink-muted"}>
+                  {t(lang, "interview.aiInterview")}
+                </span>
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="p-8 text-center">{children}</div>
       </div>
     </main>
   );
