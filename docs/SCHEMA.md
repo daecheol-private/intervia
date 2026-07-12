@@ -440,7 +440,7 @@ PK 없음 — `(job_id, user_id)` UNIQUE.
 
 - 후보자: 면접 화면/종료 화면 → `/interview/[token]/inquiry` (본인 이메일 매칭 불요 — 막힌 후보자 차단 방지).
 - 고객: `/support` 폼 + 본인 문의 내역. 관리자: `/admin/inquiries` 인박스 — **system_admin 전용**(고객센터=운영자 데스크, org_admin 은 제출만). 페이지는 서버 컴포넌트에서 역할 가드 + redirect.
-- 접수 시 (`notifyNewInquiry`, `lib/inquiry-notify.ts`): ① **시스템 관리자 인앱 알림**(`notifications.type='new_inquiry'`, SMTP 무관 항상) + ② 지원 이메일(`APPEAL_CONTACT`) 통지(수신자가 운영팀이므로 **시스템 기본 SMTP 고정**, `orgId:null` — 법인 SMTP 라우팅 시 법인 설정 오류로 누락). 모두 실패해도 제출 성공.
+- 접수 시 (`notifyNewInquiry`, `lib/inquiry-notify.ts`): ① **시스템 관리자 인앱 알림**(`notifications.type='new_inquiry'`, SMTP 무관 항상) + ② **Slack 즉시 푸시**(SLACK_WEBHOOK_URL, 메타데이터만 — 본문·연락처는 PII 라 국외 리전 Slack 제외) + ③ 지원 이메일(`APPEAL_CONTACT`) 통지(수신자가 운영팀이므로 **시스템 기본 SMTP 고정**, `orgId:null` — 법인 SMTP 라우팅 시 법인 설정 오류로 누락). 모두 실패해도 제출 성공.
 - 처리 시 (`notifyInquiryReply`, PATCH `/api/admin/inquiries/[id]`): **완료 전환 또는 운영팀 답변 작성/변경 시** ① 문의자가 로그인 고객(`user_id` 있음)이면 **인앱 알림**(`type='inquiry_replied'`, href `/support`) + ② `contact_email` 로 회신 메일 1회 발송 (운영팀 발신=시스템 기본 SMTP, `orgId:null`). 후보자(비로그인)는 메일이 처리 결과를 확인하는 유일한 채널. 단순 처리중 전환·답변 없는 재저장은 미발송.
 - 통지 호출은 모두 라우트에서 next/server `after()` 로 — 응답 반환 후 실행 보장 (`void` fire-and-forget 은 서버리스 suspend 시 유실).
 

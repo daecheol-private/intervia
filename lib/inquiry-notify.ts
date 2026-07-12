@@ -4,7 +4,9 @@
  * 접수 시(notifyNewInquiry):
  *   1) 시스템 관리자(운영자 지원 데스크) 인앱 알림 — SMTP 무관, 항상 시도.
  *      → 운영자가 로그인하면 알림 벨에 바로 뜸(문의함을 직접 열지 않아도 인지).
- *   2) 지원 이메일(APPEAL_CONTACT = DPO/문의 단일 채널)로 통지 메일 — SMTP 있을 때만.
+ *   2) Slack(SLACK_WEBHOOK_URL) 즉시 푸시 — 메타데이터만. 본문·연락처는 PII 라
+ *      국외 리전인 Slack 에 보내지 않는다(내용은 /admin/inquiries 에서).
+ *   3) 지원 이메일(APPEAL_CONTACT = DPO/문의 단일 채널)로 통지 메일 — SMTP 있을 때만.
  *
  * 처리/완료 시(notifyInquiryReply):
  *   1) 문의자가 로그인 고객(userId 있음)이면 인앱 알림 — SMTP 무관, 항상 시도.
@@ -31,6 +33,7 @@ import {
   type InquiryStatus,
 } from "@/lib/inquiry";
 import { createNotification, notifySystemAdmins } from "@/lib/notifications";
+import { notifyOps } from "@/lib/error-reporter";
 
 export async function notifyNewInquiry(opts: {
   source: InquirySource;
@@ -56,7 +59,12 @@ export async function notifyNewInquiry(opts: {
     console.error("[inquiry] 인앱 알림 실패:", e);
   }
 
-  // 2) 지원 이메일 통지 — 수신자가 운영팀이므로 항상 시스템 기본 SMTP(env)로 발송.
+  // 2) Slack 즉시 푸시 — 본문·연락처(PII)는 제외, 메타데이터만.
+  await notifyOps(
+    `📬 새 ${sourceLabel} 문의 — ${categoryLabel}${opts.orgName ? ` · ${opts.orgName}` : ""}\n처리: ${SITE_INFO.baseUrl}/admin/inquiries`
+  ).catch(() => {});
+
+  // 3) 지원 이메일 통지 — 수신자가 운영팀이므로 항상 시스템 기본 SMTP(env)로 발송.
   //    문의한 법인의 SMTP 로 라우팅하면 법인 설정 오류에 따라 조용히 누락된다.
   if (!(await isSmtpAvailable(null))) return;
 
