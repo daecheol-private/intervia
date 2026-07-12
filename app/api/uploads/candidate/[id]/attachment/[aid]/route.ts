@@ -18,6 +18,7 @@ import {
 } from "@/lib/storage";
 import path from "node:path";
 import { logAudit } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,15 @@ export async function GET(
   const me = await getCurrentUser();
   const guard = requireUser(me);
   if (guard) return guard;
+
+  // 대량 유출 억제 — 이력서 라우트와 같은 scope 로 합산 카운트.
+  const limited = await rateLimit(
+    req,
+    "download",
+    { limit: 120, windowSec: 600 },
+    me!.id
+  );
+  if (limited) return limited;
 
   const { id, aid } = await params;
   const cid = Number(id);

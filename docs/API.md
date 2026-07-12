@@ -174,6 +174,7 @@
 | GET/POST | `/api/cron/purge-original` | 🌐 (CRON_SECRET) 또는 👑 | 평가 완료 + N일 경과 후보자의 `resume_text` 와 파일 삭제 (PIPA 가명처리). `?days=N` 으로 오버라이드. Vercel Cron schedule = `30 3 * * *` (매일 03:30). 디폴트 `PURGE_AFTER_DAYS=30` |
 | GET/POST | `/api/cron/interview-reminders` | 🌐 (CRON_SECRET) 또는 👑 | ① 확정 대면 면접(`status='selected'`) D-1(24h 전): **면접관**(`interviewer_reminder_sent_at`) + **후보자**(`candidate_reminder_sent_at`) 에게 각 1회. round1/round2 모두. ② **AI 면접 미응답**(`pending`/`in_progress` + 미만료): 링크 발급 후 24h/48h 경과 시 후보자에게 넛지(`interview_sessions.reminder24_sent_at`/`reminder48_sent_at`, 48h 우선·24h skip). 응답 `{schedule, ai}`. Vercel Cron schedule = `0 * * * *` (시간당) |
 | GET/POST | `/api/cron/daily-digest` | 🌐 (CRON_SECRET) 또는 👑 | 면접관(`job_interviewers` 배정 active 계정)별로 본인 배정 공고의 '오늘 할 일'을 요약해 1통씩 발송. 3블록(오늘 확정 면접 / 결정 대기 `round1_waiting`·`round1_passed`·`round2_passed` / 신규 지원·검토 대기 `applied`·`screened`·`ai_evaluated`), 각 항목에 `STAGE_WAITER` 라벨. 할 일 0건이면 미발송, 하루 1통 멱등(`daily_digest_logs`). 운영 메일이라 토큰 차감 없음(LLM 미사용). 응답 `{sent, skipped, recipients}`. Vercel Cron schedule = `0 0 * * *` (매일 KST 09:00 = UTC 00:00) |
+| GET/POST | `/api/cron/blob-orphans` | 🌐 (CRON_SECRET) 또는 👑 | **Blob 고아 파일 리포트 (report-only — 절대 삭제 안 함)**. Blob 전체 목록 vs DB 파일 키 컬럼 전수(resume/photo/attachment/audio/logo) 대조, 48h grace. 고아 발견 시 Slack 통지(개수·용량만), 상세 목록(≤100)은 인증된 응답에만. 삭제는 운영자 수동. Vercel Cron schedule = `0 4 1 * *` (매월 1일) |
 
 인증: `Authorization: Bearer ${CRON_SECRET}` 헤더 또는 system_admin 로그인. Vercel Cron은 `x-vercel-cron: 1` 헤더로 자동 호출.
 

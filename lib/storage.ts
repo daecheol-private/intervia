@@ -100,7 +100,8 @@ export async function saveFile(
   contentType?: string
 ): Promise<string> {
   const ext = path.extname(originalName) || ".bin";
-  const safeBase = `${Date.now()}_${randomBytes(4).toString("hex")}${ext}`;
+  // public Blob 은 URL 비밀성이 유일한 접근 통제 — 추측 불가능한 크기(128bit)의 랜덤 필수.
+  const safeBase = `${Date.now()}_${randomBytes(16).toString("hex")}${ext}`;
 
   if (shouldUseBlob()) {
     const { put } = await import("@vercel/blob");

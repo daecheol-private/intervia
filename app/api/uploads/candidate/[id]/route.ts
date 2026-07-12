@@ -23,6 +23,7 @@ import {
 } from "@/lib/storage";
 import path from "node:path";
 import { logAudit } from "@/lib/audit";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,16 @@ export async function GET(
   const me = await getCurrentUser();
   const guard = requireUser(me);
   if (guard) return guard;
+
+  // 대량 유출 억제 — 이력서·첨부 다운로드는 명시적 클릭 액션이라 정상 사용은 이 한도에
+  // 닿지 않는다. 목록에서 자동 로드되는 /photo 라우트는 제외(대량 호출이 정상).
+  const limited = await rateLimit(
+    req,
+    "download",
+    { limit: 120, windowSec: 600 },
+    me!.id
+  );
+  if (limited) return limited;
 
   const { id } = await params;
   const cid = Number(id);

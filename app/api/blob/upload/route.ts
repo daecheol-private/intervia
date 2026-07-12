@@ -63,11 +63,19 @@ export async function POST(req: Request) {
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
-        // 로컬 dev 에서는 Vercel 이 콜백 못 옴 — 프로덕션 로그용
+        // 로컬 dev 에서는 Vercel 이 콜백 못 옴 — 프로덕션 로그용.
+        // blob.url 은 public 접근 가능한 이력서 URL — 로그에 남기면 로그 열람 = 파일 접근이
+        // 되므로 url/pathname(원본 파일명에 지원자 이름 포함 가능)은 기록하지 않는다.
+        let meta: { jobId?: number; userId?: number } = {};
+        try {
+          meta = JSON.parse(tokenPayload ?? "{}") as typeof meta;
+        } catch {
+          /* malformed */
+        }
         log.info("blob_client_upload_completed", {
-          url: blob.url,
-          pathname: blob.pathname,
-          tokenPayload,
+          jobId: meta.jobId,
+          userId: meta.userId,
+          ext: (blob.pathname.match(/\.[A-Za-z0-9]+$/)?.[0] ?? "").toLowerCase(),
         });
       },
     });

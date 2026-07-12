@@ -8,7 +8,7 @@
  * 순수 측정/판정만 — 발송(Slack/메일)은 cron 라우트가 담당(이 모듈은 DB만 의존).
  */
 import { db } from "./db";
-import { screeningJobs, tokenWallets } from "./schema";
+import { screeningJobs, tokenWallets, auditLogs } from "./schema";
 import { and, eq, sql, lt, lte, or, isNull, gte } from "drizzle-orm";
 
 export type OpsMetrics = {
@@ -18,6 +18,8 @@ export type OpsMetrics = {
   stuck: number; // processing 인데 lock 이 오래된(또는 NULL) — 워커 비정상
   negativeBalanceOrgs: number; // 잔액 <= 0 법인 수 (후불 정책상 정상일 수 있음 — 참고용)
   worstBalance: number | null; // 최저 잔액 (가장 깊은 마이너스)
+  // 최근 1시간 이력서·첨부 다운로드 최다 사용자 — 대량 유출(계정 탈취·내부자) 조기 감지
+  resumeDownloadsTopUser: { userId: number | null; count: number } | null;
 };
 
 export type OpsAlert = { level: "warn" | "critical"; message: string };
@@ -32,6 +34,10 @@ const STUCK_MINUTES = 10; // cleanupStuck(5분)보다 길게 — 그래도 멈�
 const BALANCE_FLOOR = process.env.OPS_BALANCE_FLOOR
   ? Number(process.env.OPS_BALANCE_FLOOR)
   : null;
+// 한 사용자의 시간당 이력서 다운로드 임계 — 다운로드는 명시적 클릭이라 정상 사용은 낮다.
+const RESUME_DL_PER_USER_HOUR = Number(
+  process.env.OPS_RESUME_DL_PER_USER_HOUR ?? 100
+);
 
 export async function collectOpsMetrics(): Promise<OpsMetrics> {
   const nowIso = new Date().toISOString();
@@ -84,6 +90,22 @@ export async function collectOpsMetrics(): Promise<OpsMetrics> {
     .select({ m: sql<number | null>`MIN(${tokenWallets.balance})` })
     .from(tokenWallets);
 
+  // 최근 1시간 사용자별 이력서·첨부 다운로드 최다 건수.
+  // audit_logs.created_at 은 CURRENT_TIMESTAMP('YYYY-MM-DD HH:MM:SS' 공백 포맷) — 같은 포맷으로 비교.
+  const oneHourAgoSqlite = oneHourAgo.replace("T", " ").replace(/\.\d+Z$/, "");
+  const [dlRow] = await db
+    .select({ userId: auditLogs.actorUserId, c: sql<number>`COUNT(*)` })
+    .from(auditLogs)
+    .where(
+      and(
+        eq(auditLogs.action, "candidate.download_resume"),
+        gte(auditLogs.createdAt, oneHourAgoSqlite)
+      )
+    )
+    .groupBy(auditLogs.actorUserId)
+    .orderBy(sql`COUNT(*) DESC`)
+    .limit(1);
+
   void nowIso;
   return {
     queued,
@@ -92,6 +114,9 @@ export async function collectOpsMetrics(): Promise<OpsMetrics> {
     stuck,
     negativeBalanceOrgs: Number(negRow?.c ?? 0),
     worstBalance: worstRow?.m == null ? null : Number(worstRow.m),
+    resumeDownloadsTopUser: dlRow
+      ? { userId: dlRow.userId ?? null, count: Number(dlRow.c) }
+      : null,
   };
 }
 
@@ -126,6 +151,15 @@ export function evaluateAlerts(m: OpsMetrics): OpsAlert[] {
       message: `법인 잔액 비정상 마이너스: 최저 ${m.worstBalance} (바닥 ${BALANCE_FLOOR}). 과금 버그·악용 점검 필요.`,
     });
   }
+  if (
+    m.resumeDownloadsTopUser &&
+    m.resumeDownloadsTopUser.count >= RESUME_DL_PER_USER_HOUR
+  ) {
+    alerts.push({
+      level: "warn",
+      message: `이력서 대량 다운로드 감지: user=${m.resumeDownloadsTopUser.userId ?? "?"} 최근 1시간 ${m.resumeDownloadsTopUser.count}건 (임계 ${RESUME_DL_PER_USER_HOUR}). 계정 탈취·내부 유출 의심 — /admin/audit 확인, 필요 시 해당 사용자 세션 강제 로그아웃(RUNBOOK §0-2).`,
+    });
+  }
   return alerts;
 }
 
@@ -134,6 +168,6 @@ export function formatOpsReport(alerts: OpsAlert[], m: OpsMetrics): string {
   const head = alerts
     .map((a) => `${a.level === "critical" ? "🔴" : "🟠"} ${a.message}`)
     .join("\n");
-  const metricLine = `queued=${m.queued} processing=${m.processing} failed/1h=${m.failedLastHour} stuck=${m.stuck} neg법인=${m.negativeBalanceOrgs} 최저잔액=${m.worstBalance ?? "-"}`;
+  const metricLine = `queued=${m.queued} processing=${m.processing} failed/1h=${m.failedLastHour} stuck=${m.stuck} neg법인=${m.negativeBalanceOrgs} 최저잔액=${m.worstBalance ?? "-"} 이력서DL최다/1h=${m.resumeDownloadsTopUser?.count ?? 0}`;
   return `${head}\n\n[지표] ${metricLine}`;
 }
