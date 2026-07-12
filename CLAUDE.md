@@ -53,9 +53,21 @@ SDK 단일: **`@google/genai`** (vertexai: true). `clientFor(task)` 는 항상 �
 - 배포: [DEPLOY.md](DEPLOY.md)
 - 장애 대응: [docs/RUNBOOK.md](docs/RUNBOOK.md) ← **사고 시 무엇을 보고/누르고/복구하는지** + 백업·복구
 - 출시 직전 체크리스트: [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md)
+- **필수 자동 테스트 (배포 전)**: [docs/CRITICAL_TESTS.md](docs/CRITICAL_TESTS.md) ← `npm run test:critical`, "필수테스트하고 배포해줘" 프로토콜
 - 전체 테스트 케이스: [docs/TEST_CASES.md](docs/TEST_CASES.md) ← **체크박스 기반, 섹션별/전체 테스트 + 회귀(§23)**. ✅ 섹션 0~23 완료(412/420, 2026-06-09)
   - 전체 테스트 **발견·해결 버그 기록**: [docs/TEST_BUGS.md](docs/TEST_BUGS.md) ← 확정버그 6종 + 마스킹 2 + 시드정리 2 **전부 수정완료**. 남은 건 C-3(출시 직전 `MAIL_OVERRIDE_TO` 제거)뿐.
   - 테스트 방법론: [docs/TEST_PLAN.md](docs/TEST_PLAN.md)
+
+## 필수 테스트 + 배포 프로토콜 ("필수테스트하고 배포해줘")
+
+사용자가 **"필수테스트하고 배포해줘"** 라고 하면 순서대로 실행하고, 하나라도 실패하면 **배포 중단 + 결과 보고**:
+
+1. `npx tsc --noEmit`
+2. `npx eslint . --quiet` (vercel-build 1단계 — 실패하면 push 해도 배포가 안 나감)
+3. `npm run test:critical` — 면접관/지원자 필수 기능 자동 검증 (~45초, 60케이스). 시나리오·예상결과: [docs/CRITICAL_TESTS.md](docs/CRITICAL_TESTS.md)
+4. 전부 통과 → 결과 표 보고 → `git push origin HEAD:main` → 배포 반영 확인(랜딩 문구 또는 `?dpl=` 해시)
+
+테스트는 완전 격리다: DB=`file:.testdb/critical.db`(매 실행 재생성), 서버=포트 3103 + 전용 `.next-test/`(개발 서버 3003 과 공존), 메일/알림톡/LLM/Blob env 전부 무력화 — 운영·로컬 dev 데이터·외부 서비스에 절대 닿지 않는다. API 계약을 바꾸면 `tests/critical/` + CRITICAL_TESTS.md 를 같이 갱신할 것. 마이그레이션 포함 push 는 이 프로토콜과 별개로 상단 "운영 데이터 보호 절대 규칙"이 우선.
 
 ## 상용화 작업 진행 규칙
 

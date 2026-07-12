@@ -74,6 +74,11 @@ next-env.d.ts
 drizzle.backup/
 dev.log
 
+# 필수테스트 격리 DB·서버 로그 (tests/critical — 매 실행 재생성)
+/.testdb/
+# 필수테스트 전용 next 빌드 디렉토리 (NEXT_TEST_DIST_DIR)
+/.next-test/
+
 # 테스트용 임시 헬퍼·아티팩트 (로컬 전용 — 커밋 금지)
 /scripts/_*
 /scripts/.cookie-*

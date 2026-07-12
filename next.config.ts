@@ -21,6 +21,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // 필수 테스트(tests/critical)가 개발 서버(3003)와 동시에 격리 서버를 띄우기 위한 분기 —
+  // Next 16 dev 는 distDir/lock 으로 프로젝트당 1개 dev 서버만 허용하므로 distDir 을 분리한다.
+  // 미설정(개발·운영) 시 기본 ".next" 그대로.
+  distDir: process.env.NEXT_TEST_DIST_DIR || undefined,
   // 참고: Next 16 의 next build 는 ESLint 를 돌리지 않는다(빌트인 lint 통합 제거됨).
   // 그래서 react-hooks 가드는 vercel-build 에서 `eslint .` 로 별도 실행한다(package.json).
   experimental: {

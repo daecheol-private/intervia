@@ -14,6 +14,8 @@ export default [
     ignores: [
       "node_modules/**",
       ".next/**",
+      ".next-test/**", // 필수테스트 전용 빌드 디렉토리 (NEXT_TEST_DIST_DIR)
+      ".testdb/**",
       "drizzle/**",
       "public/**",
       ".vercel/**",

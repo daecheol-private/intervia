@@ -2,6 +2,8 @@
 
 서비스화 (멀티테넌트 + 역할 + 토큰) 변경 후 검증할 시나리오 모음.
 
+> **자동화된 배포 전 필수 검증은 [CRITICAL_TESTS.md](CRITICAL_TESTS.md) (`npm run test:critical`)** — 이 문서의 TC 중 핵심 경로가 CT-XXX 로 코드화되어 있다. 이 문서는 수동/반자동 전수 테스트 방법론으로 유지.
+
 **자동 테스트 진행 방식**: 사용자가 "테스트해줘" / "TC-XX 돌려줘" 라고 요청하면 이 문서의 시나리오 ID를 골라 순서대로 실행한다. 실행 = (1) 가능하면 API 직접 호출 (curl/PowerShell `Invoke-RestMethod`) 으로 자동화, (2) UI 만 가능한 부분은 Playwright 또는 수동 체크포인트로 보고. 결과는 `pass / fail / blocked` 와 근거(응답 JSON, DB row, 스크린샷 경로)와 함께 표로 보고.
 
 ## 테스트 환경
