@@ -15,7 +15,7 @@ import { isJobUnlocked } from "@/lib/job-lock";
 import { isJobExpired } from "@/lib/job-lifecycle";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
-import { saveFile } from "@/lib/storage";
+import { saveFile, fetchBlobFile } from "@/lib/storage";
 import { log } from "@/lib/logger";
 import { createHash } from "node:crypto";
 import type { CurrentUser } from "@/lib/auth";
@@ -433,41 +433,17 @@ export async function POST(
         log.warn("blob_fetch_blocked_ssrf", { host: blobHost });
         return new Response("허용되지 않은 파일 위치입니다.", { status: 502 });
       }
-      let res: Response;
-      try {
-        res = await fetch(b.url);
-      } catch (err) {
-        // fetch 자체가 reject(네트워크/타임아웃)하면 그대로 두면 핸들러가 500 으로 떨어진다.
-        // 명시적 502 로 변환해 클라이언트가 원인을 구분할 수 있게 한다.
-        log.warn("blob_fetch_threw", {
-          url: b.url,
-          error: err instanceof Error ? err.message : String(err),
-        });
+      // private 스토어 blob 은 일반 fetch 가 403 — get()(토큰 인증)을 쓰는 헬퍼로 읽는다.
+      // 실패는 종류 불문 502 로 변환 (그대로 두면 핸들러가 500 으로 떨어짐).
+      const fetched = await fetchBlobFile(b.url);
+      if (!fetched) {
+        log.warn("blob_fetch_failed", { url: b.url });
         return new Response(
-          "업로드한 파일을 가져올 수 없습니다 (네트워크 오류). 잠시 후 다시 시도해 주세요.",
+          "업로드한 파일을 가져올 수 없습니다. 잠시 후 다시 시도해 주세요.",
           { status: 502 }
         );
       }
-      if (!res.ok) {
-        log.warn("blob_fetch_failed", { url: b.url, status: res.status });
-        return new Response(
-          `업로드한 파일을 가져올 수 없습니다 (HTTP ${res.status}).`,
-          { status: 502 }
-        );
-      }
-      let buf: Buffer;
-      try {
-        buf = Buffer.from(await res.arrayBuffer());
-      } catch (err) {
-        log.warn("blob_read_threw", {
-          url: b.url,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return new Response(
-          "업로드한 파일을 읽는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
-          { status: 502 }
-        );
-      }
+      const buf = fetched.data;
       rawItems.push({
         name: b.pathname,
         buf,
