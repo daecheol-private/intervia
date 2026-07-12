@@ -90,3 +90,10 @@ export function applyUrlFor(subdomain: string | null, token: string): string {
   const h = subdomain ? `${subdomain}.${host}` : host;
   return `${protocol}://${h}/apply/${encodeURIComponent(token)}`;
 }
+
+/** AI 면접 페이지 정본 URL. subdomain null 이면 apex(기존 동작). */
+export function interviewUrlFor(subdomain: string | null, token: string): string {
+  const { protocol, host } = applyBaseOrigin();
+  const h = subdomain ? `${subdomain}.${host}` : host;
+  return `${protocol}://${h}/interview/${encodeURIComponent(token)}`;
+}

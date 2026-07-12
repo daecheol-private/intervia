@@ -8,6 +8,8 @@ import { guardCandidate } from "@/lib/candidate-guard";
 import { generateToken, addDays } from "@/lib/utils";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import { logAudit } from "@/lib/audit";
+import { subdomainApplyEnabled, interviewUrlFor } from "@/lib/subdomain";
+import { ensureOrgSubdomain } from "@/lib/org-subdomain";
 import {
   requireSpendableBalance,
   insufficientTokensResponse,
@@ -151,5 +153,14 @@ export async function POST(
     metadata: { candidateId: cid, expiresAt },
   });
 
-  return Response.json(session);
+  // 법인 서브도메인 lazy 발급(있으면) — 이후 GET 조회 시 복사 링크가 브랜드 URL 로 나온다.
+  // 기능 OFF·유도 불가(공용 도메인)면 null → apex(기존 동작).
+  const orgSub = subdomainApplyEnabled()
+    ? await ensureOrgSubdomain(candidate.orgId)
+    : null;
+
+  return Response.json({
+    ...session,
+    interviewUrl: interviewUrlFor(orgSub, token),
+  });
 }

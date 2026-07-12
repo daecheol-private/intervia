@@ -42,10 +42,12 @@ export function InterviewLinkBox({
     kind: "smtp_not_configured" | "other";
     text: string;
   } | null>(null);
+  // 서버가 계산한 법인 서브도메인 정본 URL 우선({sub}.intervia.kr). 없으면(기능 OFF·구세션) 현재 origin.
   const url =
-    typeof window !== "undefined"
+    session.interviewUrl ??
+    (typeof window !== "undefined"
       ? `${window.location.origin}/interview/${session.accessToken}`
-      : `/interview/${session.accessToken}`;
+      : `/interview/${session.accessToken}`);
 
   const copy = () => {
     void navigator.clipboard.writeText(url);

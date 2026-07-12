@@ -137,6 +137,8 @@ export type Session = {
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  /** 서버가 계산한 면접 링크 정본 URL — 법인 서브도메인 반영({sub}.intervia.kr, 기능 OFF 면 apex). */
+  interviewUrl?: string;
 };
 
 export type Schedule = {

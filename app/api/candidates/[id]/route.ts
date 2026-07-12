@@ -8,6 +8,7 @@ import { parseTraitProfile } from "@/lib/personality";
 import { sanitizeCompetencies } from "@/lib/competencies";
 import { deleteFilesForCandidate } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
+import { subdomainApplyEnabled, interviewUrlFor } from "@/lib/subdomain";
 
 export const runtime = "nodejs";
 
@@ -60,6 +61,7 @@ export async function GET(
             .select({
               name: organizations.name,
               cultureFitProfile: organizations.cultureFitProfile,
+              subdomain: organizations.subdomain,
             })
             .from(organizations)
             .where(eq(organizations.id, candidate.orgId))
@@ -67,11 +69,19 @@ export async function GET(
         : Promise.resolve<{
             name: string;
             cultureFitProfile: string | null;
+            subdomain: string | null;
           } | null>(null),
     ]);
   const [lastJob] = lastJobRows;
   const [fav] = favRows;
   const companyName = orgInfo?.name ?? null;
+  // 복사 링크(HR 화면)용 법인 서브도메인 정본 URL — 발송 라우트와 동일 소스.
+  // 발급 시점(interview-link POST)에 이미 lazy 발급되므로 여기선 읽기만 한다.
+  const interviewSub = subdomainApplyEnabled() ? orgInfo?.subdomain ?? null : null;
+  const sessionsWithUrl = sessions.map((s) => ({
+    ...s,
+    interviewUrl: interviewUrlFor(interviewSub, s.accessToken),
+  }));
   // 면접 리포트의 "후보자 특성 vs 공고 선호" 대조용 — 공고의 선호 특성 프로필
   const jobTraitProfile = parseTraitProfile(job?.traitProfile);
   // 리포트 "회사가 중시하는 역량" 배지 — 법인 컬처핏 JSON 에서 NCS 역량 키만 추출
@@ -147,7 +157,7 @@ export async function GET(
     companyName,
     jobTraitProfile,
     orgCoreCompetencies,
-    sessions,
+    sessions: sessionsWithUrl,
     schedules,
     screeningPhase,
     // 실패 사유 — 후보 상세에서 "OCR 활성화 필요" 등 구체 안내 표시용.

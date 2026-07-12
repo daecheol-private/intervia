@@ -1,14 +1,11 @@
 import { db } from "@/lib/db";
-import { jobPostings, organizations } from "@/lib/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { jobPostings } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { generateApplyToken } from "@/lib/apply-link";
-import {
-  deriveSubdomain,
-  subdomainApplyEnabled,
-  applyUrlFor,
-} from "@/lib/subdomain";
+import { subdomainApplyEnabled, applyUrlFor } from "@/lib/subdomain";
+import { ensureOrgSubdomain } from "@/lib/org-subdomain";
 import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
@@ -25,41 +22,6 @@ async function loadOwnedJob(jobId: number, orgGuard: (orgId: number | null) => b
   const [job] = await db.select().from(jobPostings).where(eq(jobPostings.id, jobId));
   if (!job || !orgGuard(job.orgId)) return null;
   return job;
-}
-
-/**
- * 법인 서브도메인 lazy 발급 — email_domain 첫 라벨에서 유도해 최초 1회 저장.
- * 유도 불가(공용 도메인·예약어)면 null 유지. 라벨 충돌(타 법인 선점) 시 "{라벨}-{orgId}".
- */
-async function ensureOrgSubdomain(orgId: number | null): Promise<string | null> {
-  if (!orgId) return null;
-  const [org] = await db
-    .select({ subdomain: organizations.subdomain, emailDomain: organizations.emailDomain })
-    .from(organizations)
-    .where(eq(organizations.id, orgId));
-  if (!org) return null;
-  if (org.subdomain) return org.subdomain;
-
-  const base = deriveSubdomain(org.emailDomain);
-  if (!base) return null;
-
-  for (const candidate of [base, `${base}-${orgId}`]) {
-    try {
-      // subdomain IS NULL 조건으로 동시 발급 레이스에도 1회만 기록
-      await db
-        .update(organizations)
-        .set({ subdomain: candidate })
-        .where(and(eq(organizations.id, orgId), isNull(organizations.subdomain)));
-      const [after] = await db
-        .select({ subdomain: organizations.subdomain })
-        .from(organizations)
-        .where(eq(organizations.id, orgId));
-      return after?.subdomain ?? null;
-    } catch {
-      // unique 충돌 — 다음 후보로
-    }
-  }
-  return null;
 }
 
 async function brandedUrl(orgId: number | null, token: string): Promise<string | null> {

@@ -22,6 +22,8 @@ import {
 import { MAX_INTERVIEW_EMAILS_PER_CANDIDATE } from "@/lib/job-lifecycle";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import { sql } from "drizzle-orm";
+import { subdomainApplyEnabled, interviewUrlFor } from "@/lib/subdomain";
+import { ensureOrgSubdomain } from "@/lib/org-subdomain";
 
 export const runtime = "nodejs";
 
@@ -123,8 +125,11 @@ export async function POST(
   )
     return new Response("올바른 이메일 형식이 아닙니다.", { status: 400 });
 
-  const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
-  const url = `${base}/interview/${session.accessToken}`;
+  // 법인 서브도메인({sub}.intervia.kr) 정본 — 기능 OFF·유도 불가면 null → apex 폴백.
+  const orgSub = subdomainApplyEnabled()
+    ? await ensureOrgSubdomain(candidate.orgId)
+    : null;
+  const url = interviewUrlFor(orgSub, session.accessToken);
   const expires = formatKstDateTime(session.expiresAt);
 
   // 발신 법인명 — 후보자가 발신 주체를 확인할 수 있게 메일 본문에 노출 (피싱 식별).

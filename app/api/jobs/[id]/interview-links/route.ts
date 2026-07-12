@@ -38,6 +38,8 @@ import {
 import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { subdomainApplyEnabled, interviewUrlFor } from "@/lib/subdomain";
+import { ensureOrgSubdomain } from "@/lib/org-subdomain";
 import { MAX_INTERVIEW_EMAILS_PER_CANDIDATE, isJobExpired } from "@/lib/job-lifecycle";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
 import { after } from "next/server";
@@ -179,7 +181,11 @@ export async function POST(
     expiresAt: string;
   }> = [];
 
-  const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+  // 법인 서브도메인({sub}.intervia.kr) 정본 — 일괄 발송이라 루프 밖에서 1회 조회.
+  // 기능 OFF·유도 불가(공용 도메인)면 null → apex 폴백(기존 동작).
+  const orgSub = subdomainApplyEnabled()
+    ? await ensureOrgSubdomain(job.orgId)
+    : null;
 
   for (const c of targets) {
     if (c.jobId !== jobId || !ownsOrg(me!, c.orgId)) {
@@ -236,7 +242,7 @@ export async function POST(
 
     // 토큰 차감은 지원자가 면접을 실제 시작할 때 수행 (consent). 링크 발급은 무료.
 
-    const url = `${base}/interview/${token}`;
+    const url = interviewUrlFor(orgSub, token);
     const mail = buildInterviewEmail({
       candidateName: c.name,
       jobTitle: job.title,
