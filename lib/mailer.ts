@@ -1,10 +1,13 @@
 import nodemailer from "nodemailer";
 import type SMTPPool from "nodemailer/lib/smtp-pool";
+import path from "node:path";
 import { db } from "./db";
 import { orgSmtpConfigs, organizations } from "./schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "./crypto";
 import { SITE_INFO, APPEAL_CONTACT } from "./site-info";
+import { readStoredFile, contentTypeFromName } from "./storage";
+import { isValidBrandColor, textColorOn } from "./brand-color";
 
 // 모든 발송 transporter 는 pooled (페이싱·연결 재사용) — verify 용 일회성 제외.
 type Transporter = nodemailer.Transporter<SMTPPool.SentMessageInfo>;
@@ -126,6 +129,8 @@ export type SendMailParams = {
     filename: string;
     content: string | Buffer;
     contentType?: string;
+    /** 인라인 이미지용 Content-ID — HTML 에서 <img src="cid:..."> 로 참조. */
+    cid?: string;
   }>;
 };
 
@@ -271,6 +276,96 @@ export const EMAIL_BRAND = {
 };
 
 /**
+ * 지원자 대상 메일의 법인 브랜딩 — 지원 페이지/AI 면접 화면의 헤더 밴드와 동일한 인상.
+ * 로고는 private Blob 에 있어 공개 URL 이 없으므로 CID 인라인 첨부로 메일에 동봉한다.
+ */
+export type OrgEmailBranding = {
+  orgName: string;
+  /** 검증된 #rrggbb — 미설정 시 null (기본 네이비 밴드). */
+  brandColor: string | null;
+  /** CID 인라인 첨부용 로고 — 미설정 시 null (법인명 텍스트 밴드). */
+  logo: {
+    filename: string;
+    content: Buffer;
+    contentType: string;
+    cid: string;
+  } | null;
+};
+
+const ORG_LOGO_CID = "org-brand-logo";
+
+// 일괄 발송에서 통마다 org 조회 + 로고 Blob fetch 를 반복하지 않도록 캐시 (orgNameCache 와 동일 TTL).
+const brandingCache = new Map<
+  number,
+  { at: number; value: OrgEmailBranding | null }
+>();
+
+/**
+ * 지원자 대상 메일의 법인 브랜딩 조회 — 로고·브랜드컬러 중 하나라도 설정된 법인만 값 반환.
+ * 미설정/조회 실패 시 null → wrapEmailCard 가 기존 Intervia 헤더로 발송 (메일은 항상 나간다).
+ */
+export async function getOrgEmailBranding(
+  orgId: number | null | undefined
+): Promise<OrgEmailBranding | null> {
+  if (!orgId) return null;
+  const hit = brandingCache.get(orgId);
+  if (hit && Date.now() - hit.at < ORG_NAME_TTL_MS) return hit.value;
+  let value: OrgEmailBranding | null = null;
+  try {
+    const [org] = await db
+      .select({
+        name: organizations.name,
+        logoFileKey: organizations.logoFileKey,
+        brandColor: organizations.brandColor,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, orgId));
+    if (org && (org.logoFileKey || org.brandColor)) {
+      let logo: OrgEmailBranding["logo"] = null;
+      if (org.logoFileKey) {
+        const buf = await readStoredFile(org.logoFileKey).catch(() => null);
+        if (buf)
+          logo = {
+            filename: `logo${path.extname(org.logoFileKey) || ".png"}`,
+            content: buf,
+            contentType: contentTypeFromName(org.logoFileKey),
+            cid: ORG_LOGO_CID,
+          };
+      }
+      const color =
+        org.brandColor && isValidBrandColor(org.brandColor)
+          ? org.brandColor
+          : null;
+      if (logo || color) value = { orgName: org.name, brandColor: color, logo };
+    }
+  } catch (e) {
+    console.warn(
+      `[mailer] 브랜딩 조회 실패 — 기본 헤더로 발송 (org=${orgId}):`,
+      String(e)
+    );
+    return null; // 실패는 캐시하지 않음 — 다음 발송에서 재시도
+  }
+  brandingCache.set(orgId, { at: Date.now(), value });
+  return value;
+}
+
+/** 브랜딩 로고 CID 첨부 — sendMail attachments 에 스프레드해 병합. */
+export function brandingAttachments(
+  b: OrgEmailBranding | null | undefined
+): NonNullable<SendMailParams["attachments"]> {
+  return b?.logo ? [b.logo] : [];
+}
+
+/** 메일 CTA 버튼 색 — 브랜드 컬러가 있으면 그 색(글자 대비 자동), 없으면 기본 네이비. */
+export function emailCtaColors(b?: OrgEmailBranding | null): {
+  bg: string;
+  fg: string;
+} {
+  const bg = b?.brandColor ?? EMAIL_BRAND.primary;
+  return { bg, fg: textColorOn(bg) };
+}
+
+/**
  * 메일 HTML 에 사용자 입력(후보자 이름·공고명·가입자 이름 등)을 보간하기 전 이스케이프.
  * 누락 시 이력서 파일명/이름에 심은 `<a href>` 등이 법인 SMTP 발신 메일로 렌더되어
  * 피싱(HTML/링크 인젝션)이 가능하다. 속성 컨텍스트까지 막기 위해 " ' 도 포함.
@@ -299,18 +394,40 @@ export function emailBrandHeader(): string {
 }
 
 /**
+ * 법인 브랜딩 헤더 밴드 — 지원 페이지 ApplyForm 밴드와 동일한 인상.
+ * 로고(CID)가 있으면 로고 + 법인명 소문자 라벨, 없으면 법인명 텍스트만.
+ * bgcolor 속성 병기는 Outlook(Word 렌더러) 배경색 호환용.
+ */
+function orgBrandBand(b: OrgEmailBranding): string {
+  const bg = b.brandColor ?? EMAIL_BRAND.primary;
+  const fg = textColorOn(bg);
+  const name = escapeHtml(b.orgName);
+  const inner = b.logo
+    ? `<img src="cid:${b.logo.cid}" alt="${name}" height="40" style="display:block;height:40px;width:auto;max-width:100%;border:0;" />
+      <div style="margin-top:10px;font-size:12px;font-weight:600;color:${fg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${name}</div>`
+    : `<div style="font-size:19px;font-weight:700;color:${fg};letter-spacing:-0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${name}</div>`;
+  return `<tr><td bgcolor="${bg}" style="background:${bg};padding:24px 32px;">${inner}</td></tr>`;
+}
+
+/**
  * 공통 카드 레이아웃. 모든 발송 메일의 외곽 셸을 표준화.
  * 안에 들어갈 본문(헤더 다음 영역)을 innerHtml 로 넘기면 됨.
  *
  * - footer: 옵션. 카드 하단에 들어갈 보조 정보(만료/안내문). HTML 가능.
+ * - branding: 옵션. 지원자 대상 메일의 법인 브랜딩 — 헤더가 Intervia 대신 법인 밴드가 된다.
+ *   로고를 CID 로 참조하므로 sendMail attachments 에 brandingAttachments() 를 함께 넘겨야 한다.
  */
 export function wrapEmailCard(opts: {
   innerHtml: string;
   footer?: string;
+  branding?: OrgEmailBranding | null;
 }): string {
   const footerBlock = opts.footer
     ? `<tr><td style="padding:16px 32px 24px;border-top:1px solid #f1f5f9;font-size:11px;color:#94a3b8;line-height:1.6;">${opts.footer}</td></tr>`
     : "";
+  const headerRow = opts.branding
+    ? orgBrandBand(opts.branding)
+    : `<tr><td style="padding:32px 32px 8px;">${emailBrandHeader()}</td></tr>`;
   return `<!doctype html>
 <html lang="ko">
 <head><meta charset="utf-8"></head>
@@ -318,7 +435,7 @@ export function wrapEmailCard(opts: {
   <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
-        <tr><td style="padding:32px 32px 8px;">${emailBrandHeader()}</td></tr>
+        ${headerRow}
         <tr><td style="padding:0 32px 24px;">${opts.innerHtml}</td></tr>
         ${footerBlock}
       </table>
@@ -337,6 +454,7 @@ export function buildAppealResponseEmail(opts: {
   orgName?: string | null;
   /** 후보자 면접 언어. 후보자 대면 통지라 분기. 법조 근거(§37의2)는 한국어 정본 유지. 기본 'ko'. */
   lang?: "ko" | "en";
+  branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, status, response, orgName } = opts;
   const en = opts.lang === "en";
@@ -391,6 +509,7 @@ ${answer}
     ? `${jobTitle ? `The review of the objection you submitted regarding the AI evaluation result for the <strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> position has been completed.` : "The review of the objection you submitted regarding the AI evaluation result has been completed."}`
     : `${jobTitle ? `<strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> 포지션의 ` : ""}AI 평가 결과에 대해 제출해 주신 이의제기의 검토가 완료되어 결과를 안내드립니다.`;
   const html = wrapEmailCard({
+    branding: opts.branding,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${en ? `Hello ${escapeHtml(candidateName)},` : `${escapeHtml(candidateName)}님, 안녕하세요.`}</h1>
       <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
@@ -423,8 +542,10 @@ export function buildInterviewReminderEmail(opts: {
   url: string;
   expiresAt: string;
   orgName?: string | null;
+  branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, url, expiresAt, orgName } = opts;
+  const cta = emailCtaColors(opts.branding);
   const sender = orgName?.trim() || null;
   // 리마인더는 발급 후 미완료(주로 pending) 세션에도 나가므로 지원자가 아직 면접 언어를
   // 고르기 전이다 — 세션 언어로 분기할 수 없어, 초대 메일과 동일하게 한/영 병기로 보낸다.
@@ -473,6 +594,7 @@ Link expires: ${expiresAt}
 Thank you.`;
 
   const html = wrapEmailCard({
+    branding: opts.branding,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(candidateName)}님, 안녕하세요.</h1>
       <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
@@ -480,7 +602,7 @@ Thank you.`;
         아래 버튼으로 이어서 진행해 주세요. 이미 완료하셨다면 본 안내는 무시하셔도 됩니다.
       </p>
       <p style="text-align:center;margin:0 0 16px;">
-        <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">면접 이어서 진행하기</a>
+        <a href="${url}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">면접 이어서 진행하기</a>
       </p>
       <p style="font-size:12px;color:#64748b;margin:0 0 20px;text-align:center;">
         버튼이 동작하지 않으면 아래 링크를 복사해 주세요:<br>
@@ -504,7 +626,7 @@ Thank you.`;
           Please continue using the button below. If you have already finished, please ignore this message.
         </p>
         <p style="text-align:center;margin:0 0 16px;">
-          <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">Continue interview</a>
+          <a href="${url}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">Continue interview</a>
         </p>
         <p style="font-size:12px;color:#64748b;margin:0 0 20px;text-align:center;">
           If the button does not work, copy this link:<br>
@@ -536,8 +658,10 @@ export function buildInterviewEmail(opts: {
   expiresAt: string;
   /** 면접을 발송한 채용 법인명. 후보자가 발신 주체를 확인할 수 있게 본문에 노출 (피싱 식별). */
   orgName?: string | null;
+  branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, url, expiresAt, orgName } = opts;
+  const cta = emailCtaColors(opts.branding);
   const sender = orgName?.trim() || null;
   const subject = sender
     ? `[${sender}] AI 면접 안내 / Interview Invitation — ${jobTitle}`
@@ -593,6 +717,7 @@ View my info / results: ${url}/me
 Thank you.`;
 
   const html = wrapEmailCard({
+    branding: opts.branding,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(candidateName)}님, 안녕하세요.</h1>
       <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
@@ -600,7 +725,7 @@ Thank you.`;
         아래 버튼을 통해 AI 면접을 진행해 주시기 바랍니다.
       </p>
       <p style="text-align:center;margin:0 0 16px;">
-        <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">면접 시작하기</a>
+        <a href="${url}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">면접 시작하기</a>
       </p>
       <p style="font-size:12px;color:#64748b;margin:0 0 20px;text-align:center;">
         버튼이 동작하지 않으면 아래 링크를 복사해 주세요:<br>
@@ -627,7 +752,7 @@ Thank you.`;
           Thank you for applying to the <strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> position${sender ? ` at <strong style="color:#0f172a;">${escapeHtml(sender)}</strong>` : ""}. Please take your AI interview (powered by Intervia) using the button below.
         </p>
         <p style="text-align:center;margin:0 0 16px;">
-          <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">Start interview</a>
+          <a href="${url}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">Start interview</a>
         </p>
         <p style="font-size:12px;color:#64748b;margin:0 0 20px;text-align:center;">
           If the button does not work, copy this link:<br>

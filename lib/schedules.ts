@@ -2,7 +2,12 @@
  * 1차 면접 스케쥴 헬퍼 — 토큰 생성·메일 템플릿·시간 포맷.
  */
 import crypto from "node:crypto";
-import { EMAIL_BRAND, wrapEmailCard } from "./mailer";
+import {
+  EMAIL_BRAND,
+  wrapEmailCard,
+  emailCtaColors,
+  type OrgEmailBranding,
+} from "./mailer";
 import { formatLocalDate } from "./utils";
 
 export const SCHEDULE_EXPIRY_DAYS = 14;
@@ -111,10 +116,12 @@ export function buildScheduleProposalEmail(opts: {
   round?: ScheduleRound;
   // 기존 확정 일정을 변경하기 위해 새 시간을 다시 제안하는 경우 — "변경" 맥락 문구.
   isReschedule?: boolean;
+  branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, url, expiresAt, slots, modeOnline, address, isReschedule } =
     opts;
   const rl = roundLabel(opts.round);
+  const cta = emailCtaColors(opts.branding);
   const expDate = formatLocalDate(expiresAt);
   const slotLines = slots.map((s) => `· ${formatSlotKst(s)}`).join("\n");
   const subject = isReschedule
@@ -148,6 +155,7 @@ Intervia 채용팀`;
     ? `${esc(candidateName)}님, <strong style="color:#0f172a;">${esc(orgName)}</strong>의 <strong style="color:#0f172a;">${esc(jobTitle)}</strong> 포지션 ${rl} 면접 일정을 변경하고자 새로운 시간을 안내드립니다.`
     : `${esc(candidateName)}님, <strong style="color:#0f172a;">${esc(orgName)}</strong>의 <strong style="color:#0f172a;">${esc(jobTitle)}</strong> 포지션 ${rl} 면접 일정 안내드립니다.`;
   const html = wrapEmailCard({
+    branding: opts.branding,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${rl} 면접 일정 ${isReschedule ? "변경" : "안내"}</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">
@@ -163,7 +171,7 @@ Intervia 채용팀`;
         </div>
       </div>
       <p style="text-align:center;margin:0 0 12px;">
-        <a href="${url}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">시간 선택하기</a>
+        <a href="${url}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">시간 선택하기</a>
       </p>
       <p style="font-size:12px;color:#64748b;margin:0 0 0;text-align:center;line-height:1.6;">
         가능한 시간이 없으시면 링크에서 다른 시간을 역제시하실 수 있습니다.<br>
@@ -244,11 +252,15 @@ export function buildMeetingLinkEmail(opts: {
   note?: string | null;
   forInterviewer?: boolean;
   round?: ScheduleRound;
+  branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, slot, meetingUrl, note, forInterviewer } =
     opts;
   const rl = roundLabel(opts.round);
   const slotStr = formatSlotKst(slot);
+  // 법인 브랜딩은 지원자용에만 — 면접관(회사 내부) 메일은 Intervia 헤더 유지.
+  const branding = forInterviewer ? null : (opts.branding ?? null);
+  const cta = emailCtaColors(branding);
   const subject = forInterviewer
     ? `[Intervia] ${candidateName} 후보자 온라인 면접 링크 안내`
     : `[Intervia] ${jobTitle} ${rl} 면접 — 온라인 미팅 링크`;
@@ -271,6 +283,7 @@ Intervia 채용팀`;
        </div>`
     : "";
   const html = wrapEmailCard({
+    branding,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">🎥 온라인 면접 미팅 안내</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">${esc(greeting)}</p>
@@ -283,7 +296,7 @@ Intervia 채용팀`;
         </p>
       </div>
       <p style="text-align:center;margin:0 0 8px;">
-        <a href="${esc(meetingUrl)}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">미팅 참여하기</a>
+        <a href="${esc(meetingUrl)}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">미팅 참여하기</a>
       </p>
       ${noteHtml}
       <p style="font-size:12px;color:#64748b;margin:14px 0 0;text-align:center;line-height:1.6;">
@@ -307,8 +320,11 @@ export function buildScheduleConfirmedEmail(opts: {
   round?: ScheduleRound;
   // 기존 확정 일정을 변경(재조정)하는 경우 — 제목·헤더·문구를 "확정"→"변경" 으로.
   isReschedule?: boolean;
+  branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, slot, modeOnline, address, forInterviewer, isReschedule } = opts;
+  // 법인 브랜딩은 지원자용에만 — 면접관(회사 내부) 메일은 Intervia 헤더 유지.
+  const branding = forInterviewer ? null : (opts.branding ?? null);
   const rl = roundLabel(opts.round);
   const slotStr = formatSlotKst(slot);
   const action = isReschedule ? "변경" : "확정";
@@ -339,6 +355,7 @@ Intervia 채용팀`;
     ? `🔄 ${rl} 면접 시간 변경`
     : `✅ ${rl} 면접 시간 확정`;
   const html = wrapEmailCard({
+    branding,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${heading}</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">${esc(greeting)}</p>

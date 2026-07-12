@@ -8,6 +8,8 @@ import {
   buildInterviewEmail,
   isSmtpAvailable,
   SmtpNotConfiguredError,
+  getOrgEmailBranding,
+  brandingAttachments,
 } from "@/lib/mailer";
 import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { rateLimit } from "@/lib/rate-limit";
@@ -134,12 +136,14 @@ export async function POST(
           .where(eq(organizations.id, candidate.orgId))
       : [];
 
+  const branding = await getOrgEmailBranding(candidate.orgId);
   const mail = buildInterviewEmail({
     candidateName: candidate.name,
     jobTitle: job.title,
     url,
     expiresAt: expires,
     orgName: org?.name ?? null,
+    branding,
   });
 
   // 사전 체크 — 법인/환경변수 어디에도 SMTP 가 없으면 친절히 안내
@@ -155,7 +159,13 @@ export async function POST(
   }
 
   try {
-    await sendMail({ to: recipient, ...mail, orgId: candidate.orgId, audience: "candidate" });
+    await sendMail({
+      to: recipient,
+      ...mail,
+      orgId: candidate.orgId,
+      audience: "candidate",
+      attachments: brandingAttachments(branding),
+    });
     // 알림톡 병행 (전화번호 있을 때만, 베스트에포트 — 실패해도 이메일 발송 결과 유지).
     await sendCandidateAlimtalk("interview_invite", {
       phone: candidate.phone,

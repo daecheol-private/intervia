@@ -31,7 +31,12 @@ import {
   buildScheduleConfirmedEmail,
   roundLabel,
 } from "@/lib/schedules";
-import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import {
+  sendMail,
+  isSmtpAvailable,
+  getOrgEmailBranding,
+  brandingAttachments,
+} from "@/lib/mailer";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
 import { rateLimit } from "@/lib/rate-limit";
@@ -199,6 +204,7 @@ export async function POST(
           .where(eq(organizations.id, job.orgId))
       )[0];
       try {
+        const branding = await getOrgEmailBranding(job.orgId);
         const mail = buildScheduleConfirmedEmail({
           candidateName: candidate.name,
           jobTitle: job.title,
@@ -209,12 +215,14 @@ export async function POST(
           forInterviewer: false,
           round,
           isReschedule,
+          branding,
         });
         await sendMail({
           to: candidate.email,
           ...mail,
           orgId: job.orgId,
           audience: "candidate",
+          attachments: brandingAttachments(branding),
         });
         candidateMail = { sent: true };
       } catch (e) {

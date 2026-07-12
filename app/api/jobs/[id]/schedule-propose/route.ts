@@ -30,7 +30,12 @@ import {
   validateSlots,
   buildScheduleProposalEmail,
 } from "@/lib/schedules";
-import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import {
+  sendMail,
+  isSmtpAvailable,
+  getOrgEmailBranding,
+  brandingAttachments,
+} from "@/lib/mailer";
 import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
@@ -196,6 +201,8 @@ export async function POST(
   }
 
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+  // 법인 브랜딩(로고+컬러) — 일괄 발송이라 루프 밖에서 1회 조회.
+  const branding = await getOrgEmailBranding(job.orgId);
   const results: {
     candidateId: number;
     status: "sent" | "skipped" | "failed";
@@ -292,10 +299,17 @@ export async function POST(
       address,
       round,
       isReschedule,
+      branding,
     });
 
     try {
-      await sendMail({ to: cand.email, ...mail, orgId: job.orgId, audience: "candidate" });
+      await sendMail({
+        to: cand.email,
+        ...mail,
+        orgId: job.orgId,
+        audience: "candidate",
+        attachments: brandingAttachments(branding),
+      });
       // 알림톡 병행 (전화번호 있을 때만, 베스트에포트).
       await sendCandidateAlimtalk("schedule_propose", {
         phone: cand.phone,

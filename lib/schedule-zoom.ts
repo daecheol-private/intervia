@@ -26,7 +26,12 @@ import {
   buildIcsInvite,
   type Slot,
 } from "./schedules";
-import { sendMail, isSmtpAvailable } from "./mailer";
+import {
+  sendMail,
+  isSmtpAvailable,
+  getOrgEmailBranding,
+  brandingAttachments,
+} from "./mailer";
 import { getZoomCredentials, createMeeting, zoomErrorMessage } from "./zoom";
 
 /**
@@ -121,6 +126,7 @@ export async function tryAutoCreateZoomMeeting(
 
     if (cand?.email) {
       try {
+        const branding = await getOrgEmailBranding(sched.orgId);
         const mail = buildMeetingLinkEmail({
           candidateName: candName,
           jobTitle,
@@ -129,13 +135,14 @@ export async function tryAutoCreateZoomMeeting(
           meetingUrl: joinUrl,
           note,
           forInterviewer: false,
+          branding,
         });
         await sendMail({
           to: cand.email,
           ...mail,
           orgId: sched.orgId,
           audience: "candidate",
-          attachments: [icsAttachment],
+          attachments: [icsAttachment, ...brandingAttachments(branding)],
         });
       } catch (e) {
         console.error("[schedule-zoom] 후보자 메일 실패", e);

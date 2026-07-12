@@ -12,7 +12,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
 import { buildDecisionEmail, resolveCandidateEmailLang } from "@/lib/candidate-stage";
-import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import {
+  sendMail,
+  isSmtpAvailable,
+  getOrgEmailBranding,
+  brandingAttachments,
+} from "@/lib/mailer";
 import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { logAudit } from "@/lib/audit";
 import {
@@ -87,6 +92,7 @@ export async function POST(
         .where(eq(organizations.id, candidate.orgId))
     : [];
 
+  const branding = await getOrgEmailBranding(candidate.orgId);
   const mail = buildDecisionEmail({
     candidateName: candidate.name,
     jobTitle: job?.title ?? "공고",
@@ -94,10 +100,17 @@ export async function POST(
     customMessage: body.customMessage,
     companyName: org?.name ?? null,
     lang: await resolveCandidateEmailLang(cid),
+    branding,
   });
 
   try {
-    await sendMail({ to: candidate.email, ...mail, orgId: candidate.orgId, audience: "candidate" });
+    await sendMail({
+      to: candidate.email,
+      ...mail,
+      orgId: candidate.orgId,
+      audience: "candidate",
+      attachments: brandingAttachments(branding),
+    });
     // 합격 통보만 알림톡 병행 (불합격은 정중한 긴 문구라 메일 유지). 베스트에포트.
     if (candidate.outcome === "hired") {
       await sendCandidateAlimtalk("decision_pass", {

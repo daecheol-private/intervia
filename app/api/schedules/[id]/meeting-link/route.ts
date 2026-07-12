@@ -32,7 +32,12 @@ import {
   roundLabel,
   type Slot,
 } from "@/lib/schedules";
-import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import {
+  sendMail,
+  isSmtpAvailable,
+  getOrgEmailBranding,
+  brandingAttachments,
+} from "@/lib/mailer";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
 
@@ -132,6 +137,7 @@ export async function POST(
   if (await isSmtpAvailable(sched.orgId)) {
     if (cand?.email) {
       try {
+        const branding = await getOrgEmailBranding(sched.orgId);
         const mail = buildMeetingLinkEmail({
           candidateName: cand.name,
           jobTitle: job?.title ?? "공고",
@@ -141,13 +147,14 @@ export async function POST(
           note,
           forInterviewer: false,
           round: sched.round,
+          branding,
         });
         await sendMail({
           to: cand.email,
           ...mail,
           orgId: sched.orgId,
           audience: "candidate",
-          attachments: [icsAttachment],
+          attachments: [icsAttachment, ...brandingAttachments(branding)],
         });
       } catch (e) {
         console.error("meeting link mail to candidate failed", e);

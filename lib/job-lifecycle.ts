@@ -29,7 +29,7 @@ import { deleteCandidateFiles } from "./candidate-files";
 import { createNotification } from "./notifications";
 import { getBalance, getPricing, writeLedgerIdempotent } from "./tokens";
 import { buildDecisionEmail, purgeOnDecision, resolveCandidateEmailLang } from "./candidate-stage";
-import { sendMail } from "./mailer";
+import { sendMail, getOrgEmailBranding, brandingAttachments } from "./mailer";
 import { redactCandidateAuditPii } from "./audit";
 import { after } from "next/server";
 
@@ -385,6 +385,7 @@ export async function closeJob(args: {
       after(async () => {
         let sent = 0;
         let failed = 0;
+        const branding = await getOrgEmailBranding(job.orgId);
         for (const t of mailTargets) {
           try {
             const { subject, html, text } = buildDecisionEmail({
@@ -393,6 +394,7 @@ export async function closeJob(args: {
               decision: "rejected",
               companyName: org?.name ?? null,
               lang: await resolveCandidateEmailLang(t.id),
+              branding,
             });
             await sendMail({
               to: t.email!,
@@ -401,6 +403,7 @@ export async function closeJob(args: {
               text,
               orgId: job.orgId,
               audience: "candidate",
+              attachments: brandingAttachments(branding),
             });
             // 결정 통보 메일 카운트 증가
             await db

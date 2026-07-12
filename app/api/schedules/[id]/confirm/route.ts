@@ -33,7 +33,12 @@ import {
   roundLabel,
   type Slot,
 } from "@/lib/schedules";
-import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import {
+  sendMail,
+  isSmtpAvailable,
+  getOrgEmailBranding,
+  brandingAttachments,
+} from "@/lib/mailer";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
 import { logAudit } from "@/lib/audit";
@@ -147,6 +152,7 @@ export async function POST(
   if (await isSmtpAvailable(sched.orgId)) {
     if (!zoomHandled && cand?.email) {
       try {
+        const branding = await getOrgEmailBranding(sched.orgId);
         const mail = buildScheduleConfirmedEmail({
           candidateName: cand.name,
           jobTitle: job?.title ?? "공고",
@@ -156,12 +162,14 @@ export async function POST(
           address: sched.address,
           forInterviewer: false,
           round: sched.round,
+          branding,
         });
         await sendMail({
           to: cand.email,
           ...mail,
           orgId: sched.orgId,
           audience: "candidate",
+          attachments: brandingAttachments(branding),
         });
       } catch (e) {
         console.error("[schedule/confirm] candidate mail failed", e);

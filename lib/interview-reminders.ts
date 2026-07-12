@@ -28,6 +28,8 @@ import {
   escapeHtml,
   buildInterviewReminderEmail,
   EMAIL_BRAND,
+  getOrgEmailBranding,
+  brandingAttachments,
 } from "./mailer";
 import { getJobInterviewerEmails } from "./notifications";
 import { sendCandidateAlimtalk } from "./alimtalk";
@@ -213,7 +215,9 @@ export async function sendScheduleReminders(): Promise<{
     // 2) 후보자 D-1 리마인더 (미발송일 때만) — 이메일 + 알림톡 병행.
     if (!r.candidateSentAt) {
       if (r.candidateEmail) {
+        const branding = await getOrgEmailBranding(r.orgId);
         const html = wrapEmailCard({
+          branding,
           innerHtml: `
             <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(r.candidateName)}님, 내일 면접 안내드립니다.</h1>
             <p style="color:#475569;line-height:1.6;margin:0 0 16px;">
@@ -237,6 +241,7 @@ export async function sendScheduleReminders(): Promise<{
             html,
             orgId: r.orgId,
             audience: "candidate",
+            attachments: brandingAttachments(branding),
           });
           candidateRemindersSent++;
         } catch (e) {
@@ -341,15 +346,23 @@ export async function sendAiInterviewReminders(): Promise<{
     const expiresLabel = formatKstDateTime(r.expiresAt);
 
     if (r.candidateEmail) {
+      const branding = await getOrgEmailBranding(r.orgId);
       const mail = buildInterviewReminderEmail({
         candidateName: r.candidateName,
         jobTitle: r.jobTitle,
         url,
         expiresAt: expiresLabel,
         orgName: null, // sendMail 이 orgId+audience=candidate 로 발신 표시이름에 법인명 주입
+        branding,
       });
       try {
-        await sendMail({ to: r.candidateEmail, ...mail, orgId: r.orgId, audience: "candidate" });
+        await sendMail({
+          to: r.candidateEmail,
+          ...mail,
+          orgId: r.orgId,
+          audience: "candidate",
+          attachments: brandingAttachments(branding),
+        });
         remindersSent++;
       } catch (e) {
         console.error(

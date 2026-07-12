@@ -22,7 +22,7 @@ import { db } from "./db";
 import { candidates, candidateAttachments, interviewSessions } from "./schema";
 import { desc, eq } from "drizzle-orm";
 import { deleteFile } from "./storage";
-import { wrapEmailCard } from "./mailer";
+import { wrapEmailCard, type OrgEmailBranding } from "./mailer";
 
 // Stage 타입 + UI 메타는 client-safe 파일에 둠 (db/storage 의존 없음).
 export type { Stage, StageWaiter } from "./stage-meta";
@@ -258,6 +258,7 @@ export function buildDecisionEmail(opts: {
   companyName?: string | null;
   /** 후보자 면접 언어. 후보자 대면 메일이라 분기(평가 리포트와 별개). 기본 'ko'. */
   lang?: "ko" | "en";
+  branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, decision, customMessage, companyName } = opts;
   const en = opts.lang === "en";
@@ -287,6 +288,7 @@ export function buildDecisionEmail(opts: {
   const text = `${body}\n\n${en ? "The Intervia Recruiting Team" : "Intervia 채용팀"}`;
   const escaped = body.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
   const html = wrapEmailCard({
+    branding: opts.branding,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 16px;color:#0f172a;">${headerMap[decision]}</h1>
       <div style="font-size:14px;line-height:1.7;color:#475569;white-space:pre-wrap;">${escaped}</div>

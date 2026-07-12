@@ -28,7 +28,13 @@ import {
   requireSpendableBalance,
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
-import { sendMail, buildInterviewEmail, isSmtpAvailable } from "@/lib/mailer";
+import {
+  sendMail,
+  buildInterviewEmail,
+  isSmtpAvailable,
+  getOrgEmailBranding,
+  brandingAttachments,
+} from "@/lib/mailer";
 import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
@@ -135,6 +141,8 @@ export async function POST(
     .from(organizations)
     .where(eq(organizations.id, job.orgId));
   const orgName = org?.name ?? null;
+  // 법인 브랜딩(로고+컬러) — 일괄 발송이라 루프 밖에서 1회 조회.
+  const branding = await getOrgEmailBranding(job.orgId);
 
   const targets = await db
     .select()
@@ -235,6 +243,7 @@ export async function POST(
       url,
       expiresAt: formatKstDateTime(expiresAt),
       orgName,
+      branding,
     });
     tasks.push({
       candidateId: c.id,
@@ -275,6 +284,7 @@ export async function POST(
             text: t.text,
             orgId,
             audience: "candidate",
+            attachments: brandingAttachments(branding),
           });
           await db
             .update(candidates)

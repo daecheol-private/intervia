@@ -8,7 +8,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
 import { logAudit } from "@/lib/audit";
-import { sendMail, buildAppealResponseEmail } from "@/lib/mailer";
+import {
+  sendMail,
+  buildAppealResponseEmail,
+  getOrgEmailBranding,
+  brandingAttachments,
+} from "@/lib/mailer";
 
 export const runtime = "nodejs";
 
@@ -105,6 +110,7 @@ export async function PATCH(
       .select({ language: interviewSessions.language })
       .from(interviewSessions)
       .where(eq(interviewSessions.id, prev.interviewSessionId));
+    const branding = await getOrgEmailBranding(candidate.orgId);
     const mail = buildAppealResponseEmail({
       candidateName: candidate.name ?? "지원자",
       jobTitle: job?.title ?? null,
@@ -112,6 +118,7 @@ export async function PATCH(
       response: next.response ?? prev.response,
       orgName: org?.name ?? null,
       lang: sess?.language === "en" ? "en" : "ko",
+      branding,
     });
     try {
       await sendMail({
@@ -121,6 +128,7 @@ export async function PATCH(
         text: mail.text,
         orgId: candidate.orgId,
         audience: "candidate",
+        attachments: brandingAttachments(branding),
       });
       emailSent = true;
       logAudit(req, {
