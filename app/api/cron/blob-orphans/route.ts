@@ -22,6 +22,8 @@ import { like } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { secretEquals } from "@/lib/secret-compare";
 import { notifyOps } from "@/lib/error-reporter";
+import { sendMail, isSmtpAvailable } from "@/lib/mailer";
+import { COMPANY_INFO } from "@/lib/site-info";
 import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
@@ -32,6 +34,26 @@ export const maxDuration = 60;
 const GRACE_HOURS = 48;
 // 이보다 오래 미참조여야 자동 삭제 대상 (48h~30일 사이는 "관찰 중"으로 집계만).
 const DELETE_AFTER_DAYS = 30;
+
+// Slack(SLACK_WEBHOOK_URL) + 운영 메일 양쪽 통지 — Slack 미설정 운영에서도 리포트가 도달해야 함.
+async function notifyOpsAndMail(subject: string, text: string): Promise<void> {
+  await notifyOps(text);
+  const to = process.env.OPS_ALERT_EMAIL ?? COMPANY_INFO.email;
+  if (to && (await isSmtpAvailable(null))) {
+    try {
+      await sendMail({
+        to,
+        subject,
+        text,
+        html: `<pre style="font-family:monospace;font-size:13px;white-space:pre-wrap;line-height:1.6;">${text.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!)}</pre>`,
+        orgId: null,
+        audience: "org",
+      });
+    } catch (e) {
+      log.error("blob_orphans_mail_failed", e);
+    }
+  }
+}
 
 async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;
@@ -149,12 +171,16 @@ export async function GET(req: Request) {
   });
 
   if (breakerTripped) {
-    await notifyOps(
+    await notifyOpsAndMail(
+      "[Intervia 🔴] Blob 고아 스위퍼 중단 — 수동 확인 필요",
       `⚠️ Blob 고아 스위퍼 중단: 삭제 대상 ${deletable.length}개가 임계(${breakerLimit})를 초과. ` +
         `정상 파일이 고아로 오판되고 있을 수 있음(새 파일 컬럼의 대조 목록 누락 의심) — 자동 삭제 안 함, 수동 확인 필요.`
     );
   } else if (deleted > 0 || failed.length > 0) {
-    await notifyOps(
+    await notifyOpsAndMail(
+      failed.length > 0
+        ? `[Intervia 🟠] Blob 고아 정리 — 삭제 실패 ${failed.length}건 확인 필요`
+        : "[Intervia] Blob 고아 정리 완료",
       `Blob 고아 정리: ${deleted}개 삭제 (${(deletedBytes / 1e6).toFixed(1)}MB)` +
         (failed.length > 0
           ? ` / ⚠️ 삭제 실패 ${failed.length}개 — GET /api/cron/blob-orphans (CRON_SECRET) 응답에서 확인 필요.`
