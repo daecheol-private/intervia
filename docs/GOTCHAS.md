@@ -525,11 +525,13 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 
 **저장 키 컨벤션**:
 - 로컬: 파일명 (`1700000000_abcd.pdf`)
-- Blob: 전체 URL (`https://xxx.public.blob.vercel-storage.com/...`)
+- Blob: 전체 URL (`https://xxx.private.blob.vercel-storage.com/...`)
+
+**Blob 은 private 스토어** (2026-07-12 전환): URL 을 알아도 인증 없이는 403. 읽기는 반드시 `fetchBlobFile()`(내부에서 `get()` + 토큰) 또는 `readStoredFile()` 경유 — 일반 `fetch(url)` 는 403 난다. 호스트에 `.public.` 이 있으면 legacy 키(전환 전 잔존 — 마이그레이션 완료로 운영엔 없음)로 간주해 일반 fetch 로 분기한다.
 
 **`resumeFilePath` 컬럼은 둘 중 어느 것이든 저장 가능**. 다운로드 시 **항상 `/api/uploads/candidate/[id]` 사용** (2026-05-16 부터). 이 라우트가:
 - 세션 + ownsOrg + 부모 공고 PIN 잠금 검증
-- Blob URL 이어도 server-side fetch 해서 stream proxy → Blob 의 public URL 외부 노출 X
+- Blob URL 이어도 server-side 로 읽어 stream proxy → Blob URL 외부 노출 X
 
 ⚠️ `lib/storage.ts` 의 `getDownloadUrl` 은 제거됨 (2026-07-03, 인증 우회 footgun). 다운로드 URL 을 직접 만들지 말고 항상 위 프록시 라우트 사용.
 

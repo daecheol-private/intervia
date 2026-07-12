@@ -74,8 +74,9 @@ VALUES ('admin', '<bcrypt hash 값>', '시스템관리자', 1);
 
 1. **GitHub에 코드 푸시**
 2. **Vercel 가입 + 프로젝트 import** (https://vercel.com/new)
-3. **Storage 탭 → Create Database → Blob 선택 → Create**
-4. 생성 후 자동으로 `BLOB_READ_WRITE_TOKEN` 환경변수가 프로젝트에 추가됨
+3. **Storage 탭 → Create Database → Blob 선택** → **Access: Private** + **Region: Seoul(icn1)** 로 생성
+   - ⚠️ Access·Region 은 **생성 후 변경 불가**. 코드(`saveFile`)가 `access: "private"` 고정이라 public 스토어면 업로드가 거부된다 (2026-07-12 전환 — 이력서 PII 가 URL 만으로 노출되지 않도록)
+4. **Connect Project** 시 **"Add a read-write token env var" 체크 필수** → `BLOB_READ_WRITE_TOKEN` 생성 (미체크 시 OIDC 변수만 생겨서 SDK 2.x 코드가 스토어를 못 씀)
 
 ---
 
