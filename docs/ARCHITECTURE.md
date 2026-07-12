@@ -77,7 +77,7 @@ interviewer/
 │   ├── parsers.ts                  # PDF/TXT/HTML → 텍스트 (buffer 기반)
 │   ├── prompts.ts                  # 면접관 시스템 프롬프트 + 평가 프롬프트
 │   ├── gemini.ts                   # Gemini API 래퍼 (스트리밍 + JSON 모드)
-│   ├── mailer.ts                   # nodemailer + 메일 HTML 템플릿
+│   ├── mailer.ts                   # nodemailer + 메일 HTML 템플릿 (지원자 메일은 법인 브랜딩 밴드 — getOrgEmailBranding, 로고 CID 첨부)
 │   ├── utils.ts                    # 토큰/날짜/점수 헬퍼
 │   └── pdf-parse.d.ts              # pdf-parse 서브경로 타입 선언
 ├── proxy.ts                        # Next.js 16 미들웨어 (인증 가드)
