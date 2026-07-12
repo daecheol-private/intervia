@@ -14,7 +14,7 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
-import { readLocalFile } from "@/lib/storage";
+import { readLocalFile, fetchBlobFile } from "@/lib/storage";
 import path from "node:path";
 
 export const runtime = "nodejs";
@@ -89,11 +89,12 @@ export async function GET(
       console.error("[uploads/photo] blocked SSRF target:", upstreamHost);
       return new Response("file location blocked", { status: 502 });
     }
-    const upstream = await fetch(key);
-    if (!upstream.ok) {
+    // private 스토어는 get()(토큰 인증), legacy public 은 fetch — 헬퍼가 분기.
+    const found = await fetchBlobFile(key);
+    if (!found) {
       return new Response("upstream fetch failed", { status: 502 });
     }
-    const buf = Buffer.from(await upstream.arrayBuffer());
+    const buf = found.data;
     return new Response(new Uint8Array(buf), {
       headers: {
         "Content-Type": imageContentType(key),

@@ -432,7 +432,7 @@ export default function JobDetailPage() {
           // pathname 의 경로 구분자를 살려 서버가 relativePath 로 재구성 가능하게 함.
           // 한글/공백은 upload() 내부에서 인코딩.
           const result = await upload(relativePath, file, {
-            access: "public",
+            access: "private",
             handleUploadUrl: "/api/blob/upload",
             clientPayload: JSON.stringify({ jobId }),
             multipart: file.size > 8 * 1024 * 1024,

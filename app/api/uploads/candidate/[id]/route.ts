@@ -18,6 +18,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
 import {
   readLocalFile,
+  fetchBlobFile,
   safeDownloadContentType,
   downloadDisposition,
 } from "@/lib/storage";
@@ -140,16 +141,15 @@ export async function GET(
       console.error("[uploads] blocked SSRF target:", upstreamHost);
       return new Response("file location blocked", { status: 502 });
     }
-    const upstream = await fetch(key);
-    if (!upstream.ok) {
+    // private 스토어는 get()(토큰 인증), legacy public 은 fetch — 헬퍼가 분기.
+    // 버퍼링 유지: fetch 자동 압축해제 시 Content-Length 불일치로 함수가 에러남.
+    const found = await fetchBlobFile(key);
+    if (!found) {
       return new Response("upstream fetch failed", { status: 502 });
     }
-    // 스트림 pass-through 대신 버퍼링 — fetch 가 본문을 자동 압축해제하면
-    // upstream 의 Content-Length(압축 크기)가 본문과 어긋나 Vercel 함수가 에러난다.
-    // 작은 이력서 파일이므로 버퍼링 후 정확한 길이로 응답.
-    const buf = Buffer.from(await upstream.arrayBuffer());
+    const buf = found.data;
     const ct = safeDownloadContentType(
-      upstream.headers.get("content-type") ?? contentTypeFromPath(key)
+      found.contentType ?? contentTypeFromPath(key)
     );
     return new Response(new Uint8Array(buf), {
       headers: {

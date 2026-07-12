@@ -105,8 +105,10 @@ export async function saveFile(
 
   if (shouldUseBlob()) {
     const { put } = await import("@vercel/blob");
+    // private 스토어 — URL 만으로는 접근 불가, 읽기는 fetchBlobFile(get) 프록시 경유만.
+    // (스토어의 access 모드는 생성 시 고정 — BLOB_READ_WRITE_TOKEN 은 private 스토어여야 함)
     const result = await put(safeBase, buffer, {
-      access: "public",
+      access: "private",
       contentType: contentType ?? contentTypeFromName(originalName),
       addRandomSuffix: false,
     });
@@ -130,7 +132,9 @@ export async function deleteFile(
       const { del } = await import("@vercel/blob");
       await del(key);
     } catch {
-      // 이미 삭제됐거나 권한 없는 경우 무시
+      // 이미 삭제됐거나 권한 없는 경우 무시.
+      // legacy public 스토어 키는 현재 토큰(private 스토어)으로 못 지움 — 마이그레이션
+      // 완료 후 옛 스토어를 대시보드에서 통째로 삭제하는 것으로 정리한다.
     }
     return;
   }
@@ -168,22 +172,54 @@ export function isAllowedBlobUrl(urlStr: string): boolean {
   return [...allowedHosts].some((h) => host === h || host.endsWith("." + h));
 }
 
+/** legacy public 스토어 URL 인지 — 호스트가 `<id>.public.blob.vercel-storage.com` 형태. */
+export function isPublicBlobUrl(urlStr: string): boolean {
+  try {
+    return new URL(urlStr).host.toLowerCase().includes(".public.");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Blob URL 을 buffer 로 읽는다 — private 스토어는 get()(토큰 인증),
+ * legacy public 스토어(마이그레이션 전 잔존 키)는 일반 fetch.
+ * SSRF allowlist 는 양쪽 공통. 못 읽으면 null.
+ */
+export async function fetchBlobFile(
+  key: string
+): Promise<{ data: Buffer; contentType: string | null } | null> {
+  if (!isAllowedBlobUrl(key)) return null;
+  try {
+    if (isPublicBlobUrl(key)) {
+      const r = await fetch(key);
+      if (!r.ok) return null;
+      return {
+        data: Buffer.from(await r.arrayBuffer()),
+        contentType: r.headers.get("content-type"),
+      };
+    }
+    const { get } = await import("@vercel/blob");
+    const g = await get(key, { access: "private" });
+    if (!g || g.statusCode !== 200) return null;
+    return {
+      data: Buffer.from(await new Response(g.stream).arrayBuffer()),
+      contentType: g.blob.contentType ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * 저장된 파일을 다시 buffer 로 읽는다 — 워커가 비동기 파싱 시 사용.
- * key 가 http(s) URL(Blob)이면 fetch, 아니면 로컬 ./uploads/ 에서 읽음.
+ * key 가 http(s) URL(Blob)이면 fetchBlobFile, 아니면 로컬 ./uploads/ 에서 읽음.
  * 못 읽으면 null.
  */
 export async function readStoredFile(key: string): Promise<Buffer | null> {
   if (/^https?:\/\//i.test(key)) {
-    // SSRF 방어 — 허용된 Blob 호스트가 아니면 fetch 하지 않는다(다운로드 라우트와 동일 규칙).
-    if (!isAllowedBlobUrl(key)) return null;
-    try {
-      const r = await fetch(key);
-      if (!r.ok) return null;
-      return Buffer.from(await r.arrayBuffer());
-    } catch {
-      return null;
-    }
+    const found = await fetchBlobFile(key);
+    return found?.data ?? null;
   }
   const local = await readLocalFile(key);
   return local?.data ?? null;
