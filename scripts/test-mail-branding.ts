@@ -110,13 +110,22 @@ async function main() {
     companyName: branding.orgName,
     branding,
   });
-  const toPreview = (html: string) =>
-    branding.logo
-      ? html.replace(
-          `cid:${branding.logo.cid}`,
-          `data:${branding.logo.contentType};base64,${branding.logo.content.toString("base64")}`
-        )
-      : html;
+  // cid: 참조를 data URI 로 치환해 브라우저에서 이미지가 보이게 (메일 클라이언트는 CID 그대로 뜸).
+  const { EMAIL_LOGO_PNG_BASE64 } = await import("../lib/email-logo-data");
+  const toPreview = (html: string) => {
+    let h = html;
+    if (branding.logo)
+      h = h.replaceAll(
+        `cid:${branding.logo.cid}`,
+        `data:${branding.logo.contentType};base64,${branding.logo.content.toString("base64")}`
+      );
+    // Intervia 로고(헤더/푸터, 항상)
+    h = h.replaceAll(
+      "cid:intervia-logo",
+      `data:image/png;base64,${EMAIL_LOGO_PNG_BASE64}`
+    );
+    return h;
+  };
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mail-branding-"));
   const invitePath = path.join(dir, "invite.html");
   const decisionPath = path.join(dir, "decision.html");

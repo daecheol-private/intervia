@@ -8,6 +8,7 @@ import { decrypt } from "./crypto";
 import { SITE_INFO, APPEAL_CONTACT } from "./site-info";
 import { readStoredFile, contentTypeFromName } from "./storage";
 import { isValidBrandColor, textColorOn } from "./brand-color";
+import { EMAIL_LOGO_PNG_BASE64 } from "./email-logo-data";
 
 // 모든 발송 transporter 는 pooled (페이싱·연결 재사용) — verify 용 일회성 제외.
 type Transporter = nodemailer.Transporter<SMTPPool.SentMessageInfo>;
@@ -218,13 +219,20 @@ export async function sendMail({
   const override = resolveMailOverride(audience);
   const finalTo = override ?? to;
   const finalSubject = override ? `[DEV→${to}] ${subject}` : subject;
+  // Intervia 로고를 CID 로 참조하는 메일(wrapEmailCard 사용분)엔 로고 첨부를 자동 병합
+  // → 발송처마다 첨부를 넘길 필요 없이 헤더/푸터 마크가 항상 표시된다. cid 없는 메일
+  //   (운영 알림 <pre> 등)엔 붙이지 않는다.
+  const finalAttachments =
+    html.includes(`cid:${INTERVIA_LOGO_CID}`)
+      ? [...(attachments ?? []), interviaLogoAttachment()]
+      : attachments;
   const message = {
     from: finalFrom,
     to: finalTo,
     subject: finalSubject,
     html,
     text,
-    attachments,
+    attachments: finalAttachments,
   };
   for (let attempt = 0; ; attempt++) {
     try {
@@ -268,12 +276,28 @@ export async function verifySmtpConfig(cfg: {
   }
 }
 
-/** 모든 발송 메일 공통 — 브랜드 로고(호스팅 PNG) + Intervia 워드마크. 인라인 CSS만 사용 (메일 클라이언트 호환). */
+/** 모든 발송 메일 공통 — 브랜드 로고(CID 인라인) + Intervia 워드마크. 인라인 CSS만 사용 (메일 클라이언트 호환). */
 export const EMAIL_BRAND = {
   primary: "#1c3478",
   primaryDeep: "#13234f",
   ink: "#0c1116",
 };
+
+/**
+ * Intervia 마크의 CID — 헤더/푸터에서 `<img src="cid:intervia-logo">` 로 참조.
+ * 원격 URL 대신 메일에 동봉(sendMail 이 자동 첨부)해 수신함에서 즉시 표시된다.
+ */
+const INTERVIA_LOGO_CID = "intervia-logo";
+
+/** Intervia 로고 CID 인라인 첨부 (base64 상수 → Buffer). sendMail 이 HTML 참조 감지 시 자동 병합. */
+function interviaLogoAttachment(): NonNullable<SendMailParams["attachments"]>[number] {
+  return {
+    filename: "intervia-logo.png",
+    content: Buffer.from(EMAIL_LOGO_PNG_BASE64, "base64"),
+    contentType: "image/png",
+    cid: INTERVIA_LOGO_CID,
+  };
+}
 
 /**
  * 지원자 대상 메일의 법인 브랜딩 — 지원 페이지/AI 면접 화면의 헤더 밴드와 동일한 인상.
@@ -387,10 +411,27 @@ export function escapeHtml(s: string): string {
 export function emailBrandHeader(): string {
   return `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
     <td width="36" valign="middle" style="width:36px;padding:0;">
-      <img src="${SITE_INFO.baseUrl}/email-logo.png" width="36" height="36" alt="Intervia" style="display:block;width:36px;height:36px;border-radius:8px;border:0;" />
+      <img src="cid:${INTERVIA_LOGO_CID}" width="36" height="36" alt="Intervia" style="display:block;width:36px;height:36px;border-radius:8px;border:0;" />
     </td>
     <td valign="middle" style="padding:0 0 0 10px;font-weight:700;color:${EMAIL_BRAND.ink};font-size:18px;letter-spacing:-0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1;">Intervia</td>
   </tr></table>`;
+}
+
+/**
+ * 카드 하단 Intervia 브랜드 서명 — 로고 마크 + 워드마크 + 서비스 설명.
+ * 법인 브랜딩 밴드(헤더)에 가려 Intervia 식별이 약해지는 것을 하단에서 보강한다
+ * (지원자에게 서비스 주체를 각인). 로고는 CID(sendMail 자동 첨부).
+ */
+function interviaFooterBrand(): string {
+  return `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
+      <td width="32" valign="middle" style="width:32px;padding:0;">
+        <img src="cid:${INTERVIA_LOGO_CID}" width="32" height="32" alt="Intervia" style="display:block;width:32px;height:32px;border-radius:7px;border:0;" />
+      </td>
+      <td valign="middle" style="padding:0 0 0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+        <div style="font-weight:700;color:${EMAIL_BRAND.ink};font-size:16px;letter-spacing:-0.3px;line-height:1.2;">${SITE_INFO.serviceName}</div>
+        <div style="color:#94a3b8;font-size:11px;line-height:1.2;margin-top:2px;">${SITE_INFO.serviceDescription}</div>
+      </td>
+    </tr></table>`;
 }
 
 /**
@@ -422,9 +463,11 @@ export function wrapEmailCard(opts: {
   footer?: string;
   branding?: OrgEmailBranding | null;
 }): string {
-  const footerBlock = opts.footer
-    ? `<tr><td style="padding:16px 32px 24px;border-top:1px solid #f1f5f9;font-size:11px;color:#94a3b8;line-height:1.6;">${opts.footer}</td></tr>`
+  // 하단 Intervia 브랜드 서명 — 항상 표시(footer 안내문은 있을 때만 그 아래에).
+  const footerNote = opts.footer
+    ? `<div style="margin-top:14px;font-size:11px;color:#94a3b8;line-height:1.6;">${opts.footer}</div>`
     : "";
+  const footerBlock = `<tr><td style="padding:22px 32px 26px;border-top:1px solid #f1f5f9;">${interviaFooterBrand()}${footerNote}</td></tr>`;
   const headerRow = opts.branding
     ? orgBrandBand(opts.branding)
     : `<tr><td style="padding:32px 32px 8px;">${emailBrandHeader()}</td></tr>`;
