@@ -529,6 +529,8 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 
 **Blob 은 private 스토어** (2026-07-12 전환): URL 을 알아도 인증 없이는 403. 읽기는 반드시 `fetchBlobFile()`(내부에서 `get()` + 토큰) 또는 `readStoredFile()` 경유 — 일반 `fetch(url)` 는 403 난다. 호스트에 `.public.` 이 있으면 legacy 키(전환 전 잔존 — 마이그레이션 완료로 운영엔 없음)로 간주해 일반 fetch 로 분기한다.
 
+⚠️ **파일 키를 저장하는 새 DB 컬럼을 추가하면 `app/api/cron/blob-orphans` 의 `collectKnownKeys` 에도 반드시 등록** — 월간 스위퍼가 30일+ 미참조 blob 을 자동 삭제하므로, 등록을 빠뜨리면 그 컬럼의 정상 파일이 고아로 오판된다 (양수 방어는 "삭제 대상 > max(50, 전체 10%) 면 중단" 브레이커뿐).
+
 **`resumeFilePath` 컬럼은 둘 중 어느 것이든 저장 가능**. 다운로드 시 **항상 `/api/uploads/candidate/[id]` 사용** (2026-05-16 부터). 이 라우트가:
 - 세션 + ownsOrg + 부모 공고 PIN 잠금 검증
 - Blob URL 이어도 server-side 로 읽어 stream proxy → Blob URL 외부 노출 X
