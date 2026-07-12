@@ -20,6 +20,7 @@
  */
 
 import { ProxyAgent } from "undici";
+import { subdomainFromHost } from "@/lib/subdomain";
 
 const TOKEN_URL = "https://kakaoapi.aligo.in/akv10/token/create/600/s";
 const SEND_URL = "https://kakaoapi.aligo.in/akv10/alimtalk/send/";
@@ -56,6 +57,19 @@ const TEMPLATE_ENV: Record<AlimtalkType, string> = {
   schedule_propose: "ALIGO_TPL_SCHEDULE_PROPOSE",
   interview_day_reminder: "ALIGO_TPL_INTERVIEW_DAY",
   decision_pass: "ALIGO_TPL_DECISION_PASS",
+};
+
+/**
+ * 법인 서브도메인({co}.intervia.kr) 링크 전용 승인 템플릿 코드 env.
+ * 카카오는 버튼 URL 도메인이 승인 템플릿에 등록된 도메인과 일치해야 발송을 허용한다
+ * (apex 템플릿에 서브도메인 URL 을 넣으면 반려). 링크가 서브도메인일 때는 서브도메인
+ * 으로 승인된 이 템플릿으로 발송한다. 미설정(승인 전)이면 링크를 apex 로 강등해
+ * 기본 템플릿으로 폴백한다 — 승인 여부와 무관하게 알림톡이 깨지지 않는다.
+ * 면접 링크류만 대상(schedule 은 /schedule/ 라 apex 유지 → 미포함).
+ */
+const SUB_TEMPLATE_ENV: Partial<Record<AlimtalkType, string>> = {
+  interview_invite: "ALIGO_TPL_INTERVIEW_INVITE_SUB",
+  interview_reminder: "ALIGO_TPL_INTERVIEW_REMINDER_SUB",
 };
 
 export type AlimtalkVars = {
@@ -107,6 +121,49 @@ function buildButton(type: AlimtalkType, v: AlimtalkVars): string | undefined {
       { name: label, linkType: "WL", linkTypeName: "웹링크", linkMo: v.url, linkPc: v.url },
     ],
   });
+}
+
+/** {sub}.intervia.kr → intervia.kr (서브도메인 승인 템플릿이 없을 때 apex 폴백용). */
+function toApexUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const sub = subdomainFromHost(u.host);
+    if (sub) u.host = u.host.slice(sub.length + 1);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * 링크 도메인과 승인 템플릿을 정합시킨다 (카카오는 버튼 도메인이 승인 템플릿과 일치해야 함).
+ *  - 링크가 법인 서브도메인({co}.intervia.kr)이고 SUB 템플릿(env)이 있으면
+ *    → 서브도메인 링크 유지 + SUB 템플릿 코드로 발송.
+ *  - SUB 템플릿 미설정(카카오 승인 전)이면
+ *    → 링크를 apex 로 강등 + 기본(apex) 템플릿 (도메인 불일치 반려 방지).
+ * tplCode 가 undefined 면 발송 skip(호출부에서 template_not_set 처리).
+ */
+function resolveLinkAndTemplate(
+  type: AlimtalkType,
+  url: string | undefined
+): { url: string | undefined; tplCode: string | undefined } {
+  const baseTpl = process.env[TEMPLATE_ENV[type]];
+  const subEnvName = SUB_TEMPLATE_ENV[type];
+  if (url && subEnvName) {
+    let host: string | null = null;
+    try {
+      host = new URL(url).host;
+    } catch {
+      host = null;
+    }
+    if (host && subdomainFromHost(host)) {
+      const subTpl = process.env[subEnvName];
+      if (subTpl) return { url, tplCode: subTpl };
+      // 서브도메인 템플릿 미승인/미설정 → apex 로 강등해 기존 템플릿으로 안전 발송.
+      return { url: toApexUrl(url), tplCode: baseTpl };
+    }
+  }
+  return { url, tplCode: baseTpl };
 }
 
 export function isAlimtalkConfigured(): boolean {
@@ -203,7 +260,9 @@ export async function sendCandidateAlimtalk(
     return { ok: false, skipped: true, reason: "local_disabled" };
   }
 
-  const tplCode = process.env[TEMPLATE_ENV[type]];
+  // 링크 도메인(apex/서브도메인)에 맞는 승인 템플릿을 고르고, 서브도메인 템플릿이
+  // 아직 없으면 링크를 apex 로 강등한다(카카오 도메인 검증 통과).
+  const { url: linkUrl, tplCode } = resolveLinkAndTemplate(type, args.vars.url);
   if (!tplCode) return { ok: false, skipped: true, reason: "template_not_set" };
 
   const realMobile = normalizeMobile(args.phone);
@@ -218,8 +277,10 @@ export async function sendCandidateAlimtalk(
   const token = await getToken();
   if (!token) return { ok: false, skipped: false, reason: "token_failed" };
 
-  const message = buildMessage(type, args.vars);
-  const button = buildButton(type, args.vars);
+  // 템플릿 정합 후의 vars — 서브도메인 템플릿 미승인 시 url 이 apex 로 강등돼 있다.
+  const vars = { ...args.vars, url: linkUrl };
+  const message = buildMessage(type, vars);
+  const button = buildButton(type, vars);
 
   const body = new URLSearchParams({
     apikey: process.env.ALIGO_API_KEY!,
