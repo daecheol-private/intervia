@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
-import { Logo } from "@/app/components/Logo";
+import { Logo, PoweredByIntervia } from "@/app/components/Logo";
 import { formatLocalDate } from "@/lib/utils";
 
 type Slot = { start: string; end: string };
@@ -142,6 +142,7 @@ export default function SchedulePage() {
             {err.message}
           </p>
         </div>
+        <PoweredByIntervia className="mt-6" />
       </main>
     );
   }
@@ -151,6 +152,7 @@ export default function SchedulePage() {
       <main className="max-w-md mx-auto px-6 py-16">
         <BrandHeader />
         <div className="text-center text-sm text-ink-muted">불러오는 중...</div>
+        <PoweredByIntervia className="mt-6" />
       </main>
     );
   }
@@ -167,6 +169,7 @@ export default function SchedulePage() {
             지원이 취소되었습니다. 관심 가져주셔서 감사합니다.
           </p>
         </div>
+        <PoweredByIntervia className="mt-6" />
       </main>
     );
   }
@@ -224,6 +227,7 @@ export default function SchedulePage() {
             일정 변경이나 취소가 필요하시면 채용 담당자에게 문의해 주세요.
           </p>
         </div>
+        <PoweredByIntervia className="mt-6" />
       </main>
     );
   }
@@ -324,8 +328,8 @@ export default function SchedulePage() {
           {formatLocalDate(info.expiresAt)}
         </p>
       </div>
-      <p className="text-[11px] text-ink-muted text-center mt-4">
-        본 페이지는 Intervia 채용 플랫폼에서 발송되었습니다.{" "}
+      <PoweredByIntervia className="mt-6" />
+      <p className="text-[11px] text-ink-muted text-center mt-2">
         <Link href="/privacy" className="underline">
           처리방침
         </Link>

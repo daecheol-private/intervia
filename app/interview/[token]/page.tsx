@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { memo, useEffect, useRef, useState } from "react";
 import { useVoiceInput } from "./use-voice-input";
-import { LogoMark, Logo } from "@/app/components/Logo";
+import { LogoMark, Logo, PoweredByIntervia } from "@/app/components/Logo";
 import { MicHelpModal } from "@/app/components/MicHelpModal";
 import { t, normalizeLang, type Lang } from "@/lib/i18n/interview";
 import { isValidBrandColor, textColorOn } from "@/lib/brand-color";
@@ -867,6 +867,7 @@ export default function InterviewPage() {
       )}
 
       <MicHelpModal open={micHelp} onClose={() => setMicHelp(false)} />
+      <PoweredByIntervia className="mt-2 shrink-0" />
     </main>
   );
 }
@@ -1389,6 +1390,7 @@ function PersonalityGate({
           </span>
         </div>
       </div>
+      <PoweredByIntervia className="mt-4 shrink-0" />
     </main>
   );
 }
@@ -1705,6 +1707,7 @@ function McqGate({
           </span>
         </div>
       </div>
+      <PoweredByIntervia className="mt-4 shrink-0" />
     </main>
   );
 }
@@ -1722,8 +1725,8 @@ function CenteredCard({
 }) {
   const hasLogoBand = Boolean(brand?.logoUrl);
   return (
-    <main className="flex-1 flex items-center justify-center p-6">
-      <div className="bg-card border border-border-default rounded-2xl overflow-hidden max-w-md shadow-sm">
+    <main className="flex-1 flex flex-col items-center justify-center gap-5 p-6">
+      <div className="bg-card border border-border-default rounded-2xl overflow-hidden w-full max-w-md shadow-sm">
         {hasLogoBand ? (
           <div
             className="flex justify-center px-6 py-5"
@@ -1743,6 +1746,7 @@ function CenteredCard({
           {children}
         </div>
       </div>
+      <PoweredByIntervia className="max-w-md" />
     </main>
   );
 }
@@ -1767,7 +1771,7 @@ function IntroBandCard({
   children: React.ReactNode;
 }) {
   return (
-    <main className="flex-1 flex items-center justify-center p-6">
+    <main className="flex-1 flex flex-col items-center justify-center gap-5 p-6">
       <div className="w-full max-w-md bg-card border border-border-default rounded-2xl overflow-hidden shadow-sm">
         <div
           className={`px-5 py-3.5 border-b border-border-default flex items-center gap-2.5 ${
@@ -1810,6 +1814,7 @@ function IntroBandCard({
         </div>
         <div className="p-8 text-center">{children}</div>
       </div>
+      <PoweredByIntervia className="max-w-md" />
     </main>
   );
 }
@@ -2186,6 +2191,7 @@ function ConsentGate({
           </div>
         </div>
       </div>
+      <PoweredByIntervia className="mt-4 shrink-0" />
     </main>
   );
 }

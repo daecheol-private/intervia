@@ -9,6 +9,7 @@ import {
   MESSAGE_MAX,
   MESSAGE_MIN,
 } from "@/lib/inquiry";
+import { PoweredByIntervia } from "@/app/components/Logo";
 
 export default function InterviewInquiryPage() {
   const params = useParams<{ token: string }>();
@@ -46,8 +47,8 @@ export default function InterviewInquiryPage() {
 
   if (done) {
     return (
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="bg-card border border-border-default rounded-2xl p-10 text-center max-w-md shadow-sm">
+      <main className="flex-1 flex flex-col items-center justify-center gap-5 p-6">
+        <div className="bg-card border border-border-default rounded-2xl p-10 text-center w-full max-w-md shadow-sm">
           <div className="text-4xl mb-3">🛟</div>
           <h1 className="text-xl font-bold text-ink">접수 완료</h1>
           <p className="text-sm text-ink-soft mt-3 leading-relaxed">
@@ -55,6 +56,7 @@ export default function InterviewInquiryPage() {
             급한 경우 면접 안내 메일에 회신해 주셔도 됩니다.
           </p>
         </div>
+        <PoweredByIntervia className="max-w-md" />
       </main>
     );
   }
@@ -136,6 +138,7 @@ export default function InterviewInquiryPage() {
           </Link>
         </div>
       </div>
+      <PoweredByIntervia className="mt-10" />
     </main>
   );
 }

@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { formatLocalDateTime } from "@/lib/utils";
+import { PoweredByIntervia } from "@/app/components/Logo";
 
 const STAGE_LABEL_KO: Record<string, string> = {
   applied: "지원 접수",
@@ -74,8 +75,8 @@ export default function SelfPage() {
 
   if (deleted) {
     return (
-      <main className="flex-1 flex items-center justify-center p-6">
-        <div className="bg-card border border-border-default rounded-2xl p-10 text-center max-w-md shadow-sm">
+      <main className="flex-1 flex flex-col items-center justify-center gap-5 p-6">
+        <div className="bg-card border border-border-default rounded-2xl p-10 text-center w-full max-w-md shadow-sm">
           <div className="text-4xl mb-3">🗑️</div>
           <h1 className="text-xl font-bold text-ink">폐기 완료</h1>
           <p className="text-sm text-ink-soft mt-3 leading-relaxed">
@@ -83,6 +84,7 @@ export default function SelfPage() {
             자동 삭제됩니다 (처리방침 §3).
           </p>
         </div>
+        <PoweredByIntervia className="max-w-md" />
       </main>
     );
   }
@@ -169,6 +171,7 @@ export default function SelfPage() {
           </>
         )}
       </div>
+      <PoweredByIntervia className="mt-10" />
     </main>
   );
 }

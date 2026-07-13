@@ -71,3 +71,21 @@ export function Logo({
     </span>
   );
 }
+
+/**
+ * 지원자 대면 화면(면접·인성검사·일정·지원·안내) 하단 공통 브랜드 서명 — "Powered by" + 로고 마크 + "Intervia".
+ * 상단 헤더는 고객사(법인) 브랜딩이라 서비스 주체를 하단에서 각인한다. 이 토큰 경로들에서는
+ * 전역 Footer 가 숨겨져 있어(app/components/Footer.tsx) 브랜드 표시가 없던 것을 보강.
+ * w-full + 우측 정렬 — 부모 콘텐츠 컨테이너(카드·max-w-* 래퍼)의 오른쪽 끝에 붙는다.
+ */
+export function PoweredByIntervia({ className }: { className?: string }) {
+  return (
+    <div
+      className={`flex w-full items-center justify-end gap-2 text-ink-muted ${className ?? ""}`}
+    >
+      <span className="text-xs">Powered by</span>
+      <LogoMark size={22} />
+      <span className="text-sm font-bold tracking-tight text-ink-soft">Intervia</span>
+    </div>
+  );
+}
