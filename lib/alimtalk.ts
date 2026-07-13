@@ -185,6 +185,41 @@ function normalizeMobile(raw: string | null | undefined): string | null {
 }
 
 /**
+ * 야간(KST) 발송 억제 대상 — HR 이 버튼으로 능동 발송하는 종류만.
+ * 심야에 트리거되면 지원자 폰이 즉시 울리지 않도록 당일 아침으로 예약(알리고 senddate)한다.
+ *  - decision_pass(합격)는 예외(즉시) — 좋은 소식은 지연하지 않는다(사용자 결정 2026-07-14).
+ *  - interview_reminder / interview_day_reminder 는 cron 이 KST 09~20시에만 돌아
+ *    애초에 야간에 호출되지 않으므로 목록에서 제외(넣어도 무해하나 불필요).
+ */
+const NIGHTLY_DEFER_TYPES: ReadonlySet<AlimtalkType> = new Set([
+  "interview_invite",
+  "schedule_propose",
+]);
+
+/** 야간 경계(KST). 자정~이 시각 직전(00:00~06:59:59)에 트리거된 억제 대상은 당일 이 시각으로 예약. */
+const NIGHT_DEFER_UNTIL_HOUR_KST = 7;
+
+/**
+ * 억제 대상 종류가 KST 야간(00:00~07:00 직전)에 발송되려 하면 알리고 예약발송용
+ * senddate(`YYYYMMDDHHmmss`, KST 벽시계)를 반환한다. 그 외(비대상·주간)엔 undefined(즉시 발송).
+ * KST 는 서머타임이 없어 UTC+9 고정 — now 에 9h 를 더해 UTC 필드로 읽으면 KST 벽시계가 된다
+ * (서버가 UTC 로 돌아도 정확). 최대 지연은 7시간이라 알리고 예약 최대기간 제한과 무관.
+ */
+export function computeNightlyDeferSenddate(
+  type: AlimtalkType,
+  now: Date
+): string | undefined {
+  if (!NIGHTLY_DEFER_TYPES.has(type)) return undefined;
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  if (kst.getUTCHours() >= NIGHT_DEFER_UNTIL_HOUR_KST) return undefined; // 07:00 이후 → 즉시
+  const y = kst.getUTCFullYear();
+  const m = String(kst.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(kst.getUTCDate()).padStart(2, "0");
+  const hh = String(NIGHT_DEFER_UNTIL_HOUR_KST).padStart(2, "0");
+  return `${y}${m}${d}${hh}0000`; // 당일 KST 07:00:00
+}
+
+/**
  * 로컬/비운영 강제 리다이렉트 수신번호 (mailer 의 LOCAL_DEV_FALLBACK 과 동일 정책).
  * NODE_ENV != production(로컬 dev·테스트 스크립트) 이면 실제 후보자 번호 대신 항상 이 번호로만 발송한다.
  * → 로컬 테스트 중 실제 지원자에게 알림톡이 나가는 사고를 원천 차단. 운영에선 null(실번호 발송).
@@ -295,6 +330,13 @@ export async function sendCandidateAlimtalk(
     testMode: process.env.ALIGO_TEST_MODE === "1" ? "Y" : "N",
   });
   if (button) body.set("button_1", button);
+  // 야간(KST 00~07시) 억제: HR 능동 발송(초대·일정제안)만 당일 아침 07:00 로 예약(알리고 senddate).
+  // 이메일은 이미 즉시 발송됨 — 알림톡(카톡 푸시)만 심야 수신을 피한다. 합격·리마인더는 대상 아님.
+  const senddate = computeNightlyDeferSenddate(type, new Date());
+  if (senddate) {
+    body.set("senddate", senddate);
+    console.log(`[alimtalk] 야간 예약: type=${type} → senddate=${senddate}(KST)`);
+  }
   if (args.fallbackText) {
     body.set("failover", "Y");
     body.set("fsubject_1", "채용 안내");
