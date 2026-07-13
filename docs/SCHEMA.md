@@ -162,7 +162,7 @@
 | job_id | INTEGER NOT NULL FK job_postings(id) ON DELETE CASCADE | |
 | uploaded_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
 | source | TEXT NOT NULL DEFAULT 'manual' | 유입 경로 — `manual`(HR 업로드) / `apply_link`(공개 지원 링크 자가 업로드) |
-| apply_referrer_host | TEXT NULL | apply_link 유입 시 `document.referrer` 호스트 (예: www.saramin.co.kr). best-effort — noreferrer·인앱 브라우저면 NULL. 라벨 매핑: `lib/apply-source.ts` (0055) |
+| apply_referrer_host | TEXT NULL | apply_link 유입 시 `document.referrer` 호스트 (예: www.saramin.co.kr). best-effort — noreferrer·인앱 브라우저면 NULL. 라벨 매핑: `lib/apply-source.ts` (0055). 소비처: 채용 결과 리포트(`/jobs/[id]/report`) §04 '지원 유입 경로' 도넛 집계 |
 | resume_hash | TEXT NULL | 파일 **바이트** SHA-256. 업로드 시 `(job_id, resume_hash)` 중복 거부 (1차 dedup, 바이트 동일만) |
 | resume_content_hash | TEXT NULL | 파싱된 **본문**(정규화) SHA-256. 워커가 파싱 후 기록. 같은 공고에 동일 내용이 먼저 있으면 자동 삭제 (2차 dedup, 바이트 달라도 잡음) |
 | name / email / phone / age / career_years / career_summary | … | 정규식 + LLM 추출 |

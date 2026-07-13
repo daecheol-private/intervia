@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { formatKstDateTime, formatLocalDate } from "@/lib/utils";
 import { STAGE_RANK, type Stage } from "@/lib/stage-meta";
+import { applySourceLabel } from "@/lib/apply-source";
 import { PrintButton } from "./PrintButton";
 import { Donut, Radar, VBars, HBars } from "@/components/charts";
 
@@ -147,6 +148,8 @@ export default async function JobReportPage({
       decidedAt: candidates.decidedAt,
       createdAt: candidates.createdAt,
       lastInterviewEmailSentAt: candidates.lastInterviewEmailSentAt,
+      source: candidates.source,
+      applyReferrerHost: candidates.applyReferrerHost,
     })
     .from(candidates)
     .where(eq(candidates.jobId, jobId))
@@ -502,6 +505,53 @@ export default async function JobReportPage({
   }));
   const hasAge = ageList.length > 0;
 
+  // ───────── 지원 유입 경로 (source + referrer 집계) ─────────
+  // manual = HR 직접 업로드, apply_link = 공개 지원 링크 자가 지원.
+  // apply_link 는 referrer 호스트가 잡히면 채널명(사람인 등), 아니면 '경로 미상'(noreferrer·인앱).
+  const applyLinkCount = cands.filter((c) => c.source === "apply_link").length;
+  const manualCount = totalCount - applyLinkCount;
+  const channelCount: Record<string, number> = {};
+  let unknownApplyCount = 0;
+  for (const c of cands) {
+    if (c.source !== "apply_link") continue;
+    const label = applySourceLabel(c.applyReferrerHost);
+    if (label) channelCount[label] = (channelCount[label] ?? 0) + 1;
+    else unknownApplyCount++;
+  }
+  const channelSorted = Object.entries(channelCount).sort((a, b) => b[1] - a[1]);
+  const topChannel = channelSorted[0] ?? null;
+  // 도넛: 채용사이트 채널 상위 6개(다색) + 기타 채널 + 경로 미상 + 직접 등록.
+  const SRC_TOP = 6;
+  const SRC_PALETTE = [RC.blue, RC.sky, RC.teal, RC.amber, RC.violet, RC.green];
+  const sourceData: { label: string; value: number; color: string }[] = [];
+  channelSorted.slice(0, SRC_TOP).forEach(([label, value], i) => {
+    sourceData.push({ label, value, color: SRC_PALETTE[i % SRC_PALETTE.length] });
+  });
+  const restChannels = channelSorted.slice(SRC_TOP);
+  const restChannelSum = restChannels.reduce((s, [, v]) => s + v, 0);
+  if (restChannelSum > 0)
+    sourceData.push({
+      label: `기타 채널 ${restChannels.length}곳`,
+      value: restChannelSum,
+      color: RC.orange,
+    });
+  if (unknownApplyCount > 0)
+    sourceData.push({
+      label: "지원 링크 (경로 미상)",
+      value: unknownApplyCount,
+      color: RC.slate,
+    });
+  if (manualCount > 0)
+    sourceData.push({
+      label: "직접 등록 (HR)",
+      value: manualCount,
+      color: RC.slateSoft,
+    });
+  const selfApplyPct =
+    totalCount > 0 ? Math.round((applyLinkCount / totalCount) * 100) : 0;
+  // 유입 경로 섹션은 공개 지원 링크로 들어온 지원자가 하나라도 있을 때만 (직접 등록만이면 무의미).
+  const hasSource = applyLinkCount > 0;
+
   // ───────── 지원자 풀: 서류 4축 (전체 vs 합격자) ─────────
   const SCREEN_AXES: {
     key: "tech_fit" | "experience_depth" | "role_match" | "growth_attitude";
@@ -790,6 +840,24 @@ export default async function JobReportPage({
           : "지원자 풀이 형성되었습니다."}
       </>
     );
+    if (applyLinkCount > 0)
+      insights.push(
+        topChannel ? (
+          <>
+            공개 지원 링크로{" "}
+            <b className="font-semibold text-primary">{applyLinkCount}명</b>(
+            {selfApplyPct}%)이 자가 지원했고, 그중{" "}
+            <b className="font-semibold">{topChannel[0]}</b> 유입이{" "}
+            {topChannel[1]}명으로 가장 많았습니다.
+          </>
+        ) : (
+          <>
+            공개 지원 링크로{" "}
+            <b className="font-semibold text-primary">{applyLinkCount}명</b>(
+            {selfApplyPct}%)이 자가 지원했습니다.
+          </>
+        )
+      );
     if (qualitySentence) insights.push(<>{qualitySentence}</>);
     if (showAutomation && savedMinutes > 0) {
       const autoParts = [
@@ -1226,10 +1294,54 @@ export default async function JobReportPage({
             )}
           </Section>
 
-          {/* ── 04 지원자 분포 ── */}
-          {show04 && (
+          {/* ── 04 지원 유입 경로 ── */}
+          {hasSource && (
             <Section
               n="04"
+              title="지원 유입 경로"
+              sub={`자가 지원 ${applyLinkCount}명 · ${selfApplyPct}%`}
+              desc="이력서가 어느 채널을 통해 들어왔는가"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-[1.35fr_1fr] gap-2 items-stretch">
+                <ChartCard title="유입 경로 분포">
+                  <Donut data={sourceData} size={118} thickness={17} />
+                </ChartCard>
+                <ChartCard title="유입 요약">
+                  <ul className="space-y-2.5 text-[12px]">
+                    <SourceStat
+                      label="자가 지원 (지원 링크)"
+                      value={`${applyLinkCount}명`}
+                      sub={`전체의 ${selfApplyPct}%`}
+                    />
+                    {topChannel && (
+                      <>
+                        <SourceStat
+                          label="최다 유입처"
+                          value={topChannel[0]}
+                          sub={`${topChannel[1]}명`}
+                        />
+                        <SourceStat
+                          label="유입 채널 수"
+                          value={`${channelSorted.length}곳`}
+                        />
+                      </>
+                    )}
+                    <SourceStat label="직접 등록 (HR)" value={`${manualCount}명`} />
+                  </ul>
+                  <p className="text-[10.5px] text-ink-muted leading-relaxed mt-3">
+                    유입 경로는 지원 시 브라우저 referrer 로 자동 감지되며, 채용사이트가
+                    referrer 를 차단하거나 인앱 브라우저로 열면 &lsquo;경로 미상&rsquo;으로
+                    집계됩니다.
+                  </p>
+                </ChartCard>
+              </div>
+            </Section>
+          )}
+
+          {/* ── 05 지원자 분포 ── */}
+          {show04 && (
+            <Section
+              n="05"
               title="지원자 분포"
               desc="어떤 지원자들이 지원했는가 · 합격자 위치"
             >
@@ -1267,10 +1379,10 @@ export default async function JobReportPage({
             </Section>
           )}
 
-          {/* ── 05 AI 평가 결과 ── */}
+          {/* ── 06 AI 평가 결과 ── */}
           {show05 && (
             <Section
-              n="05"
+              n="06"
               title="AI 평가 결과"
               desc="서류 평가 기반 지원자 풀의 강점·품질 분포"
             >
@@ -1345,10 +1457,10 @@ export default async function JobReportPage({
             </Section>
           )}
 
-          {/* ── 06 채용 속도 · 운영 ── */}
+          {/* ── 07 채용 속도 · 운영 ── */}
           {show07 && (
             <Section
-              n="06"
+              n="07"
               title="채용 속도 · 운영"
               desc="구간별 평균 소요 시간과 지연 원인"
             >
@@ -1563,6 +1675,28 @@ function ChartCard({
       <div className="text-[11px] font-medium text-ink-soft mb-2">{title}</div>
       {children}
     </div>
+  );
+}
+
+function SourceStat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <li className="flex items-baseline justify-between gap-2 border-b border-border-default/60 pb-2 last:border-0 last:pb-0">
+      <span className="text-ink-muted">{label}</span>
+      <span className="text-right shrink-0">
+        <b className="font-semibold text-ink tabular-nums">{value}</b>
+        {sub && (
+          <span className="text-[10.5px] text-ink-muted ml-1">{sub}</span>
+        )}
+      </span>
+    </li>
   );
 }
 
