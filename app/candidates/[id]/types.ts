@@ -3,6 +3,10 @@ export type Confidence = "high" | "medium" | "low";
 export type Candidate = {
   id: number;
   jobId: number;
+  // 유입 경로 — 'manual'(담당자 업로드) / 'apply_link'(지원 링크 자가 업로드).
+  source: string;
+  // apply_link 유입 시 referrer 호스트 (예: www.saramin.co.kr). 감지 실패 시 null.
+  applyReferrerHost?: string | null;
   name: string;
   email: string | null;
   phone: string | null;

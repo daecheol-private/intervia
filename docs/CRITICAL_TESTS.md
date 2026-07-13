@@ -106,7 +106,7 @@ npm run test:critical        # 전체 (~2/4분, dev 서버 라우트 컴파일 �
 
 | ID | 시나리오 | 예상 결과 |
 |---|---|---|
-| CT-501 | 정상 지원 (이름/이메일/동의/PDF) | `{ok:true}` + 후보 row `source:"apply_link"` + 동의시각 기록 + 큐 등록 |
+| CT-501 | 정상 지원 (이름/이메일/동의/PDF/referrer) | `{ok:true}` + 후보 row `source:"apply_link"` + `apply_referrer_host` 호스트만 저장 + 동의시각 기록 + 큐 등록 |
 | CT-502 | 같은 이메일 재지원 | 409 `{code:"already_applied"}` |
 | CT-503 | 수집·이용 동의 누락 | 400 `{code:"consent_required"}` |
 | CT-504 | **잔액 0 이어도** 지원 접수 성공 (지원자 유실 방지 정책) | `{ok:true}`, 평가는 큐 보류 |

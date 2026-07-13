@@ -57,6 +57,7 @@ import {
   ScoreBar,
   displayCandidateName,
   formatPhoneKr,
+  SourceBadge,
   recColor,
   scoreColor,
   showRec,
@@ -606,6 +607,10 @@ export default function CandidateDetailPage() {
                       AI {candidate.screeningReport.recommendation}
                     </span>
                   )}
+                <SourceBadge
+                  source={candidate.source}
+                  referrerHost={candidate.applyReferrerHost}
+                />
                 <EmailSentBadge sentAt={candidate.lastInterviewEmailSentAt} />
               </div>
             </div>

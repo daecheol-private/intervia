@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { formatLocalDateTime } from "@/lib/utils";
+import { applySourceLabel } from "@/lib/apply-source";
 
 export const recColor: Record<string, string> = {
   강력추천: "bg-primary text-surface border-primary",
@@ -242,6 +243,38 @@ export function Modal({
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * 이력서 유입 경로 배지 — 담당자 업로드 vs 지원 링크(referrer 로 감지한 채용사이트).
+ * referrer 는 best-effort: noreferrer·인앱 브라우저·직접 접속이면 사이트 없이 "지원 링크".
+ */
+export function SourceBadge({
+  source,
+  referrerHost,
+}: {
+  source: string;
+  referrerHost?: string | null;
+}) {
+  if (source !== "apply_link")
+    return (
+      <span className="text-[11px] px-2 py-0.5 rounded-md border bg-surface-alt text-ink-soft border-border-default">
+        담당자 업로드
+      </span>
+    );
+  const site = applySourceLabel(referrerHost);
+  return (
+    <span
+      className="text-[11px] px-2 py-0.5 rounded-md border bg-info-soft text-info border-info/30 max-w-[180px] truncate"
+      title={
+        referrerHost
+          ? `유입: ${referrerHost}`
+          : "유입 사이트 미감지 (직접 접속·모바일 앱 등)"
+      }
+    >
+      {site ? `${site} 지원` : "지원 링크"}
+    </span>
   );
 }
 

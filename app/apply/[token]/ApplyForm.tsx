@@ -93,6 +93,8 @@ export default function ApplyForm({
       for (const a of attachments) fd.append("attachment", a);
       fd.append("consent_collection_use", agreeCollection ? "true" : "false");
       fd.append("consent_ai_decision", agreeAi ? "true" : "false");
+      // 유입 출처(어느 채용사이트에서 왔는지) — 서버가 호스트만 추려 저장. 없으면 생략.
+      if (document.referrer) fd.append("referrer", document.referrer);
 
       const res = await fetch(`/api/apply/${token}`, {
         method: "POST",

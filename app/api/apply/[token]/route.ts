@@ -17,6 +17,7 @@ import { triggerWorker } from "@/lib/worker-trigger";
 import { logAudit } from "@/lib/audit";
 import { isJobExpired } from "@/lib/job-lifecycle";
 import { CONSENT_VERSION } from "@/lib/consent";
+import { normalizeReferrerHost } from "@/lib/apply-source";
 import { extractKoreanNameFromFilename } from "@/lib/file-classify";
 import { log } from "@/lib/logger";
 
@@ -65,6 +66,8 @@ export async function POST(
 
   const consentCollection = form.get("consent_collection_use") === "true";
   const consentAi = form.get("consent_ai_decision") === "true";
+  // 유입 출처 — 폼이 보낸 document.referrer 에서 호스트만 (자기 도메인·비정상 값은 null).
+  const referrerHost = normalizeReferrerHost(form.get("referrer"));
 
   if (!email || !/\S+@\S+\.\S+/.test(email))
     return bad("올바른 이메일을 입력해 주세요.");
@@ -117,6 +120,7 @@ export async function POST(
         jobId: job.id,
         uploadedByUserId: null,
         source: "apply_link",
+        applyReferrerHost: referrerHost,
         resumeHash,
         name: candidateName,
         email,

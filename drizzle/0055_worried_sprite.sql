@@ -1,0 +1,1 @@
+ALTER TABLE `candidates` ADD `apply_referrer_host` text;

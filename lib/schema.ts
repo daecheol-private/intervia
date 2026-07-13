@@ -378,6 +378,9 @@ export const candidates = sqliteTable("candidates", {
   }),
   // 유입 경로 — 'manual'(HR 업로드) / 'apply_link'(공개 지원 링크 자가 업로드).
   source: text("source").notNull().default("manual"),
+  // apply_link 유입 시 document.referrer 의 호스트만 저장 (예: www.saramin.co.kr).
+  // 어느 채용사이트에서 왔는지 표시용 — best-effort (noreferrer·인앱 브라우저면 null).
+  applyReferrerHost: text("apply_referrer_host"),
   resumeHash: text("resume_hash"),
   // 파싱된 이력서 본문(정규화) SHA-256. resume_hash(파일 바이트)와 달리 "내용 동일"을 잡는다.
   // 바이트가 달라도(재저장·재export) 텍스트가 같으면 같은 값 → 워커가 같은 공고 내 중복 자동 삭제.

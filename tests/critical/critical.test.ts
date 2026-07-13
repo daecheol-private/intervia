@@ -415,6 +415,7 @@ describe("CT-5 셀프 지원", () => {
         phone: "010-2222-3333",
         consent_collection_use: "true",
         consent_ai_decision: "true",
+        referrer: "https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx=123",
         file: { buf: ctx.pdfB, name: `${RUN_TAG}-apply-b.pdf` },
       })
     );
@@ -423,14 +424,17 @@ describe("CT-5 셀프 지원", () => {
     const cand = await row<{
       id: number;
       source: string;
+      apply_referrer_host: string | null;
       applicant_consent_confirmed_at: string | null;
     }>(
-      "SELECT id, source, applicant_consent_confirmed_at FROM candidates WHERE job_id = ? AND email = ?",
+      "SELECT id, source, apply_referrer_host, applicant_consent_confirmed_at FROM candidates WHERE job_id = ? AND email = ?",
       [ids.jobA, "apply1@example.com"]
     );
     assert.ok(cand, "지원자 row 미생성");
     ctx.candApply = Number(cand.id);
     assert.equal(cand.source, "apply_link");
+    // referrer 는 호스트만 저장 (경로·쿼리 버림 — 유입 채용사이트 식별용)
+    assert.equal(cand.apply_referrer_host, "www.saramin.co.kr");
     assert.ok(cand.applicant_consent_confirmed_at, "동의 시각 미기록");
     const q = await row("SELECT status FROM screening_jobs WHERE candidate_id = ?", [
       ctx.candApply,
