@@ -20,7 +20,13 @@ import type { McqQuestion } from "@/lib/mcq";
 
 const POLL_MS = 3000;
 
-type McqState = { count: number; generating: boolean; enabled: boolean };
+type McqState = {
+  count: number;
+  generating: boolean;
+  enabled: boolean;
+  /** 자가검증 불일치(정답 재확인 필요) 문항 수 */
+  flagged: number;
+};
 
 export function McqPanel({
   jobId,
@@ -35,6 +41,7 @@ export function McqPanel({
   const [count, setCount] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [enabled, setEnabled] = useState(false);
+  const [flagged, setFlagged] = useState(0);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<McqQuestion[] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -55,6 +62,7 @@ export function McqPanel({
         count: d.count ?? 0,
         generating: !!d.generating,
         enabled: !!d.enabled,
+        flagged: d.flagged ?? 0,
       };
     } catch {
       return null;
@@ -64,6 +72,7 @@ export function McqPanel({
   const applyState = (s: McqState) => {
     setCount(s.count);
     setEnabled(s.enabled);
+    setFlagged(s.flagged);
   };
 
   const stopPoll = () => {
@@ -206,6 +215,8 @@ export function McqPanel({
       const d = (await r.json()) as { count: number };
       setCount(d.count);
       if (d.count === 0) setEnabled(false);
+      // 검토·수정 결과로 불일치 수 갱신 — 보기를 눌러 정답을 고치면 verified=true 가 되어 줄어든다.
+      setFlagged(draft.filter((q) => q.verified === false).length);
       setDraft(null);
       notify(
         d.count > 0
@@ -236,20 +247,26 @@ export function McqPanel({
   const reviewing = draft != null;
   // 적용 여부를 아이콘 색으로 표현: 적용 중=포레스트 강조, 그 외(미적용·미생성)=회색, 생성 중=깜빡임.
   const active = count > 0 && enabled;
+  // 자가검증 불일치 문항이 있으면(자동 생성 후 미검토 등) 경고색으로 확인 유도 — 생성 중엔 아직 결과 없음.
+  const needsReview = !generating && flagged > 0;
   const triggerClass = generating
     ? "border-primary/40 text-primary-deep bg-primary-soft animate-pulse"
-    : active
-      ? "border-primary/40 text-primary-deep bg-primary-soft hover:bg-primary/15"
-      : "border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink";
+    : needsReview
+      ? "border-warning/50 text-warning bg-warning-soft hover:bg-warning/15"
+      : active
+        ? "border-primary/40 text-primary-deep bg-primary-soft hover:bg-primary/15"
+        : "border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink";
 
-  // 마우스 오버 툴팁 — 이름 + 적용/미적용 상태를 한 줄로.
+  // 마우스 오버 툴팁 — 이름 + 적용/미적용/확인필요 상태를 한 줄로.
   const tooltip = `역량평가${
     generating
       ? " · 생성 중"
       : count > 0
-        ? enabled
-          ? " · 적용 중"
-          : " · 미적용"
+        ? needsReview
+          ? ` · 정답 확인 필요 ${flagged}문항`
+          : enabled
+            ? " · 적용 중"
+            : " · 미적용"
         : " · 미설정"
   }`;
 
@@ -267,6 +284,11 @@ export function McqPanel({
       >
         <ListChecks className="w-4 h-4" />
         역량평가
+        {needsReview && (
+          <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-warning text-white text-[10px] font-bold leading-none">
+            {flagged}
+          </span>
+        )}
       </button>
 
       <Modal
@@ -406,6 +428,13 @@ export function McqPanel({
                         : "아직 생성된 문제가 없습니다."}
               </p>
             </div>
+
+            {!loading && !generating && count > 0 && flagged > 0 && (
+              <p className="text-xs text-warning bg-warning-soft border border-warning/30 rounded-lg px-3 py-2 leading-relaxed">
+                ⚠ {flagged}문항은 자동 정답 검증에서 불일치가 감지됐습니다 — 아래{" "}
+                <strong>“문제 보기·수정”</strong>에서 올바른 보기를 눌러 정답을 확인·수정하세요.
+              </p>
+            )}
 
             {!loading && !generating && count > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3">

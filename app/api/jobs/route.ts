@@ -4,6 +4,7 @@ import {
   jobPostings,
   candidates,
   jobInterviewers,
+  organizations,
 } from "@/lib/schema";
 import { desc, eq, count, sql, and } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
@@ -22,8 +23,12 @@ import {
   serializeChecklist,
 } from "@/lib/job-checklist";
 import { traitProfileInputToJson } from "@/lib/personality";
+import { MCQ_TARGET_COUNT } from "@/lib/mcq";
+import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
+// mcqAutoGenerate 시 after() 에서 LLM 2회 호출(생성+검증) — 수십 초 소요. 넉넉히 잡는다.
+export const maxDuration = 120;
 
 export async function GET() {
   const me = await getCurrentUser();
@@ -136,6 +141,10 @@ export async function POST(req: Request) {
       ? body.applyToken
       : null;
 
+  // 공고 생성과 함께 역량평가(객관식) 자동 생성·적용 여부. true 면 아래 after() 가 LLM 으로
+  // 문항을 생성해 저장하고 mcqEnabled=true 로 켠다(HR 검토 없이 바로 적용, 불일치는 버튼색 경고).
+  const wantMcq = body.mcqAutoGenerate === true;
+
   const now = new Date();
   const [row] = await db
     .insert(jobPostings)
@@ -164,6 +173,8 @@ export async function POST(req: Request) {
       publishedAt: now.toISOString(),
       closesAt: defaultClosesAt(now),
       createdByUserId: me!.id,
+      // 역량평가 자동 생성 요청 시 진행 표시 — 공고 상세 진입 시 McqPanel 이 "생성 중"으로 폴링.
+      mcqGeneratingAt: wantMcq ? now.toISOString() : null,
     })
     .returning();
 
@@ -218,6 +229,54 @@ export async function POST(req: Request) {
       // 체크리스트는 보조 데이터 — 실패 시 즉석 분해 폴백으로 충분.
     }
   });
+
+  // 역량평가 자동 생성 — 요청 시에만. LLM 2회 호출(생성+검증)이라 응답 후 백그라운드로 처리하고,
+  // 그동안 상세 페이지의 McqPanel 이 "생성 중"으로 폴링한다. 실패해도 공고 자체는 정상.
+  if (wantMcq) {
+    after(async () => {
+      try {
+        // 무거운 LLM 모듈은 여기서만 lazy load — 라우트 top-level 번들에 gemini(@google/genai)를
+        // 끌어들이지 않는다. (dev 컴파일 그래프 비대화로 인한 테스트 서버 소켓 플레이크 회피 +
+        // mcqAutoGenerate=false 인 대다수 공고 생성에서 미사용 모듈 로딩 절약.)
+        const { generateMcqSet } = await import("@/lib/mcq-generate");
+        let companyName: string | null = null;
+        if (orgId) {
+          const [org] = await db
+            .select({ name: organizations.name })
+            .from(organizations)
+            .where(eq(organizations.id, orgId));
+          companyName = org?.name ?? null;
+        }
+        const questions = await generateMcqSet(
+          {
+            company: companyName,
+            position: body.position,
+            level: body.level,
+            employmentType: body.employmentType,
+            responsibilities: body.responsibilities,
+            requirements: body.requirements,
+            idealProfile: body.idealProfile ?? "",
+          },
+          MCQ_TARGET_COUNT
+        );
+        // 생성 성공 → 세트 저장 + 기본 적용(ON). HR 이 상세에서 검토·토글로 조정 가능.
+        await db
+          .update(jobPostings)
+          .set({ mcqSet: questions, mcqGeneratingAt: null, mcqEnabled: true })
+          .where(eq(jobPostings.id, row.id));
+      } catch (e) {
+        log.error("mcq_autogenerate_failed", {
+          jobId: row.id,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        // 진행 표시만 해제 — 공고 상세에서 "문제 생성"으로 재시도 가능(기존 세트 없음).
+        await db
+          .update(jobPostings)
+          .set({ mcqGeneratingAt: null })
+          .where(eq(jobPostings.id, row.id));
+      }
+    });
+  }
 
   return Response.json(row);
 }

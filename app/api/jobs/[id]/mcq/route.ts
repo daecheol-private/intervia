@@ -50,9 +50,13 @@ export async function GET(
   const set = a.job.mcqSet ?? [];
   const genAt = a.job.mcqGeneratingAt ? Date.parse(a.job.mcqGeneratingAt) : 0;
   const generating = !!genAt && Date.now() - genAt < MCQ_GEN_STALE_MS;
+  // 자가검증 불일치(정답 재확인 필요) 문항 수 — HR 이 검토 없이 자동 적용한 경우
+  // 트리거 버튼을 경고색으로 띄워 확인을 유도한다. 정답 자체는 노출하지 않음(개수만).
+  const flagged = set.filter((q) => q.verified === false).length;
   return Response.json({
     questions: set,
     count: set.length,
+    flagged,
     generating,
     enabled: a.job.mcqEnabled,
   });

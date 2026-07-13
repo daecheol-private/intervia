@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect, type ClipboardEvent } from "react";
 import Link from "next/link";
-import { Sparkles, Link2, Loader2, Info, ClipboardPaste, ImagePlus, X } from "lucide-react";
+import { Sparkles, Link2, Loader2, Info, ClipboardPaste, ImagePlus, X, ListChecks } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { confirmDialog } from "@/app/components/Dialog";
@@ -61,6 +61,8 @@ export default function NewJobPage() {
     password: "",
     recruitingContactEmail: "",
     traitProfile: { ...DEFAULT_TRAIT_PROFILE } as TraitProfile,
+    // 켜면 공고 생성과 함께 역량평가(객관식) 문항을 자동 생성하고 AI 면접에 적용한다.
+    mcqAutoGenerate: false,
   });
 
   // 채용 담당자 이메일 기본값 = 로그인 사용자 이메일(공고에 공개될 §37의2 연락처).
@@ -670,6 +672,42 @@ export default function NewJobPage() {
             onChange={(traitProfile) => setForm({ ...form, traitProfile })}
           />
         </Field>
+
+        {/* 역량평가 자동 생성 — 채용 담당자 이메일 바로 위. 켜면 공고 생성과 함께
+           객관식 문항을 자동 생성해 AI 면접에 적용한다(합불 미반영·참고용). */}
+        <div className="rounded-xl border border-border-default bg-surface-alt px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <ListChecks className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink-soft">역량평가 자동 생성</p>
+                <p className="text-[11px] text-ink-muted mt-0.5 leading-relaxed">
+                  켜면 공고를 만들면서 직무 기본기를 묻는 4지선다(객관식)를 자동으로
+                  생성해 AI 면접에 적용합니다. 점수는 합불에 반영되지 않는 참고용이며,
+                  생성 후 공고 상세에서 문항을 검토·수정하거나 끌 수 있습니다.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.mcqAutoGenerate}
+              aria-label="역량평가 자동 생성"
+              onClick={() =>
+                setForm({ ...form, mcqAutoGenerate: !form.mcqAutoGenerate })
+              }
+              className={`relative shrink-0 w-9 h-5 rounded-full transition-colors ${
+                form.mcqAutoGenerate ? "bg-primary" : "bg-border-strong"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-card rounded-full shadow transition-transform ${
+                  form.mcqAutoGenerate ? "translate-x-4" : ""
+                }`}
+              />
+            </button>
+          </div>
+        </div>
 
         <Field
           label="채용 담당자 이메일"
