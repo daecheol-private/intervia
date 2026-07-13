@@ -128,16 +128,6 @@ export default function NewJobPage() {
     setImportInfo(`✓ 자동 채움 완료 — ${bits.join(" · ")}. 내용 확인 후 수정/저장하세요.`);
   };
 
-  // 추측 불가능한 지원 토큰을 클라이언트에서 발급 (서버 apply_token unique 가 최종 보증).
-  const genApplyToken = () => {
-    const bytes = new Uint8Array(18);
-    crypto.getRandomValues(bytes);
-    let bin = "";
-    for (const b of bytes) bin += String.fromCharCode(b);
-    const b64 = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    return "ap_" + b64;
-  };
-
   // "지원링크 생성" — 링크(토큰)만 발급해 보여준다. 공고가 만들어지는 게 아니다.
   // 저장 시('공고 생성' 또는 '임시공고') 이 토큰이 그 공고에 붙어 링크가 동작한다.
   const generateApplyLink = async () => {
@@ -150,9 +140,21 @@ export default function NewJobPage() {
       { title: "지원링크 생성", confirmText: "지원링크 생성", tone: "info" }
     );
     if (!ok) return;
-    const token = genApplyToken();
+    // 토큰·URL 을 서버에서 발급 — 법인 서브도메인 정본({sub}.intervia.kr)을 서버가 구성한다.
+    // (클라이언트는 법인 서브도메인을 모르므로 origin 으로 조립하면 apex 로만 나온다.)
+    const r = await fetch("/api/jobs/draft-apply-link", { method: "POST" });
+    if (!r.ok) {
+      alert("지원 링크 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+    const { token, url, path } = (await r.json()) as {
+      token: string;
+      path: string;
+      url: string | null;
+    };
     setApplyToken(token);
-    setApplyUrl(`${window.location.origin}/apply/${token}`);
+    // 서버가 준 서브도메인 정본 URL 우선, 없으면(기능 OFF·공용도메인) 현재 origin.
+    setApplyUrl(url ?? `${window.location.origin}${path}`);
   };
 
   const copyLink = async () => {
