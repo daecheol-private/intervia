@@ -57,7 +57,24 @@ export class Client {
     } else if (opts.form) {
       body = opts.form; // fetch 가 multipart boundary 포함 Content-Type 자동 세팅
     }
-    const res = await fetch(this.base + path, { method, headers, body, redirect: "manual" });
+    // keep-alive 재사용 소켓이 서버 유휴 종료와 겹치면 요청이 서버에 닿기 전에
+    // "fetch failed"(ECONNRESET/other side closed)로 터진다 — Windows 실측 간헐 플레이크.
+    // 죽은 소켓 신호일 때만 1회 재시도 (미도달 실패라 재전송 안전. 타 오류는 그대로 throw).
+    const doFetch = () =>
+      fetch(this.base + path, { method, headers, body, redirect: "manual" });
+    let res: Response;
+    try {
+      res = await doFetch();
+    } catch (e) {
+      const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+      const deadSocket =
+        cause?.code === "ECONNRESET" ||
+        cause?.code === "UND_ERR_SOCKET" ||
+        (cause?.message ?? "").includes("other side closed");
+      if (!deadSocket) throw e;
+      await new Promise((r) => setTimeout(r, 300));
+      res = await doFetch();
+    }
     this.absorbCookies(res);
     const text = await res.text();
     let parsed: unknown = text;
