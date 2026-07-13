@@ -53,6 +53,14 @@ export async function POST(req: Request) {
     const userMsg = msg.startsWith("fetch failed")
       ? "해당 채용 사이트가 자동 수집을 차단하고 있어 공고를 불러오지 못했습니다. 공고 본문을 복사해 아래 항목에 직접 붙여넣어 주세요."
       : msg;
-    return new Response(`${userMsg} (오류 코드: ${ref})`, { status: 502 });
+    // 명확한 원인 코드(ECONNRESET 등)가 있으면 화면에도 함께 — 문의 없이도 원인 구분 가능.
+    const causeCode =
+      causeRaw instanceof Error && "code" in causeRaw && causeRaw.code
+        ? String(causeRaw.code)
+        : undefined;
+    return new Response(
+      `${userMsg} (오류 코드: ${ref}${causeCode ? ` · 원인: ${causeCode}` : ""})`,
+      { status: 502 }
+    );
   }
 }
