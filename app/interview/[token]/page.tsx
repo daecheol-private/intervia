@@ -333,7 +333,7 @@ export default function InterviewPage() {
     const t = input.trim();
     if (!t || streaming || ended) return;
     setInput("");
-    if (textareaRef.current) textareaRef.current.style.height = "";
+    // 입력칸 높이 리셋은 input="" 변화를 감지하는 useEffect 가 담당
     void sendMessage(t);
   };
 
@@ -342,6 +342,20 @@ export default function InterviewPage() {
     lang: lang === "en" ? "en-US" : "ko-KR",
     onFinalText: (txt) => setInput((prev) => (prev ? prev + " " + txt : txt)),
   });
+
+  // 답변이 길어지면 입력칸 높이를 내용에 맞춰 자동 확장.
+  // input 변화를 감지하므로 타이핑·음성 입력(setInput 직접 호출) 모두 커버.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, [input]);
+
+  // 음성 인식의 임시(interim) 텍스트는 아직 input 에 확정 반영되기 전 상태.
+  // interim 이 비워지는 순간 = 해당 텍스트가 input 에 누적된 시점이므로,
+  // interim 이 남아 있는 동안은 전송을 막아 마지막 발화 누락을 방지한다.
+  const hasPendingVoice = voice.interim.trim().length > 0;
   const toggleVoice = () => {
     if (voice.listening) voice.stop();
     else voice.start();
@@ -706,7 +720,7 @@ export default function InterviewPage() {
               <textarea
                 ref={textareaRef}
                 aria-label={t(lang, "interview.answerAria")}
-                className="flex-1 border border-border-strong rounded-xl px-3 py-2.5 text-base sm:text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-h-[44px] max-h-[120px]"
+                className="flex-1 border border-border-strong rounded-xl px-3 py-2.5 text-base sm:text-sm resize-none overflow-y-auto focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-h-[44px] max-h-[40vh]"
                 rows={1}
                 placeholder={voice.listening ? t(lang, "interview.inputPlaceholderListening") : t(lang, "interview.inputPlaceholder")}
                 value={input}
@@ -718,9 +732,7 @@ export default function InterviewPage() {
                   if (sig.firstInputAt == null) sig.firstInputAt = Date.now();
                   if (nextLen > prev) sig.typedChars += nextLen - prev;
                   setInput(e.target.value);
-                  e.target.style.height = "auto";
-                  e.target.style.height =
-                    Math.min(120, e.target.scrollHeight) + "px";
+                  // 높이 자동 조정은 input 을 감지하는 useEffect 가 담당 (음성 입력도 커버)
                 }}
                 onPaste={(e) => {
                   const pasted = e.clipboardData.getData("text") ?? "";
@@ -740,6 +752,7 @@ export default function InterviewPage() {
                     /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
                   if (e.key === "Enter" && !e.shiftKey && !isMobile) {
                     e.preventDefault();
+                    if (hasPendingVoice) return; // 음성 확정 대기 중엔 전송 보류
                     handleSend();
                   }
                 }}
@@ -778,7 +791,7 @@ export default function InterviewPage() {
               )}
               <button
                 onClick={handleSend}
-                disabled={streaming || !input.trim()}
+                disabled={streaming || !input.trim() || hasPendingVoice}
                 aria-label={t(lang, "interview.send")}
                 className={`text-surface px-4 sm:px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-40 shadow-sm min-h-[44px] min-w-[60px] ${
                   brand.color
