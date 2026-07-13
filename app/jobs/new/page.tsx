@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ClipboardEvent } from "react";
 import Link from "next/link";
-import { Sparkles, Link2, Loader2, Info } from "lucide-react";
+import { Sparkles, Link2, Loader2, Info, ClipboardPaste, ImagePlus, X } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { confirmDialog } from "@/app/components/Dialog";
@@ -14,6 +14,29 @@ import {
   type TraitProfile,
 } from "@/lib/personality";
 import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
+
+const LEVELS = [
+  "신입 (0년)",
+  "1~2년차 (주니어)",
+  "3~5년차 (중급)",
+  "6~9년차 (시니어)",
+  "10년 이상 (리드)",
+];
+const EMPLOYMENT = ["정규직", "계약직", "인턴", "프리랜서"];
+const MAX_PASTE_IMAGES = 5;
+
+/** URL·붙여넣기 임포트가 공통으로 돌려주는 추출 결과. */
+type Extracted = {
+  title: string;
+  position: string;
+  level: string;
+  employmentType: string;
+  responsibilities: string;
+  requirements: string;
+  idealProfile: string;
+  preferredTraits: string[];
+  confidence: number;
+};
 
 export default function NewJobPage() {
   const router = useRouter();
@@ -63,6 +86,35 @@ export default function NewJobPage() {
   const [importErr, setImportErr] = useState("");
   const [importInfo, setImportInfo] = useState<string | null>(null);
 
+  // 붙여넣기(텍스트/이미지) 임포트 상태 — URL 가져오기가 거절될 때의 우회 경로.
+  const [pasteText, setPasteText] = useState("");
+  const [pasteImages, setPasteImages] = useState<
+    Array<{ mimeType: string; data: string; preview: string }>
+  >([]);
+  const [parsing, setParsing] = useState(false);
+  const [parseErr, setParseErr] = useState("");
+  const [parseInfo, setParseInfo] = useState<string | null>(null);
+
+  // 추출 결과를 폼에 반영 (URL·붙여넣기 공용).
+  // 매번 새 값으로 전체 교체 — 추출 안 된 필드는 기본값으로 초기화(이전 내용 잔류 방지).
+  const applyExtracted = (d: Extracted) => {
+    setForm((f) => ({
+      ...f,
+      title: d.title,
+      position: d.position,
+      // 자유 텍스트로 추출되면 select 옵션에 없어 드롭다운이 깨지므로 기본값 유지
+      level: LEVELS.includes(d.level) ? d.level : "3~5년차 (중급)",
+      employmentType: EMPLOYMENT.includes(d.employmentType)
+        ? d.employmentType
+        : "정규직",
+      responsibilities: d.responsibilities,
+      requirements: d.requirements,
+      idealProfile: d.idealProfile,
+      // 직무 분석으로 추천된 선호 특성을 미리 선택 (없으면 전 특성 medium 으로 초기화)
+      traitProfile: traitProfileFromKeys(d.preferredTraits ?? []),
+    }));
+  };
+
   const importFromUrl = async () => {
     setImportErr("");
     setImportInfo(null);
@@ -81,43 +133,10 @@ export default function NewJobPage() {
       setImportErr((await r.text()) || "가져오기 실패");
       return;
     }
-    const d = (await r.json()) as {
-      title: string;
-      position: string;
-      level: string;
-      employmentType: string;
-      responsibilities: string;
-      requirements: string;
-      idealProfile: string;
-      preferredTraits: string[];
-      confidence: number;
+    const d = (await r.json()) as Extracted & {
       meta: { usedImageFallback: boolean; imageCount: number; siteHint?: string };
     };
-    // 불러오기 할 때마다 추출 필드를 새 값으로 전체 교체.
-    // 추출 안 된 필드는 빈 값/기본값으로 초기화 (이전 공고 내용 잔류 방지).
-    const LEVELS = [
-      "신입 (0년)",
-      "1~2년차 (주니어)",
-      "3~5년차 (중급)",
-      "6~9년차 (시니어)",
-      "10년 이상 (리드)",
-    ];
-    const EMPLOYMENT = ["정규직", "계약직", "인턴", "프리랜서"];
-    setForm((f) => ({
-      ...f,
-      title: d.title,
-      position: d.position,
-      // 자유 텍스트로 추출되면 select 옵션에 없어 드롭다운이 깨지므로 기본값 유지
-      level: LEVELS.includes(d.level) ? d.level : "3~5년차 (중급)",
-      employmentType: EMPLOYMENT.includes(d.employmentType)
-        ? d.employmentType
-        : "정규직",
-      responsibilities: d.responsibilities,
-      requirements: d.requirements,
-      idealProfile: d.idealProfile,
-      // 직무 분석으로 추천된 선호 특성을 미리 선택 (없으면 전 특성 medium 으로 초기화)
-      traitProfile: traitProfileFromKeys(d.preferredTraits ?? []),
-    }));
+    applyExtracted(d);
     const bits = [
       `${d.meta.siteHint ?? "외부 사이트"}에서 추출`,
       `신뢰도 ${(d.confidence * 100).toFixed(0)}%`,
@@ -126,6 +145,100 @@ export default function NewJobPage() {
     if ((d.preferredTraits?.length ?? 0) > 0)
       bits.push(`선호 특성 ${d.preferredTraits.length}개 자동 선택`);
     setImportInfo(`✓ 자동 채움 완료 — ${bits.join(" · ")}. 내용 확인 후 수정/저장하세요.`);
+  };
+
+  // 캡처 이미지를 다운스케일 + JPEG base64 로 변환 (페이로드·토큰 절약).
+  const fileToInlinePart = async (
+    file: File
+  ): Promise<{ mimeType: string; data: string; preview: string }> => {
+    const bitmap = await createImageBitmap(file);
+    const maxDim = 1600;
+    let w = bitmap.width;
+    let h = bitmap.height;
+    if (w > maxDim || h > maxDim) {
+      const s = maxDim / Math.max(w, h);
+      w = Math.round(w * s);
+      h = Math.round(h * s);
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("canvas 미지원");
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    return { mimeType: "image/jpeg", data: dataUrl.split(",")[1], preview: dataUrl };
+  };
+
+  const addImageFiles = async (files: File[]) => {
+    setParseErr("");
+    const imgs = files.filter((f) => f.type.startsWith("image/"));
+    if (imgs.length === 0) return;
+    const room = MAX_PASTE_IMAGES - pasteImages.length;
+    if (room <= 0) {
+      setParseErr(`이미지는 최대 ${MAX_PASTE_IMAGES}장까지 첨부할 수 있어요.`);
+      return;
+    }
+    try {
+      const parts = await Promise.all(imgs.slice(0, room).map(fileToInlinePart));
+      setPasteImages((prev) => [...prev, ...parts]);
+    } catch {
+      setParseErr("이미지를 읽지 못했습니다. 다른 캡처로 다시 시도해 주세요.");
+    }
+  };
+
+  const onPasteContent = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData.items;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const f = item.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length > 0) {
+      // 이미지 붙여넣기 — textarea 엔 넣지 않고 첨부로 처리.
+      e.preventDefault();
+      void addImageFiles(files);
+    }
+    // 텍스트는 기본 동작으로 textarea 에 입력됨.
+  };
+
+  const parseContent = async () => {
+    setParseErr("");
+    setParseInfo(null);
+    if (!pasteText.trim() && pasteImages.length === 0) {
+      setParseErr("공고 본문을 붙여넣거나 이미지를 첨부하세요.");
+      return;
+    }
+    setParsing(true);
+    try {
+      const r = await fetch("/api/jobs/parse-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: pasteText.trim() || undefined,
+          images: pasteImages.map(({ mimeType, data }) => ({ mimeType, data })),
+        }),
+      });
+      if (!r.ok) {
+        setParseErr((await r.text()) || "분석 실패");
+        return;
+      }
+      const d = (await r.json()) as Extracted;
+      applyExtracted(d);
+      const bits = [`신뢰도 ${(d.confidence * 100).toFixed(0)}%`];
+      if (pasteImages.length > 0) bits.push(`이미지 ${pasteImages.length}장 분석`);
+      if ((d.preferredTraits?.length ?? 0) > 0)
+        bits.push(`선호 특성 ${d.preferredTraits.length}개 자동 선택`);
+      setParseInfo(`✓ 자동 채움 완료 — ${bits.join(" · ")}. 내용 확인 후 저장하세요.`);
+    } catch {
+      setParseErr("분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setParsing(false);
+    }
   };
 
   // "지원링크 생성" — 링크(토큰)만 발급해 보여준다. 공고가 만들어지는 게 아니다.
@@ -341,6 +454,85 @@ export default function NewJobPage() {
         {importInfo && (
           <div className="mt-2 text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
             {importInfo}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-primary-soft/40 border border-primary/20 rounded-2xl p-4 mb-5">
+        <div className="flex items-center gap-2 mb-2">
+          <ClipboardPaste className="w-4 h-4 text-primary" />
+          <h2 className="text-sm font-semibold text-primary-deep">
+            본문·이미지 붙여넣어 자동 채우기
+          </h2>
+        </div>
+        <p className="text-xs text-ink-soft mb-3">
+          URL 가져오기가 안 될 때 쓰세요. 공고 본문을 복사해 붙여넣거나(Ctrl+V), 이미지로 된 공고는
+          화면을 <b>캡처(스크린샷)</b>해 붙여넣으면 됩니다. 텍스트든 이미지든 자동으로 인식해 아래
+          필드를 채웁니다.
+        </p>
+        <textarea
+          value={pasteText}
+          onChange={(e) => setPasteText(e.target.value)}
+          onPaste={onPasteContent}
+          placeholder="여기에 공고 본문을 붙여넣거나, 캡처 이미지를 붙여넣으세요 (Ctrl+V)"
+          className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm h-32 resize-y bg-card focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+        />
+        {pasteImages.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {pasteImages.map((img, i) => (
+              <div key={i} className="relative">
+                {/* 미리보기 — 사용자가 방금 첨부한 data URL. next/image 불필요. */}
+                <img
+                  src={img.preview}
+                  alt={`첨부 이미지 ${i + 1}`}
+                  className="w-20 h-20 object-cover rounded-lg border border-border-default"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPasteImages((prev) => prev.filter((_, j) => j !== i))
+                  }
+                  aria-label="이미지 삭제"
+                  className="absolute -top-1.5 -right-1.5 rounded-full bg-ink text-surface p-0.5 shadow"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2 mt-3">
+          <label className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong bg-card px-3 py-2 text-sm font-medium text-ink-soft hover:bg-surface-alt cursor-pointer">
+            <ImagePlus className="w-4 h-4" /> 이미지 첨부
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                void addImageFiles(Array.from(e.target.files ?? []));
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={parseContent}
+            disabled={parsing || (!pasteText.trim() && pasteImages.length === 0)}
+            className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium whitespace-nowrap inline-flex items-center gap-1.5"
+          >
+            {parsing && <Loader2 className="w-4 h-4 animate-spin" />}
+            {parsing ? "분석 중..." : "분석해서 채우기"}
+          </button>
+        </div>
+        {parseErr && (
+          <div className="mt-2 text-xs text-danger bg-danger-soft border border-danger/40 rounded-lg px-3 py-2">
+            {parseErr}
+          </div>
+        )}
+        {parseInfo && (
+          <div className="mt-2 text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
+            {parseInfo}
           </div>
         )}
       </div>

@@ -438,7 +438,7 @@ const EXTRACTION_SCHEMA_HINT = `
 /**
  * 텍스트만으로 1차 추출.
  */
-async function extractFromText(
+export async function extractFromText(
   text: string,
   titleHint: string
 ): Promise<ImportedJob | null> {
@@ -465,7 +465,7 @@ ${maskContacts(text)}
 /**
  * 텍스트 + 이미지로 2차 (멀티모달) 추출.
  */
-async function extractFromMultimodal(
+export async function extractFromMultimodal(
   text: string,
   imageParts: Array<{ inlineData: { mimeType: string; data: string } }>,
   titleHint: string
