@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { CultureFitProfile, QualItem } from "@/lib/prompts";
+import { defaultCultureFitProfile } from "@/lib/culture-fit-defaults";
 import { textColorOn } from "@/lib/brand-color";
 import {
   NCS_COMPETENCY_KEYS,
@@ -65,55 +66,6 @@ const QUAL_LABELS: Record<QualKey, string> = {
   futureAmbition: "입사후 포부",
 };
 
-function qualItem(
-  enabled: boolean,
-  weight: QualItem["weight"],
-  guide: string
-): QualItem {
-  return { enabled, weight, guide };
-}
-
-// 미설정 법인의 초기 기본값 — "저장" 을 눌러야 평가에 반영됨
-function defaultProfile(): CultureFitProfile {
-  return {
-    idealTalent:
-      "자기주도적으로 문제를 정의하고 실행까지 책임지며, 동료와 협력해 함께 성장하는 인재",
-    qualitativeItems: {
-      selfIntro: qualItem(
-        true,
-        "medium",
-        "핵심 경험이 직무와 연결되는지, 구체적인 사례 중심으로 서술했는지"
-      ),
-      motivation: qualItem(
-        true,
-        "high",
-        "회사·직무에 대한 이해도와 지원 이유의 진정성·구체성"
-      ),
-      interpersonal: qualItem(
-        true,
-        "medium",
-        "협업·갈등 상황에서의 소통 방식과 해결 경험"
-      ),
-      strengthWeakness: qualItem(
-        true,
-        "medium",
-        "단점을 스스로 인지하고 보완하려는 노력이 있는지"
-      ),
-      lifeExperience: qualItem(
-        false,
-        "medium",
-        "성실함과 꾸준함을 보여주는 경험이 있는지"
-      ),
-      futureAmbition: qualItem(
-        true,
-        "medium",
-        "포부가 직무·회사 방향과 맞고 실현 가능한 계획인지"
-      ),
-    },
-    coreCompetencies: ["communication", "problemSolving", "interpersonal"],
-  };
-}
-
 export default function OrgSettingsPage() {
   const [org, setOrg] = useState<Org | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -128,7 +80,9 @@ export default function OrgSettingsPage() {
   const [msg, setMsg] = useState<SaveMsgState>(null);
 
   // 컬처핏 로컬 상태
-  const [cfProfile, setCfProfile] = useState<CultureFitProfile>(defaultProfile());
+  const [cfProfile, setCfProfile] = useState<CultureFitProfile>(
+    defaultCultureFitProfile()
+  );
   const [cfBusy, setCfBusy] = useState(false);
 
   // 법인 브랜딩 로컬 상태 (지원 페이지·AI 면접 화면 공통)
@@ -782,7 +736,8 @@ export default function OrgSettingsPage() {
               <strong>성향</strong>(개방성·성실성 등 어떤 기질인가)은 AI 면접
               인성검사로 측정하며 직무마다 달라 각{" "}
               <strong>공고의 등록/수정 화면</strong>에서 설정합니다. 이 컬처핏
-              설정이 저장되어 있어야 인성검사가 출제됩니다.
+              설정이 저장되어 있어야 인성검사가 출제되며, 신규 가입 시 기본값이
+              자동 저장되어 있습니다.
             </p>
 
             {canEdit && (

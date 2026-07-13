@@ -15,6 +15,7 @@ import {
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/site-info";
 import { extractIp } from "@/lib/auth-attempts";
 import { syncMarketingRecipient } from "@/lib/marketing-consent";
+import { defaultCultureFitProfile } from "@/lib/culture-fit-defaults";
 
 export const runtime = "nodejs";
 
@@ -188,6 +189,10 @@ export async function POST(req: Request) {
       verificationStatus,
       verifiedAt,
       verificationNote,
+      // 신규 법인은 기본 컬처핏 프로필을 자동 저장 — 법인이 설정 화면에서 아무것도
+      // 저장하지 않아도 AI 면접 인성검사가 기본 특성으로 출제된다(출제 게이트 = 이 값 존재 여부).
+      // 법인은 언제든 org 설정에서 수정·해제할 수 있다.
+      cultureFitProfile: JSON.stringify(defaultCultureFitProfile()),
     })
     .returning();
 
