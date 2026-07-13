@@ -34,7 +34,25 @@ export async function POST(req: Request) {
     // 고객센터 문의 시 코드로 로그 역추적.
     const ref = newErrorRef();
     const msg = e instanceof Error ? e.message : String(e);
-    log.error("job_import_failed", { ref, url, error: msg.slice(0, 300) });
-    return new Response(`${msg} (오류 코드: ${ref})`, { status: 502 });
+    // undici fetch 는 진짜 원인(ECONNRESET 등)을 e.cause 에 감춘다 — 역추적용으로 함께 로깅.
+    const causeRaw = e instanceof Error ? (e as { cause?: unknown }).cause : undefined;
+    const cause =
+      causeRaw instanceof Error
+        ? `${causeRaw.message}${"code" in causeRaw && causeRaw.code ? ` [${String(causeRaw.code)}]` : ""}`
+        : causeRaw != null
+          ? String(causeRaw)
+          : undefined;
+    log.error("job_import_failed", {
+      ref,
+      url,
+      error: msg.slice(0, 300),
+      cause: cause?.slice(0, 300),
+    });
+    // 네트워크 단계 실패 = 대부분 채용 사이트의 데이터센터 IP 차단(사람인 실측) —
+    // 기술 문구 대신 고객이 취할 수 있는 다음 행동을 안내.
+    const userMsg = msg.startsWith("fetch failed")
+      ? "해당 채용 사이트가 자동 수집을 차단하고 있어 공고를 불러오지 못했습니다. 공고 본문을 복사해 아래 항목에 직접 붙여넣어 주세요."
+      : msg;
+    return new Response(`${userMsg} (오류 코드: ${ref})`, { status: 502 });
   }
 }
