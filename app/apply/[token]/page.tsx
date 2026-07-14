@@ -9,7 +9,7 @@ import {
   subdomainApplyEnabled,
   applyUrlFor,
 } from "@/lib/subdomain";
-import { LogoMark } from "@/app/components/Logo";
+import { PoweredByIntervia } from "@/app/components/Logo";
 import ApplyForm from "./ApplyForm";
 
 export const runtime = "nodejs";
@@ -21,11 +21,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-surface-alt flex flex-col items-center justify-start px-4 py-6">
       <div className="w-full max-w-xl">{children}</div>
-      {/* Intervia 는 회사 노출을 가리지 않도록 폼 하단에 로고만 작게 */}
-      <div className="mt-4 mb-2 flex items-center justify-center gap-1.5 text-ink-muted">
-        <LogoMark size={18} />
-        <span className="text-xs">Intervia 로 진행되는 채용 지원</span>
-      </div>
+      {/* AI 면접 화면과 동일한 하단 브랜드 서명 — 콘텐츠 카드 오른쪽 끝에 맞춘다 */}
+      <PoweredByIntervia className="max-w-xl mt-4 mb-2" />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { FileText, Paperclip, X } from "lucide-react";
+import { upload } from "@vercel/blob/client";
 import { isValidBrandColor, textColorOn } from "@/lib/brand-color";
 
 const MAX_FILE_MB = 10;
@@ -31,6 +32,7 @@ export default function ApplyForm({
   const [agreeAi, setAgreeAi] = useState(false);
   const [agreeFinal, setAgreeFinal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const resumeInputRef = useRef<HTMLInputElement>(null);
@@ -83,23 +85,103 @@ export default function ApplyForm({
       setError(`첨부파일은 1개당 최대 ${MAX_FILE_MB}MB 까지 가능합니다: ${tooBig.name}`);
       return;
     }
+    // 이력서+첨부 합산 총량 — 서버(413)와 동일 기준으로 미리 안내.
+    const totalBytes = file.size + attachments.reduce((s, f) => s + f.size, 0);
+    if (totalBytes > MAX_FILE_MB * 1024 * 1024) {
+      setError(
+        `이력서와 첨부를 합쳐 최대 ${MAX_FILE_MB}MB 까지 업로드할 수 있습니다.`
+      );
+      return;
+    }
     setSubmitting(true);
+    setProgress(null);
     try {
-      const fd = new FormData();
-      fd.append("name", name.trim());
-      fd.append("email", email.trim());
-      fd.append("phone", phone.trim());
-      fd.append("file", file);
-      for (const a of attachments) fd.append("attachment", a);
-      fd.append("consent_collection_use", agreeCollection ? "true" : "false");
-      fd.append("consent_ai_decision", agreeAi ? "true" : "false");
-      // 유입 출처(어느 채용사이트에서 왔는지) — 서버가 호스트만 추려 저장. 없으면 생략.
-      if (document.referrer) fd.append("referrer", document.referrer);
+      // 사전 중복체크 — 파일 업로드 전에 email·연락처로 기존 지원 여부 확인(Blob 낭비·고아 방지).
+      // 실패(네트워크 등)는 무시하고 진행 — 최종 제출(/api/apply/[token])이 다시 검증한다.
+      try {
+        const pre = await fetch(`/api/apply/${token}/precheck`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim(), phone: phone.trim() }),
+        });
+        if (pre.ok) {
+          const pj = (await pre.json()) as { duplicate?: boolean; message?: string };
+          if (pj?.duplicate) {
+            setError(pj.message || "이미 지원하신 내역이 있습니다.");
+            setSubmitting(false);
+            return;
+          }
+        }
+      } catch {
+        /* 사전 체크 실패는 무시 — 최종 제출에서 다시 검증 */
+      }
 
-      const res = await fetch(`/api/apply/${token}`, {
-        method: "POST",
-        body: fd,
-      });
+      // Vercel 서버 함수 본문 한도(4.5MB) 회피 — 브라우저에서 Vercel Blob 으로 직접 업로드 후
+      // 서버에는 manifest(JSON)만 전송. 최대 10MB 까지 (4.5~10MB PDF 가 413 으로 잘리던 문제 해결).
+      // dev/blob 미설정 환경에서는 NEXT_PUBLIC_BLOB_CLIENT_UPLOAD!=1 → 기존 FormData 경로.
+      const useBlobUpload = process.env.NEXT_PUBLIC_BLOB_CLIENT_UPLOAD === "1";
+      let res: Response;
+      if (useBlobUpload) {
+        // 전체 바이트 대비 진행률 — 파일별 onUploadProgress 를 누적해 표시.
+        const uploadTotal =
+          file.size + attachments.reduce((s, a) => s + a.size, 0) || 1;
+        let uploadedBytes = 0;
+        setProgress(0);
+        const showProgress = (loaded: number) =>
+          setProgress(
+            Math.min(99, Math.round(((uploadedBytes + loaded) / uploadTotal) * 100))
+          );
+        const resumeBlob = await upload(file.name, file, {
+          access: "private",
+          handleUploadUrl: `/api/apply/${token}/blob-upload`,
+          clientPayload: JSON.stringify({ kind: "resume" }),
+          multipart: file.size > 8 * 1024 * 1024,
+          onUploadProgress: (p) => showProgress(p.loaded),
+        });
+        uploadedBytes += file.size;
+        const attBlobs: { url: string; name: string; size: number }[] = [];
+        for (const a of attachments) {
+          const r = await upload(a.name, a, {
+            access: "private",
+            handleUploadUrl: `/api/apply/${token}/blob-upload`,
+            clientPayload: JSON.stringify({ kind: "attachment" }),
+            multipart: a.size > 8 * 1024 * 1024,
+            onUploadProgress: (p) => showProgress(p.loaded),
+          });
+          uploadedBytes += a.size;
+          attBlobs.push({ url: r.url, name: a.name, size: a.size });
+        }
+        setProgress(100);
+        res = await fetch(`/api/apply/${token}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            phone: phone.trim(),
+            consent_collection_use: agreeCollection,
+            consent_ai_decision: agreeAi,
+            // 유입 출처(어느 채용사이트에서 왔는지) — 서버가 호스트만 추려 저장.
+            referrer: document.referrer || undefined,
+            resume: { url: resumeBlob.url, name: file.name, size: file.size },
+            attachments: attBlobs,
+          }),
+        });
+      } else {
+        const fd = new FormData();
+        fd.append("name", name.trim());
+        fd.append("email", email.trim());
+        fd.append("phone", phone.trim());
+        fd.append("file", file);
+        for (const a of attachments) fd.append("attachment", a);
+        fd.append("consent_collection_use", agreeCollection ? "true" : "false");
+        fd.append("consent_ai_decision", agreeAi ? "true" : "false");
+        if (document.referrer) fd.append("referrer", document.referrer);
+        res = await fetch(`/api/apply/${token}`, {
+          method: "POST",
+          body: fd,
+        });
+      }
       if (!res.ok) {
         let msg = "지원서 제출에 실패했습니다. 잠시 후 다시 시도해 주세요.";
         try {
@@ -108,13 +190,20 @@ export default function ApplyForm({
         } catch {
           /* non-json */
         }
+        setProgress(null);
         setError(msg);
         setSubmitting(false);
         return;
       }
       setDone(true);
-    } catch {
-      setError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } catch (err) {
+      // upload() 실패(형식·크기·네트워크)는 서버 토큰 라우트가 던진 한국어 메시지를 그대로 노출.
+      setProgress(null);
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+      );
       setSubmitting(false);
     }
   }
@@ -256,7 +345,7 @@ export default function ApplyForm({
             className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-surface-alt file:px-4 file:py-2 file:text-sm file:font-medium file:text-ink-soft hover:file:bg-surface-alt"
           />
           <p className="mt-1 text-xs text-ink-muted">
-            경력기술서·포트폴리오·자기소개서 등. 여러 개 추가 가능 · 1개당 최대 {MAX_FILE_MB}MB
+            경력기술서·포트폴리오·자기소개서 등. 여러 개 추가 가능 · 이력서 포함 전체 합쳐 최대 {MAX_FILE_MB}MB
           </p>
           {attachments.length > 0 && (
             <ul className="mt-1.5 space-y-1 text-xs text-ink-soft">
@@ -308,6 +397,20 @@ export default function ApplyForm({
         <p className="text-sm text-danger bg-danger-soft rounded-lg px-3 py-2">
           {error}
         </p>
+      )}
+
+      {submitting && progress !== null && (
+        <div className="space-y-1.5">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-alt">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-200"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-center text-xs text-ink-muted">
+            {progress < 100 ? `업로드 중… ${progress}%` : "지원서 등록 중…"}
+          </p>
+        </div>
       )}
 
       <button
