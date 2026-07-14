@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { FileText, Paperclip, X } from "lucide-react";
 import { upload } from "@vercel/blob/client";
 import { isValidBrandColor, textColorOn } from "@/lib/brand-color";
@@ -246,7 +247,20 @@ export default function ApplyForm({
     >
       {/* 헤더 밴드 — 브랜드 컬러 설정 시 영역 전체를 채운다 */}
       <div className="px-5 pt-5 pb-4 sm:px-6 sm:pt-6" style={bandStyle}>
-        {logoImg(false)}
+        {/* 로고 + 상시 문의 링크 — AI 면접 화면처럼 헤더 영역 오른쪽에 배치.
+            밴드 배경(브랜드 컬러) 위에서는 대비색(onBand)으로, 흰 헤더에서는 회색으로. */}
+        <div className="flex items-start gap-3">
+          {logoImg(false)}
+          <Link
+            href={`/apply/${token}/inquiry`}
+            className={`ml-auto shrink-0 text-[11px] underline whitespace-nowrap ${
+              onBand ? "hover:opacity-80" : "text-ink-muted hover:text-ink-soft"
+            }`}
+            style={onBand ? { color: onBand, opacity: 0.75 } : undefined}
+          >
+            문제가 있나요? 신고 / 문의
+          </Link>
+        </div>
         <p
           className="text-xs font-medium text-primary"
           style={onBand ? { color: onBand, opacity: 0.85 } : undefined}

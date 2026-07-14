@@ -393,6 +393,13 @@
       "when": 1783926704829,
       "tag": "0055_worried_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1784028688206,
+      "tag": "0056_motionless_jigsaw",
+      "breakpoints": true
     }
   ]
 }

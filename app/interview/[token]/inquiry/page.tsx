@@ -8,6 +8,7 @@ import {
   CATEGORY_LABEL,
   MESSAGE_MAX,
   MESSAGE_MIN,
+  PHONE_MAX,
 } from "@/lib/inquiry";
 import { PoweredByIntervia } from "@/app/components/Logo";
 
@@ -15,6 +16,7 @@ export default function InterviewInquiryPage() {
   const params = useParams<{ token: string }>();
   const token = params.token;
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [category, setCategory] = useState<string>(CANDIDATE_CATEGORIES[0]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -35,7 +37,7 @@ export default function InterviewInquiryPage() {
     const res = await fetch(`/api/interview/${token}/inquiry`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, category, message }),
+      body: JSON.stringify({ email, phone, category, message }),
     });
     setBusy(false);
     if (!res.ok) {
@@ -82,6 +84,22 @@ export default function InterviewInquiryPage() {
             className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             placeholder="you@example.com"
           />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-ink-soft mb-1">
+            연락 전화번호 (선택)
+          </label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            maxLength={PHONE_MAX}
+            className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="010-0000-0000"
+          />
+          <div className="text-[11px] text-ink-muted mt-1">
+            전화 회신이 필요하면 남겨 주세요. 입력하지 않아도 됩니다.
+          </div>
         </div>
         <div>
           <label className="block text-xs font-medium text-ink-soft mb-1">

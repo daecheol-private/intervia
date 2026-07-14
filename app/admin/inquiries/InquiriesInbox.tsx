@@ -19,12 +19,15 @@ type InquiryRow = {
   category: string;
   message: string;
   contactEmail: string;
+  contactPhone: string | null;
   status: InquiryStatus;
   adminNote: string | null;
   orgId: number | null;
   orgName: string | null;
   candidateId: number | null;
   candidateName: string | null;
+  jobId: number | null;
+  jobTitle: string | null;
   createdAt: string;
   resolvedAt: string | null;
 };
@@ -38,6 +41,7 @@ const STATUS_STYLE: Record<InquiryStatus, string> = {
 const SOURCE_STYLE: Record<InquirySource, string> = {
   org_user: "bg-surface-alt text-ink-soft border-border-default",
   candidate: "bg-surface-alt text-ink-soft border-border-default",
+  applicant: "bg-surface-alt text-ink-soft border-border-default",
 };
 
 const FILTERS: { value: string; label: string }[] = [
@@ -289,12 +293,23 @@ function InquiryDetailModal({
             {row.source === "candidate" && (
               <span>후보자: {row.candidateName ?? "(폐기됨)"}</span>
             )}
+            {row.source === "applicant" && (
+              <span>공고: {row.jobTitle ?? "(삭제됨)"}</span>
+            )}
             <a
               href={`mailto:${row.contactEmail}`}
               className="text-primary hover:underline"
             >
               {row.contactEmail}
             </a>
+            {row.contactPhone && (
+              <a
+                href={`tel:${row.contactPhone}`}
+                className="text-primary hover:underline"
+              >
+                {row.contactPhone}
+              </a>
+            )}
           </div>
 
           <div>

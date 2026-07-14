@@ -40,6 +40,7 @@ export async function notifyNewInquiry(opts: {
   category: string;
   message: string;
   contactEmail: string;
+  contactPhone?: string | null;
   orgName?: string | null;
   orgId?: number | null;
 }): Promise<void> {
@@ -86,7 +87,7 @@ export async function notifyNewInquiry(opts: {
       </tr>
       <tr>
         <td style="padding:12px 16px;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;">연락처</td>
-        <td style="padding:12px 16px;font-size:13px;color:${EMAIL_BRAND.ink};border-top:1px solid #e2e8f0;">${escapeHtml(opts.contactEmail)}</td>
+        <td style="padding:12px 16px;font-size:13px;color:${EMAIL_BRAND.ink};border-top:1px solid #e2e8f0;">${escapeHtml(opts.contactEmail)}${opts.contactPhone ? ` · ${escapeHtml(opts.contactPhone)}` : ""}</td>
       </tr>
     </table>
     <div style="margin:0 0 20px;padding:14px 16px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;font-size:13px;color:#334155;line-height:1.6;white-space:pre-wrap;">${escapeHtml(opts.message)}</div>
@@ -104,7 +105,7 @@ export async function notifyNewInquiry(opts: {
 
 분류: ${categoryLabel}
 법인: ${opts.orgName ?? "-"}
-연락처: ${opts.contactEmail}
+연락처: ${opts.contactEmail}${opts.contactPhone ? ` · ${opts.contactPhone}` : ""}
 
 내용:
 ${opts.message}
@@ -212,6 +213,7 @@ ${note ? `\n운영팀 답변:\n${note}\n` : ""}
     html,
     text,
     orgId: null,
-    audience: opts.source === "candidate" ? "candidate" : "org",
+    // org_user 만 법인 고객, candidate/applicant 는 개인(비로그인 후보자/지원자).
+    audience: opts.source === "org_user" ? "org" : "candidate",
   });
 }
