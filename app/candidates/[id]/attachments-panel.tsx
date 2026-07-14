@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FileDown, Loader2, X } from "lucide-react";
+import { upload as blobUpload } from "@vercel/blob/client";
 import { confirmDialog } from "@/app/components/Dialog";
 
 type Attachment = {
@@ -39,6 +40,7 @@ export function AttachmentsPanel({
   const [list, setList] = useState<Attachment[] | null>(null);
   const [kind, setKind] = useState<string>("portfolio");
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   // 평가 완료 후 첨부를 추가/삭제하면 재평가 안내를 띄운다
   const [rescreenNotice, setRescreenNotice] = useState(false);
@@ -84,15 +86,40 @@ export function AttachmentsPanel({
       return;
     }
     setUploading(true);
+    setProgress(null);
     setErr("");
     try {
-      const fd = new FormData();
-      fd.append("file", f);
-      fd.append("kind", kind);
-      const r = await fetch(`/api/candidates/${candidateId}/attachments`, {
-        method: "POST",
-        body: fd,
-      });
+      // Vercel 함수 본문 한도(4.5MB) 회피 — 브라우저에서 Blob 으로 직접 업로드 후 서버엔
+      // URL 만 전송. 미설정 dev 환경은 NEXT_PUBLIC_BLOB_CLIENT_UPLOAD!=1 → FormData 폴백.
+      const useBlobUpload = process.env.NEXT_PUBLIC_BLOB_CLIENT_UPLOAD === "1";
+      let r: Response;
+      if (useBlobUpload) {
+        setProgress(0);
+        const blob = await blobUpload(f.name, f, {
+          access: "private",
+          handleUploadUrl: "/api/blob/upload",
+          clientPayload: JSON.stringify({ candidateId }),
+          multipart: f.size > 8 * 1024 * 1024,
+          onUploadProgress: (p) =>
+            setProgress(
+              Math.min(99, Math.round((p.loaded / (f.size || 1)) * 100))
+            ),
+        });
+        setProgress(100);
+        r = await fetch(`/api/candidates/${candidateId}/attachments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: blob.url, name: f.name, size: f.size, kind }),
+        });
+      } else {
+        const fd = new FormData();
+        fd.append("file", f);
+        fd.append("kind", kind);
+        r = await fetch(`/api/candidates/${candidateId}/attachments`, {
+          method: "POST",
+          body: fd,
+        });
+      }
       if (!r.ok) {
         setErr(await r.text());
         return;
@@ -105,6 +132,7 @@ export function AttachmentsPanel({
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   };
 
@@ -215,7 +243,11 @@ export function AttachmentsPanel({
               className="h-8 text-sm px-3.5 rounded-md bg-primary hover:bg-primary-deep text-surface font-medium disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
             >
               {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {uploading ? "업로드 중..." : "첨부 추가"}
+              {uploading
+                ? progress != null && progress < 100
+                  ? `업로드 중 ${progress}%`
+                  : "업로드 중..."
+                : "첨부 추가"}
             </button>
           </div>
           <p className="text-[11px] text-ink-muted mt-1.5">

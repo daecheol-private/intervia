@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
 import { isJobExpired } from "@/lib/job-lifecycle";
+import { guardCandidate } from "@/lib/candidate-guard";
+import { MAX_ATTACHMENT_SIZE, MAX_AUDIO_BYTES } from "@/lib/upload-validation";
 import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
@@ -26,14 +28,36 @@ export async function POST(req: Request) {
       body,
       request: req,
       onBeforeGenerateToken: async (pathname, clientPayloadRaw) => {
-        // clientPayload 로 jobId 전달 — 권한 검증
-        let jobId = 0;
+        let payload: { jobId?: number; candidateId?: number; kind?: string } = {};
         try {
-          const p = JSON.parse(clientPayloadRaw ?? "{}") as { jobId?: number };
-          jobId = Number(p.jobId);
+          payload = JSON.parse(clientPayloadRaw ?? "{}") as typeof payload;
         } catch {
           /* malformed */
         }
+
+        // 후보자 하위 파일 경로 — 로그인 HR. kind:"audio"=대면 녹음(18MB), 그 외=첨부(10MB).
+        const candidateId = Number(payload.candidateId);
+        if (candidateId) {
+          const g = await guardCandidate(me!, candidateId);
+          if (!g.ok) throw new Error("업로드 권한이 없습니다.");
+          const isAudio = payload.kind === "audio";
+          if (!isAudio) {
+            // 첨부는 결정·폐기된 후보자에 추가 불가(대면 녹음은 결정 후에도 허용).
+            if (g.candidate.outcome)
+              throw new Error("이미 합·불이 결정된 후보자에는 첨부를 추가할 수 없습니다.");
+            if (!g.candidate.resumeFilePath && !g.candidate.resumeMaskedText)
+              throw new Error("원본이 폐기된 후보자에는 첨부를 추가할 수 없습니다.");
+          }
+          return {
+            allowedContentTypes: undefined,
+            maximumSizeInBytes: isAudio ? MAX_AUDIO_BYTES : MAX_ATTACHMENT_SIZE,
+            addRandomSuffix: true,
+            tokenPayload: JSON.stringify({ candidateId, userId: me!.id }),
+          };
+        }
+
+        // 공고 일괄 업로드 경로 (기존) — clientPayload 의 jobId 로 권한 검증.
+        const jobId = Number(payload.jobId);
         if (!jobId) throw new Error("jobId 누락");
 
         const [job] = await db
@@ -66,7 +90,7 @@ export async function POST(req: Request) {
         // 로컬 dev 에서는 Vercel 이 콜백 못 옴 — 프로덕션 로그용.
         // blob.url 은 public 접근 가능한 이력서 URL — 로그에 남기면 로그 열람 = 파일 접근이
         // 되므로 url/pathname(원본 파일명에 지원자 이름 포함 가능)은 기록하지 않는다.
-        let meta: { jobId?: number; userId?: number } = {};
+        let meta: { jobId?: number; candidateId?: number; userId?: number } = {};
         try {
           meta = JSON.parse(tokenPayload ?? "{}") as typeof meta;
         } catch {
@@ -74,6 +98,7 @@ export async function POST(req: Request) {
         }
         log.info("blob_client_upload_completed", {
           jobId: meta.jobId,
+          candidateId: meta.candidateId,
           userId: meta.userId,
           ext: (blob.pathname.match(/\.[A-Za-z0-9]+$/)?.[0] ?? "").toLowerCase(),
         });

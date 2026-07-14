@@ -13,6 +13,11 @@
  * 설계: docs/LIVE_INTERVIEW_PLAN.md
  */
 
+import { upload as blobUpload } from "@vercel/blob/client";
+
+// 서버 MAX_AUDIO_BYTES(18MB) 와 동기 — 초과 시 업로드 전에 permanent 처리.
+const MAX_AUDIO_BYTES = 18 * 1024 * 1024;
+
 const DB_NAME = "intervia-live-rec";
 const DB_VERSION = 1;
 const SESSIONS = "sessions";
@@ -186,22 +191,57 @@ export async function uploadLiveRecording(
     await idbDeleteSession(s.riId);
     return "empty";
   }
+  // 크기 초과는 재시도해도 무의미 — 정리 + permanent(호출자가 '파일 다시 올려주세요' 통지).
+  if (blob.size > MAX_AUDIO_BYTES) {
+    await idbDeleteSession(s.riId);
+    return "permanent";
+  }
   const ext = s.mime.includes("mp4") ? "mp4" : s.mime.includes("ogg") ? "ogg" : "webm";
-  const fd = new FormData();
-  fd.append("audio", new File([blob], `live-${s.riId}.${ext}`, { type: s.mime }));
-  fd.append("round", s.round);
-  fd.append("consentConfirmed", "true");
-  fd.append("recordedInterviewId", String(s.riId));
-  fd.append("durationSeconds", String(Math.max(0, Math.round(s.durationSeconds))));
+  const file = new File([blob], `live-${s.riId}.${ext}`, { type: s.mime });
+  const durationSeconds = Math.max(0, Math.round(s.durationSeconds));
 
+  // Vercel 함수 본문 한도(4.5MB) 회피 — Blob 직접 업로드 후 서버엔 URL manifest 만 전송.
+  // dev/blob 미설정은 FormData 폴백. 업로드/전송 실패는 retry(IndexedDB 유지 → 다음 로드 재개).
+  const useBlobUpload = process.env.NEXT_PUBLIC_BLOB_CLIENT_UPLOAD === "1";
   let r: Response;
   try {
-    r = await fetch(`/api/candidates/${s.candidateId}/recorded-interview`, {
-      method: "POST",
-      body: fd,
-    });
+    if (useBlobUpload) {
+      const uploaded = await blobUpload(file.name, file, {
+        access: "private",
+        handleUploadUrl: `/api/blob/upload`,
+        clientPayload: JSON.stringify({
+          candidateId: s.candidateId,
+          kind: "audio",
+        }),
+        multipart: file.size > 8 * 1024 * 1024,
+      });
+      r = await fetch(`/api/candidates/${s.candidateId}/recorded-interview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          audioUrl: uploaded.url,
+          audioMime: s.mime,
+          size: file.size,
+          round: s.round,
+          consentConfirmed: true,
+          recordedInterviewId: s.riId,
+          durationSeconds,
+        }),
+      });
+    } else {
+      const fd = new FormData();
+      fd.append("audio", file);
+      fd.append("round", s.round);
+      fd.append("consentConfirmed", "true");
+      fd.append("recordedInterviewId", String(s.riId));
+      fd.append("durationSeconds", String(durationSeconds));
+      r = await fetch(`/api/candidates/${s.candidateId}/recorded-interview`, {
+        method: "POST",
+        body: fd,
+      });
+    }
   } catch {
-    return "retry"; // 네트워크 — 유실 없이 다음 로드에서 재시도.
+    return "retry"; // 네트워크·업로드 실패 — 유실 없이 다음 로드에서 재시도.
   }
   if (r.ok) {
     await idbDeleteSession(s.riId);

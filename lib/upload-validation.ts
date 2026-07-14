@@ -5,6 +5,9 @@
 
 // 개별 첨부 1건 상한. 초과 시 그 파일만 제외 — 동영상 삽입된 PPT 등
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB
+// 대면 면접 녹음 오디오 1건 상한 — Gemini Vertex inline 데이터 한도 회피
+// (그 이상 장시간·고비트레이트는 준실시간 모드 권장). 상세: docs/LIVE_INTERVIEW_PLAN.md
+export const MAX_AUDIO_BYTES = 18 * 1024 * 1024;
 export const RESUME_EXTS = new Set(["pdf", "docx", "hwpx"]);
 export const ATTACHMENT_EXTS = new Set([
   "pdf",

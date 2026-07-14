@@ -13,7 +13,8 @@ import {
 } from "@/lib/wallet-guard";
 import { finalizeRecordedInterview } from "@/lib/recorded-interview";
 import { triggerRecordedWorker } from "@/lib/recorded-interview-queue";
-import { deleteFile, saveFile } from "@/lib/storage";
+import { deleteFile, saveFile, isAllowedBlobUrl } from "@/lib/storage";
+import { MAX_AUDIO_BYTES } from "@/lib/upload-validation";
 import { logAudit } from "@/lib/audit";
 import { after } from "next/server";
 
@@ -22,10 +23,6 @@ export const runtime = "nodejs";
 // 수행한다 — after 작업도 maxDuration 안에 끝나야 하므로 한도 유지.
 // (업로드 POST 는 저장+enqueue 뿐이라 짧다 — 전사·평가는 백그라운드 워커가 수행.)
 export const maxDuration = 300;
-
-// Gemini Vertex inline 데이터 한도 회피 — 업로드 1건당 오디오 최대 크기.
-// 그 이상(장시간·고비트레이트)은 준실시간(청크) 모드 권장. 상세: docs/LIVE_INTERVIEW_PLAN.md
-const MAX_AUDIO_BYTES = 18 * 1024 * 1024;
 
 /**
  * 업로드 모드 — 대면 면접 녹음 파일 1개를 받아 **큐에 적재만** 하고 즉시 응답한다.
@@ -56,59 +53,112 @@ export async function POST(
   });
   if (!balanceGuard.ok) return insufficientTokensResponse(balanceGuard);
 
-  let formData: FormData;
-  try {
-    formData = await req.formData();
-  } catch {
-    return new Response("multipart/form-data 가 필요합니다.", { status: 400 });
+  // 두 입력 경로 (Vercel 함수 본문 4.5MB 한도 때문):
+  //  (a) multipart/form-data     — 오디오를 서버로 직송(dev·소형).
+  //  (b) application/json manifest — 브라우저가 Blob 에 직접 올린 뒤 URL 만 전달(운영·최대 18MB).
+  // 오디오는 워커가 전사할 때 readStoredFile 로 읽으므로 서버는 여기서 되읽지 않고 키만 저장한다.
+  const isJsonManifest = (req.headers.get("content-type") || "").includes(
+    "application/json"
+  );
+
+  let audioBlobKey: string;
+  let mime: string;
+  let round: "round1" | "round2";
+  let consentOk: boolean;
+  let attachId = 0;
+  let durValue: number | null = null;
+
+  if (isJsonManifest) {
+    let m: {
+      audioUrl?: string;
+      audioMime?: string;
+      size?: number;
+      round?: string;
+      consentConfirmed?: boolean;
+      recordedInterviewId?: number;
+      durationSeconds?: number;
+    };
+    try {
+      m = (await req.json()) as typeof m;
+    } catch {
+      return new Response("잘못된 요청 본문(JSON)", { status: 400 });
+    }
+    mime = m.audioMime || "audio/webm";
+    if (!/^(audio|video)\//.test(mime))
+      return new Response("오디오 파일만 업로드할 수 있습니다.", { status: 400 });
+    // audioUrl 은 클라이언트 제어값 — Blob 도메인만 허용(SSRF 방어). 저장만 하고 여기선 안 읽음.
+    if (!m.audioUrl || !isAllowedBlobUrl(m.audioUrl))
+      return new Response("오디오 파일 위치가 올바르지 않습니다.", { status: 400 });
+    if ((m.size ?? 0) === 0) return new Response("빈 파일입니다.", { status: 400 });
+    if ((m.size ?? 0) > MAX_AUDIO_BYTES)
+      return new Response(
+        `오디오가 너무 큽니다 (최대 ${Math.floor(MAX_AUDIO_BYTES / 1024 / 1024)}MB).`,
+        { status: 413 }
+      );
+    consentOk = m.consentConfirmed === true;
+    round = m.round === "round2" ? "round2" : "round1";
+    audioBlobKey = m.audioUrl; // 이미 Blob 에 있음 — 재저장 안 함.
+    attachId = Number(m.recordedInterviewId);
+    durValue = Number.isFinite(Number(m.durationSeconds))
+      ? Number(m.durationSeconds)
+      : null;
+  } else {
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch {
+      return new Response("multipart/form-data 가 필요합니다.", { status: 400 });
+    }
+    const audio = formData.get("audio");
+    if (!(audio instanceof File))
+      return new Response("audio 파일이 필요합니다.", { status: 400 });
+    mime = audio.type || "audio/webm";
+    if (!/^(audio|video)\//.test(mime))
+      return new Response("오디오 파일만 업로드할 수 있습니다.", { status: 400 });
+    if (audio.size === 0) return new Response("빈 파일입니다.", { status: 400 });
+    if (audio.size > MAX_AUDIO_BYTES)
+      return new Response(
+        `오디오가 너무 큽니다 (최대 ${Math.floor(
+          MAX_AUDIO_BYTES / 1024 / 1024
+        )}MB). 더 낮은 음질로 녹음하거나 준실시간 모드를 사용하세요.`,
+        { status: 413 }
+      );
+    consentOk =
+      formData.get("consentConfirmed") === "true" ||
+      formData.get("consentConfirmed") === "1" ||
+      formData.get("consentConfirmed") === "on";
+    round = formData.get("round") === "round2" ? "round2" : "round1";
+    // 오디오 임시 저장(Blob/로컬) — 워커가 전사할 때까지만 보관, 전사 직후 폐기.
+    try {
+      audioBlobKey = await saveFile(
+        audio.name || `interview.${mime.split("/")[1] ?? "webm"}`,
+        Buffer.from(await audio.arrayBuffer()),
+        mime
+      );
+    } catch {
+      return new Response("오디오 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.", {
+        status: 502,
+      });
+    }
+    attachId = Number(formData.get("recordedInterviewId"));
+    const durRaw = Number(formData.get("durationSeconds"));
+    durValue = Number.isFinite(durRaw) ? durRaw : null;
   }
 
-  const audio = formData.get("audio");
-  if (!(audio instanceof File))
-    return new Response("audio 파일이 필요합니다.", { status: 400 });
-  const mime = audio.type || "audio/webm";
-  if (!/^(audio|video)\//.test(mime))
-    return new Response("오디오 파일만 업로드할 수 있습니다.", { status: 400 });
-  if (audio.size === 0) return new Response("빈 파일입니다.", { status: 400 });
-  if (audio.size > MAX_AUDIO_BYTES)
-    return new Response(
-      `오디오가 너무 큽니다 (최대 ${Math.floor(
-        MAX_AUDIO_BYTES / 1024 / 1024
-      )}MB). 더 낮은 음질로 녹음하거나 준실시간 모드를 사용하세요.`,
-      { status: 413 }
-    );
-
   // 녹취 동의 attestation — 지원자 동의(녹취·전사·AI 평가) 확인 필수 (PIPA).
-  const consentRaw = formData.get("consentConfirmed");
-  if (consentRaw !== "true" && consentRaw !== "1" && consentRaw !== "on")
+  if (!consentOk) {
+    await deleteFile(audioBlobKey).catch(() => {}); // 이미 저장/업로드된 오디오 정리(고아 방지)
     return new Response(
       "지원자에게 녹취·전사·AI 평가 동의를 받았음을 먼저 확인해 주세요.",
       { status: 400 }
     );
-
-  const round = formData.get("round") === "round2" ? "round2" : "round1";
-
-  // 오디오 임시 저장(Blob/로컬) — 워커가 전사할 때까지만 보관, 전사 직후 폐기.
-  let audioBlobKey: string;
-  try {
-    audioBlobKey = await saveFile(
-      audio.name || `interview.${mime.split("/")[1] ?? "webm"}`,
-      Buffer.from(await audio.arrayBuffer()),
-      mime
-    );
-  } catch {
-    return new Response("오디오 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.", {
-      status: 502,
-    });
   }
 
   // ── 라이브 세션 오디오 attach (A안) ─────────────────────────────────────────
   // recordedInterviewId 가 오면 새 행을 만들지 않고 **기존 라이브 행**에 오디오를 붙여
   // 재전사(초안 세그먼트 교체)·평가하도록 큐에 넣는다. 라이브 화면은 Web Speech 초안이지만
   // 최종 리포트는 이 오디오를 Gemini 로 재전사한 결과로 만든다(품질 = 업로드 모드와 동일).
-  const attachIdRaw = formData.get("recordedInterviewId");
-  const attachId = Number(attachIdRaw);
-  if (attachIdRaw != null && Number.isInteger(attachId) && attachId > 0) {
+  if (Number.isInteger(attachId) && attachId > 0) {
     const [existing] = await db
       .select()
       .from(recordedInterviews)
@@ -131,15 +181,14 @@ export async function POST(
         { status: 200 }
       );
     }
-    const durRaw = Number(formData.get("durationSeconds"));
     await db
       .update(recordedInterviews)
       .set({
         audioBlobKey,
         audioMime: mime,
         durationSeconds:
-          Number.isFinite(durRaw) && durRaw > 0
-            ? Math.round(durRaw)
+          durValue != null && durValue > 0
+            ? Math.round(durValue)
             : existing.durationSeconds,
         status: "queued",
         error: null,
@@ -178,7 +227,7 @@ export async function POST(
       createdByUserId: me!.id,
       consentConfirmedAt: sql`CURRENT_TIMESTAMP`,
       consentConfirmedByUserId: me!.id,
-      durationSeconds: 0,
+      durationSeconds: durValue != null && durValue > 0 ? Math.round(durValue) : 0,
       audioBlobKey,
       audioMime: mime,
     })

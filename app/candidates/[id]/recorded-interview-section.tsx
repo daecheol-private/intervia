@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ChevronRight, Loader2, Mic } from "lucide-react";
+import { upload as blobUpload } from "@vercel/blob/client";
 import { formatKstDateTime } from "@/lib/utils";
 import { notify } from "@/app/components/Dialog";
 import {
@@ -18,6 +19,9 @@ import {
   idbListSessions,
   uploadLiveRecording,
 } from "./live-recording-store";
+
+// 서버 MAX_AUDIO_BYTES(18MB) 와 동기 — 초과 시 client upload 전에 미리 거른다.
+const MAX_AUDIO_BYTES = 18 * 1024 * 1024;
 
 // ── 대면(오프라인) 면접 녹음 → AI 평가 리포트 ──────────────────────────
 // 업로드 모드: 녹음 파일을 올리면 전사 → 화자 역할배정 → 평가 → 리포트.
@@ -159,6 +163,7 @@ export function RecordedInterviewPanel({
   const [interviews, setInterviews] = useState<RI[] | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [liveOpen, setLiveOpen] = useState(false);
   const [consent, setConsent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -265,16 +270,54 @@ export function RecordedInterviewPanel({
 
   const upload = async () => {
     if (!file || uploading) return;
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("audio", file);
-      fd.append("round", round);
-      fd.append("consentConfirmed", "true");
-      const r = await fetch(
-        `/api/candidates/${candidateId}/recorded-interview`,
-        { method: "POST", body: fd }
+    if (file.size > MAX_AUDIO_BYTES) {
+      notify(
+        `오디오가 너무 큽니다 (최대 ${MAX_AUDIO_BYTES / 1024 / 1024}MB). 더 낮은 음질로 녹음해 주세요.`,
+        { title: "파일 초과", tone: "danger" }
       );
+      return;
+    }
+    setUploading(true);
+    setUploadPct(null);
+    try {
+      // Vercel 함수 본문 한도(4.5MB) 회피 — 브라우저에서 Blob 으로 직접 업로드 후 서버엔 URL 만.
+      // 미설정 dev 환경은 NEXT_PUBLIC_BLOB_CLIENT_UPLOAD!=1 → 기존 FormData 경로.
+      const useBlobUpload = process.env.NEXT_PUBLIC_BLOB_CLIENT_UPLOAD === "1";
+      let r: Response;
+      if (useBlobUpload) {
+        setUploadPct(0);
+        const blob = await blobUpload(file.name, file, {
+          access: "private",
+          handleUploadUrl: "/api/blob/upload",
+          clientPayload: JSON.stringify({ candidateId, kind: "audio" }),
+          multipart: file.size > 8 * 1024 * 1024,
+          onUploadProgress: (p) =>
+            setUploadPct(
+              Math.min(99, Math.round((p.loaded / (file.size || 1)) * 100))
+            ),
+        });
+        setUploadPct(100);
+        r = await fetch(`/api/candidates/${candidateId}/recorded-interview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            audioUrl: blob.url,
+            audioMime: file.type || "audio/webm",
+            size: file.size,
+            round,
+            consentConfirmed: true,
+          }),
+        });
+      } else {
+        const fd = new FormData();
+        fd.append("audio", file);
+        fd.append("round", round);
+        fd.append("consentConfirmed", "true");
+        r = await fetch(`/api/candidates/${candidateId}/recorded-interview`, {
+          method: "POST",
+          body: fd,
+        });
+      }
       if (!r.ok) {
         const t = await r.text().catch(() => "");
         let msg = t;
@@ -297,13 +340,16 @@ export function RecordedInterviewPanel({
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       await load();
-    } catch {
-      notify("네트워크 오류가 발생했습니다.", {
-        title: "오류",
-        tone: "danger",
-      });
+    } catch (e) {
+      notify(
+        e instanceof Error && e.message
+          ? e.message
+          : "네트워크 오류가 발생했습니다.",
+        { title: "오류", tone: "danger" }
+      );
     } finally {
       setUploading(false);
+      setUploadPct(null);
     }
   };
 
@@ -394,7 +440,11 @@ export function RecordedInterviewPanel({
               className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               {uploading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {uploading ? "업로드 중..." : "녹음 업로드"}
+              {uploading
+                ? uploadPct != null && uploadPct < 100
+                  ? `업로드 중 ${uploadPct}%`
+                  : "업로드 중..."
+                : "녹음 업로드"}
             </button>
             <span className="text-ink-muted px-1" aria-hidden>
               |
