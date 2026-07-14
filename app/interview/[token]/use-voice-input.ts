@@ -112,6 +112,9 @@ export function useVoiceInput({
         }
       }
       setInterim(interimAcc);
+      // 인식 결과가 돌아왔다 = 정상 동작 = 이전 일시 오류(network 등) 문구 제거.
+      // network 오류는 onend 자동재시작으로 복구되는데 error 문구가 남아 있던 버그 방지.
+      setError(null);
     };
     rec.onerror = (e) => {
       const map: Record<string, string> = en

@@ -53,6 +53,19 @@ type CleanSeg = {
 
 const MAX_SUGGESTIONS = 5; // 추천 질문은 최대 5개까지 누적
 
+// 연속 같은 화자 세그먼트를 한 묶음으로 — 문장 단위로 끊긴 전사를 화자별로 합쳐 보여준다.
+function groupByRole<T extends { role: unknown }>(
+  segs: T[]
+): { role: T["role"]; segs: T[] }[] {
+  const groups: { role: T["role"]; segs: T[] }[] = [];
+  for (const s of segs) {
+    const last = groups[groups.length - 1];
+    if (last && last.role === s.role) last.segs.push(s);
+    else groups.push({ role: s.role, segs: [s] });
+  }
+  return groups;
+}
+
 type WakeLockNav = Navigator & {
   wakeLock?: { request(type: "screen"): Promise<WakeLockSentinelLike> };
 };
@@ -619,18 +632,20 @@ export function LiveRecorder({
                   뜹니다)
                 </p>
               ) : (
-                cleaned.map((s) => (
-                  <div key={s.seq} className="flex gap-2">
+                groupByRole(cleaned).map((g) => (
+                  <div key={g.segs[0].seq} className="flex gap-2">
                     <span
                       className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded h-fit ${
-                        s.role === "candidate"
+                        g.role === "candidate"
                           ? "bg-card text-info border border-info/40"
                           : "bg-surface-alt text-ink-soft border border-border-default"
                       }`}
                     >
-                      {roleKo(s.role)}
+                      {roleKo(g.role)}
                     </span>
-                    <span className="text-ink">{s.text}</span>
+                    <span className="text-ink">
+                      {g.segs.map((s) => s.text).join(" ")}
+                    </span>
                   </div>
                 ))
               )}
@@ -673,9 +688,15 @@ export function LiveRecorder({
                   <button
                     key={q}
                     type="button"
-                    onClick={() =>
-                      setSuggestions((prev) => prev.filter((x) => x !== q))
-                    }
+                    onClick={() => {
+                      setSuggestions((prev) => {
+                        const next = prev.filter((x) => x !== q);
+                        suggestionsRef.current = next; // 폴링 클로저가 즉시 최신값 읽도록
+                        return next;
+                      });
+                      // 45초 폴링을 안 기다리고 즉시 빈자리를 다시 채운다.
+                      void pollSuggestion();
+                    }}
                     className="block w-full text-left rounded-md border border-primary/20 bg-primary-soft/40 hover:bg-white hover:border-primary/40 px-2.5 py-1.5 text-xs text-primary-deep leading-relaxed transition-colors"
                     title="클릭하면 목록에서 제거"
                   >

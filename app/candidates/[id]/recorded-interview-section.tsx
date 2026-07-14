@@ -23,6 +23,19 @@ import {
 // 서버 MAX_AUDIO_BYTES(18MB) 와 동기 — 초과 시 client upload 전에 미리 거른다.
 const MAX_AUDIO_BYTES = 18 * 1024 * 1024;
 
+// 연속 같은 화자 세그먼트를 한 묶음으로 — 문장 단위로 끊긴 전사를 화자별로 합쳐 보여준다.
+function groupByRole<T extends { role: unknown }>(
+  segs: T[]
+): { role: T["role"]; segs: T[] }[] {
+  const groups: { role: T["role"]; segs: T[] }[] = [];
+  for (const s of segs) {
+    const last = groups[groups.length - 1];
+    if (last && last.role === s.role) last.segs.push(s);
+    else groups.push({ role: s.role, segs: [s] });
+  }
+  return groups;
+}
+
 // ── 대면(오프라인) 면접 녹음 → AI 평가 리포트 ──────────────────────────
 // 업로드 모드: 녹음 파일을 올리면 전사 → 화자 역할배정 → 평가 → 리포트.
 // 결과는 AI 채팅 면접 평가와 별개 — 사람이 진행한 대면 면접의 평가서.
@@ -768,47 +781,48 @@ function RecordedReportCard({
               </button>
               {transcriptOpen && (
                 <div className="max-h-[26rem] overflow-y-auto divide-y divide-border-default">
-                  {ri.segments.map((s) => {
-                    const isCand = s.role === "candidate";
+                  {groupByRole(ri.segments).map((g) => {
+                    const isCand = g.role === "candidate";
                     // 지원자 답변만 하늘색, 면접관/미상은 무색.
-                    const rowTone =
-                      flash === s.seq
-                        ? "bg-warning-soft"
-                        : isCand
-                          ? "bg-info-soft"
-                          : "bg-card";
                     return (
                       <div
-                        key={s.seq}
-                        id={`riseg-${ri.id}-${s.seq}`}
-                        className={`px-3 py-2 transition-colors ${rowTone}`}
+                        key={g.segs[0].seq}
+                        className={`px-3 py-2 ${isCand ? "bg-info-soft" : "bg-card"}`}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <span
-                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${roleClass(s.role)}`}
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${roleClass(g.role)}`}
                           >
-                            {roleKo(s.role)}
+                            {roleKo(g.role)}
                           </span>
-                          {fmtMs(s.startMs) && (
+                          {fmtMs(g.segs[0].startMs) && (
                             <span className="text-[10px] text-ink-muted tabular-nums">
-                              {fmtMs(s.startMs)}
-                            </span>
-                          )}
-                          <span className="text-[10px] text-ink-muted">
-                            #{s.seq}
-                          </span>
-                          {s.lowConfidence && (
-                            <span
-                              className="text-[10px] text-warning"
-                              title="저신뢰 전사 구간 — 검수 권장"
-                            >
-                              · 저신뢰
+                              {fmtMs(g.segs[0].startMs)}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs leading-relaxed text-ink">
-                          {highlightPhrases(s.text, report?.key_phrases ?? [])}
-                        </p>
+                        {/* 연속 발화를 한 블록으로 — 단, 근거 점프(evidence_seq)용 seq id·flash 는 문장별 유지. */}
+                        <div className="space-y-1">
+                          {g.segs.map((s) => (
+                            <p
+                              key={s.seq}
+                              id={`riseg-${ri.id}-${s.seq}`}
+                              className={`text-xs leading-relaxed text-ink rounded transition-colors ${
+                                flash === s.seq ? "bg-warning-soft px-1 -mx-1" : ""
+                              }`}
+                            >
+                              {highlightPhrases(s.text, report?.key_phrases ?? [])}
+                              {s.lowConfidence && (
+                                <span
+                                  className="ml-1 text-[10px] text-warning"
+                                  title="저신뢰 전사 구간 — 검수 권장"
+                                >
+                                  · 저신뢰
+                                </span>
+                              )}
+                            </p>
+                          ))}
+                        </div>
                       </div>
                     );
                   })}
