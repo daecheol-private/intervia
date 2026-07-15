@@ -15,6 +15,7 @@ import type { LookupOptions, LookupAddress } from "node:dns";
 import { isIP } from "node:net";
 import { Agent } from "undici";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
+import { clampYears, formatCareerLevel } from "./career-level";
 import { maskContacts } from "./mask";
 import { TRAIT_KEYS, MAX_HIGH_TRAITS, type TraitKey } from "./personality";
 
@@ -23,7 +24,8 @@ const MAX_HTML_BYTES = 2_000_000; // 2MB cap
 const MAX_TEXT_CHARS = 30_000;
 const MAX_IMAGES = 4;
 const IMAGE_MIN_BYTES = 5_000; // 5KB 미만은 광고/아이콘으로 간주
-const IMAGE_MAX_BYTES = 4_000_000; // 4MB
+const IMAGE_MAX_BYTES = 10_000_000; // 10MB — 본문 전체가 한 장 이미지인 공고(자소설닷컴 등) 대응
+const MAX_TOTAL_IMAGE_BYTES = 16_000_000; // 이미지 합계 캡 (Gemini inline 요청 총량 ~20MB 이내)
 const SUPPORTED_IMAGE_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -34,6 +36,7 @@ const SUPPORTED_IMAGE_TYPES = new Set([
 export type ImportedJob = {
   title: string;
   position: string;
+  /** 경력 요건 캐노니컬 텍스트 — LLM 이 준 min/max 연차를 formatCareerLevel 로 직렬화. */
   level: string;
   employmentType: string;
   responsibilities: string;
@@ -342,6 +345,67 @@ function extractMainText(html: string): { text: string; imageUrls: string[] } {
 }
 
 /**
+ * og:image / twitter:image 등 메타 이미지 URL.
+ * 본문이 이미지 한 장인 SPA(자소설닷컴 등)는 본문 <img> 가 없고 이 메타에만 실 이미지가 있다.
+ * 단, 사람인·잡코리아는 og:image 가 사이트 공용 공유 배너라 후순위로만 시도해야 한다
+ * (호출부에서 후보 목록 맨 뒤에 배치).
+ */
+function extractMetaImageUrls(html: string): string[] {
+  const $ = cheerio.load(html);
+  const urls: string[] = [];
+  const push = (v?: string) => {
+    if (v && /^https?:/i.test(v)) urls.push(v);
+  };
+  push($('meta[property="og:image"]').attr("content"));
+  push($('meta[name="twitter:image"]').attr("content"));
+  return dedup(urls);
+}
+
+/**
+ * script JSON(예: Next.js `__NEXT_DATA__`) 안에 HTML 조각으로 박힌 본문 이미지 수집.
+ * extractMainText 는 script 를 noise 로 먼저 제거하므로, 본문이 JSON 안 HTML 로만 오는
+ * SPA(자소설닷컴 등)는 여기서 별도로 긁어야 한다. JSON 문자열 값 중 `<img>` 를 포함한
+ * 것에서만 src 를 뽑아 로고·아이콘 URL 오염을 줄인다. JSON 아닌 스크립트(JS 번들)는
+ * 파싱 실패로 건너뛴다 — 오탐·비용 회피.
+ */
+function extractEmbeddedContentImages(html: string): string[] {
+  const $ = cheerio.load(html);
+  const urls: string[] = [];
+  $("script").each((_, el) => {
+    const raw = $(el).contents().text();
+    if (!raw || raw.length > 2_000_000) return;
+    // JSON script 만 대상 (JS 번들 제외 — 비용·오탐 회피). raw 에서 `<img` 를 미리
+    // 거르지 않는 이유: __NEXT_DATA__ 는 `<` 를 `<` 로 이스케이프해 저장하므로
+    // 파싱 전 문자열 검색으로는 놓친다. 파싱 후 디코드된 문자열에서 찾는다.
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return;
+    let json: unknown;
+    try {
+      json = JSON.parse(trimmed);
+    } catch {
+      return;
+    }
+    const fragments: string[] = [];
+    const walk = (v: unknown) => {
+      if (typeof v === "string") {
+        if (v.includes("<img")) fragments.push(v);
+      } else if (v && typeof v === "object") {
+        for (const x of Object.values(v as Record<string, unknown>)) walk(x);
+      }
+    };
+    walk(json);
+    for (const frag of fragments) {
+      const $frag = cheerio.load(frag);
+      $frag("img").each((_, img) => {
+        const src = $frag(img).attr("src") || $frag(img).attr("data-src");
+        if (src && /^https?:/i.test(src)) urls.push(src);
+      });
+    }
+  });
+  return dedup(urls);
+}
+
+/**
  * 페이지 메타데이터에서 '정식 공고 제목' 후보 추출.
  * 사람인 등은 상세 본문을 이미지/JS iframe 으로 올려서, 본문(이미지)에 박힌 제목이
  * 실제 공고 제목과 다를 수 있다 (회사가 옛 공고 이미지를 재사용하고 제목만 새로 설정 등).
@@ -389,6 +453,7 @@ async function downloadAsInlineParts(
   urls: string[]
 ): Promise<Array<{ inlineData: { mimeType: string; data: string } }>> {
   const out: Array<{ inlineData: { mimeType: string; data: string } }> = [];
+  let totalBytes = 0;
   for (const url of urls) {
     if (out.length >= MAX_IMAGES) break;
     try {
@@ -398,6 +463,9 @@ async function downloadAsInlineParts(
       if (!SUPPORTED_IMAGE_TYPES.has(mime)) continue;
       const buf = await readBodyWithLimit(r, IMAGE_MAX_BYTES);
       if (buf.byteLength < IMAGE_MIN_BYTES || buf.byteLength > IMAGE_MAX_BYTES) continue;
+      // 합계 캡 초과분은 skip (한 장이 커도 뒤의 작은 이미지는 담을 수 있게 break 대신 continue)
+      if (totalBytes + buf.byteLength > MAX_TOTAL_IMAGE_BYTES) continue;
+      totalBytes += buf.byteLength;
       const b64 = buf.toString("base64");
       out.push({ inlineData: { mimeType: mime, data: b64 } });
     } catch {
@@ -412,7 +480,8 @@ const EXTRACTION_SCHEMA_HINT = `
 {
   "title": "공고 제목 (전체. 예: '백엔드 개발자 (3~7년)')",
   "position": "직무 (예: '백엔드 개발자')",
-  "level": "경력 요건 텍스트 (예: '경력 3~7년', '신입~경력 5년', '경력무관')",
+  "levelMin": "최소 요구 경력 연차 (숫자). 신입 지원 가능하면 0. 경력무관이거나 언급이 없으면 null.",
+  "levelMax": "최대 경력 연차 (숫자). 'N년 이상'처럼 상한이 없거나 경력무관이면 null.",
   "employmentType": "고용 형태 (예: '정규직', '계약직', '인턴', '프리랜서')",
   "responsibilities": "담당 업무. 줄바꿈으로 구분된 bullet 리스트. 각 줄 앞에 '- '.",
   "requirements": "지원 자격/필수 요건. 줄바꿈으로 구분된 bullet 리스트. 각 줄 앞에 '- '.",
@@ -424,7 +493,7 @@ const EXTRACTION_SCHEMA_HINT = `
 - 한국어 채용 공고. 응답도 한국어.
 - 광고·추천공고·복리후생·회사 소개는 제외 (요구된 필드에 포함시키지 말 것).
 - **학력·전공 요건은 추출하지 말 것** (블라인드 채용 — 채용절차 공정화법). requirements·idealProfile 에서 최종학력(고졸/초대졸/대졸/석사/박사 등) 조건과 전공(관련 전공 우대 등) 항목은 제외한다. 나이·성별·출신지역 등 차별 금지 항목도 동일하게 제외.
-- title~idealProfile 은 추측·날조 X. 페이지에 없으면 빈 문자열.
+- title~idealProfile 은 추측·날조 X. 페이지에 없으면 빈 문자열(levelMin/levelMax 는 null).
 - **title 은 아래에 '정식 공고 제목'이 주어지면 그것을 근거로 작성한다.** 본문 텍스트나 이미지 안에 다른 제목·배너 문구(회사가 이전 공고에서 남긴 제목 등)가 있어도 무시하고 정식 공고 제목을 따른다. 사이트명·마감일(D-n) 표시는 제외.
 - preferredTraits 는 위 규칙의 예외 — 담당 업무·자격 요건을 분석해 직무 성격에서 추론한다 (공고에 명시되지 않아도 됨). 키는 영어 그대로, 아래 5개 중에서만 선택:
   - "openness" (개방성·도전): 새로운 기술·방식을 시도하고 변화가 잦은 환경에 강함. 예) 신규 서비스 개발, 기획, R&D, 신기술 도입.
@@ -452,7 +521,7 @@ ${titleHint ? `\n${titleHint}\n` : ""}
 ${maskContacts(text)}
 ---`;
   try {
-    const j = await generateJSON<Partial<ImportedJob>>(prompt, {
+    const j = await generateJSON<RawExtracted>(prompt, {
       task: "screening",
       allowFallback: true,
     });
@@ -480,7 +549,7 @@ ${maskContacts(text)}
 ---`;
   try {
     const parts = [{ text: prompt }, ...imageParts];
-    const j = await generateJSONMultimodal<Partial<ImportedJob>>(parts, {
+    const j = await generateJSONMultimodal<RawExtracted>(parts, {
       task: "interviewEval",
       allowFallback: true,
     });
@@ -506,11 +575,20 @@ function normalizePreferredTraits(input: unknown): TraitKey[] {
   return out;
 }
 
-function finalize(j: Partial<ImportedJob>): ImportedJob {
+/** LLM 원시 응답 — level 은 숫자 min/max 로 받아 finalize 에서 텍스트로 직렬화. */
+type RawExtracted = Partial<Omit<ImportedJob, "level">> & {
+  levelMin?: unknown;
+  levelMax?: unknown;
+};
+
+function finalize(j: RawExtracted): ImportedJob {
   const filled = {
     title: (j.title ?? "").trim(),
     position: (j.position ?? "").trim(),
-    level: (j.level ?? "").trim(),
+    level: formatCareerLevel({
+      min: clampYears(j.levelMin),
+      max: clampYears(j.levelMax),
+    }),
     employmentType: (j.employmentType ?? "").trim(),
     responsibilities: (j.responsibilities ?? "").trim(),
     requirements: (j.requirements ?? "").trim(),
@@ -564,6 +642,12 @@ export async function importJobFromUrl(rawUrl: string): Promise<ImportedJob> {
 
   let { text, imageUrls } = extractMainText(html);
 
+  // script JSON(Next.js __NEXT_DATA__ 등) 안 본문 이미지 — 본문이 이미지 한 장인 SPA
+  // (자소설닷컴 등)는 <img> 태그가 아니라 여기에만 있다. 실 본문이라 후보 앞에 둔다.
+  const embeddedImages = extractEmbeddedContentImages(html);
+  if (embeddedImages.length > 0)
+    imageUrls = dedup([...embeddedImages, ...imageUrls]).slice(0, MAX_IMAGES * 3);
+
   // 사이트별 추가 본문 (iframe) 추적 — 잡코리아 등 메인이 SUMMARY 만 노출하는 경우.
   const extraUrls = additionalContentUrls(html, normalizedUrl);
   for (const extraUrl of extraUrls) {
@@ -582,6 +666,13 @@ export async function importJobFromUrl(rawUrl: string): Promise<ImportedJob> {
       /* iframe fetch 실패는 무시 */
     }
   }
+
+  // og:image 는 사이트 공용 공유 배너인 경우가 많아(사람인·잡코리아) 후순위로만 시도 —
+  // 본문 <img>·embedded 이미지가 슬롯을 먼저 채우고, 그것들이 없는 페이지(자소설닷컴 등)
+  // 에서만 실제로 채택된다.
+  const metaImages = extractMetaImageUrls(html);
+  if (metaImages.length > 0)
+    imageUrls = dedup([...imageUrls, ...metaImages]).slice(0, MAX_IMAGES * 3);
 
   if (text.length < 100)
     throw new Error("본문 텍스트를 충분히 추출하지 못했습니다.");

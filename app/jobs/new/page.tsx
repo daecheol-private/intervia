@@ -14,14 +14,13 @@ import {
   type TraitProfile,
 } from "@/lib/personality";
 import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
+import {
+  careerInputsFrom,
+  careerInputsToText,
+  type CareerInputs,
+} from "@/lib/career-level";
+import { CareerRangeInput } from "@/app/components/CareerRangeInput";
 
-const LEVELS = [
-  "신입 (0년)",
-  "1~2년차 (주니어)",
-  "3~5년차 (중급)",
-  "6~9년차 (시니어)",
-  "10년 이상 (리드)",
-];
 const EMPLOYMENT = ["정규직", "계약직", "인턴", "프리랜서"];
 const MAX_PASTE_IMAGES = 5;
 
@@ -46,10 +45,15 @@ export default function NewJobPage() {
   const [applyToken, setApplyToken] = useState<string | null>(null);
   const [applyUrl, setApplyUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // 직급/연차 — 최소/최대 range 입력. 저장 시 careerInputsToText 로 직렬화해 level 로 전송.
+  const [career, setCareer] = useState<CareerInputs>({
+    any: true,
+    min: "",
+    max: "",
+  });
   const [form, setForm] = useState({
     title: "",
     position: "",
-    level: "3~5년차 (중급)",
     employmentType: "정규직",
     responsibilities: "",
     requirements: "",
@@ -100,12 +104,12 @@ export default function NewJobPage() {
   // 추출 결과를 폼에 반영 (URL·붙여넣기 공용).
   // 매번 새 값으로 전체 교체 — 추출 안 된 필드는 기본값으로 초기화(이전 내용 잔류 방지).
   const applyExtracted = (d: Extracted) => {
+    // 서버가 준 캐노니컬 텍스트("신입~10년" 등)를 range 입력값으로 역변환
+    setCareer(careerInputsFrom(d.level));
     setForm((f) => ({
       ...f,
       title: d.title,
       position: d.position,
-      // 자유 텍스트로 추출되면 select 옵션에 없어 드롭다운이 깨지므로 기본값 유지
-      level: LEVELS.includes(d.level) ? d.level : "3~5년차 (중급)",
       employmentType: EMPLOYMENT.includes(d.employmentType)
         ? d.employmentType
         : "정규직",
@@ -310,7 +314,7 @@ export default function NewJobPage() {
     const res = await fetch("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, applyToken }),
+      body: JSON.stringify({ ...form, level: careerInputsToText(career), applyToken }),
     });
     if (!res.ok) {
       const text = await res.text();
@@ -333,7 +337,7 @@ export default function NewJobPage() {
     const res = await fetch("/api/jobs/draft", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, applyToken }),
+      body: JSON.stringify({ ...form, level: careerInputsToText(career), applyToken }),
     });
     if (!res.ok) {
       alert("임시저장 실패: " + (await res.text()));
@@ -573,17 +577,7 @@ export default function NewJobPage() {
             />
           </Field>
           <Field label="직급/연차">
-            <Select
-              value={form.level}
-              onChange={(v) => setForm({ ...form, level: v })}
-              options={[
-                "신입 (0년)",
-                "1~2년차 (주니어)",
-                "3~5년차 (중급)",
-                "6~9년차 (시니어)",
-                "10년 이상 (리드)",
-              ]}
-            />
+            <CareerRangeInput value={career} onChange={setCareer} />
           </Field>
         </div>
 

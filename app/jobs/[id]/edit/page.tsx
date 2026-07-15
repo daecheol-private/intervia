@@ -14,11 +14,16 @@ import {
   type TraitProfile,
 } from "@/lib/personality";
 import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
+import {
+  careerInputsFrom,
+  careerInputsToText,
+  type CareerInputs,
+} from "@/lib/career-level";
+import { CareerRangeInput } from "@/app/components/CareerRangeInput";
 
 type Form = {
   title: string;
   position: string;
-  level: string;
   employmentType: string;
   responsibilities: string;
   requirements: string;
@@ -38,6 +43,13 @@ export default function EditJobPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const [form, setForm] = useState<Form | null>(null);
+  // 직급/연차 — 최소/최대 range 입력. 저장 시 careerInputsToText 로 직렬화해 level 로 전송.
+  // 기존 공고의 구 버킷 라벨("3~5년차 (중급)")도 careerInputsFrom 이 range 로 해석한다.
+  const [career, setCareer] = useState<CareerInputs>({
+    any: true,
+    min: "",
+    max: "",
+  });
   const [isDraft, setIsDraft] = useState(false);
   const [saving, setSaving] = useState(false);
   // 기존 공고 URL 자동 채우기 — 새 공고 등록과 동일 (임시공고 정식 전환 시 사람인 URL 로 내용 채우기 등).
@@ -62,11 +74,11 @@ export default function EditJobPage() {
       }
       const j = await fetch(`/api/jobs/${id}`).then((r) => r.json());
       setIsDraft(!!j.isDraft);
+      setCareer(careerInputsFrom(j.level));
       setForm({
         title: j.title === "(작성 중인 임시 공고)" ? "" : j.title,
         position: j.position,
         // 임시공고는 빈 값일 수 있음 → 유효한 기본값으로 보정(빈 select 면 정식 전환이 막힘).
-        level: j.level || "3~5년차 (중급)",
         employmentType: j.employmentType || "정규직",
         responsibilities: j.responsibilities,
         requirements: j.requirements,
@@ -116,21 +128,15 @@ export default function EditJobPage() {
       confidence: number;
       meta: { usedImageFallback: boolean; imageCount: number; siteHint?: string };
     };
-    const LEVELS = [
-      "신입 (0년)",
-      "1~2년차 (주니어)",
-      "3~5년차 (중급)",
-      "6~9년차 (시니어)",
-      "10년 이상 (리드)",
-    ];
     const EMPLOYMENT = ["정규직", "계약직", "인턴", "프리랜서"];
+    // 서버가 준 캐노니컬 텍스트("신입~10년" 등)를 range 입력값으로 역변환
+    setCareer(careerInputsFrom(d.level));
     setForm((f) =>
       f
         ? {
             ...f,
             title: d.title,
             position: d.position,
-            level: LEVELS.includes(d.level) ? d.level : f.level,
             employmentType: EMPLOYMENT.includes(d.employmentType)
               ? d.employmentType
               : f.employmentType,
@@ -185,7 +191,10 @@ export default function EditJobPage() {
     }
     setSaving(true);
     // password: 빈 문자열 + clearPassword=true → 잠금 해제, 4자리 → 변경, 그 외 → 유지
-    const payload: Record<string, unknown> = { ...form };
+    const payload: Record<string, unknown> = {
+      ...form,
+      level: careerInputsToText(career),
+    };
     if (form.clearPassword) payload.password = "";
     else if (!form.password) delete payload.password;
     delete payload.hasPassword;
@@ -295,17 +304,7 @@ export default function EditJobPage() {
             />
           </Field>
           <Field label="직급/연차">
-            <select
-              className={inputCls}
-              value={form.level}
-              onChange={(e) => setForm({ ...form, level: e.target.value })}
-            >
-              <option>신입 (0년)</option>
-              <option>1~2년차 (주니어)</option>
-              <option>3~5년차 (중급)</option>
-              <option>6~9년차 (시니어)</option>
-              <option>10년 이상 (리드)</option>
-            </select>
+            <CareerRangeInput value={career} onChange={setCareer} />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-4">
