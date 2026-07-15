@@ -6,6 +6,7 @@ import { orgSmtpConfigs, organizations } from "./schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "./crypto";
 import { SITE_INFO, APPEAL_CONTACT } from "./site-info";
+import { notifyOps } from "./error-reporter";
 import { readStoredFile, contentTypeFromName } from "./storage";
 import { isValidBrandColor, textColorOn } from "./brand-color";
 import { EMAIL_LOGO_PNG_BASE64 } from "./email-logo-data";
@@ -193,6 +194,29 @@ function isTransientMailError(e: unknown): boolean {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const MAX_SEND_RETRIES = 3;
 
+// ── 발송 실패 Slack 경보 ──────────────────────────────────────────────────────
+// 메일 장애(특히 Resend 무료 티어 일 100통 캡 초과)는 메일로 알릴 수 없으므로 Slack 이
+// 유일한 경보 채널. 폭주 방지: 10분 창당 1회만 통지. 인스턴스별 상태라 서버리스 다중
+// 인스턴스에서 몇 건 중복될 수 있음 — 유실보단 낫다. 수신 주소(PII)는 마스킹.
+const MAIL_FAIL_WINDOW_MS = 10 * 60_000;
+let mailFailWindowStart = 0;
+
+function reportMailFailure(e: unknown): void {
+  const now = Date.now();
+  if (now - mailFailWindowStart < MAIL_FAIL_WINDOW_MS) return;
+  mailFailWindowStart = now;
+  const msg = (e instanceof Error ? e.message : String(e)).replace(
+    /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+    "[email]"
+  );
+  const quotaSuspect = /\b429\b|quota|too many|rate ?limit|daily|limit exceeded/i.test(msg);
+  void notifyOps(
+    `📪 메일 발송 실패 감지${
+      quotaSuspect ? " — Resend 쿼터/전송률 한도 초과 의심 (무료 티어 일 100통·월 3,000통)" : ""
+    }\n원인: ${msg.slice(0, 300)}\n(반복 실패는 10분당 1회만 통지 — Vercel 로그에서 전체 확인)`
+  ).catch(() => {});
+}
+
 export async function sendMail({
   to,
   subject,
@@ -239,7 +263,10 @@ export async function sendMail({
       await transporter.sendMail(message);
       return;
     } catch (e) {
-      if (attempt >= MAX_SEND_RETRIES || !isTransientMailError(e)) throw e;
+      if (attempt >= MAX_SEND_RETRIES || !isTransientMailError(e)) {
+        reportMailFailure(e); // 재시도 소진/영구 실패만 경보 — 일시 오류 재시도 성공은 조용히
+        throw e;
+      }
       const backoff = 1000 * 2 ** attempt + Math.random() * 300;
       console.warn(
         `[mailer] 일시 오류 — ${Math.round(backoff)}ms 후 재발송 (${attempt + 1}/${MAX_SEND_RETRIES}, to=${finalTo}):`,

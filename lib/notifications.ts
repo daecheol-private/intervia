@@ -12,6 +12,7 @@ import { withDbRetry } from "./db-retry";
 import { notifications, users, jobInterviewers, jobPostings } from "./schema";
 import { and, desc, eq, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { sendMail, isSmtpAvailable, wrapEmailCard, escapeHtml } from "./mailer";
+import { notifyOps } from "./error-reporter";
 
 export type NotificationType =
   | "ai_interview_done"
@@ -277,17 +278,30 @@ export async function activeUserCount(): Promise<number> {
   return Number(r?.c ?? 0);
 }
 
+// 시스템 관리자 알림의 Slack 라벨 — Slack 은 국외 리전이라 이름·이메일이 섞인 title 대신
+// 유형 라벨만 보낸다(inquiry-notify 의 메타데이터-only 원칙). 상세는 href 어드민 화면에서.
+const SLACK_TYPE_LABEL: Partial<Record<NotificationType, string>> = {
+  new_org: "신규 법인 등록/도메인 검토",
+  admin_promotion: "법인 담당자 승격 요청",
+  new_inquiry: "고객 문의 접수",
+  candidate_appeal: "AI 평가 이의제기 접수",
+};
+
 /**
  * 시스템 관리자 전원에게 fanout.
  *
- * @param options.email true 면 인앱 알림 + 이메일 동시 발송 (시스템 env SMTP).
+ * 인앱 알림 + Slack(SLACK_WEBHOOK_URL 설정 시, 미설정이면 no-op) 기본 발송.
+ *
+ * @param options.email true 면 이메일도 동시 발송 (시스템 env SMTP).
  *   운영자가 매번 어드민에 들어와 있지 않으므로, 사람 검토가 필요한 알림
  *   (도메인 코테넌트 신고 등)은 메일로도 통지해 누락을 막는다.
  *   시스템 메일이라 법인 SMTP 가 아닌 환경변수 SMTP(orgId 없음)로 발송.
+ * @param options.slack false 면 Slack 생략 — 호출부가 더 풍부한 Slack 메시지를
+ *   직접 보내는 경우의 중복 차단용 (예: inquiry-notify).
  */
 export async function notifySystemAdmins(
   input: Omit<CreateNotificationInput, "userId">,
-  options?: { email?: boolean }
+  options?: { email?: boolean; slack?: boolean }
 ): Promise<void> {
   const admins = await db
     .select({ id: users.id, email: users.email, name: users.name })
@@ -297,6 +311,13 @@ export async function notifySystemAdmins(
     admins.map((a) => a.id),
     input
   );
+
+  if (options?.slack !== false) {
+    const label = SLACK_TYPE_LABEL[input.type] ?? "시스템 관리자 알림";
+    const base = resolveMailBaseUrl();
+    const url = input.href.startsWith("http") ? input.href : `${base}${input.href}`;
+    void notifyOps(`🛎 ${label}\n확인: ${url}`).catch(() => {});
+  }
 
   if (!options?.email) return;
   if (admins.length === 0) return;

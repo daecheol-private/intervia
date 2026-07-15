@@ -49,13 +49,17 @@ export async function notifyNewInquiry(opts: {
   const categoryLabel = CATEGORY_LABEL[opts.category] ?? opts.category;
 
   // 1) 인앱 알림 — 시스템 관리자(운영자) 전원. SMTP 와 무관하게 항상 시도.
+  //    slack:false — 아래 2)에서 orgName 포함한 더 풍부한 Slack 메시지를 직접 보냄(중복 차단).
   try {
-    await notifySystemAdmins({
-      type: "new_inquiry",
-      title: `${sourceLabel} 문의 접수 — ${categoryLabel}`,
-      href: "/admin/inquiries",
-      payload: { source: opts.source, category: opts.category, orgId },
-    });
+    await notifySystemAdmins(
+      {
+        type: "new_inquiry",
+        title: `${sourceLabel} 문의 접수 — ${categoryLabel}`,
+        href: "/admin/inquiries",
+        payload: { source: opts.source, category: opts.category, orgId },
+      },
+      { slack: false }
+    );
   } catch (e) {
     console.error("[inquiry] 인앱 알림 실패:", e);
   }

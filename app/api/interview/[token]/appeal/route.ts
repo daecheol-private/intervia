@@ -20,7 +20,11 @@ import { rateLimit } from "@/lib/rate-limit";
 import { sendMail, isSmtpAvailable, escapeHtml } from "@/lib/mailer";
 import { DPO_INFO, COMPANY_INFO, SITE_INFO } from "@/lib/site-info";
 import { logAudit } from "@/lib/audit";
-import { notifyJobInterviewers, notifyOrgAdmins } from "@/lib/notifications";
+import {
+  notifyJobInterviewers,
+  notifyOrgAdmins,
+  notifySystemAdmins,
+} from "@/lib/notifications";
 
 export const runtime = "nodejs";
 
@@ -140,6 +144,14 @@ export async function POST(
       { email: true }
     );
   }
+  // 운영자(시스템 관리자)에게도 인앱+Slack — §37의2 는 7영업일 회신 기한이 있어 운영자 인지 필수.
+  // 이메일은 위 notifyDpo 가 DPO 앞으로 이미 발송하므로 중복 생략.
+  void notifySystemAdmins({
+    type: "candidate_appeal",
+    title: apTitle,
+    href: "/admin/appeals",
+    payload: { candidateId: candidate.id, jobId: candidate.jobId },
+  });
 
   return Response.json({ ok: true });
 }
