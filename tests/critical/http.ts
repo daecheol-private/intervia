@@ -2,7 +2,13 @@
  * 쿠키 자(jar) 를 가진 최소 HTTP 클라이언트 — 역할별(관리자/멤버/지원자) 독립 세션.
  * 모든 요청에 Origin 헤더를 실어 proxy.ts 의 CSRF Origin 검증을 통과한다.
  */
+import { Agent } from "undici"; // @vercel/blob 경유 hoisted (Node 내장 fetch 와 같은 v6 계열)
 import { BASE } from "./env";
+
+// keep-alive 재사용 소켓이 dev 서버 유휴 종료와 겹치면 요청이 서버에 닿기 전에
+// "fetch failed"로 터진다 — Windows 간헐 플레이크(CT-805 등, 서버 로그에 요청 부재로 실측).
+// pipelining:0 = keep-alive 비활성 → 요청마다 새 연결이라 죽은 소켓 재사용이 원천 차단된다.
+const noKeepAlive = new Agent({ pipelining: 0 });
 
 export type Res = {
   status: number;
@@ -57,21 +63,23 @@ export class Client {
     } else if (opts.form) {
       body = opts.form; // fetch 가 multipart boundary 포함 Content-Type 자동 세팅
     }
-    // keep-alive 재사용 소켓이 서버 유휴 종료와 겹치면 요청이 서버에 닿기 전에
-    // "fetch failed"(ECONNRESET/other side closed)로 터진다 — Windows 실측 간헐 플레이크.
-    // 죽은 소켓 신호일 때만 1회 재시도 (미도달 실패라 재전송 안전. 타 오류는 그대로 throw).
     const doFetch = () =>
-      fetch(this.base + path, { method, headers, body, redirect: "manual" });
+      fetch(this.base + path, {
+        method,
+        headers,
+        body,
+        redirect: "manual",
+        // Node fetch 의 undici 확장 필드 — RequestInit 타입엔 없어 단언 필요
+        dispatcher: noKeepAlive,
+      } as RequestInit);
     let res: Response;
     try {
       res = await doFetch();
     } catch (e) {
-      const cause = (e as { cause?: { code?: string; message?: string } }).cause;
-      const deadSocket =
-        cause?.code === "ECONNRESET" ||
-        cause?.code === "UND_ERR_SOCKET" ||
-        (cause?.message ?? "").includes("other side closed");
-      if (!deadSocket) throw e;
+      // "fetch failed" TypeError = 응답 수신 전 연결 수준 실패. keep-alive 를 껐으므로
+      // 새 연결의 connect 단계 실패 = 서버 미도달 → 메서드 무관 1회 재전송 안전.
+      // (기존의 cause 코드 화이트리스트는 Windows 실측에서 놓치는 변형이 있어 폐기)
+      if (!(e instanceof TypeError && e.message.includes("fetch failed"))) throw e;
       await new Promise((r) => setTimeout(r, 300));
       res = await doFetch();
     }
