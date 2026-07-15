@@ -119,17 +119,14 @@ export async function POST(
   const title = `${cand?.name ?? "후보자"} 님이 지원을 취소했습니다`;
   const href = `/candidates/${sched.candidateId}`;
   try {
-    // urgent: 확정 면접이 임박했을 수 있어 취소는 주말·야간에도 즉시 통지(캘린더 정리).
-    await notifyJobInterviewers(
-      sched.jobId,
-      {
-        type: "schedule_withdrawn",
-        title,
-        href,
-        payload: { scheduleId: sched.id },
-      },
-      { urgent: true }
-    );
+    // 취소도 조용시간(주말·야간) 메일 스킵 — 아침 digest '오늘 면접' 블록이 당일 일정의
+    // 정본이고 취소 후보는 거기서 빠지므로(superseded 필터) 잘못 출석할 경로가 없다.
+    await notifyJobInterviewers(sched.jobId, {
+      type: "schedule_withdrawn",
+      title,
+      href,
+      payload: { scheduleId: sched.id },
+    });
   } catch (e) {
     console.error("schedule withdraw notify interviewers failed", e);
   }

@@ -4,8 +4,9 @@
  *
  * 두 종류:
  *  1) sendScheduleReminders  — 확정 대면 면접(round1/round2) D-1(24h 전):
- *       · 면접관 전원에게 1회 발송 후 `interviewerReminderSentAt` 기록
- *       · 후보자에게 1회 발송 후 `candidateReminderSentAt` 기록 (독립 추적)
+ *       · 면접관 전원에게 1회 발송 후 `interviewerReminderSentAt` 기록.
+ *         단 주말(isQuietHoursKst)엔 발송 없이 기록만 — 월요일 면접은 당일 digest 가 커버.
+ *       · 후보자에게 1회 발송 후 `candidateReminderSentAt` 기록 (독립 추적, 주말에도 발송)
  *  2) sendAiInterviewReminders — AI 면접 미응답(pending/in_progress) 후보자에게
  *       링크 발급 후 48h 경과 시 1회만 넛지. 완료/만료 세션은 제외.
  *
@@ -31,7 +32,7 @@ import {
   getOrgEmailBranding,
   brandingAttachments,
 } from "./mailer";
-import { getJobInterviewerEmails } from "./notifications";
+import { getJobInterviewerEmails, isQuietHoursKst } from "./notifications";
 import { sendCandidateAlimtalk } from "./alimtalk";
 import { formatKstDateTime } from "./utils";
 import { isAiInterviewSuperseded, isScheduleSuperseded } from "./stage-meta";
@@ -172,8 +173,13 @@ export async function sendScheduleReminders(): Promise<{
     } = {};
     const nowIso = new Date(now).toISOString();
 
-    // 1) 면접관 리마인더 (미발송일 때만)
-    if (!r.interviewerSentAt) {
+    // 1) 면접관 리마인더 (미발송일 때만).
+    // 조용시간(주말 — cron 이 09~20시라 야간엔 원래 안 돎)엔 보내지 않고 처리 완료로
+    // 기록: 월요일 면접은 당일 09:00 digest '오늘 면접' 블록이 커버한다(사용자 결정).
+    // 후보자 리마인더(아래 2)는 시간 민감이라 주말에도 그대로 발송.
+    if (!r.interviewerSentAt && isQuietHoursKst()) {
+      update.interviewerReminderSentAt = nowIso;
+    } else if (!r.interviewerSentAt) {
       const interviewers = await getJobInterviewerEmails(r.jobId);
       for (const iv of interviewers) {
         const html = wrapEmailCard({
