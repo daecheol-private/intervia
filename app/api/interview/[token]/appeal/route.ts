@@ -7,8 +7,14 @@
  * 제출 시 DPO 에게 알림 메일 (있을 때만 — 실패해도 DB 저장은 성공 응답).
  */
 import { db } from "@/lib/db";
-import { interviewSessions, candidates, appealLogs, jobPostings } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import {
+  interviewSessions,
+  candidates,
+  appealLogs,
+  jobPostings,
+  users,
+} from "@/lib/schema";
+import { and, eq } from "drizzle-orm";
 import { extractIp } from "@/lib/auth-attempts";
 import { rateLimit } from "@/lib/rate-limit";
 import { sendMail, isSmtpAvailable, escapeHtml } from "@/lib/mailer";
@@ -102,12 +108,25 @@ export async function POST(
   // 인앱 알림 — 면접관 + 법인 관리자
   const apTitle = `${candidate.name} 후보자가 AI 평가에 이의를 제기했습니다`;
   const apHref = `/candidates/${candidate.id}`;
-  void notifyJobInterviewers(candidate.jobId, {
-    type: "candidate_appeal",
-    title: apTitle,
-    href: apHref,
-    payload: { candidateId: candidate.id, jobId: candidate.jobId },
-  });
+  // org_admin 겸직 면접관은 아래 notifyOrgAdmins 메일과 중복 — 면접관 fanout 에선 메일만 제외.
+  const adminIds = candidate.orgId
+    ? (
+        await db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.orgId, candidate.orgId), eq(users.role, "org_admin")))
+      ).map((r) => r.id)
+    : [];
+  void notifyJobInterviewers(
+    candidate.jobId,
+    {
+      type: "candidate_appeal",
+      title: apTitle,
+      href: apHref,
+      payload: { candidateId: candidate.id, jobId: candidate.jobId },
+    },
+    adminIds.length ? { excludeEmailUserIds: adminIds } : undefined
+  );
   if (candidate.orgId) {
     void notifyOrgAdmins(
       candidate.orgId,

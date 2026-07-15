@@ -192,8 +192,8 @@ export async function POST(
   }
 
   // in-app 알림 — 공고 면접관 전원.
-  // 제시 면접관(proposedByUserId)은 위에서 buildMeetingLinkEmail 풍부한 메일을 이미 받았고,
-  // 등록 주체(me) 본인도 방금 등록한 행동이라 알림 메일 불필요 — 둘 다 이메일에서만 제외(인앱 알림은 발송).
+  // skipEmail: 제시 면접관은 위 buildMeetingLinkEmail(ICS 포함)을 이미 받았고, 나머지에겐
+  // 링크가 후보자 페이지 + D-1 리마인더 본문으로 전달되므로 개별 메일은 소음.
   try {
     await notifyJobInterviewers(
       sched.jobId,
@@ -203,9 +203,7 @@ export async function POST(
         href: `/candidates/${sched.candidateId}`,
         payload: { scheduleId: sched.id, slot: selected, hasMeetingUrl: true },
       },
-      sched.proposedByUserId
-        ? { excludeEmailUserIds: [sched.proposedByUserId, me!.id] }
-        : { excludeEmailUserIds: [me!.id] }
+      { skipEmail: true }
     );
   } catch (e) {
     console.error("meeting link notify interviewers failed", e);
