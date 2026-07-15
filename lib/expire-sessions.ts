@@ -3,18 +3,17 @@ import {
   interviewSessions,
   interviewSchedules,
   candidates,
-  jobInterviewers,
-  jobPostings,
-  users,
 } from "./schema";
 import { and, eq, lt, sql, isNull, inArray } from "drizzle-orm";
 import { purgeOnDecision } from "./candidate-stage";
-import { sendMail, isSmtpAvailable, wrapEmailCard, escapeHtml } from "./mailer";
 
 /**
  * 만료 시점이 지난 면접 세션 정리.
  * - status='pending' (미시작) 만 환불 대상. in_progress/completed는 그대로 expired 처리만.
  * - 환불은 candidate.org_id 기준 (interview_session에는 org_id 없음).
+ *
+ * 면접관 통지: 개별 메일 없음 — cron 이 24시간 돌아 야간·주말 메일의 유일한 소스였고,
+ * 자동 종결분은 다음 daily digest 의 '자동 종결' 블록(outcomeReason 기반)이 요약한다.
  */
 export async function expireInterviewSessions(): Promise<{
   expiredCount: number;
@@ -152,126 +151,10 @@ export async function expireInterviewSessions(): Promise<{
     }
   }
 
-  // 자동 불합격된 후보들 → 공고별로 묶어서 면접관에게 알림 메일 1통씩.
-  // (만료 직후라 stage 는 보존되어 있고, outcome=rejected, decisionFromStage 기록됨)
-  const autoRejectedCandidateIds: number[] = [];
-  if (expiredSessionCandidateIds.length > 0) {
-    const rows = await db
-      .select({ id: candidates.id })
-      .from(interviewSessions)
-      .innerJoin(candidates, eq(candidates.id, interviewSessions.candidateId))
-      .where(
-        and(
-          inArray(interviewSessions.id, expiredSessionCandidateIds),
-          eq(candidates.outcome, "rejected"),
-          eq(candidates.outcomeReason, "ai_link_expired")
-        )
-      );
-    for (const r of rows) autoRejectedCandidateIds.push(r.id);
-  }
-  if (expiredScheds.length > 0) {
-    for (const s of expiredScheds) autoRejectedCandidateIds.push(s.candidateId);
-  }
-  if (autoRejectedCandidateIds.length > 0) {
-    await notifyInterviewersOnAutoReject(autoRejectedCandidateIds).catch((e) =>
-      console.error("notifyInterviewersOnAutoReject failed", e)
-    );
-  }
-
   return {
     expiredCount: expiredPending.length + expiredInProgress.length,
     refundedCount,
     aiAutoRejected,
     scheduleAutoRejected,
   };
-}
-
-/**
- * 자동 불합격된 후보들의 공고 면접관 전원에게 알림.
- * 공고별로 묶어 1통씩 (메일 수 최소화). 메일 실패는 silent — cron 흐름 막지 않음.
- */
-async function notifyInterviewersOnAutoReject(
-  candidateIds: number[]
-): Promise<void> {
-  if (candidateIds.length === 0) return;
-  const rows = await db
-    .select({
-      id: candidates.id,
-      name: candidates.name,
-      jobId: candidates.jobId,
-      orgId: candidates.orgId,
-      reason: candidates.outcomeReason,
-    })
-    .from(candidates)
-    .where(inArray(candidates.id, candidateIds));
-
-  // 공고별 그룹
-  const byJob = new Map<
-    number,
-    { orgId: number | null; items: { name: string; reason: string | null }[] }
-  >();
-  for (const r of rows) {
-    const g = byJob.get(r.jobId) ?? { orgId: r.orgId, items: [] };
-    g.items.push({ name: r.name, reason: r.reason });
-    byJob.set(r.jobId, g);
-  }
-
-  const reasonLabel: Record<string, string> = {
-    ai_link_expired: "AI면접 링크 만료 (응시 기한 경과)",
-    schedule_link_expired: "1차 면접 일정 링크 만료",
-  };
-
-  for (const [jobId, group] of byJob) {
-    if (!group.orgId) continue;
-    if (!(await isSmtpAvailable(group.orgId))) continue;
-
-    const [job] = await db
-      .select({ title: jobPostings.title })
-      .from(jobPostings)
-      .where(eq(jobPostings.id, jobId));
-    if (!job) continue;
-
-    const recipients = await db
-      .select({ email: users.email, name: users.name })
-      .from(jobInterviewers)
-      .innerJoin(users, eq(users.id, jobInterviewers.userId))
-      .where(eq(jobInterviewers.jobId, jobId));
-    if (recipients.length === 0) continue;
-
-    const listText = group.items
-      .map((c) => `- ${c.name} (${reasonLabel[c.reason ?? ""] ?? c.reason ?? "사유 미상"})`)
-      .join("\n");
-    const subject = `[Intervia] ${job.title} 자동 불합격 처리 알림 (${group.items.length}명)`;
-    const text = `다음 후보자들의 면접/일정 링크가 만료되어 자동으로 불합격 처리되었습니다.\n응시 기한 경과에 따른 절차 종료이며 AI 평가 결과에 따른 결정이 아닙니다.\n\n${listText}\n\nIntervia`;
-    const html = wrapEmailCard({
-      innerHtml: `
-        <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">자동 불합격 처리 알림</h1>
-        <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 16px;">
-          <strong style="color:#0f172a;">${escapeHtml(job.title)}</strong> 공고에서 다음 후보자들의 링크가 만료되어 자동으로 불합격 처리되었습니다.
-          응시 기한 경과에 따른 절차 종료이며 AI 평가 결과에 따른 결정이 아닙니다.
-        </p>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
-          <ul style="font-size:13px;color:#0f172a;line-height:1.8;margin:0;padding-left:18px;">
-${group.items.map((c) => `            <li>${escapeHtml(c.name)} <span style="color:#64748b;">— ${reasonLabel[c.reason ?? ""] ?? c.reason ?? "사유 미상"}</span></li>`).join("\n")}
-          </ul>
-        </div>
-      `,
-      footer: "본 메일은 Intervia 채용 플랫폼에서 자동 발송되었습니다.",
-    });
-
-    for (const r of recipients) {
-      try {
-        await sendMail({
-          to: r.email,
-          subject,
-          text,
-          html,
-          orgId: group.orgId,
-          audience: "org",
-        });
-      } catch (e) {
-        console.error("auto-reject notify mail failed", { to: r.email, e });
-      }
-    }
-  }
 }

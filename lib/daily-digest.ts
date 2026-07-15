@@ -7,10 +7,12 @@
  * 놓친다. 매일 아침 "본인이 면접관으로 배정된 공고"에 한해 오늘 할 일을 메일로 push 한다.
  *
  * 받는 사람: job_interviewers 에 배정된 active 사용자 전원(역할 무관). 각자 본인 배정 공고만.
- * 3블록:
+ * 4블록:
  *   ① 오늘(KST) 진행할 확정 면접 — interview_schedules.status='selected' + 오늘 슬롯
  *   ② 결정 대기            — round1_waiting / round1_passed / round2_passed (outcome 미정)
  *   ③ 신규 지원·검토 대기  — applied / screened / ai_evaluated (outcome 미정)
+ *   ④ 자동 종결            — 링크 만료 자동 불합격(outcomeReason 기반), 신규 창 내 발생분.
+ *      expire cron(24시간 가동)의 개별 알림 메일을 대체한다 — 야간·주말 메일 소스 제거.
  * 합계 0건이면 그 면접관에겐 보내지 않는다(빈 메일 방지).
  *
  * 변동 중심 발송(2026-07-15): 24h 내 변동(updated_at) 항목을 '신규'로 판정해 블록 상단
@@ -50,6 +52,13 @@ import { STAGE_WAITER, isScheduleSuperseded, type Stage } from "./stage-meta";
 const DECISION_STAGES: Stage[] = ["round1_waiting", "round1_passed", "round2_passed"];
 /** "신규 지원·검토 대기"로 묶는 stage — 면접 전 단계에서 검토·진행 결정이 필요한 단계. */
 const REVIEW_STAGES: Stage[] = ["applied", "screened", "ai_evaluated"];
+
+/** "자동 종결" 블록의 outcomeReason — expire cron 이 자동 불합격 처리한 사유(수동 결정 제외). */
+const AUTO_CLOSE_REASONS = ["ai_link_expired", "schedule_link_expired"] as const;
+const AUTO_CLOSE_LABEL: Record<string, string> = {
+  ai_link_expired: "AI면접 링크 만료 (응시 기한 경과)",
+  schedule_link_expired: "1차 면접 일정 링크 만료",
+};
 
 /** 메일 CTA 절대 base URL. APP_BASE_URL 우선, 미설정 시 dev=localhost:3003. */
 function resolveBaseUrl(): string {
@@ -264,8 +273,35 @@ export async function sendDailyDigests(): Promise<{
     }));
     sortNewFirst(reviewPending);
 
+    // 블록④ — 자동 종결(링크 만료). 신규 창 내 발생분만 — 창 밖은 이미 이전 digest 가 안내함.
+    const autoClosedRows = await db
+      .select({
+        name: candidates.name,
+        reason: candidates.outcomeReason,
+        decidedAt: candidates.decidedAt,
+        jobTitle: jobPostings.title,
+      })
+      .from(candidates)
+      .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
+      .where(
+        and(
+          inArray(candidates.jobId, jobIds),
+          eq(candidates.outcome, "rejected"),
+          inArray(candidates.outcomeReason, [...AUTO_CLOSE_REASONS])
+        )
+      );
+    const autoClosed: DigestItem[] = autoClosedRows
+      .filter((r) => parseDbTimeMs(r.decidedAt) >= newSinceMs)
+      .map((r) => ({
+        primary: `${r.name} · ${r.jobTitle}`,
+        secondary: AUTO_CLOSE_LABEL[r.reason ?? ""] ?? r.reason ?? "링크 만료",
+      }));
+
     const total =
-      todayInterviews.length + decisionPending.length + reviewPending.length;
+      todayInterviews.length +
+      decisionPending.length +
+      reviewPending.length +
+      autoClosed.length;
     const newCount =
       decisionPending.filter((it) => it.isNew).length +
       reviewPending.filter((it) => it.isNew).length;
@@ -274,7 +310,8 @@ export async function sendDailyDigests(): Promise<{
         isWeekend: isWeekendKst,
         isMonday: isMondayKst,
         todayCount: todayInterviews.length,
-        newCount,
+        // 자동 종결은 창 내 새 이벤트 — 다른 변동이 없어도 발송 사유가 된다.
+        newCount: newCount + autoClosed.length,
         total,
       })
     ) {
@@ -294,6 +331,7 @@ export async function sendDailyDigests(): Promise<{
       todayInterviews,
       decisionPending,
       reviewPending,
+      autoClosed,
     });
 
     try {
@@ -326,21 +364,24 @@ export async function sendDailyDigests(): Promise<{
   return { sent, skipped, recipients: byUser.size };
 }
 
-/** 일일 할 일 요약 메일 빌더 — 3블록 카드. 비어 있는 블록은 생략한다. */
+/** 일일 할 일 요약 메일 빌더 — 4블록 카드. 비어 있는 블록은 생략한다. */
 export function buildDailyDigestEmail(opts: {
   name: string;
   dashboardUrl: string;
   todayInterviews: DigestItem[];
   decisionPending: DigestItem[];
   reviewPending: DigestItem[];
+  autoClosed?: DigestItem[];
 }): { subject: string; html: string; text: string } {
   const { name, dashboardUrl, todayInterviews, decisionPending, reviewPending } =
     opts;
+  const autoClosed = opts.autoClosed ?? [];
 
   const parts: string[] = [];
   if (todayInterviews.length) parts.push(`면접 ${todayInterviews.length}건`);
   if (decisionPending.length) parts.push(`결정 대기 ${decisionPending.length}건`);
   if (reviewPending.length) parts.push(`검토 대기 ${reviewPending.length}건`);
+  if (autoClosed.length) parts.push(`자동 종결 ${autoClosed.length}건`);
   const newCount = [...decisionPending, ...reviewPending].filter(
     (it) => it.isNew
   ).length;
@@ -357,11 +398,17 @@ export function buildDailyDigestEmail(opts: {
           .join("\n") +
         "\n"
       : "";
+  const autoClosedTextNote = autoClosed.length
+    ? "※ 자동 종결은 링크 만료(응시 기한 경과)에 따른 처리이며 AI 평가 결과에 따른 결정이 아닙니다.\n"
+    : "";
   const text = `${name}님, 오늘 처리하실 항목을 안내드립니다.
 ${textSection("오늘 진행할 면접", todayInterviews)}${textSection(
     "결정 대기",
     decisionPending
-  )}${textSection("신규 지원·검토 대기", reviewPending)}
+  )}${textSection("신규 지원·검토 대기", reviewPending)}${textSection(
+    "자동 종결 (링크 만료)",
+    autoClosed
+  )}${autoClosedTextNote}
 Intervia 에서 보기: ${dashboardUrl}
 
 본 메일은 회원님이 면접관으로 배정된 공고에 한해 발송됩니다.`;
@@ -415,6 +462,12 @@ Intervia 에서 보기: ${dashboardUrl}
       ${htmlSection("오늘 진행할 면접", EMAIL_BRAND.primary, todayInterviews)}
       ${htmlSection("합격/불합격 결정 대기", "#b45309", decisionPending)}
       ${htmlSection("신규 지원·검토 대기", "#0f766e", reviewPending)}
+      ${htmlSection("자동 종결 (링크 만료)", "#64748b", autoClosed)}
+      ${
+        autoClosed.length
+          ? `<p style="font-size:11px;color:#94a3b8;margin:-12px 0 20px;">링크 만료(응시 기한 경과)에 따른 자동 처리이며 AI 평가 결과에 따른 결정이 아닙니다.</p>`
+          : ""
+      }
       <p style="text-align:center;margin:28px 0 8px;">
         <a href="${dashboardUrl}" style="display:inline-block;background:${
           EMAIL_BRAND.primary
