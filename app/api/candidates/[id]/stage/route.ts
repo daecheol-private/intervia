@@ -164,12 +164,17 @@ export async function PATCH(
     stageRequested === "round1_passed" ||
     stageRequested === "round1_waiting"
   ) {
-    void notifyJobInterviewers(candidate.jobId, {
-      type: "round1_decision",
-      title: `${candidate.name} 후보자의 1차 면접 결과 결정이 필요합니다`,
-      href: `/candidates/${cid}`,
-      payload: { candidateId: cid, jobId: candidate.jobId, stage: stageRequested },
-    });
+    // skipEmail: 변경자 본인에게까지 가는 중복 메일 — daily digest '결정 대기'가 커버, 인앱만.
+    void notifyJobInterviewers(
+      candidate.jobId,
+      {
+        type: "round1_decision",
+        title: `${candidate.name} 후보자의 1차 면접 결과 결정이 필요합니다`,
+        href: `/candidates/${cid}`,
+        payload: { candidateId: cid, jobId: candidate.jobId, stage: stageRequested },
+      },
+      { skipEmail: true }
+    );
   }
 
   logAudit(req, {

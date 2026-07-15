@@ -13,6 +13,11 @@
  *   ③ 신규 지원·검토 대기  — applied / screened / ai_evaluated (outcome 미정)
  * 합계 0건이면 그 면접관에겐 보내지 않는다(빈 메일 방지).
  *
+ * 변동 중심 발송(2026-07-15): 24h 내 변동(updated_at) 항목을 '신규'로 판정해 블록 상단
+ * 정렬 + NEW 배지 + 제목에 건수 표기. "오늘 면접 0 + 신규 0"이면 발송을 스킵해 같은
+ * 목록이 매일 반복되는 소음을 막는다 — 단 월요일(KST)은 변동이 없어도 전체 목록을
+ * 발송(장기 미처리 항목이 묻히지 않게 하는 주간 앵커).
+ *
  * 멱등: (userId, digestDate) 를 daily_digest_logs 에 기록 — 같은 날 중복 실행 시 skip.
  * 운영 메일이라 토큰 차감 없음. SMTP 미설정이면 발송 skip(기록도 남기지 않아 다음 실행 재시도).
  */
@@ -54,7 +59,22 @@ function kstDateStr(d: Date): string {
   return d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
 }
 
-type DigestItem = { primary: string; secondary: string };
+/**
+ * DB 시각 → epoch ms.
+ * ISO('T' 포함)면 그대로, SQLite CURRENT_TIMESTAMP('YYYY-MM-DD HH:MM:SS', UTC)면 UTC 로 해석.
+ */
+function parseDbTimeMs(s: string | null | undefined): number {
+  if (!s) return NaN;
+  const iso = s.includes("T") ? s : s.replace(" ", "T") + "Z";
+  return Date.parse(iso);
+}
+
+type DigestItem = { primary: string; secondary: string; isNew?: boolean };
+
+/** 신규 항목을 앞으로 (sort 는 stable — 그 외 기존 순서 유지). */
+function sortNewFirst(items: DigestItem[]): void {
+  items.sort((a, b) => Number(b.isNew ?? false) - Number(a.isNew ?? false));
+}
 
 /**
  * 면접관 전원에게 일일 할 일 요약 메일 발송.
@@ -65,7 +85,15 @@ export async function sendDailyDigests(): Promise<{
   skipped: number;
   recipients: number;
 }> {
-  const todayKst = kstDateStr(new Date());
+  const now = Date.now();
+  const todayKst = kstDateStr(new Date(now));
+  // '신규' 판정 기준 — 직전 digest 이후 변동. cron 이 매일 같은 시각(09:00 KST)이라 24h 창이 곧 전회 이후.
+  const newSinceMs = now - 24 * 60 * 60 * 1000;
+  const isMondayKst =
+    new Date(now).toLocaleDateString("en-US", {
+      timeZone: "Asia/Seoul",
+      weekday: "short",
+    }) === "Mon";
 
   // 1) 면접관 배정 전부 → userId 로 그룹핑 (active + 이메일 보유자만).
   const assignments = await db
@@ -167,6 +195,7 @@ export async function sendDailyDigests(): Promise<{
         name: candidates.name,
         stage: candidates.stage,
         jobTitle: jobPostings.title,
+        updatedAt: candidates.updatedAt,
       })
       .from(candidates)
       .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
@@ -182,7 +211,9 @@ export async function sendDailyDigests(): Promise<{
       .map((r) => ({
         primary: `${r.name} · ${r.jobTitle}`,
         secondary: STAGE_WAITER[r.stage].label,
+        isNew: parseDbTimeMs(r.updatedAt) >= newSinceMs,
       }));
+    sortNewFirst(decisionPending);
 
     // 블록③ — 신규 지원·검토 대기.
     const reviewRows = await db
@@ -190,6 +221,7 @@ export async function sendDailyDigests(): Promise<{
         name: candidates.name,
         stage: candidates.stage,
         jobTitle: jobPostings.title,
+        updatedAt: candidates.updatedAt,
       })
       .from(candidates)
       .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
@@ -203,11 +235,21 @@ export async function sendDailyDigests(): Promise<{
     const reviewPending: DigestItem[] = reviewRows.map((r) => ({
       primary: `${r.name} · ${r.jobTitle}`,
       secondary: STAGE_WAITER[r.stage].label,
+      isNew: parseDbTimeMs(r.updatedAt) >= newSinceMs,
     }));
+    sortNewFirst(reviewPending);
 
     const total =
       todayInterviews.length + decisionPending.length + reviewPending.length;
     if (total === 0) {
+      skipped++;
+      continue;
+    }
+    // 변동 없는 날은 스킵(같은 목록 반복 소음 방지) — 오늘 면접이 있거나 월요일(주간 앵커)이면 발송.
+    const newCount =
+      decisionPending.filter((it) => it.isNew).length +
+      reviewPending.filter((it) => it.isNew).length;
+    if (todayInterviews.length === 0 && newCount === 0 && !isMondayKst) {
       skipped++;
       continue;
     }
@@ -271,13 +313,20 @@ export function buildDailyDigestEmail(opts: {
   if (todayInterviews.length) parts.push(`면접 ${todayInterviews.length}건`);
   if (decisionPending.length) parts.push(`결정 대기 ${decisionPending.length}건`);
   if (reviewPending.length) parts.push(`검토 대기 ${reviewPending.length}건`);
-  const subject = `[Intervia] 오늘의 면접 할 일 — ${parts.join(" · ")}`;
+  const newCount = [...decisionPending, ...reviewPending].filter(
+    (it) => it.isNew
+  ).length;
+  const subject = `[Intervia] 오늘의 면접 할 일 — ${parts.join(" · ")}${
+    newCount ? ` (신규 ${newCount}건)` : ""
+  }`;
 
   // --- text (plain fallback) ---
   const textSection = (title: string, items: DigestItem[]) =>
     items.length
       ? `\n[${title}] ${items.length}건\n` +
-        items.map((it) => `· ${it.primary} — ${it.secondary}`).join("\n") +
+        items
+          .map((it) => `· ${it.isNew ? "[신규] " : ""}${it.primary} — ${it.secondary}`)
+          .join("\n") +
         "\n"
       : "";
   const text = `${name}님, 오늘 처리하실 항목을 안내드립니다.
@@ -299,7 +348,11 @@ Intervia 에서 보기: ${dashboardUrl}
       .map(
         (it) =>
           `<li style="padding:8px 0;border-bottom:1px solid #f1f5f9;list-style:none;">
-            <span style="color:#0f172a;font-size:14px;font-weight:600;">${escapeHtml(
+            ${
+              it.isNew
+                ? `<span style="display:inline-block;background:#ffe9df;color:#9a3412;font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;margin-right:6px;vertical-align:1px;">NEW</span>`
+                : ""
+            }<span style="color:#0f172a;font-size:14px;font-weight:600;">${escapeHtml(
               it.primary
             )}</span><br>
             <span style="color:#64748b;font-size:12px;">${escapeHtml(

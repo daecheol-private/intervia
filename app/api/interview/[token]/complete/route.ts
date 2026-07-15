@@ -188,12 +188,17 @@ export async function POST(
       .set({ evaluation })
       .where(eq(interviewSessions.id, session.id));
     if (nextStage === "ai_evaluated") {
-      void notifyJobInterviewers(candidate!.jobId, {
-        type: "ai_interview_done",
-        title: `${candidate!.name} 후보자의 AI 면접 평가가 완료되었습니다`,
-        href: `/candidates/${candidate!.id}`,
-        payload: { candidateId: candidate!.id, jobId: candidate!.jobId },
-      });
+      // skipEmail: 개별 완료 메일은 소음(후보자 수 × 면접관 수) — 익일 daily digest '검토 대기'가 커버.
+      void notifyJobInterviewers(
+        candidate!.jobId,
+        {
+          type: "ai_interview_done",
+          title: `${candidate!.name} 후보자의 AI 면접 평가가 완료되었습니다`,
+          href: `/candidates/${candidate!.id}`,
+          payload: { candidateId: candidate!.id, jobId: candidate!.jobId },
+        },
+        { skipEmail: true }
+      );
     }
     return Response.json(DONE_RESPONSE);
   }
@@ -244,12 +249,17 @@ export async function POST(
     }
 
     if (nextStage === "ai_evaluated") {
-      void notifyJobInterviewers(candidate!.jobId, {
-        type: "ai_interview_done",
-        title: `${candidate!.name} 후보자의 AI 면접 평가가 완료되었습니다`,
-        href: `/candidates/${candidate!.id}`,
-        payload: { candidateId: candidate!.id, jobId: candidate!.jobId },
-      });
+      // skipEmail: 위 무응답 경로와 동일 — 메일은 daily digest 에 위임, 인앱 알림만.
+      void notifyJobInterviewers(
+        candidate!.jobId,
+        {
+          type: "ai_interview_done",
+          title: `${candidate!.name} 후보자의 AI 면접 평가가 완료되었습니다`,
+          href: `/candidates/${candidate!.id}`,
+          payload: { candidateId: candidate!.id, jobId: candidate!.jobId },
+        },
+        { skipEmail: true }
+      );
     }
 
     return Response.json(DONE_RESPONSE);
