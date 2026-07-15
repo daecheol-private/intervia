@@ -83,6 +83,21 @@ function resolveMailBaseUrl(): string {
 }
 
 /**
+ * KST 조용시간 — 주말 전체 + 평일 밤(21:00~07:59).
+ * FYI 성 면접관 알림 메일은 이때 보내지 않는다: 인앱 알림은 즉시 남고, 내용은
+ * 다음 digest(주말분은 월요일 앵커 + 72h 신규 창)·D-1 리마인더가 커버한다.
+ * 밀린 메일을 개별 재발송하는 큐를 두지 않는 이유: 월요일 폭증(Resend 일 100통 캡)
+ * 없이 digest 1통으로 흡수하는 쪽이 수신자에게도 낫다.
+ */
+export function isQuietHoursKst(d: Date = new Date()): boolean {
+  const kst = new Date(d.getTime() + 9 * 3_600_000);
+  const day = kst.getUTCDay(); // 0=일, 6=토
+  if (day === 0 || day === 6) return true;
+  const h = kst.getUTCHours();
+  return h >= 21 || h < 8;
+}
+
+/**
  * 공고 면접관 전원에게 fanout.
  * 인앱 알림 + 이메일 동시 발송. SMTP 미설정이거나 면접관 이메일 없으면 이메일만 자동 skip.
  * 메일은 면접관이 서비스에 접속하지 않아도 후보자 액션을 인지할 수 있도록 함.
@@ -90,11 +105,13 @@ function resolveMailBaseUrl(): string {
  * @param options.skipEmail true 면 이메일 생략.
  * @param options.excludeEmailUserIds 이 userId 들은 이메일에서만 제외 (인앱 알림은 발송).
  *   호출자가 별도의 풍부한 메일을 보내는 경우 중복 차단용.
+ * @param options.urgent true 면 조용시간(주말·야간)에도 이메일 즉시 발송.
+ *   시간 민감 이벤트(지원 취소 등)만 지정 — 기본은 FYI 로 간주해 조용시간엔 스킵.
  */
 export async function notifyJobInterviewers(
   jobId: number,
   input: Omit<CreateNotificationInput, "userId">,
-  options?: { skipEmail?: boolean; excludeEmailUserIds?: number[] }
+  options?: { skipEmail?: boolean; excludeEmailUserIds?: number[]; urgent?: boolean }
 ): Promise<void> {
   const recipients = await db
     .select({
@@ -114,6 +131,7 @@ export async function notifyJobInterviewers(
 
   // 2) 이메일 발송 — SMTP 사용 가능할 때만. 실패해도 인앱 알림은 유지.
   if (options?.skipEmail) return;
+  if (!options?.urgent && isQuietHoursKst()) return; // FYI 메일은 주말·야간 스킵 — digest/D-1 이 커버
   if (recipients.length === 0) return;
 
   // 공고 정보 (orgId, title) 조회 — SMTP 라우팅 + 메일 본문용

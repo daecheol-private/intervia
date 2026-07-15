@@ -119,12 +119,17 @@ export async function POST(
   const title = `${cand?.name ?? "후보자"} 님이 지원을 취소했습니다`;
   const href = `/candidates/${sched.candidateId}`;
   try {
-    await notifyJobInterviewers(sched.jobId, {
-      type: "schedule_withdrawn",
-      title,
-      href,
-      payload: { scheduleId: sched.id },
-    });
+    // urgent: 확정 면접이 임박했을 수 있어 취소는 주말·야간에도 즉시 통지(캘린더 정리).
+    await notifyJobInterviewers(
+      sched.jobId,
+      {
+        type: "schedule_withdrawn",
+        title,
+        href,
+        payload: { scheduleId: sched.id },
+      },
+      { urgent: true }
+    );
   } catch (e) {
     console.error("schedule withdraw notify interviewers failed", e);
   }

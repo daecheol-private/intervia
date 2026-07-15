@@ -18,6 +18,10 @@
  * 목록이 매일 반복되는 소음을 막는다 — 단 월요일(KST)은 변동이 없어도 전체 목록을
  * 발송(장기 미처리 항목이 묻히지 않게 하는 주간 앵커).
  *
+ * 주말(토·일 KST)은 그날 진행할 확정 면접이 있는 면접관에게만 발송 — 그 외 주말 변동은
+ * 월요일 앵커가 흡수한다(월요일의 '신규' 창을 72h 로 넓혀 금요일 digest 이후 변동이
+ * 전부 NEW 로 표시됨). 판정 규칙은 shouldSendDigest 참조.
+ *
  * 멱등: (userId, digestDate) 를 daily_digest_logs 에 기록 — 같은 날 중복 실행 시 skip.
  * 운영 메일이라 토큰 차감 없음. SMTP 미설정이면 발송 skip(기록도 남기지 않아 다음 실행 재시도).
  */
@@ -71,6 +75,25 @@ function parseDbTimeMs(s: string | null | undefined): number {
 
 type DigestItem = { primary: string; secondary: string; isNew?: boolean };
 
+/**
+ * digest 발송 판정 (순수 — 테스트 용이).
+ * 주말: 그날 진행할 확정 면접이 있는 사람에게만 — 그 외 변동은 월요일 앵커로 이월.
+ * 월요일: 할 일이 있으면 무조건(주간 전체 앵커).
+ * 평일: 오늘 면접 또는 신규 변동이 있을 때만(동일 목록 반복 방지).
+ */
+export function shouldSendDigest(p: {
+  isWeekend: boolean;
+  isMonday: boolean;
+  todayCount: number;
+  newCount: number;
+  total: number;
+}): boolean {
+  if (p.total === 0) return false;
+  if (p.isWeekend) return p.todayCount > 0;
+  if (p.isMonday) return true;
+  return p.todayCount > 0 || p.newCount > 0;
+}
+
 /** 신규 항목을 앞으로 (sort 는 stable — 그 외 기존 순서 유지). */
 function sortNewFirst(items: DigestItem[]): void {
   items.sort((a, b) => Number(b.isNew ?? false) - Number(a.isNew ?? false));
@@ -87,13 +110,15 @@ export async function sendDailyDigests(): Promise<{
 }> {
   const now = Date.now();
   const todayKst = kstDateStr(new Date(now));
-  // '신규' 판정 기준 — 직전 digest 이후 변동. cron 이 매일 같은 시각(09:00 KST)이라 24h 창이 곧 전회 이후.
-  const newSinceMs = now - 24 * 60 * 60 * 1000;
-  const isMondayKst =
-    new Date(now).toLocaleDateString("en-US", {
-      timeZone: "Asia/Seoul",
-      weekday: "short",
-    }) === "Mon";
+  const weekdayKst = new Date(now).toLocaleDateString("en-US", {
+    timeZone: "Asia/Seoul",
+    weekday: "short",
+  });
+  const isMondayKst = weekdayKst === "Mon";
+  const isWeekendKst = weekdayKst === "Sat" || weekdayKst === "Sun";
+  // '신규' 판정 기준 — 직전 발송 digest 이후 변동. 평일은 24h(매일 09:00 cron),
+  // 월요일은 주말 스킵분까지 커버하도록 72h(금요일 digest 이후).
+  const newSinceMs = now - (isMondayKst ? 72 : 24) * 60 * 60 * 1000;
 
   // 1) 면접관 배정 전부 → userId 로 그룹핑 (active + 이메일 보유자만).
   const assignments = await db
@@ -241,15 +266,18 @@ export async function sendDailyDigests(): Promise<{
 
     const total =
       todayInterviews.length + decisionPending.length + reviewPending.length;
-    if (total === 0) {
-      skipped++;
-      continue;
-    }
-    // 변동 없는 날은 스킵(같은 목록 반복 소음 방지) — 오늘 면접이 있거나 월요일(주간 앵커)이면 발송.
     const newCount =
       decisionPending.filter((it) => it.isNew).length +
       reviewPending.filter((it) => it.isNew).length;
-    if (todayInterviews.length === 0 && newCount === 0 && !isMondayKst) {
+    if (
+      !shouldSendDigest({
+        isWeekend: isWeekendKst,
+        isMonday: isMondayKst,
+        todayCount: todayInterviews.length,
+        newCount,
+        total,
+      })
+    ) {
       skipped++;
       continue;
     }
