@@ -1,4 +1,5 @@
-import { captureError } from "@/lib/error-reporter";
+import { after } from "next/server";
+import { captureError, alertError } from "@/lib/error-reporter";
 
 export const runtime = "nodejs";
 
@@ -7,8 +8,9 @@ export const runtime = "nodejs";
  * 서버에서 captureError 로 넘겨 Sentry 전송(+PII 스크럽). 운영에서 클라이언트
  * 페이지가 깨지면 사용자가 신고하기 전에 알림으로 먼저 알게 하는 용도.
  *
- * 인증 없는 same-origin 비콘 — captureError 는 Slack 을 울리지 않고 Sentry 로만
- * 보내므로(=captureCritical 아님) 알림 폭주 위험은 Sentry 자체 quota 로 한정.
+ * 인증 없는 same-origin 비콘이라 남용(POST 폭탄) 위험이 있어, Sentry 는 전량 전송하되
+ * Slack 경보(alertError)는 전역 30분당 1회로 스로틀한다 — 첫 크래시만 즉시 알리고
+ * 상세는 Sentry 에서 확인. 폭주 위험은 스로틀 + Sentry 자체 quota 로 이중 한정.
  */
 export async function POST(req: Request) {
   try {
@@ -30,6 +32,16 @@ export async function POST(req: Request) {
       url: typeof body.url === "string" ? body.url.slice(0, 500) : undefined,
       digest: typeof body.digest === "string" ? body.digest : undefined,
     });
+    // 화면이 깨진 사용자 — 신고 전에 먼저 인지하도록 Slack 경보(전역 30분당 1회).
+    // 공개 비콘이라 url 별로 키를 쪼개지 않고 단일 키로 묶어 남용 시에도 30분 1건 상한.
+    after(() =>
+      alertError(
+        "🖥 화면 오류 — 사용자 페이지 렌더 크래시",
+        err,
+        "client-error",
+        30 * 60_000
+      ).catch(() => {})
+    );
   } catch {
     /* 리포팅 실패는 무시 — 비콘은 best-effort */
   }

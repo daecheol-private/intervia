@@ -16,7 +16,7 @@ import {
 } from "@/lib/screening";
 import { getCurrentUser } from "@/lib/auth";
 import { secretEquals } from "@/lib/secret-compare";
-import { captureError } from "@/lib/error-reporter";
+import { captureError, alertError } from "@/lib/error-reporter";
 import { isTransientDbError } from "@/lib/db-retry";
 import { log } from "@/lib/logger";
 import { workerBaseUrl } from "@/lib/worker-trigger";
@@ -119,6 +119,12 @@ async function processOne(workerId: string): Promise<
         jobId: claim.jobId,
         candidateId: claim.candidateId,
       });
+      // 매출 누락은 바로 알아야 하므로 Slack 경보도(10분당 1회). jobId·candidateId 는 내부 PK(PII 아님).
+      await alertError(
+        `💸 과금 실패 (매출 누락 가능) — 평가 job ${claim.jobId}`,
+        chargeErr,
+        "charge-fail"
+      );
     }
     return "success";
   } catch (e) {

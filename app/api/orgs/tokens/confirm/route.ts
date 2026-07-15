@@ -1,11 +1,13 @@
+import { after } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { db } from "@/lib/db";
-import { paymentOrders } from "@/lib/schema";
+import { paymentOrders, organizations } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { applyChargePayment } from "@/lib/tokens";
 import { confirmTossPayment, parseTossOrderId, TossError } from "@/lib/toss";
 import { withVat } from "@/lib/beta";
+import { notifyOps } from "@/lib/error-reporter";
 
 export const runtime = "nodejs";
 
@@ -145,6 +147,24 @@ async function applyAndRespond(
     amountKrw: order.amountKrw,
     userId,
   });
+  // 첫 지급(=alreadyApplied false)일 때만 매출 알림 — 새로고침·재확인 재호출은 조용히 통과.
+  // 응답 후 서버리스가 suspend 되기 전에 실행되도록 after() 로(void fire-and-forget 은 유실 위험).
+  if (!r.alreadyApplied) {
+    const { orgId, amountKrw, tokens } = order;
+    after(async () => {
+      try {
+        const [org] = await db
+          .select({ name: organizations.name })
+          .from(organizations)
+          .where(eq(organizations.id, orgId));
+        await notifyOps(
+          `💰 토큰 충전 완료 — ${org?.name ?? `법인#${orgId}`}\n결제 ${withVat(amountKrw).toLocaleString()}원 (공급가 ${amountKrw.toLocaleString()}원) · ${tokens.toLocaleString()} 토큰`
+        );
+      } catch {
+        /* 매출 알림 실패는 무시 — 충전 자체는 이미 완료·응답됨 */
+      }
+    });
+  }
   return Response.json({
     ok: true,
     alreadyApplied: r.alreadyApplied,

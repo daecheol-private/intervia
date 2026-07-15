@@ -156,7 +156,7 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `SCREENING_WORKER_MAX_JOBS` | **미설정 권장**(= concurrency 와 동일, 1실행 1라운드). 동시성보다 크게 잡으면(예: 100) 1실행이 maxDuration(120s)을 넘겨 함수가 self-chain 전에 죽고 큐가 cron(매분)까지 정체된다. 워커에 70s 벽시계 가드가 있어 이제 멈추진 않지만, 동시성과 어긋난 큰 값은 self-chain 횟수만 늘릴 뿐 이득 없음 → 비워두거나 `SCREENING_WORKER_CONCURRENCY` 와 같은 값으로. |
 | `NEXT_PUBLIC_BLOB_CLIENT_UPLOAD` | `1` (이력서 100MB 직접 업로드 활성화 — 프로덕션에서만 `1`) |
 | `SENTRY_DSN` | (선택) 오류 추적. 설정 시 instrumentation 이 전 라우트 미처리 예외를 Sentry 로 자동 전송 |
-| `SLACK_WEBHOOK_URL` | (선택) 운영자 Slack 통지 채널(Incoming Webhook URL). critical 에러 + 운영 알림(ops-alerts) + **메일 발송 실패(Resend 쿼터 초과 등, 10분당 1회 스로틀)** + **시스템 관리자 알림 전반**(신규 법인·담당자 승격 요청·도메인 신고·고객 문의·이의제기 — PII 없는 유형 라벨만). 미설정 시 전부 조용히 skip |
+| `SLACK_WEBHOOK_URL` | (선택) 운영자 Slack 통지 채널(Incoming Webhook URL). **서버 500 오류(고객 신고 전 사전 인지 — 라우트별 10분당 1회 스로틀)·화면 렌더 크래시(client-error 비콘, 전역 30분당 1회)·과금 실패(매출 누락 가능, 10분당 1회)** + critical 에러 + 운영 알림(ops-alerts) + **토큰 충전 완료(매출, 첫 지급만)** + **메일 발송 실패(Resend 쿼터 초과 등, 10분당 1회 스로틀)** + **시스템 관리자 알림 전반**(신규 법인·담당자 승격 요청·도메인 신고·고객 문의·이의제기 — PII 없는 유형 라벨만). 오류·경보 메시지는 PII 스크럽 적용. 미설정 시 전부 조용히 skip |
 | `OPS_ALERT_EMAIL` | (선택) 운영 알림 수신 메일. 미설정 시 회사 이메일(`site-info` COMPANY_INFO.email)로 발송 |
 | `OPS_QUEUE_BACKLOG` / `OPS_FAILED_LAST_HOUR` / `OPS_STUCK` / `OPS_BALANCE_FLOOR` | (선택) 운영 알림 임계값. 기본 50 / 20 / 5 / (잔액 알림 비활성). `OPS_BALANCE_FLOOR` 설정 시 최저 잔액이 그 값 이하면 알림 |
 | `HEALTH_TOKEN` | (선택) `/api/health` 상세 모드(큐 통계·env 진단) 토큰. 미설정 시 공개 ping 만 |

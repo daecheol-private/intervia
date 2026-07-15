@@ -221,3 +221,42 @@ export async function notifyOps(text: string): Promise<void> {
   log.warn("ops_alert", { text: text.slice(0, 500) });
   await sendToSlack(`📟 *Intervia 운영 알림*\n${text}`);
 }
+
+// ── 스로틀된 오류 경보 (고객 신고 전 사전 인지용) ─────────────────────────────
+// 500·화면 크래시·과금 실패처럼 "바로 알아야 하는" 오류를 Slack 으로 밀어 올린다.
+// 폭주 방지: key 별 windowMs 당 1회만(같은 라우트가 초당 수십 번 터져도 창당 1건).
+// 상태는 인메모리 — 서버리스 인스턴스별이라 다중 인스턴스에서 몇 건 중복될 수 있으나
+// 유실보다 낫다(mailer.reportMailFailure 와 동일 전략). Sentry 엔 항상 전량 남는다.
+const alertThrottleAt = new Map<string, number>();
+
+function passAlertThrottle(key: string, windowMs: number): boolean {
+  const now = Date.now();
+  if (now - (alertThrottleAt.get(key) ?? 0) < windowMs) return false;
+  alertThrottleAt.set(key, now);
+  if (alertThrottleAt.size > 500) {
+    // 창의 2배 지난 항목 정리 — 맵 무한 성장 방지.
+    for (const [k, t] of alertThrottleAt)
+      if (now - t > windowMs * 2) alertThrottleAt.delete(k);
+  }
+  return true;
+}
+
+/**
+ * 즉시 알아야 하는 오류를 Slack 으로 경보한다 (Sentry 와 별개 — 그쪽은 항상 전량 기록).
+ * PII 스크럽 적용. `throttleKey` 별로 `windowMs`(기본 10분)당 1회만 발송해 폭주를 막는다.
+ * SLACK_WEBHOOK_URL 미설정 시 notifyOps 가 조용히 no-op.
+ */
+export async function alertError(
+  title: string,
+  err: unknown,
+  throttleKey: string,
+  windowMs = 10 * 60_000
+): Promise<void> {
+  if (!passAlertThrottle(throttleKey, windowMs)) return;
+  const raw =
+    err instanceof Error ? flattenError(err) : String(err ?? "unknown error");
+  const mins = Math.round(windowMs / 60_000);
+  await notifyOps(
+    `${title}\n원인: ${scrubString(raw).slice(0, 300)}\n(같은 유형 ${mins}분당 1회 통지 · 상세는 Sentry/Vercel 로그)`
+  );
+}

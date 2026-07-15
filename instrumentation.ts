@@ -22,7 +22,7 @@ export const onRequestError: Instrumentation.onRequestError = async (
   const digest = (err as { digest?: unknown })?.digest;
   if (typeof digest === "string" && digest.startsWith("NEXT_")) return;
   try {
-    const { reportError } = await import("@/lib/error-reporter");
+    const { reportError, alertError } = await import("@/lib/error-reporter");
     await reportError(err, {
       // raw request.path 는 면접/일정 토큰·ID 가 박혀 있어 보내지 않는다.
       // routePath 는 라우트 패턴(예: /api/interview/[token]/chat) — 동적값 없음.
@@ -30,6 +30,14 @@ export const onRequestError: Instrumentation.onRequestError = async (
       routePath: context.routePath,
       routeType: context.routeType,
     });
+    // 고객이 실제로 500 을 맞은 상황 — 신고 전에 먼저 인지하도록 Slack 경보도 보낸다.
+    // routePath 는 라우트 패턴이라 동적값(토큰·ID) 없음 = PII 안전. 같은 경로 반복은
+    // 10분당 1회로 스로틀(=대형 장애 시 채널 도배 방지). Sentry 에는 위에서 전량 기록됨.
+    await alertError(
+      `🔴 서버 오류 (500) — ${request.method ?? "?"} ${context.routePath ?? "?"}`,
+      err,
+      `500:${context.routePath ?? "unknown"}`
+    );
   } catch {
     // 리포팅 자체 실패가 앱 흐름에 영향 주지 않도록 무시.
   }
