@@ -38,6 +38,49 @@ const BRAND_PRESETS = [
   "#111827",
 ];
 
+/**
+ * AVIF 로고를 PNG 로 변환 — 브라우저가 AVIF 를 디코드하고 canvas 로 재인코딩한다.
+ * 이유: 로고는 지원자 메일에 CID 로 인라인 첨부되는데(lib/mailer.ts) Gmail·Outlook·
+ * Apple Mail 대부분이 AVIF 를 렌더하지 못해 메일에서 로고가 깨진다. 업로드 시점에
+ * PNG 로 바꿔 서버·웹·이메일이 모두 PNG 만 보게 함으로써 깨짐을 원천 차단한다.
+ * 비-AVIF(PNG/JPG/WebP) 는 그대로 반환한다.
+ */
+async function normalizeLogoFile(file: File): Promise<File> {
+  const isAvif = file.type === "image/avif" || /\.avif$/i.test(file.name);
+  if (!isAvif) return file;
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error(
+      "이 브라우저에서 AVIF 를 열지 못했습니다. PNG · JPG · WebP 로 변환해 올려주세요."
+    );
+  }
+
+  // 긴 변을 1600px 로 제한 — PNG 는 무손실이라 큰 AVIF 가 용량을 초과할 수 있어 상한을 둔다.
+  const MAX_EDGE = 1600;
+  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("이미지 변환에 실패했습니다. 다른 파일로 시도해주세요.");
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/png")
+  );
+  if (!blob) throw new Error("이미지 변환에 실패했습니다. 다른 파일로 시도해주세요.");
+
+  const name = file.name.replace(/\.avif$/i, "") + ".png";
+  return new File([blob], name, { type: "image/png" });
+}
+
 const QUAL_KEYS = [
   "selfIntro",
   "motivation",
@@ -221,19 +264,37 @@ export default function OrgSettingsPage() {
   };
 
   const uploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
+    const raw = e.target.files?.[0];
     e.target.value = ""; // 같은 파일 재선택 허용
-    if (!f) return;
-    if (f.size > 2 * 1024 * 1024) {
+    if (!raw) return;
+    setLogoBusy(true);
+    setMsg(null);
+
+    // AVIF 는 브라우저에서 PNG 로 변환(메일 호환) — 그 외는 그대로.
+    let f: File;
+    try {
+      f = await normalizeLogoFile(raw);
+    } catch (err) {
+      setLogoBusy(false);
       setMsg({
         section: "brand",
         type: "error",
-        text: "로고는 최대 2MB 까지 업로드할 수 있습니다.",
+        text: err instanceof Error ? err.message : "이미지 변환에 실패했습니다.",
       });
       return;
     }
-    setLogoBusy(true);
-    setMsg(null);
+
+    // 용량 검사는 변환 후에 — AVIF→PNG 는 원본보다 커질 수 있다.
+    if (f.size > 2 * 1024 * 1024) {
+      setLogoBusy(false);
+      setMsg({
+        section: "brand",
+        type: "error",
+        text: "로고는 최대 2MB 까지 업로드할 수 있습니다. 더 작은 이미지로 시도해주세요.",
+      });
+      return;
+    }
+
     const fd = new FormData();
     fd.append("file", f);
     const r = await fetch("/api/orgs/me/branding/logo", {
@@ -442,13 +503,14 @@ export default function OrgSettingsPage() {
               )}
               <input
                 type="file"
-                accept=".png,.jpg,.jpeg,.webp"
+                accept=".png,.jpg,.jpeg,.webp,.avif,image/avif"
                 onChange={uploadLogo}
                 disabled={logoBusy}
                 className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-primary-soft file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-primary-soft disabled:opacity-50"
               />
               <p className="text-[11px] text-ink-muted">
-                PNG · JPG · WebP, 최대 2MB. 가로형 로고를 권장합니다.
+                PNG · JPG · WebP · AVIF, 최대 2MB. 가로형 로고를 권장합니다.
+                AVIF 는 메일 호환을 위해 자동으로 PNG 로 변환됩니다.
               </p>
             </div>
 
