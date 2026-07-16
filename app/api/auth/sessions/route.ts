@@ -4,7 +4,7 @@
  */
 import { db } from "@/lib/db";
 import { sessions } from "@/lib/schema";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, gt, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 
@@ -37,7 +37,14 @@ export async function GET() {
       expiresAt: sessions.expiresAt,
     })
     .from(sessions)
-    .where(eq(sessions.userId, me!.id))
+    // 만료 행 제외 — cron 청소 전까지 남아있는 죽은 세션이 "활성"으로 보이면 안 된다.
+    // expiresAt 는 ISO 라 ISO 로 비교 (cleanupExpiredSessions 주석 참고).
+    .where(
+      and(
+        eq(sessions.userId, me!.id),
+        gt(sessions.expiresAt, new Date().toISOString())
+      )
+    )
     .orderBy(desc(sessions.lastSeenAt));
 
   const result = rows.map((r) => ({

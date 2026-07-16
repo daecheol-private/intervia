@@ -115,6 +115,10 @@ export default function PrivacyPage() {
               <td>30일</td>
             </tr>
             <tr>
+              <td>로그인 세션 기록(접속 IP·User-Agent)</td>
+              <td>세션 만료(마지막 활동 후 6시간) 시 파기</td>
+            </tr>
+            <tr>
               <td>동의 기록</td>
               <td>분쟁 대비 5년 (감사 증거)</td>
             </tr>

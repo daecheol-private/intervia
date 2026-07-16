@@ -3,7 +3,7 @@ import { cleanupOldAttempts } from "@/lib/auth-attempts";
 import { cleanupOldRateLog } from "@/lib/rate-limit";
 import { runLifecycleSweep } from "@/lib/job-lifecycle";
 import { expireInterviewSessions } from "@/lib/expire-sessions";
-import { getCurrentUser } from "@/lib/auth";
+import { cleanupExpiredSessions, getCurrentUser } from "@/lib/auth";
 import { secretEquals } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
@@ -28,6 +28,7 @@ export async function GET(req: Request) {
   const result = await purgeExpiredOriginals(days);
   const purgedAttempts = await cleanupOldAttempts();
   const purgedRateLog = await cleanupOldRateLog();
+  const purgedSessions = await cleanupExpiredSessions();
   const lifecycle = await runLifecycleSweep();
   // 만료 처리 안전망 — expire-interviews 는 외부 cron(cron-job.org, 매시간)에 의존한다.
   // 그 등록이 누락/실패하면 만료 세션 자동불합격·만료 PII 폐기가 영원히 안 돈다. 멱등(이미
@@ -38,6 +39,7 @@ export async function GET(req: Request) {
     ...result,
     purgedAttempts,
     purgedRateLog,
+    purgedSessions,
     lifecycle,
     expiry,
   });

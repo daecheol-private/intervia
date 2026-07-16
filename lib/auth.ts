@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { users, sessions, organizations } from "./schema";
-import { eq, count, sql } from "drizzle-orm";
+import { eq, count, lt, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
@@ -175,6 +175,25 @@ export function assertOrgAccess(
 
 export async function deleteSession(token: string) {
   await db.delete(sessions).where(eq(sessions.token, token));
+}
+
+/**
+ * 만료 세션 삭제. cron 정리용.
+ *
+ * getCurrentUser 는 만료 행을 그 토큰으로 요청이 올 때만 지운다(lazy) — 기기를 바꾸거나
+ * 쿠키를 지우면 그 요청이 영영 안 오므로 IP·User-Agent 가 무기한 남는다. 만료 시점에
+ * 수집 목적(인증 유지·디바이스 목록)이 끝나므로 지체 없이 파기한다 (PIPA §21).
+ * 만료 행은 이미 getCurrentUser 가 거부하는 죽은 행이라 로그아웃 영향 없음.
+ */
+export async function cleanupExpiredSessions(): Promise<number> {
+  // expiresAt 는 createSession·슬라이딩 갱신 모두 ISO('T' 포함) — cutoff 도 ISO 여야 한다.
+  // 옆 정리 함수들이 쓰는 sqliteTimestamp(공백 구분) 를 그대로 가져다 쓰면 'T'(0x54) > ' '(0x20)
+  // 라 모든 행이 cutoff 보다 크다고 판정돼, 에러 없이 0건만 지우고 정리가 조용히 죽는다.
+  const r = await db
+    .delete(sessions)
+    .where(lt(sessions.expiresAt, new Date().toISOString()))
+    .returning({ token: sessions.token });
+  return r.length;
 }
 
 export async function hasAnyUser(): Promise<boolean> {
