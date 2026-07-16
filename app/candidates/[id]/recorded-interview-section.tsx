@@ -179,6 +179,9 @@ export function RecordedInterviewPanel({
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [liveOpen, setLiveOpen] = useState(false);
   const [consent, setConsent] = useState(false);
+  // 완료된 대면 평가가 있어도 '새 대면 면접'을 다시 진행하려고 녹음 영역을 다시 연 상태.
+  // (녹음이 중간 종료되는 등 사용자 요구로 재실시 — 기존 녹취 재평가와 별개, 새 평가로 과금.)
+  const [redoOpen, setRedoOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -237,18 +240,30 @@ export function RecordedInterviewPanel({
   // 이 라운드 건만 표시.
   const roundInterviews = (interviews ?? []).filter((i) => i.round === round);
 
-  // 이 라운드의 대면 면접 평가가 이미 완료(리포트 생성/확정)됐는지.
-  // 완료됐으면 업로드/라이브 녹음 영역은 불필요한 클러터라 숨긴다. 성공한 평가는 이미 과금됐으므로
-  // 재평가 버튼을 두지 않는다 — 재평가는 '실패' 카드에서만 (정책: 차감 기능은 오류 시에만 재평가,
-  // 과금은 실행 후 성공 시 차감). 예외는 이력서평가(서류 스크리닝)뿐.
-  // 이 라운드의 완료된(ready/confirmed) 대면 평가 — 보통 1건. 메타(모드·길이·일시)는
-  // 카드 헤더 대신 섹션 요약으로 끌어올려 표시하므로 여기서 한 줄로 만들어 부모에 넘긴다.
-  const completedRi =
-    roundInterviews.find(
-      (i) => i.status === "ready" || i.status === "confirmed"
-    ) ?? null;
-  const hasCompletedReport = completedRi !== null;
+  // 화면엔 이 라운드의 **최신 1건만** 노출한다 — 새 대면 면접을 진행하면 새 row 가 최신이 되어
+  // 이전 녹음/평가를 화면상 대체한다(사용자 요구로 "덮어쓰기"). 이전 row 는 DB 에 남지만(안전)
+  // 표시하지 않는다. GET 이 id desc 정렬이라 roundInterviews[0] 이 최신.
+  const currentRi = roundInterviews[0] ?? null;
+  // 최신 건이 완료(ready/confirmed·리포트 존재)됐는지 — 재실시 진입점/컨트롤 게이팅에 사용.
+  const currentCompleted =
+    !!currentRi &&
+    (currentRi.status === "ready" || currentRi.status === "confirmed") &&
+    !!currentRi.report;
+  // 완료된(ready/confirmed) 대면 평가 요약(모드·길이·일시) — 부모 섹션 요약용. 재실시 처리 중에도
+  // 직전 완료 건이 남아 있어 "완료"로 유지된다(스케줄/문제생성 UI 가 잠깐 되살아나지 않게).
   const completedSummary = completedRecordedSummary(interviews ?? [], round);
+
+  // 녹음 컨트롤(동의+업로드+라이브) 노출 조건:
+  //  - 최신 건이 없음(최초) / 사용자가 '새 대면 면접'을 열었음(redoOpen) / 최신 건이 실패(재업로드 필요).
+  const showControls =
+    canModify &&
+    !liveOpen &&
+    interviews !== null && // 로드 완료 후에만 — 완료 리포트가 있어도 컨트롤이 깜빡였다 사라지지 않게.
+    (currentRi === null || redoOpen || currentRi.status === "failed");
+  // 완료 리포트 아래 '새 대면 면접 진행하기' 진입점 — 완료 상태에서 재실시를 아직 안 연 경우만.
+  const showRedoButton = canModify && currentCompleted && !redoOpen;
+  // 리포트 카드는 최신 건만. 재실시 컴포즈 중(redoOpen)엔 이전 리포트를 감춰 '새로 시작' 느낌을 준다.
+  const showReportCard = currentRi !== null && !redoOpen;
 
   // 완료 메타(또는 null)를 부모에 통지 — 부모는 완료 시 "면접 문제 생성" UI를 숨기고
   // 섹션 요약에 이 메타를 덧붙인다.
@@ -351,6 +366,8 @@ export function RecordedInterviewPanel({
         { title: "업로드 완료", tone: "success" }
       );
       setFile(null);
+      setConsent(false);
+      setRedoOpen(false); // 새 건이 최신이 되어 처리중 카드로 전환 — 재실시 컨트롤은 닫는다.
       if (fileInputRef.current) fileInputRef.current.value = "";
       await load();
     } catch (e) {
@@ -386,29 +403,54 @@ export function RecordedInterviewPanel({
   return (
     <div
       className={
-        hasCompletedReport
+        currentCompleted && !redoOpen
           ? "space-y-4"
           : "space-y-4 pt-4 mt-2 border-t border-border-default"
       }
     >
-      {/* 평가 완료 시엔 섹션 제목·요약("대면 평가 완료")과 카드 헤더(차수·날짜)로 충분 —
-          중복 레이블과 구분선을 숨겨 불필요한 영역을 줄인다. */}
-      {!hasCompletedReport && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-ink-soft">
-            대면 면접 평가
-          </span>
-          <span className="text-[11px] text-ink-muted">
-            {roundLabel} 면접 · 녹음 업로드 또는 라이브
-          </span>
-        </div>
+      {/* 최초 업로드/실패 상태의 안내 헤더 — 완료 리포트만 보이는 상태에선 숨긴다(섹션 제목·요약으로 충분). */}
+      {showControls && !redoOpen && (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-ink-soft">
+              대면 면접 평가
+            </span>
+            <span className="text-[11px] text-ink-muted">
+              {roundLabel} 면접 · 녹음 업로드 또는 라이브
+            </span>
+          </div>
+          <p className="text-sm text-ink-soft leading-relaxed">
+            사람이 진행한 <strong>대면 면접</strong>을 녹음 업로드하거나 라이브로
+            진행하면, 전사 → 화자 분리 → AI 역량 평가 리포트를 만들어 줍니다. 녹음
+            파일은 보관하지 않습니다.
+          </p>
+        </>
       )}
-      {!hasCompletedReport && (
-        <p className="text-sm text-ink-soft leading-relaxed">
-          사람이 진행한 <strong>대면 면접</strong>을 녹음 업로드하거나 라이브로
-          진행하면, 전사 → 화자 분리 → AI 역량 평가 리포트를 만들어 줍니다. 녹음
-          파일은 보관하지 않습니다.
-        </p>
+
+      {/* 재실시(새 대면 면접) 진입 시 — 이 녹음이 현재 평가를 대체하고 별도 과금됨을 명시. */}
+      {showControls && redoOpen && (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-ink-soft">
+              새 대면 면접 진행
+            </div>
+            <p className="text-[11px] text-ink-muted mt-0.5 leading-relaxed">
+              새 녹음이 현재 {roundLabel} 대면 평가를 대체하며, 별도의 대면
+              평가로 과금됩니다.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setRedoOpen(false);
+              setFile(null);
+              setConsent(false);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+            className="shrink-0 text-xs text-ink-muted hover:text-ink-soft underline"
+          >
+            취소
+          </button>
+        </div>
       )}
 
       {canModify && liveOpen && (
@@ -419,12 +461,13 @@ export function RecordedInterviewPanel({
           onClose={() => setLiveOpen(false)}
           onFinished={() => {
             setLiveOpen(false);
+            setRedoOpen(false);
             void load();
           }}
         />
       )}
 
-      {canModify && !liveOpen && !hasCompletedReport && (
+      {showControls && (
         <div className="rounded-xl border border-border-default bg-surface-alt p-4 space-y-3">
           <label className="flex items-start gap-2 text-xs text-ink-soft cursor-pointer select-none">
             <input
@@ -485,25 +528,40 @@ export function RecordedInterviewPanel({
         </div>
       )}
 
-      {/* 리포트 목록 (이 라운드) */}
+      {/* 리포트 카드 — 이 라운드의 최신 1건만(이전 건은 새 녹음이 화면상 대체). */}
       {interviews === null ? (
         <p className="text-sm text-ink-muted">불러오는 중...</p>
-      ) : roundInterviews.length === 0 ? (
+      ) : showReportCard && currentRi ? (
+        <div className="space-y-4">
+          <RecordedReportCard
+            ri={currentRi}
+            canModify={canModify}
+            onReevaluate={() => reevalReport(currentRi.id)}
+          />
+        </div>
+      ) : (
+        currentRi === null &&
         !canModify && (
           <p className="text-sm text-ink-muted">
             아직 {roundLabel} 대면 면접 평가가 없습니다.
           </p>
         )
-      ) : (
-        <div className="space-y-4">
-          {roundInterviews.map((ri) => (
-            <RecordedReportCard
-              key={ri.id}
-              ri={ri}
-              canModify={canModify}
-              onReevaluate={() => reevalReport(ri.id)}
-            />
-          ))}
+      )}
+
+      {/* 재실시 진입점 — 완료된 대면 평가 아래. 녹음이 중간 종료되는 등 다시 진행해야 할 때. */}
+      {showRedoButton && (
+        <div className="pt-1">
+          <button
+            onClick={() => setRedoOpen(true)}
+            className="px-3 py-1.5 rounded-lg border border-primary/40 text-primary-deep hover:bg-primary-soft text-xs font-medium inline-flex items-center gap-1.5"
+          >
+            <Mic className="w-3.5 h-3.5" />
+            새 대면 면접 진행하기
+          </button>
+          <p className="text-[11px] text-ink-muted mt-1.5 leading-relaxed">
+            녹음이 중간에 종료되는 등 다시 진행해야 할 때 사용하세요. 새 녹음이
+            현재 평가를 대체하며, 별도의 대면 평가로 과금됩니다.
+          </p>
         </div>
       )}
     </div>
