@@ -56,6 +56,10 @@ const RE_DOB = new RegExp(
   "g"
 );
 
+// "1993년생" / "93년생" — 월·일 없이 생년만 적는 표기. RE_DOB(완전한 날짜)가 못 잡는다.
+// lib/pii-extract.ts RE_BIRTH_YEAR 와 같은 표기를 대상으로 함.
+const RE_BIRTH_YEAR = /(?<!\d)(?:19\d{2}|20\d{2}|\d{2})\s*년\s*생/g;
+
 const RE_ROAD_ADDR =
   /[가-힣A-Za-z0-9·]+(?:로|길)\s?\d+(?:[-]\d+)?(?:번지?)?(?:\s*,?\s*\d+(?:동|호|층))*/g;
 const RE_JIBUN = /[가-힣]+동\s?\d+(?:[-]\d+)?(?:번지)?/g;
@@ -120,7 +124,9 @@ const LABELS: LabelRule[] = [
   },
   // 채용절차법 §4의3 평가 금지 항목 — 라벨형(콜론/공백 구분)만. 본문 문장 오탐 방지 위해 값을 제한.
   {
-    re: /(나\s*이|만\s*나이|연\s*령|Age)\s*[:：·▶▷-]?\s*(만\s*)?\d{1,2}\s*[세歳]?/g,
+    // 끝 가드 (?!\d) — 없으면 "나이 1993년생" 에서 "나이 19" 만 가려 "[나이]93년생" 으로
+    // 생년이 남는다. 숫자가 더 붙으면 나이가 아니라 연도 → 아래 RE_BIRTH_YEAR/RE_DOB 가 처리.
+    re: /(나\s*이|만\s*나이|연\s*령|Age)\s*[:：·▶▷-]?\s*(만\s*)?\d{1,2}(?!\d)\s*[세歳]?/g,
     token: "[나이]",
   },
   {
@@ -220,6 +226,7 @@ function applyBasic(text: string): string {
   return text
     .replace(RE_RRN, "[주민번호]")
     .replace(RE_DOB, "[생년월일]")
+    .replace(RE_BIRTH_YEAR, "[생년월일]")
     .replace(RE_AGE_INLINE, "[나이]")
     .replace(RE_PHONE, "[전화]")
     .replace(RE_EMAIL, "[이메일]")

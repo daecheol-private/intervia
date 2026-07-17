@@ -97,13 +97,18 @@ const RE_NAME_LABEL =
   /(?:이\s*름|성\s*명|성명|Name|姓\s*名)\s*[:：·▶▷-]\s*([^\n,/]{1,30})/;
 
 // "나이: 30세" / "30 세" / "Age: 30" / "만 30세"
+// 끝 가드 (?!\d) 필수 — [세歳] 가 옵션이라, 없으면 "나이 1993년생"(나이 칸에 생년을 적는 흔한 표기)에서
+// "19" 만 떼어 19세로 확정해버린다(candidate 29 실사고). 뒤에 숫자가 더 붙으면 나이가 아니라 연도다.
 const RE_AGE_LABEL =
-  /(?:나\s*이|만\s*나이|Age)\s*[:：·▶▷-]?\s*(\d{1,2})\s*[세歳]?/;
+  /(?:나\s*이|만\s*나이|Age)\s*[:：·▶▷-]?\s*(\d{1,2})(?!\d)\s*[세歳]?/;
 const RE_AGE_INLINE = /\(\s*만\s*(\d{1,2})\s*[세歳]\s*\)/;
 
 // 생년월일 — 연도만 추출하면 나이 계산 가능. 첫/두 번째 구분자가 일치해야 함 (경력 기간 오매칭 방지).
 const RE_DOB_YEAR =
   /\b(19\d{2}|20\d{2})(?:\s*([.\-/])\s*(?:1[0-2]|0?[1-9])\s*\2\s*(?:3[01]|[12]\d|0?[1-9])|\s*년\s*(?:1[0-2]|0?[1-9])\s*월\s*(?:3[01]|[12]\d|0?[1-9])\s*일|\s*年\s*(?:1[0-2]|0?[1-9])\s*月\s*(?:3[01]|[12]\d|0?[1-9])\s*日)/;
+
+// "1993년생" / "93년생" — 월·일 없이 생년만 적는 표기. RE_DOB_YEAR(완전한 날짜)가 못 잡는 폴백.
+const RE_BIRTH_YEAR = /(?<!\d)(19\d{2}|20\d{2}|\d{2})\s*년\s*생/;
 
 function cleanName(raw: string): string {
   // 라벨 뒤 첫 토큰만 — 공백/괄호/쉼표 전까지
@@ -174,6 +179,16 @@ function calcAgeFromDOBYear(year: number): number | null {
   const age = now.getFullYear() - year;
   if (age < 14 || age > 90) return null; // 비현실적 값 거절
   return age;
+}
+
+// "93년생" 의 2자리 연도 → 세기 보정. 19xx/20xx 두 후보는 100년 차이라
+// 유효 범위(14~90세, 77년 폭)에 동시에 들 수 없어 모호하지 않다.
+function resolveBirthYear(raw: string): number | null {
+  if (raw.length === 4) return Number(raw);
+  const yy = Number(raw);
+  return (
+    [1900 + yy, 2000 + yy].find((y) => calcAgeFromDOBYear(y) != null) ?? null
+  );
 }
 
 // 이력서 첫 부분(~500자) 에서 한글 이름 추출. 보수적으로 — 잘못된 매칭이 빈 결과보다 나쁨.
@@ -297,6 +312,14 @@ export function extractPII(
     const y = Number(dobMatch[1]);
     result.dobYear = y;
     if (result.age == null) result.age = calcAgeFromDOBYear(y);
+  }
+  if (result.dobYear == null) {
+    const birthMatch = text.match(RE_BIRTH_YEAR);
+    const y = birthMatch ? resolveBirthYear(birthMatch[1]) : null;
+    if (y != null) {
+      result.dobYear = y;
+      if (result.age == null) result.age = calcAgeFromDOBYear(y);
+    }
   }
 
   return result;
