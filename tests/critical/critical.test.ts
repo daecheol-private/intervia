@@ -31,7 +31,12 @@ import {
 } from "./db";
 import { resetWorkspace, startServer, stopServer } from "./server";
 import { Client, field } from "./http";
-import { makeResumePdf } from "./fixtures";
+import { makeResumeDocx, makeResumePdf } from "./fixtures";
+// CT-11 은 DB 를 타지 않는 순수 함수라 정적 import 로 충분하다(CT-10 과 달리 lib/db 미의존).
+import { extractEducation } from "../../lib/education-extract";
+import { extractPhotoFromBuffer } from "../../lib/photo-extract";
+import { extractPII } from "../../lib/pii-extract";
+import { maskText } from "../../lib/mask";
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert";
 import { existsSync, readdirSync, rmSync } from "node:fs";
@@ -1007,5 +1012,243 @@ describe("CT-10 지갑 정합성", () => {
     // balance_after 체인도 마지막 행과 일치해야 한다
     const last = led[led.length - 1];
     assert.equal(Number(last.balance_after), await walletBalance(ids.orgB));
+  });
+});
+
+/**
+ * CT-11 이력서 추출 판정 (lib 단위 직접 호출)
+ *
+ * 2026-07-20 사고 회귀 방지 — 이력서 하나에서 두 오판이 동시에 났다:
+ *  ① 스킬 줄 "한글/MS워드" 의 `MS` 가 석사로 잡혀 실제 학사 학력을 덮어씀
+ *  ② 증명사진 대신 포트폴리오 스크린샷이 추출됨(면적 최대 선택 로직)
+ * 둘 다 화면에 드러나기 전엔 조용히 틀리는 종류라 여기서 결과를 고정한다.
+ */
+describe("CT-11 이력서 추출 판정", () => {
+  const resume = (body: string) => `홍길동\n${body}\n010-0000-0000`;
+
+  it("CT-1101 스킬·경력 표현을 학위로 오탐하지 않는다", () => {
+    // 전부 실제 이력서에 흔한 표현 — 학위 단서가 아니다
+    for (const line of [
+      "한글/MS워드", // ← 2026-07-20 사고 원인
+      "MS Office, MS SQL, MS Teams 활용",
+      "Scrum Master 자격 보유",
+      "git master branch 운영",
+      "Business Analyst(BA) 로 근무",
+      "데이터 분석 사례를 정리했습니다",
+      "매출 분석 사업 참여",
+      "박 사원과 협업",
+      "입학 사정관 전형 안내",
+    ]) {
+      assert.equal(extractEducation(resume(line)).level, null, `오탐: "${line}"`);
+    }
+  });
+
+  it("CT-1102 실제 학위 표기는 그대로 인식한다", () => {
+    const cases: [string, string][] = [
+      ["서울대학교 컴퓨터공학 석사 졸업", "석사 졸업"],
+      ["공학석사", "석사"],
+      ["석사학위 취득", "석사"],
+      ["석 사 졸업", "석사 졸업"], // PDF 자간 벌어짐
+      ["Master's degree in Computer Science", "석사"],
+      ["M.S. in Computer Engineering", "석사"],
+      ["MBA 취득", "석사"],
+      ["박사 졸업", "박사 졸업"],
+      ["Ph.D in Physics", "박사"],
+      ["Bachelor's degree", "학사"],
+      ["B.S. in Computer Science", "학사"],
+      ["컴퓨터공학부", "학사"],
+      ["전문학사 졸업", "전문학사 졸업"],
+      ["○○고등학교 졸업", "고졸"],
+    ];
+    for (const [line, expect] of cases) {
+      assert.equal(extractEducation(resume(line)).level, expect, `정탐 실패: "${line}"`);
+    }
+  });
+
+  it("CT-1103 스킬 섹션이 학력 섹션을 덮어쓰지 않는다", () => {
+    // 사고 이력서의 실제 구조 — 학력(앞) + 보유기술(뒤)
+    const text = [
+      "□ 학력사항",
+      "한신대학교",
+      "컴퓨터공학부",
+      "졸업",
+      "□ 보유기술",
+      "한글/MS워드",
+    ].join("\n");
+    const edu = extractEducation(text);
+    assert.equal(edu.level, "학사", "스킬 줄이 학력을 덮어씀");
+    assert.equal(edu.school, "한신대학교");
+  });
+
+  it("CT-1104 증명사진 = 본문 첫 인물형 이미지 (크기·ZIP 순서와 무관)", async () => {
+    // 증명사진이 포트폴리오 스크린샷보다 작고, ZIP 에는 스크린샷이 먼저 저장된 배치.
+    // 면적 최대(구 로직)나 ZIP 순서로 고르면 둘 다 스크린샷을 집는다.
+    const docx = makeResumeDocx(
+      [
+        { file: "photo.png", w: 235, h: 302 }, // 본문 1번 = 증명사진
+        { file: "screenshot.png", w: 532, h: 607 }, // 본문 2번 = 더 큰 스크린샷
+      ],
+      ["screenshot.png", "photo.png"] // ZIP 엔트리는 역순
+    );
+    const photo = await extractPhotoFromBuffer(docx, "resume.docx");
+    assert.ok(photo, "사진을 추출하지 못함");
+    assert.equal(photo.data.readUInt32BE(16), 235, "본문 첫 이미지가 아닌 것을 선택");
+    assert.equal(photo.data.readUInt32BE(20), 302);
+  });
+
+  it("CT-1106 미기입 학위 행(빈 템플릿)을 최종학력으로 잡지 않는다", () => {
+    // 표 양식 이력서는 셀 하나가 한 줄씩, 사이에 빈 줄을 두고 분해된다.
+    // 마지막 "대학원(박사)" 행은 라벨 + YYYY.MM 플레이스홀더뿐인 미기입 템플릿 —
+    // 라벨만 보고 판정하면 박사가 되고, 전공은 엉뚱한 학사 행에서 주워온다.
+    const cell = (...v: string[]) => v.flatMap((x) => [x, ""]);
+    const text = [
+      ...cell("구    분", "입학년월", "졸업년월", "학교명", "전공", "졸업구분", "소재지"),
+      ...cell("고등학교", "1997.03", "2001.02", "광영고등학교", "이과", "졸업", "서울"),
+      ...cell("대학교", "2003.03", "2009.02", "수원대학교", "물리학과", "졸업", "경기"),
+      ...cell("대학교", "(석사)", "2015.09", "2017.08", "숭실대학교", "IT융합학과", "졸업", "서울"),
+      ...cell("졸업논문", "스마트폰을 이용한 통합 인증 관리 기법", "LAB."),
+      ...cell("대학원", "(박사)", "YYYY.MM", "YYYY.MM", "", "", "", ""),
+      ...cell("졸업논문", "", "LAB.", ""),
+    ].join("\n");
+    assert.equal(extractEducation(text).level, "석사", "빈 박사 행을 최종학력으로 채택함");
+    // 학교·전공은 이 양식에서 여전히 부정확하다(학교 셀이 ±2줄 밖, 전공은 전체 fallback).
+    // 탐색 범위를 행 전체로 넓혀 봤다가 실데이터 회귀 51건(학사→고졸 강등, 엉뚱한 학교)을
+    // 내고 되돌렸다 — 개선하려면 픽스처가 아니라 실제 이력서 회귀 스캔으로 검증할 것.
+  });
+
+  it("CT-1107 생년월일 라벨 뒤 2자리 연도로 나이를 계산한다", () => {
+    const age83 = new Date().getFullYear() - 1983;
+    // "83.01.24" 처럼 2자리로 적는 표기 — 세기는 유효 나이 범위(14~90)로 판별한다
+    for (const body of [
+      "생년월일: 83.01.24",
+      "생년월일 83.01.24",
+      "생년월일: 83-01-24",
+      "생일: 83년 1월 24일",
+      // 표 양식 — 라벨과 값이 다른 셀로 떨어진다
+      "성명\n\n생년월일\n\n연락처\n\n홍길동\n\n83.01.24\n\n010-1111-2222",
+    ]) {
+      assert.equal(extractPII(`홍길동\n${body}`).age, age83, `미인식: "${body}"`);
+    }
+    // 기존 표기도 유지
+    assert.equal(extractPII("홍길동\n생년월일: 1983.01.24").age, age83);
+    assert.equal(extractPII("홍길동\n93년생").age, new Date().getFullYear() - 1993);
+    assert.equal(extractPII("홍길동\n나이: 30세").age, 30);
+  });
+
+  it("CT-1108 경력·자격증 날짜를 생년월일로 오인하지 않는다", () => {
+    // 라벨 없는 날짜는 생년월일이 아니다 — 2자리 연도는 라벨이 있을 때만 인정
+    assert.equal(extractPII("홍길동\n경력\n15.01.01 ~ 20.12.31 근무").age, null);
+    assert.equal(extractPII("홍길동\n자격증\n빅데이터전문가 2025.06.03").age, null);
+    // 라벨이 있으면 뒤에 경력 날짜가 있어도 라벨 쪽이 이긴다
+    assert.equal(
+      extractPII("홍길동\n생년월일: 83.01.24\n경력 2023.08.29 입사").age,
+      new Date().getFullYear() - 1983
+    );
+  });
+
+  it("CT-1109 추출이 인식하는 생년월일은 마스킹도 가린다", () => {
+    // 추출/마스킹 불일치 = LLM 으로 원문 PII 유출 (GOTCHAS §0-7 사고 패턴)
+    const leak = /83\s*[.\-/]\s*0?1\s*[.\-/]\s*24/;
+    for (const text of [
+      "홍길동\n생년월일: 83.01.24\n010-1111-2222",
+      "성명\n\n생년월일\n\n연락처\n\n홍길동\n\n83.01.24\n\n010-1111-2222", // 표 양식
+    ]) {
+      assert.ok(extractPII(text).age != null, "추출이 인식 못 함");
+      assert.ok(!leak.test(maskText(text)), "마스킹이 생년월일을 남김");
+    }
+    // 과잉 마스킹 금지 — 라벨 없는 경력 기간은 평가에 필요하므로 보존한다
+    assert.match(maskText("경력사항\n15.01.01 ~ 20.12.31 근무"), /15\.01\.01/);
+  });
+
+  it("CT-1110 값이 라벨보다 먼저 오는 표 양식에서 본인 휴대폰을 고른다", () => {
+    // 표 양식은 "값 → 라벨" 순서로 추출된다. 라벨 뒤만 보면 "휴대폰" 이 이메일을 건너뛰어
+    // 다음 셀의 일반전화를 집어온다(candidate 111 — 휴대폰 대신 02 번호가 저장됨).
+    assert.equal(
+      extractPII("유소망\n010-7333-4819휴대폰somang4819@gmail.comEmail\n02-967-4819전화번호").phone,
+      "010-7333-4819"
+    );
+    assert.equal(
+      extractPII("홍길동\n02-967-4819전화번호\n010-7333-4819휴대폰").phone,
+      "010-7333-4819"
+    );
+    // 기존 "라벨 → 값" 순서도 그대로
+    assert.equal(extractPII("홍길동\n휴대폰: 010-1234-5678\n전화: 02-111-2222").phone, "010-1234-5678");
+    assert.equal(extractPII("홍길동\n010-7777-8888\n경력사항").phone, "010-7777-8888");
+    // 타인 번호 가드 유지 — 긴급연락처는 본인 번호를 덮지 않는다
+    assert.equal(
+      extractPII("홍길동\n휴대폰: 010-1111-2222\n긴급연락처: 010-3333-4444").phone,
+      "010-1111-2222"
+    );
+  });
+
+  it("CT-1111 채용포털 양식 '○○대학교(지역) 대학교(4년) 졸업' 을 정확히 읽는다", () => {
+    // 실제 이력서 6건에서 사용자가 확인해 준 정답(2026-07-20). 판정 근거를 "학교명이
+    // 따라오는가"로 넓혔을 때 전부 깨졌던 케이스다 — 학사→고졸/전문학사 강등,
+    // "강원대학교(삼척)"→삼척대학교, 졸업·수료 상태 소실. 그 회귀를 여기서 고정한다.
+    const cases: [string, string, string | null][] = [
+      ["영산대학교(부산) 대학교(4년) 졸업", "학사 졸업", "영산대학교"],
+      ["강원대학교(삼척) 대학교(4년) 졸업", "학사 졸업", "강원대학교"], // 괄호 안 지역명에 안 속아야
+      ["동아대학교 대학교(4년) 졸업", "학사 졸업", "동아대학교"],
+      ["한동대학교 대학교(4년) 졸업", "학사 졸업", "한동대학교"],
+      // 학점은행제는 학교가 아니지만 이력서 학력란의 "학교명" 칸에 이렇게 적히고,
+      // 사람이 만든 정답표(sample/이력서/candidate.xlsx)도 학교 자리에 둔다.
+      ["학점은행제 대학교(4년) 졸업", "학사 졸업", "학점은행제"],
+      ["한림대학교 대학원(박사) 수료", "박사 수료", "한림대학교"], // 수료 = 학위 없음, 상태 유지 필수
+    ];
+    for (const [line, expLevel, expSchool] of cases) {
+      const e = extractEducation(`홍길동\n${line}\n010-0000-0000`);
+      assert.equal(e.level, expLevel, `level 오판: "${line}"`);
+      assert.equal(e.school, expSchool, `school 오판: "${line}"`);
+    }
+  });
+
+  it("CT-1112 known 이름 마스킹이 본문을 파괴하지 않고, 조사·표양식 이름을 가린다", () => {
+    // known.name 은 파일명 유래라 틀릴 수 있다. 구 구현(split/join, 경계 없음)은 이름이
+    // "개발" 이면 "웹개발팀"→"웹[이름]팀" 으로 본문을 파괴하고, 동시에 라벨 없는 진짜 이름은
+    // 그대로 LLM 에 나갔다. 앞 경계만 걸어 파괴는 막고 뒤(조사·호칭)는 열어 둔다.
+    assert.match(
+      maskText("웹개발팀에서 백엔드 근무", { known: { name: "개발" } }),
+      /웹개발팀/,
+      "부정확한 known 이름이 본문 단어를 삼킴"
+    );
+    // 조사·호칭이 붙어도 가려야 한다
+    for (const body of ["홍길동은 개발자입니다", "홍길동님께 연락", "작성자 홍길동"]) {
+      assert.ok(
+        !maskText(body, { known: { name: "홍길동" } }).includes("홍길동"),
+        `이름이 남음: "${body}"`
+      );
+    }
+    // 표 양식(라벨과 값이 다른 줄) — DB 이름이 틀려도 본문 추출 이름으로 가린다
+    const masked = maskText("성명\n\n이수현\n\n연락처\n\n010-1111-2222", {
+      known: { name: "20240115 지원서류", extraNames: ["이수현"] },
+    });
+    assert.ok(!masked.includes("이수현"), "표 양식 이름이 마스킹되지 않음");
+    // known 이 "(이름 미상)" 이면 치환 자체를 하지 않는다
+    assert.match(
+      maskText("백엔드 개발 경력 5년", { known: { name: "(이름 미상)" } }),
+      /백엔드 개발 경력 5년/
+    );
+  });
+
+  it("CT-1113 '총 경력 N년' 명시 표기만 경력으로 인정한다", () => {
+    assert.equal(extractPII("홍길동\n총 경력 24년 4개월").careerYears, 24);
+    assert.equal(extractPII("홍길동\n경력 총 27년").careerYears, 27);
+    assert.equal(extractPII("홍길동\n총 30년\n경력사항").careerYears, 30);
+    assert.equal(extractPII("홍길동\n총   경   력 17년10개월").careerYears, 17);
+    // 개월은 버린다 — 표기 규칙이 내림("11년 10개월" → 11년)
+    assert.equal(extractPII("홍길동\n총 경력 11년 10개월").careerYears, 11);
+    // "총" 없는 문장 속 표기는 인정하지 않는다 — 신입이 자기소개에 "(경력1년반)" 이라
+    // 쓴 실제 사례가 있었다(정답 0년). 표기가 없으면 null 로 두고 LLM 에 맡긴다.
+    assert.equal(extractPII("홍길동\n풀스택 개발자입니다. (경력1년반)").careerYears, null);
+    assert.equal(extractPII("홍길동\n신입 지원자입니다").careerYears, null);
+  });
+
+  it("CT-1105 인물형 이미지가 없으면 추출하지 않는다", async () => {
+    // 가로형 배너·로고만 있는 이력서 — 아무거나 집으면 안 된다(화면은 이니셜 아바타 폴백)
+    const docx = makeResumeDocx([
+      { file: "banner.png", w: 900, h: 200 },
+      { file: "logo.png", w: 640, h: 160 },
+    ]);
+    assert.equal(await extractPhotoFromBuffer(docx, "resume.docx"), null);
   });
 });

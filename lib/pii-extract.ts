@@ -1,9 +1,11 @@
 /**
  * 이력서 원문에서 정규식·라벨로 직접 식별자 추출.
  *
- * 추출 대상: name (라벨 있을 때만), phone, email, age (라벨 또는 DOB → 만 나이 계산).
+ * 추출 대상: name (라벨 있을 때만), phone, email, age (라벨 또는 DOB → 만 나이 계산),
+ * careerYears ("총 경력 N년" 명시 표기만).
  * 라벨 없는 케이스에서 이름은 추출하지 않음 — false positive 위험 + LLM 도 마스킹본 받아서 어차피 추출 불가.
- * career_summary / career_years 는 추론 필요 → LLM 영역.
+ * career_summary 와 "표기 없는 경력 추정"은 여전히 LLM 영역 — 여기서는 이력서에 적힌 총 경력만
+ * 읽는다. AI 평가를 끄고 업로드해도 경력이 보이게 하는 게 목적이고, 평가를 돌리면 LLM 값이 덮는다.
  */
 
 export type ExtractedPII = {
@@ -12,6 +14,8 @@ export type ExtractedPII = {
   email: string | null;
   age: number | null;
   dobYear: number | null;
+  /** 이력서에 "총 경력 N년" 으로 적힌 값만. 표기가 없으면 null (추정하지 않음). */
+  careerYears: number | null;
   companies: string[];
 };
 
@@ -42,7 +46,9 @@ const HEADER_BLACKLIST = new Set([
   "프로젝트", "포트폴리오", "취미", "특기", "병역", "사진",
   // 연락처·기타
   "연락처", "이메일", "전화", "전화번호", "휴대폰", "주소",
-  "성명", "이름", "생년월일", "성별", "나이",
+  "성명", "이름", "생년월일",
+  // 외국인 이력서의 어학·도구 섹션 (한글 이름이 없는 문서에서 오탐)
+  "언어", "한국어", "영어", "중국어", "일본어", "도구", "초급", "중급", "고급", "능력", "성별", "나이",
   "가족", "가족관계", "결혼", "혼인", "종교", "정치",
   // 짧은 단답 노이즈
   "남", "여", "남자", "여자", "한국", "대한민국", "재택", "출근", "원격",
@@ -101,14 +107,38 @@ const RE_NAME_LABEL =
 // "19" 만 떼어 19세로 확정해버린다(candidate 29 실사고). 뒤에 숫자가 더 붙으면 나이가 아니라 연도다.
 const RE_AGE_LABEL =
   /(?:나\s*이|만\s*나이|Age)\s*[:：·▶▷-]?\s*(\d{1,2})(?!\d)\s*[세歳]?/;
-const RE_AGE_INLINE = /\(\s*만\s*(\d{1,2})\s*[세歳]\s*\)/;
+// "(만 30세)" 뿐 아니라 "(30세)" 도 — 채용포털 export 는 "남, 1998 (28세)" 처럼 만 없이 쓴다.
+// 14~90 범위 검사가 뒤따르므로 "만" 을 옵션으로 둬도 오탐이 늘지 않는다.
+const RE_AGE_INLINE = /\(\s*(?:만\s*)?(\d{1,2})\s*[세歳]\s*\)/;
+// 괄호가 나이로 시작하지 않는 경우 — "(1973년 01월생 / 만53세)". "세" 가 필수라 금액("1만")과 안 겹친다.
+const RE_AGE_MAN = /만\s*(\d{1,2})\s*[세歳]/;
 
 // 생년월일 — 연도만 추출하면 나이 계산 가능. 첫/두 번째 구분자가 일치해야 함 (경력 기간 오매칭 방지).
 const RE_DOB_YEAR =
   /\b(19\d{2}|20\d{2})(?:\s*([.\-/])\s*(?:1[0-2]|0?[1-9])\s*\2\s*(?:3[01]|[12]\d|0?[1-9])|\s*년\s*(?:1[0-2]|0?[1-9])\s*월\s*(?:3[01]|[12]\d|0?[1-9])\s*일|\s*年\s*(?:1[0-2]|0?[1-9])\s*月\s*(?:3[01]|[12]\d|0?[1-9])\s*日)/;
 
-// "1993년생" / "93년생" — 월·일 없이 생년만 적는 표기. RE_DOB_YEAR(완전한 날짜)가 못 잡는 폴백.
-const RE_BIRTH_YEAR = /(?<!\d)(19\d{2}|20\d{2}|\d{2})\s*년\s*생/;
+/**
+ * 총 경력 연수 — "총 경력 24년 4개월" / "경력 총 27년" / 줄 첫머리의 "총 30년".
+ *
+ * **"총" 을 요구한다.** 이게 없으면 자기소개 문장의 "…풀스택 개발자입니다. (경력1년반)" 같은
+ * 표기까지 잡아 실제와 다른 값이 들어간다(실측 84건: "총" 없이는 6건 더 맞히지만 1건 오답).
+ * 개월은 버린다 — 표기 규칙이 "11년 10개월 → 11년"(내림).
+ */
+const RE_CAREER_YEARS =
+  /총\s*경\s*력\s*[:：]?\s*(\d{1,2})\s*년|경\s*력\s*총\s*(\d{1,2})\s*년|(?:^|\n)\s*총\s*(\d{1,2})\s*년/;
+
+// "1993년생" / "93년생" / "1981년 生"(한자) — 월·일 없이 생년만 적는 표기.
+// RE_DOB_YEAR(완전한 날짜)가 못 잡는 폴백. lib/mask.ts RE_BIRTH_YEAR 와 같은 표기를 대상으로 함.
+const RE_BIRTH_YEAR = /(?<!\d)(19\d{2}|20\d{2}|\d{2})\s*년\s*[생生]/;
+
+// 생년월일 라벨 — lib/mask.ts 의 dob 라벨 세트와 정렬(같은 표기를 대상으로 한다).
+const RE_DOB_LABEL =
+  /(?:생\s*년\s*월\s*일|생\s*년|생\s*일|출\s*생|Date\s*of\s*Birth|D\.?O\.?B\.?|Birth\s*(?:day|date)?|出\s*生|生\s*日)\s*[:：·▶▷-]?/i;
+
+// 라벨 근처 전용 — 2자리 연도("83.01.24")까지 인정한다. 라벨이 맥락을 보증하므로
+// 전체 스캔용 RE_DOB_YEAR 보다 느슨해도 되고, 구분자 일치도 요구하지 않는다.
+const RE_DOB_LOOSE =
+  /(?<!\d)(\d{4}|\d{2})\s*(?:[.\-/]\s*(?:1[0-2]|0?[1-9])\s*[.\-/]\s*(?:3[01]|[12]\d|0?[1-9])|년\s*(?:1[0-2]|0?[1-9])\s*월\s*(?:3[01]|[12]\d|0?[1-9])\s*일?)/;
 
 function cleanName(raw: string): string {
   // 라벨 뒤 첫 토큰만 — 공백/괄호/쉼표 전까지
@@ -147,19 +177,45 @@ function normalizePhone(raw: string): string {
   return trimmed.replace(/[.\s]+/g, "-").replace(/-+/g, "-");
 }
 
-// 라벨(휴대폰/연락처 등) 바로 뒤 40자 윈도우에서 첫 전화 매치. "긴급/회사" 등 수식어 붙은 라벨은 건너뜀.
-// 라벨이 없거나 뒤에 번호가 없으면 null → 호출부가 본문 첫 매치로 폴백(기존 동작 유지, 회귀 없음).
+// 라벨(휴대폰/연락처 등) 주변 전화 매치. "긴급/회사" 등 수식어 붙은 라벨은 건너뜀.
+//
+// 앞뒤를 모두 보고 **라벨에 더 가까운 쪽**을 택한다 — 표 양식 이력서는 값이 라벨보다 먼저 온다
+// ("010-7333-4819휴대폰 / 02-967-4819전화번호", candidate 111). 뒤만 보면 "휴대폰" 라벨이
+// 이메일을 건너뛰어 다음 셀의 일반전화를 집어와 본인 휴대폰이 유선번호로 덮인다.
+// 라벨이 없거나 주변에 번호가 없으면 null → 호출부가 본문 첫 매치로 폴백(기존 동작 유지).
 function phoneNearLabel(text: string, labelRe: RegExp): string | null {
   labelRe.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = labelRe.exec(text)) !== null) {
     const before = text.slice(Math.max(0, m.index - 8), m.index);
     if (RE_PHONE_LABEL_EXCLUDE.test(before)) continue;
+
     const start = m.index + m[0].length;
-    const found = text.slice(start, start + 40).match(RE_PHONE);
-    if (found) return found[0];
+    RE_PHONE.lastIndex = 0;
+    const fwd = RE_PHONE.exec(text.slice(start, start + 40));
+
+    // 라벨 직전 창의 **마지막** 매치 = 라벨에 가장 붙어 있는 번호
+    const prevWin = text.slice(Math.max(0, m.index - 20), m.index);
+    RE_PHONE.lastIndex = 0;
+    let back: RegExpExecArray | null = null;
+    for (let e = RE_PHONE.exec(prevWin); e !== null; e = RE_PHONE.exec(prevWin)) back = e;
+
+    if (!fwd && !back) continue;
+    if (!back) return fwd![0];
+    if (!fwd) return back[0];
+    const backGap = prevWin.length - (back.index + back[0].length);
+    return backGap <= fwd.index ? back[0] : fwd[0];
   }
   return null;
+}
+
+/**
+ * 이메일 앞 글리프 간격 복원 — PDF 추출이 "wild_ jk@naver.com" 처럼 밑줄 뒤에 공백을 끼우면
+ * 로컬파트 앞부분이 잘려 다른 주소("jk@naver.com")가 나온다. 뒤에 `@` 가 오는 경우로 한정해
+ * 붙이므로 "홍길동 jk@..." 같은 정상 공백은 건드리지 않는다.
+ */
+function healEmailGaps(text: string): string {
+  return text.replace(/([A-Za-z0-9._%+\-]*_)\s+(?=[A-Za-z0-9._%+\-]*@)/g, "$1");
 }
 
 // 이메일 라벨 바로 뒤 60자 윈도우에서 첫 이메일 매치.
@@ -191,6 +247,22 @@ function resolveBirthYear(raw: string): number | null {
   );
 }
 
+/**
+ * 생년월일 라벨 뒤에서 출생연도 추출 — 2자리 연도("생년월일: 83.01.24")를 인정한다.
+ *
+ * 라벨을 안 보고 문서 전체에서 첫 날짜를 취하면 경력 시작일·자격증 취득일이 생년월일이
+ * 된다(실측: 후보 8명이 경력의 2026 년 날짜 때문에 dobYear=2026 → 나이 공백).
+ * 라벨이 맥락을 보증할 때만 느슨한 패턴을 쓰므로 오탐을 늘리지 않는다.
+ * 표 양식은 라벨과 값이 다른 셀로 떨어지므로 뒤 50자까지 본다.
+ */
+function dobYearNearLabel(text: string): number | null {
+  const m = text.match(RE_DOB_LABEL);
+  if (m?.index == null) return null;
+  const start = m.index + m[0].length;
+  const d = text.slice(start, start + 50).match(RE_DOB_LOOSE);
+  return d ? resolveBirthYear(d[1]) : null;
+}
+
 // 이력서 첫 부분(~500자) 에서 한글 이름 추출. 보수적으로 — 잘못된 매칭이 빈 결과보다 나쁨.
 //
 // 통과 조건 (모두 충족):
@@ -199,31 +271,64 @@ function resolveBirthYear(raw: string): number | null {
 //   3) 첫 글자가 흔한 성씨 (false positive 큰 폭 감소)
 //   4) "이력서" 라는 단어 등 노이즈가 같은 라인에 없음
 function isPlausibleKoreanName(s: string): boolean {
-  if (!/^[가-힣]{2,4}$/.test(s)) return false;
+  // 2~3자만 — 한국 이름은 대부분 2~3자다. 4자를 허용하면 "지원분야"·"주요강점"·"장애여부"·
+  // "안세기술"(회사명) 같은 이력서 라벨이 성씨 조건을 통과해 이름으로 잡힌다(실측 84건).
+  // 복성 4자 이름을 놓치지만, 틀린 이름은 빈 값보다 나쁘다는 원칙을 따른다.
+  if (!/^[가-힣]{2,3}$/.test(s)) return false;
+  // "유창함"·"가능함" 류 서술형 명사 — 이름 끝에 오지 않는 어미
+  if (/[함됨음임]$/.test(s)) return false;
   if (HEADER_BLACKLIST.has(s)) return false;
   if (!COMMON_SURNAMES.has(s[0])) return false;
   return true;
 }
 
+/** 인적사항 블록 신호 — 이 근처의 단독 한글 토큰이라야 이름으로 인정한다. */
+function hasPersonalInfoNear(chunk: string): boolean {
+  RE_EMAIL.lastIndex = 0;
+  RE_PHONE.lastIndex = 0;
+  return (
+    RE_EMAIL.test(chunk) ||
+    RE_PHONE.test(chunk) ||
+    /\(\s*(?:만\s*)?\d{1,2}\s*[세歳]\s*\)/.test(chunk) ||
+    RE_DOB_LABEL.test(chunk)
+  );
+}
+
+/**
+ * 이력서 앞부분에서 이름 추출. **틀린 이름은 빈 값보다 나쁘다** — 최대한 보수적으로.
+ *
+ * 순서: ① "성명: 홍길동" 라벨(가장 확실) → ② 인적사항 블록 안의 단독 한글 2~4자.
+ *
+ * ⚠️ "라인 맨 앞 한글 2~4자 + 구분자" 규칙은 제거했다. 실측 84건에서 `지원분야  개발SM…`,
+ * `육군 대위 출신으로…`, `오복전자`(회사명) 같은 걸 이름으로 잡아 정확도가 13% 였다.
+ * ②에 연락처 근접 조건을 건 이유도 같다 — 채용포털 export 는 회사명·섹션 헤더가 문서
+ * 맨 앞에 오고, 진짜 이름은 이메일·전화·나이와 같은 블록에 있다.
+ */
 function extractNameFromHeader(text: string): string | null {
-  const head = text.slice(0, 500);
-  const lines = head
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  for (const line of lines.slice(0, 30)) {
-    // 1) 단독 라인의 2~4자 한글
-    if (isPlausibleKoreanName(line)) return line;
-    // 2) "성명 홍길동" 식 인라인 라벨 — 짧은 라인에서만
-    if (line.length <= 40) {
-      const m = line.match(/(?:성\s*명|이\s*름)[\s:：]+([가-힣]{2,4})(?:\b|$)/);
-      if (m && isPlausibleKoreanName(m[1])) return m[1];
-    }
-    // 3) "홍길동 (만 30세)" / "홍길동 010-..." 같이 다른 정보와 같은 라인
-    if (line.length <= 60) {
-      const m = line.match(/^([가-힣]{2,4})(?:\s+|\(|\[|·|—|-)/);
-      if (m && isPlausibleKoreanName(m[1])) return m[1];
-    }
+  const head = text.slice(0, 1500); // 표 양식은 인적사항 블록이 문서 앞이 아닐 수 있다
+  const lines = head.split(/\r?\n/).map((l) => l.trim());
+  const scan = Math.min(lines.length, 60);
+
+  // ① 라벨 — "성명 홍길동" / "이름: 홍길동" / "작성자 : 함세연" (라벨 세트는 lib/mask.ts 와 정렬)
+  //    끝 경계는 (?![가-힣]) — `\b` 는 한글이 \w 가 아니라 "송명수 영문…" 에서 성립하지 않는다.
+  for (let i = 0; i < scan; i++) {
+    const line = lines[i];
+    if (!line || line.length > 40) continue;
+    const m = line.match(
+      /(?:성\s*명|이\s*름|성\s*함|작\s*성\s*자|지\s*원\s*자|응\s*시\s*자|신\s*청\s*자)[\s:：]+([가-힣]{2,3})(?![가-힣])/
+    );
+    if (m && isPlausibleKoreanName(m[1])) return m[1];
+  }
+  // ⚠️ "라인 맨 앞 한글 2~3자 + 영문/한자" 로 병기 이름("김도현 Kim Do-hyun")을 잡으려다
+  //    실측 84건에서 틀림이 0→11건 났다 — "고객 Center"·"서버 Linux"·"차세대 ERP" 처럼
+  //    한글 단어 + 영문 기술용어가 이력서에 흔하고, 흔한 성씨(고·최·서·노·차·강·지)가
+  //    필터 역할을 못 한다. 병기 이름을 잡으려면 로마자 **이름 형태**(2단어/하이픈) 검증이
+  //    필요하고, 그것만으로도 부족하면 인적사항 블록 근접 조건까지 걸어야 한다.
+  // ② 인적사항 블록 안의 단독 라인
+  for (let i = 0; i < scan; i++) {
+    const line = lines[i];
+    if (!line || !isPlausibleKoreanName(line)) continue;
+    if (hasPersonalInfoNear(lines.slice(Math.max(0, i - 3), i + 6).join("\n"))) return line;
   }
   return null;
 }
@@ -249,6 +354,7 @@ export function extractPII(
     email: null,
     age: null,
     dobYear: null,
+    careerYears: null,
     companies: [],
   };
 
@@ -283,7 +389,8 @@ export function extractPII(
   if (hints?.providedEmail?.trim()) {
     result.email = hints.providedEmail.trim();
   } else {
-    result.email = emailNearLabel(text) ?? text.match(RE_EMAIL)?.[0] ?? null;
+    const mailText = healEmailGaps(text);
+    result.email = emailNearLabel(mailText) ?? mailText.match(RE_EMAIL)?.[0] ?? null;
   }
 
   // 전화 — 라벨(휴대폰 > 연락처) 우선, 없으면 본문 첫 매치. 라벨 우선으로 본인 번호 정확도↑.
@@ -300,18 +407,27 @@ export function extractPII(
     const n = Number(ageLabel[1]);
     if (n >= 14 && n <= 90) result.age = n;
   }
-  if (result.age == null) {
-    const ageInline = text.match(RE_AGE_INLINE);
-    if (ageInline) {
-      const n = Number(ageInline[1]);
+  for (const re of [RE_AGE_INLINE, RE_AGE_MAN]) {
+    if (result.age != null) break;
+    const m = text.match(re);
+    if (m) {
+      const n = Number(m[1]);
       if (n >= 14 && n <= 90) result.age = n;
     }
   }
-  const dobMatch = text.match(RE_DOB_YEAR);
-  if (dobMatch) {
-    const y = Number(dobMatch[1]);
-    result.dobYear = y;
-    if (result.age == null) result.age = calcAgeFromDOBYear(y);
+  // 생년월일 — 라벨 근처 우선(2자리 연도 허용), 라벨이 없을 때만 문서 전체 스캔으로 폴백
+  const dobLabeled = dobYearNearLabel(text);
+  if (dobLabeled != null) {
+    result.dobYear = dobLabeled;
+    if (result.age == null) result.age = calcAgeFromDOBYear(dobLabeled);
+  }
+  if (result.dobYear == null) {
+    const dobMatch = text.match(RE_DOB_YEAR);
+    if (dobMatch) {
+      const y = Number(dobMatch[1]);
+      result.dobYear = y;
+      if (result.age == null) result.age = calcAgeFromDOBYear(y);
+    }
   }
   if (result.dobYear == null) {
     const birthMatch = text.match(RE_BIRTH_YEAR);
@@ -320,6 +436,13 @@ export function extractPII(
       result.dobYear = y;
       if (result.age == null) result.age = calcAgeFromDOBYear(y);
     }
+  }
+
+  // 총 경력 — 명시 표기만. 없으면 null 로 두고 LLM(career_info.career_years)에 맡긴다.
+  const career = text.match(RE_CAREER_YEARS);
+  if (career) {
+    const y = Number(career[1] ?? career[2] ?? career[3]);
+    if (Number.isFinite(y) && y >= 0 && y <= 60) result.careerYears = y;
   }
 
   return result;

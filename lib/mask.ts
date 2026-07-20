@@ -13,6 +13,8 @@ export type MaskLevel = "basic" | "standard";
 
 export type KnownPII = {
   name?: string | null;
+  /** 본문에서 추출한 이름 등 — DB 이름(파일명 유래)과 다를 수 있어 둘 다 가린다. */
+  extraNames?: (string | null | undefined)[];
   phones?: (string | null | undefined)[];
   emails?: (string | null | undefined)[];
   address?: string | null;
@@ -58,16 +60,25 @@ const RE_DOB = new RegExp(
 
 // "1993년생" / "93년생" — 월·일 없이 생년만 적는 표기. RE_DOB(완전한 날짜)가 못 잡는다.
 // lib/pii-extract.ts RE_BIRTH_YEAR 와 같은 표기를 대상으로 함.
-const RE_BIRTH_YEAR = /(?<!\d)(?:19\d{2}|20\d{2}|\d{2})\s*년\s*생/g;
+const RE_BIRTH_YEAR = /(?<!\d)(?:19\d{2}|20\d{2}|\d{2})\s*년\s*[생生]/g;
+
+// 생년월일 라벨 뒤 2자리 연도 날짜("생년월일 … 83.01.24").
+// 표 양식은 라벨과 값이 다른 셀로 떨어져 같은 줄 전용 라벨 규칙(LABELS.dob)도,
+// 4자리 전용 RE_DOB 도 못 잡는다. lib/pii-extract.ts 가 이 표기를 생년월일로 인식하므로
+// 여기서도 반드시 가려야 한다 — 추출/마스킹 불일치가 곧 PII 유출이다(GOTCHAS §0-7).
+// 라벨 근처로 한정해 경력 기간("15.01.01 ~ 20.12.31")이 삼켜지지 않게 한다.
+const RE_DOB_LABELED_SHORT =
+  /((?:생\s*년\s*월\s*일|생\s*년|생\s*일|출\s*생|Date\s*of\s*Birth|D\.?O\.?B\.?|Birth\s*(?:day|date)?)[\s\S]{0,50}?)((?<!\d)\d{2}\s*[.\-/]\s*(?:1[0-2]|0?[1-9])\s*[.\-/]\s*(?:3[01]|[12]\d|0?[1-9]))/gi;
 
 const RE_ROAD_ADDR =
   /[가-힣A-Za-z0-9·]+(?:로|길)\s?\d+(?:[-]\d+)?(?:번지?)?(?:\s*,?\s*\d+(?:동|호|층))*/g;
 const RE_JIBUN = /[가-힣]+동\s?\d+(?:[-]\d+)?(?:번지)?/g;
 
-// 나이 인라인 — "(만 35세)" / "만 35세". lib/pii-extract.ts RE_AGE_INLINE 이식 + 비괄호형.
+// 나이 인라인 — "(만 35세)" / "(35세)" / "만 35세". lib/pii-extract.ts RE_AGE_INLINE·RE_AGE_MAN 대응.
+// 괄호형의 "만" 은 옵션 — 채용포털 export 는 "남, 1998 (28세)" 로 쓴다(닫는 괄호가 경계라 안전).
 // "3만 5세"/"35세대" 같은 부분 매칭은 lookaround 로 차단.
 const RE_AGE_INLINE =
-  /\(\s*만\s*\d{1,2}\s*[세歳]\s*\)|(?<![가-힣A-Za-z0-9])만\s*\d{1,2}\s*[세歳](?![가-힣A-Za-z0-9])/g;
+  /\(\s*(?:만\s*)?\d{1,2}\s*[세歳]\s*\)|(?<![가-힣A-Za-z0-9])만\s*\d{1,2}\s*[세歳](?![가-힣A-Za-z0-9])/g;
 
 // 회사명 — 접미사로 회사 식별
 // "회사명(주)", "(주)회사명", "회사명 주식회사", "회사명 부설연구소" 등
@@ -197,9 +208,12 @@ function applyKnown(text: string, known: KnownPII | undefined): string {
   // [이름] 으로 바꿔 텍스트를 파괴한다(예: 이름 "a" → "N[이름]me"). 2글자 미만은
   // 실제 사람 이름이 아닐 가능성이 높고(한글 이름 2~3자, 영문은 더 김) 부작용만 크므로
   // 치환을 건너뛴다. 실제 PII 는 라벨/정규식/사전 패스가 별도로 처리한다.
-  const knownName = known.name?.trim();
-  if (knownName && knownName.length >= 2)
-    text = text.split(knownName).join("[이름]");
+  // 긴 이름부터 — 짧은 이름이 먼저 치환되면 긴 이름의 일부를 삼킨다.
+  const names = [known.name, ...(known.extraNames ?? [])]
+    .map((n) => n?.trim())
+    .filter((n): n is string => !!n && n.length >= 2 && n !== "(이름 미상)")
+    .sort((a, b) => b.length - a.length);
+  for (const n of names) text = maskName(text, n);
   for (const p of known.phones ?? [])
     if (p) text = text.split(p).join("[전화]");
   for (const e of known.emails ?? [])
@@ -249,6 +263,23 @@ function applyBasic(text: string): string {
  * 한국어는 단어 사이 공백이 일반적이라 lookahead `(?![가-힣A-Za-z0-9])` 가 충분히 견고.
  * 예외: "삼성전자" 같은 합성어는 dict 에 별도로 등재되어야 함 (이미 그렇게 되어 있음).
  */
+/**
+ * 이름 마스킹 — **앞 경계만** 엄격하게 걸고 뒤는 열어 둔다.
+ *
+ * 한국어 이름 뒤에는 조사·호칭이 붙는다("홍길동은", "홍길동님"). maskByDict 처럼 뒤에도
+ * 경계를 걸면 이런 형태를 통째로 놓친다. 반대로 앞 경계가 없으면(구 `split/join`) known 이
+ * 부정확할 때 본문이 파괴된다 — 실측: 이름 "개발" → "웹[이름]팀에서 백엔드 [이름]자로",
+ * 이름 "김민" → "[이름]수 대리와 협업. [이름]정 과장". 마스킹은 과검출이 안전한 방향이라
+ * 앞만 막고 뒤는 허용한다.
+ */
+function maskName(text: string, name: string): string {
+  if (!text.includes(name)) return text;
+  return text.replace(
+    new RegExp(`(?<![가-힣A-Za-z0-9])${escapeRe(name)}`, "g"),
+    "[이름]"
+  );
+}
+
 function maskByDict(text: string, word: string, token: string): string {
   if (!text.includes(word)) return text;
   const re = new RegExp(
@@ -308,6 +339,10 @@ export function maskText(
   //   TLD 조각을 남기던 사고 방지(라벨이 보는 건 이미 [이메일]/[전화] 토큰). 주소/회사 등 다른
   //   정규식은 순서를 바꾸지 않는다(이름이 지번 패턴에 먼저 걸리는 부작용 회피) — 그건 3) 에서.
   out = out.replace(RE_EMAIL, "[이메일]").replace(RE_PHONE, "[전화]");
+  // 0.6) 라벨 뒤 2자리 생년월일도 선(先)마스킹 — 같은 이유. 표 양식("성명 \n 생년월일 \n …")에서는
+  //   앞선 라벨의 값 매칭(`\s*` 가 줄바꿈을 넘는다)이 "생년월일" 라벨 자체를 삼켜버려,
+  //   라벨 패스 뒤에는 근거가 사라진 채 날짜만 남는다.
+  out = out.replace(RE_DOB_LABELED_SHORT, "$1[생년월일]");
   // 1) 라벨 먼저 — known/regex 가 만든 토큰 ([이름] 등) 을 라벨이 재해석하는 사고 방지
   if (level === "standard") out = applyLabels(out);
   // 2) known PII (가장 정확) — 라벨이 못 잡은 본문 내 PII 대응

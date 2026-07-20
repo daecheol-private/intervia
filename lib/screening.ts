@@ -22,7 +22,7 @@ import { chargeFeature } from "./tokens";
 import { extractTextFromBuffer } from "./parsers";
 import { extractPII } from "./pii-extract";
 import { extractEducation } from "./education-extract";
-import { maskText } from "./mask";
+import { maskText, type KnownPII } from "./mask";
 import { sanitizeResumeText } from "./prompt-safety";
 import { readStoredFile, saveFile } from "./storage";
 import { extractPhotoFromBuffer } from "./photo-extract";
@@ -65,12 +65,49 @@ function extOf(name: string): string {
  */
 export async function maskAttachmentText(
   buf: Buffer,
-  originalName: string
+  originalName: string,
+  known?: KnownPII
 ): Promise<string | null> {
   if (!TEXT_EXTRACTABLE.has(extOf(originalName))) return null;
   const raw = await extractTextFromBuffer(buf, originalName);
   if (raw.trim().length === 0) return null;
-  return sanitizeResumeText(maskText(raw)).text;
+  // known 이 없으면 라벨·정규식·사전만으로 마스킹된다 — 이름처럼 라벨 없이 적히는 PII 는
+  // 놓칠 수 있으므로 호출부는 가능하면 후보자의 known PII 를 넘길 것.
+  return sanitizeResumeText(maskText(raw, { level: "standard", known })).text;
+}
+
+/** 학력 문자열 비교용 정규화 — 구분자·"졸업"(기본값)·공백 차이를 흡수. */
+function normEduValue(s: string | null | undefined): string {
+  return (s ?? "").replace(/[·•]/g, " ").replace(/졸업/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * LLM 이 읽은 학력 vs 결정적 추출 결과 대조 — **불일치를 로그로만 남긴다.**
+ *
+ * DB 를 LLM 값으로 덮지 않는 이유: LLM 은 비결정적이라 재평가마다 값이 흔들릴 수 있고,
+ * 결정적 추출이 회귀해도 조용히 가려진다. 여기서는 "정규식이 놓치는 형태"를 모으는 게 목적이다.
+ * 수집된 로그는 `sample/이력서` 골든 데이터셋에 추가할 후보가 된다.
+ */
+function logEducationMismatch(
+  candidateId: number,
+  llm: { education_level?: string | null; education_major?: string | null } | undefined,
+  parsed: { level: string | null; major: string | null }
+): void {
+  if (!llm) return;
+  const diffs: Record<string, { llm: string; parsed: string }> = {};
+  for (const [key, a, b] of [
+    ["level", llm.education_level, parsed.level],
+    ["major", llm.education_major, parsed.major],
+  ] as const) {
+    const x = normEduValue(a);
+    const y = normEduValue(b);
+    // 한쪽이 비어 있으면 "못 뽑은 것"이라 불일치로 세지 않는다 — 틀린 값만 관심 대상.
+    if (!x || !y || x === y) continue;
+    diffs[key] = { llm: x, parsed: y };
+  }
+  if (Object.keys(diffs).length > 0) {
+    log.warn("education_parse_mismatch", { candidateId, ...diffs });
+  }
 }
 
 /**
@@ -233,15 +270,18 @@ export async function ensureParsed(candidateId: number): Promise<void> {
   // (파일명/수동입력 이름은 파싱 이름보다 우선이라 그대로 유지.)
   const finalName = c.name === "(이름 미상)" && pii.name ? pii.name : c.name;
 
-  const masked = maskText(resumeText, {
-    level: "standard",
-    known: {
-      name: finalName,
-      emails: [pii.email, c.email].filter(Boolean) as string[],
-      phones: [pii.phone].filter(Boolean) as string[],
-      companies: pii.companies,
-    },
-  });
+  // 첨부(자소서·경력기술서)도 같은 known 으로 마스킹한다 — 본문만 강하게 가리고 첨부를
+  // 정규식·사전에만 맡기면 같은 사람의 이름·연락처가 첨부 경로로 LLM 에 그대로 나간다.
+  const known = {
+    name: finalName,
+    // 본문에서 뽑은 이름도 함께 — finalName 은 파일명 유래라 본문의 진짜 이름과
+    // 다를 수 있고, 그 경우 이름이 마스킹되지 않은 채 LLM 으로 나간다.
+    extraNames: [pii.name],
+    emails: [pii.email, c.email].filter(Boolean) as string[],
+    phones: [pii.phone, c.phone].filter(Boolean) as string[],
+    companies: pii.companies,
+  };
+  const masked = maskText(resumeText, { level: "standard", known });
   const sanitized = sanitizeResumeText(masked);
   if (sanitized.injectionAttempt) {
     log.warn("resume_injection_attempt", { candidateId, filename: originalName });
@@ -254,6 +294,9 @@ export async function ensureParsed(candidateId: number): Promise<void> {
       email: c.email || pii.email || null,
       phone: c.phone || pii.phone,
       age: c.age ?? pii.age,
+      // 이력서에 "총 경력 N년" 이 적혀 있으면 AI 평가 없이도 채운다.
+      // 평가를 돌리면 LLM(career_info.career_years)이 덮어쓴다 — 그쪽이 표기 없는 경우까지 본다.
+      careerYears: c.careerYears ?? pii.careerYears,
       educationLevel: education.level,
       educationSchool: education.school,
       educationMajor: education.major,
@@ -299,7 +342,7 @@ export async function ensureParsed(candidateId: number): Promise<void> {
     const abuf = await readStoredFile(a.filePath);
     if (!abuf) continue;
     try {
-      const maskedAtt = await maskAttachmentText(abuf, a.originalName);
+      const maskedAtt = await maskAttachmentText(abuf, a.originalName, known);
       if (maskedAtt) {
         await db
           .update(candidateAttachments)
@@ -377,6 +420,11 @@ type ScreeningResult = {
   career_info?: {
     career_years?: number | null;
     career_summary?: string | null;
+  };
+  /** 파싱 검증 전용 — 평가에 쓰지 않고 결정적 추출과 대조만 한다. */
+  parsed_check?: {
+    education_level?: string | null;
+    education_major?: string | null;
   };
 };
 
@@ -526,6 +574,16 @@ const SCREENING_SCHEMA = {
         career_summary: { type: Type.STRING, nullable: true },
       },
       propertyOrdering: ["career_years", "career_summary"],
+    },
+    // 파싱 검증 전용 — 평가에 쓰지 않는다. 결정적 추출(lib/education-extract)과 대조해
+    // 불일치를 로그로 남기고, 그 목록이 다음 개선 대상이 된다.
+    parsed_check: {
+      type: Type.OBJECT,
+      properties: {
+        education_level: { type: Type.STRING, nullable: true },
+        education_major: { type: Type.STRING, nullable: true },
+      },
+      propertyOrdering: ["education_level", "education_major"],
     },
   },
   required: [
@@ -997,6 +1055,14 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
   const ci = result.career_info ?? {};
   if (typeof ci.career_years === "number") updateFields.careerYears = ci.career_years;
   if (ci.career_summary) updateFields.careerSummary = ci.career_summary;
+
+  // 파싱 교차검증 — LLM 이 읽은 학력과 결정적 추출(lib/education-extract)을 대조한다.
+  // DB 값은 바꾸지 않는다(LLM 은 비결정적). 불일치 로그가 쌓이면 그게 다음 개선 대상이고,
+  // 접미사 없는 전공("인공지능")처럼 정규식으로 못 잡는 클래스를 여기서 발견한다.
+  logEducationMismatch(candidateId, result.parsed_check, {
+    level: candidate.educationLevel,
+    major: candidate.educationMajor,
+  });
 
   await db
     .update(candidates)

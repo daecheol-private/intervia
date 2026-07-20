@@ -13,7 +13,7 @@
  * 사진 = PII → 저장 후엔 본문(resume_file_path)과 동일한 보유기간 정책으로 폐기된다
  * (purgeOnDecision / purgeExpiredOriginals / deleteCandidateFiles).
  */
-import { unzipSync } from "fflate";
+import { unzipSync, strFromU8 } from "fflate";
 
 export type ExtractedPhoto = { data: Buffer; ext: "jpg" | "png" };
 
@@ -25,7 +25,13 @@ const MAX_AREA = 1_500_000; // px² — 전면 페이지 이미지(스캔본) �
 const MIN_BYTES = 2 * 1024; // 2KB 미만은 장식/스페이서
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB 초과 단일 이미지는 사진으로 취급 안 함
 
-type Cand = { data: Buffer; ext: "jpg" | "png"; w: number; h: number };
+type Cand = {
+  data: Buffer;
+  ext: "jpg" | "png";
+  w: number;
+  h: number;
+  order: number; // 문서 내 등장 순번 (작을수록 앞)
+};
 
 /** w/h 비율·크기로 "증명사진스러움" 판정. 가로형 로고·초대형 페이지 스캔을 거른다. */
 function looksLikePortraitPhoto(w: number, h: number): boolean {
@@ -90,10 +96,37 @@ function sizeOf(buf: Buffer, ext: "jpg" | "png"): { w: number; h: number } | nul
 function pickBest(cands: Cand[]): ExtractedPhoto | null {
   const portrait = cands.filter((c) => looksLikePortraitPhoto(c.w, c.h));
   if (portrait.length === 0) return null;
-  // 인물 사진은 보통 가장 큰(면적) 인물형 이미지 — 작은 인장·서명 이미지보다 우선.
-  portrait.sort((a, b) => b.w * b.h - a.w * a.h);
+  // 증명사진은 이력서 첫머리에 온다 — 문서에 가장 먼저 등장하는 인물형 이미지를 택한다.
+  // (면적 최대 선택은 포트폴리오 스크린샷이 증명사진보다 큰 이력서에서 오답이 났다.)
+  portrait.sort((a, b) => a.order - b.order);
   const best = portrait[0];
   return { data: best.data, ext: best.ext };
+}
+
+/**
+ * DOCX 본문 기준 이미지 등장 순서를 `media 파일명 → 순번` 으로 반환.
+ *
+ * ZIP 엔트리 순서는 본문 순서와 무관하다(실측: 첫 엔트리가 image3, 본문 첫 이미지는 image11).
+ * document.xml 의 r:embed 등장 순 + rels 의 rId→Target 매핑으로 실제 순서를 복원한다.
+ * 파싱 실패 시 빈 Map — 호출부가 ZIP 순서로 폴백한다.
+ */
+function docxImageOrder(files: Record<string, Uint8Array>): Map<string, number> {
+  const order = new Map<string, number>();
+  const relBytes = files["word/_rels/document.xml.rels"];
+  const docBytes = files["word/document.xml"];
+  if (!relBytes || !docBytes) return order;
+  const target = new Map<string, string>();
+  for (const m of strFromU8(relBytes).matchAll(/Id="([^"]+)"[^>]*Target="([^"]+)"/g)) {
+    // Target 은 "media/image11.png" 형태 — 경로 표기 차이를 피해 파일명만 키로 쓴다.
+    const base = m[2].split("/").pop();
+    if (base) target.set(m[1], base);
+  }
+  let n = 0;
+  for (const m of strFromU8(docBytes).matchAll(/r:(?:embed|link)="([^"]+)"/g)) {
+    const base = target.get(m[1]);
+    if (base && !order.has(base)) order.set(base, n++);
+  }
+  return order;
 }
 
 /** DOCX(zip)의 word/media/ 에서 인물 사진 후보 추출. */
@@ -101,20 +134,30 @@ function extractFromDocx(buffer: Buffer): ExtractedPhoto | null {
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(buffer, {
-      // 미디어 폴더만 압축 해제 — 전체 docx 해제 비용 회피.
-      filter: (f) => /^word\/media\/[^/]+\.(jpe?g|png)$/i.test(f.name),
+      // 미디어 + 등장 순서 판별용 본문/관계 파일만 — 전체 docx 해제 비용 회피.
+      filter: (f) =>
+        /^word\/media\/[^/]+\.(jpe?g|png)$/i.test(f.name) ||
+        f.name === "word/document.xml" ||
+        f.name === "word/_rels/document.xml.rels",
     });
   } catch {
     return null;
   }
+  const docOrder = docxImageOrder(files);
   const cands: Cand[] = [];
+  let zipIdx = 0;
   for (const [name, bytes] of Object.entries(files)) {
+    if (!/^word\/media\//.test(name)) continue;
+    const base = name.split("/").pop() ?? name;
+    zipIdx++;
     const ext: "jpg" | "png" = /\.png$/i.test(name) ? "png" : "jpg";
     if (bytes.length < MIN_BYTES || bytes.length > MAX_BYTES) continue;
     const data = Buffer.from(bytes);
     const dim = sizeOf(data, ext);
     if (!dim) continue;
-    cands.push({ data, ext, w: dim.w, h: dim.h });
+    // 본문에서 순서를 못 찾은 이미지(헤더·도형 등)는 본문 이미지 뒤로 — ZIP 순서로 폴백.
+    const order = docOrder.get(base) ?? docOrder.size + zipIdx;
+    cands.push({ data, ext, w: dim.w, h: dim.h, order });
   }
   return pickBest(cands);
 }
@@ -160,7 +203,8 @@ function extractFromPdf(buffer: Buffer): ExtractedPhoto | null {
     const data = Buffer.from(buffer.subarray(start, dataEnd));
     const dim = jpegSize(data);
     if (!dim) continue;
-    cands.push({ data, ext: "jpg", w: dim.w, h: dim.h });
+    // 앞에서부터 순차 스캔이라 push 순서 = 파일 내 바이트 오프셋 순서 ≈ 등장 순서.
+    cands.push({ data, ext: "jpg", w: dim.w, h: dim.h, order: cands.length });
   }
   return pickBest(cands);
 }

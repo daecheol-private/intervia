@@ -75,6 +75,10 @@ export async function GET(
       name: candidates.name,
       email: candidates.email,
       phone: candidates.phone,
+      age: candidates.age,
+      educationLevel: candidates.educationLevel,
+      educationSchool: candidates.educationSchool,
+      educationMajor: candidates.educationMajor,
       careerYears: candidates.careerYears,
       screeningScore: candidates.screeningScore,
       screeningReport: candidates.screeningReport,
@@ -112,6 +116,8 @@ export async function GET(
     "이름",
     "이메일",
     "전화",
+    "나이",
+    "학력",
     "경력(년)",
     "AI서류점수",
     "AI추천",
@@ -138,6 +144,11 @@ export async function GET(
         c.name,
         c.email,
         c.phone,
+        c.age,
+        // 화면 표기와 동일한 순서 — 학교 · 전공 · 수준 (없는 항목은 빼고 잇는다)
+        [c.educationSchool, c.educationMajor, c.educationLevel]
+          .filter(Boolean)
+          .join(" · "),
         c.careerYears,
         c.screeningScore,
         c.screeningReport?.recommendation,

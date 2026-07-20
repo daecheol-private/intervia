@@ -64,10 +64,42 @@ SDK 단일: **`@google/genai`** (vertexai: true). `clientFor(task)` 는 항상 �
 
 1. `npx tsc --noEmit`
 2. `npx eslint . --quiet` (vercel-build 1단계 — 실패하면 push 해도 배포가 안 나감)
-3. `npm run test:critical` — 면접관/지원자 필수 기능 자동 검증 (~45초, 60케이스). 시나리오·예상결과: [docs/CRITICAL_TESTS.md](docs/CRITICAL_TESTS.md)
+3. `npm run test:critical` — 면접관/지원자 필수 기능 자동 검증 (~45초, 73케이스). 시나리오·예상결과: [docs/CRITICAL_TESTS.md](docs/CRITICAL_TESTS.md)
 4. 전부 통과 → 결과 표 보고 → `git push origin HEAD:main` → 배포 반영 확인(랜딩 문구 또는 `?dpl=` 해시)
 
 테스트는 완전 격리다: DB=`file:.testdb/critical.db`(매 실행 재생성), 서버=포트 3103 + 전용 `.next-test/`(개발 서버 3003 과 공존), 메일/알림톡/LLM/Blob env 전부 무력화 — 운영·로컬 dev 데이터·외부 서비스에 절대 닿지 않는다. API 계약을 바꾸면 `tests/critical/` + CRITICAL_TESTS.md 를 같이 갱신할 것. 마이그레이션 포함 push 는 이 프로토콜과 별개로 상단 "운영 데이터 보호 절대 규칙"이 우선.
+
+## 이력서 파싱 테스트 ("이력서 파싱 테스트해줘")
+
+사용자가 **"이력서 파싱 테스트해줘"** 라고 하면:
+
+```powershell
+cd D:\intervia\interviewer
+npm run check:parsing          # 틀림/부족/누락만 출력
+npm run check:parsing -- --all # 일치 항목까지
+```
+
+실제 이력서 샘플 + 사람이 확인한 정답표(`D:\intervia\sample\이력서\candidate.xlsx`)로
+`lib/parsers` · `lib/pii-extract` · `lib/education-extract` 를 검증한다. 결과는 네 가지:
+
+| | 뜻 | 판정 |
+|---|---|---|
+| ✅ 일치 | 정답과 같음 | — |
+| ❌ **틀림** | 정답에 없는 값이 나옴 | **0 이어야 함** (exit code 1) |
+| ➖ 부족 | 추출값이 정답의 일부 (`영산대학교 Business 학사` → `영산대학교 학사`) | 허용 |
+| ⚠️ 누락 | 정답은 있는데 추출이 빔 | 허용 |
+
+**"틀린 값보다 빈 값이 낫다"** 가 원칙 — 부족·누락을 줄이려다 틀림을 늘리면 안 된다.
+**이름·전화번호·이메일이 필수 항목**이고 나이·학력·경력보다 우선한다.
+정답표·샘플은 사용자가 관리한다(폴더는 repo 밖, PII 라 커밋 금지). 상세: `sample\이력서\README.md`.
+
+⚠️ 샘플 파일명은 `{ID}__{원본파일명}` 이다. **앱은 이름을 파일명에서 먼저 뽑고**(본문 추출은
+"(이름 미상)" 일 때만 승격) 그래서 원본 파일명이 없으면 이름 검증이 실제와 어긋난다 —
+실측 84건에서 본문만 74% vs 앱 순서 92%.
+
+⚠️ **추출 로직(`lib/education-extract` 등)을 고쳤으면 이 테스트를 반드시 돌릴 것.**
+2026-07-20, 합성 픽스처 6개가 전부 통과하는데도 실제 이력서 107건 중 51건이 깨진 회귀가 있었다.
+픽스처는 만든 사람이 상상한 형태만 담는다 — 표 셀 붙음·약칭·빈 템플릿 행은 실물로만 잡힌다.
 
 ## 상용화 작업 진행 규칙
 
