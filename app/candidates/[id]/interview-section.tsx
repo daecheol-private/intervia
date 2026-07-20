@@ -6,11 +6,14 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardList,
+  ClipboardPaste,
   Loader2,
   Mail,
+  MessagesSquare,
   RefreshCw,
   X,
 } from "lucide-react";
+import { Button } from "@/app/components/ui";
 import { formatKstDateTime } from "@/lib/utils";
 import { BulletBlock } from "./screening-report";
 import { HL, recColor, scoreColor, scoreBarColor, showRec } from "./shared";
@@ -20,7 +23,11 @@ import {
   BehaviorStyleCard,
   CompetencyBadges,
 } from "./personality-visuals";
-import type { InterviewEvaluation, Session } from "./types";
+import type {
+  InterviewEvaluation,
+  Session,
+  TranscriptMessage,
+} from "./types";
 
 export function InterviewLinkBox({
   session,
@@ -534,13 +541,12 @@ export function InterviewResult({
         </div>
       )}
 
-      <div className="flex gap-3 pt-3 border-t border-border-default items-center flex-wrap">
-        <button
-          onClick={onShowTranscript}
-          className="text-xs text-primary hover:underline"
-        >
-          면접 대화록 보기 →
-        </button>
+      {/* 대화록은 이 점수의 "근거 원문" — 운영자가 가장 자주 여는 액션이라 실채움 버튼으로 둔다. */}
+      <div className="flex gap-3 pt-4 border-t border-border-default items-center flex-wrap">
+        <Button onClick={onShowTranscript} variant="primary" size="md">
+          <MessagesSquare className="w-4 h-4" />
+          면접 대화록 보기
+        </Button>
         {!disabled && (
           <button
             onClick={onRegenerate}
@@ -894,13 +900,27 @@ function CultureFitBlock({
   );
 }
 
+/** 지원자 턴의 붙여넣기 정도. 신호 수집 이전 세션은 inputSignals 자체가 없어 null(색 구분 없음). */
+function pasteInfoOf(m: TranscriptMessage) {
+  if (m.role !== "user") return null;
+  const s = m.inputSignals;
+  if (!s) return null;
+  const pasted = s.pastedChars ?? 0;
+  if (pasted <= 0) return null;
+  const total = pasted + (s.typedChars ?? 0);
+  // 집계 리포트(computeTranscriptStats)와 같은 분모 — 두 화면 수치가 어긋나지 않게.
+  return { pasted, ratio: total > 0 ? Math.round((pasted / total) * 100) : 100 };
+}
+
 export function TranscriptModal({
   messages,
   onClose,
 }: {
-  messages: { role: string; content: string }[];
+  messages: TranscriptMessage[];
   onClose: () => void;
 }) {
+  const shown = messages.filter((m, i) => !(i === 0 && m.role === "user"));
+  const hasPasteSignal = shown.some((m) => pasteInfoOf(m));
   return (
     <div
       className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
@@ -910,36 +930,64 @@ export function TranscriptModal({
         className="bg-card rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-5 border-b border-border-default flex justify-between items-center">
+        <div className="p-5 border-b border-border-default flex justify-between items-center gap-3">
           <h3 className="font-bold text-ink">면접 대화록</h3>
+          {/* 색 범례 — 붙여넣기 신호가 실제로 있는 세션에서만. 없으면 설명할 색도 없다.
+              말풍선(네이비) 위 글씨색이 기준이라 범례도 같은 조합으로 보여준다. */}
+          {hasPasteSignal && (
+            <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+              <ClipboardPaste className="w-3.5 h-3.5" />
+              <span className="rounded bg-primary text-accent px-1.5 py-0.5 font-semibold">
+                가나다
+              </span>
+              붙여넣기가 섞인 답변
+            </span>
+          )}
           <button
             onClick={onClose}
             aria-label="닫기"
-            className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-surface-alt text-ink-muted hover:text-ink transition-colors"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-surface-alt text-ink-muted hover:text-ink transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="overflow-y-auto p-5 space-y-3 bg-surface-alt">
-          {messages
-            .filter((m, i) => !(i === 0 && m.role === "user"))
-            .map((m, i) => (
+          {shown.map((m, i) => {
+            const paste = pasteInfoOf(m);
+            return (
               <div
                 key={i}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}
               >
                 <div
                   className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
-                    m.role === "user"
-                      ? "bg-primary text-surface"
-                      : "bg-card text-ink border border-border-default"
+                    m.role !== "user"
+                      ? "bg-card text-ink border border-border-default"
+                      : // 말풍선은 한 덩어리로 두고 글씨색만 바꾼다 — 배경까지 나누면
+                        // 그 답변만 경고 블록처럼 튀어 채팅 흐름이 끊긴다.
+                        `bg-primary ${paste ? "text-accent" : "text-surface"}`
                   }`}
                 >
                   {m.content.replace("[INTERVIEW_END]", "")}
                 </div>
+                {paste && (
+                  // 색만으로 구분하면 색각 이상·흑백 출력에서 사라진다 — 수치를 말풍선
+                  // 밖 메타로 남긴다(안에 넣으면 말풍선이 두 칸으로 쪼개져 보인다).
+                  <div className="mt-1 text-[11px] text-ink-muted inline-flex items-center gap-1">
+                    <ClipboardPaste className="w-3 h-3" />
+                    붙여넣기 {paste.pasted}자 · 입력의 {paste.ratio}%
+                  </div>
+                )}
               </div>
-            ))}
+            );
+          })}
         </div>
+        {hasPasteSignal && (
+          <div className="px-5 py-3 border-t border-border-default text-[11px] text-ink-muted leading-relaxed">
+            붙여넣기는 준비한 메모·이력서 인용 등 정당한 사유도 많습니다. 그 자체를
+            부정행위로 보지 말고, 답변 내용과 함께 판단하세요.
+          </div>
+        )}
       </div>
     </div>
   );
