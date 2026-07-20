@@ -8,9 +8,11 @@ import {
   ClipboardList,
   Loader2,
   Mail,
+  MessagesSquare,
   RefreshCw,
   X,
 } from "lucide-react";
+import { Button } from "@/app/components/ui";
 import { formatKstDateTime } from "@/lib/utils";
 import { BulletBlock } from "./screening-report";
 import { HL, recColor, scoreColor, scoreBarColor, showRec } from "./shared";
@@ -534,13 +536,12 @@ export function InterviewResult({
         </div>
       )}
 
-      <div className="flex gap-3 pt-3 border-t border-border-default items-center flex-wrap">
-        <button
-          onClick={onShowTranscript}
-          className="text-xs text-primary hover:underline"
-        >
-          면접 대화록 보기 →
-        </button>
+      {/* 대화록은 이 점수의 "근거 원문" — 운영자가 가장 자주 여는 액션이라 실채움 버튼으로 둔다. */}
+      <div className="flex gap-3 pt-4 border-t border-border-default items-center flex-wrap">
+        <Button onClick={onShowTranscript} variant="primary" size="md">
+          <MessagesSquare className="w-4 h-4" />
+          면접 대화록 보기
+        </Button>
         {!disabled && (
           <button
             onClick={onRegenerate}
