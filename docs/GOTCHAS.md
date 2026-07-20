@@ -2,6 +2,29 @@
 
 작업 전 한 번 훑으면 시간 낭비 큰 폭으로 줄어듭니다.
 
+## 0-C. 워크트리 제거가 main 의 node_modules 를 지운다 (2026-06-12, 2026-07-21 **두 번** 발생)
+
+`.claude/worktrees/*/node_modules` 는 main 을 가리키는 **junction(심볼릭 링크)** 이다.
+`git worktree remove` 가 실패하거나(`failed to delete … Invalid argument`) `rm -rf` 로 지우면
+**링크를 따라가 main 의 실제 패키지를 삭제**한다. 2026-07-21 에는 `@libsql/client` 와
+`@google/genai` 가 통째로 사라져 빌드가 불가능해졌다(같은 사고 두 번째).
+
+**안전한 절차** — 순서를 지킬 것:
+
+```powershell
+# 1) junction 먼저 끊는다 (rmdir 은 링크만 제거, 대상은 안 건드림)
+node -e "const{rmdirSync,lstatSync}=require('fs');const p='.claude/worktrees/<이름>/node_modules';if(lstatSync(p).isSymbolicLink())rmdirSync(p)"
+# 2) main 무결성 확인 — 여기서 깨졌으면 이미 사고다
+node -e "for(const p of ['@libsql/client','@google/genai','next'])require.resolve(p)"
+# 3) 그 다음에야 디렉토리 삭제
+rm -rf .claude/worktrees/<이름>
+git worktree prune
+# 4) 삭제 후 무결성 재확인 + 빈 패키지 스캔
+```
+
+복구는 `npm install` 이지만 **dev 서버(3003)를 먼저 내려야 한다** — 실행 중이면 Windows
+파일잠금으로 exit 0 인데 패키지가 누락된다(§ dev 서버 중 npm install 금지).
+
 ## 0-B. node 스크립트의 env 기본값은 운영 — DB 스크립트는 반드시 `LOCAL_DB=1`
 
 **증상**: `npm run db:seed-test` 등을 로컬 작업이라 생각하고 실행했는데 운영 Turso 가 wipe 됨 (2026-06-12 실사고).
