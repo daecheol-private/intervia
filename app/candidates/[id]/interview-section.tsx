@@ -932,11 +932,14 @@ export function TranscriptModal({
       >
         <div className="p-5 border-b border-border-default flex justify-between items-center gap-3">
           <h3 className="font-bold text-ink">면접 대화록</h3>
-          {/* 색 범례 — 붙여넣기 신호가 실제로 있는 세션에서만. 없으면 설명할 색도 없다. */}
+          {/* 색 범례 — 붙여넣기 신호가 실제로 있는 세션에서만. 없으면 설명할 색도 없다.
+              말풍선(네이비) 위 글씨색이 기준이라 범례도 같은 조합으로 보여준다. */}
           {hasPasteSignal && (
             <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
-              <ClipboardPaste className="w-3.5 h-3.5 text-warning" />
-              <span className="w-3 h-3 rounded bg-warning shrink-0" aria-hidden />
+              <ClipboardPaste className="w-3.5 h-3.5" />
+              <span className="rounded bg-primary text-accent px-1.5 py-0.5 font-semibold">
+                가나다
+              </span>
               붙여넣기가 섞인 답변
             </span>
           )}
@@ -960,15 +963,14 @@ export function TranscriptModal({
                   className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
                     m.role !== "user"
                       ? "bg-card text-ink border border-border-default"
-                      : paste
-                        ? "bg-warning text-surface"
-                        : "bg-primary text-surface"
+                      : // 배경은 네이비로 통일 — 채팅 흐름을 깨지 않게 글씨색만 바꾼다.
+                        `bg-primary ${paste ? "text-accent" : "text-surface"}`
                   }`}
                 >
                   {m.content.replace("[INTERVIEW_END]", "")}
                   {paste && (
                     // 색만으로 구분하면 색각 이상·흑백 출력에서 사라진다 — 수치를 함께 남긴다.
-                    <div className="mt-1.5 pt-1.5 border-t border-surface/30 text-[11px] text-surface inline-flex items-center gap-1">
+                    <div className="mt-1.5 pt-1.5 border-t border-accent/30 text-[11px] text-accent inline-flex items-center gap-1">
                       <ClipboardPaste className="w-3 h-3" />
                       붙여넣기 {paste.pasted}자 · 입력의 {paste.ratio}%
                     </div>
