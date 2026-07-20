@@ -957,25 +957,27 @@ export function TranscriptModal({
             return (
               <div
                 key={i}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}
               >
                 <div
                   className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
                     m.role !== "user"
                       ? "bg-card text-ink border border-border-default"
-                      : // 배경은 네이비로 통일 — 채팅 흐름을 깨지 않게 글씨색만 바꾼다.
+                      : // 말풍선은 한 덩어리로 두고 글씨색만 바꾼다 — 배경까지 나누면
+                        // 그 답변만 경고 블록처럼 튀어 채팅 흐름이 끊긴다.
                         `bg-primary ${paste ? "text-accent" : "text-surface"}`
                   }`}
                 >
                   {m.content.replace("[INTERVIEW_END]", "")}
-                  {paste && (
-                    // 색만으로 구분하면 색각 이상·흑백 출력에서 사라진다 — 수치를 함께 남긴다.
-                    <div className="mt-1.5 pt-1.5 border-t border-accent/30 text-[11px] text-accent inline-flex items-center gap-1">
-                      <ClipboardPaste className="w-3 h-3" />
-                      붙여넣기 {paste.pasted}자 · 입력의 {paste.ratio}%
-                    </div>
-                  )}
                 </div>
+                {paste && (
+                  // 색만으로 구분하면 색각 이상·흑백 출력에서 사라진다 — 수치를 말풍선
+                  // 밖 메타로 남긴다(안에 넣으면 말풍선이 두 칸으로 쪼개져 보인다).
+                  <div className="mt-1 text-[11px] text-ink-muted inline-flex items-center gap-1">
+                    <ClipboardPaste className="w-3 h-3" />
+                    붙여넣기 {paste.pasted}자 · 입력의 {paste.ratio}%
+                  </div>
+                )}
               </div>
             );
           })}
