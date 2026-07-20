@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardList,
+  ClipboardPaste,
   Loader2,
   Mail,
   MessagesSquare,
@@ -22,7 +23,11 @@ import {
   BehaviorStyleCard,
   CompetencyBadges,
 } from "./personality-visuals";
-import type { InterviewEvaluation, Session } from "./types";
+import type {
+  InterviewEvaluation,
+  Session,
+  TranscriptMessage,
+} from "./types";
 
 export function InterviewLinkBox({
   session,
@@ -895,13 +900,27 @@ function CultureFitBlock({
   );
 }
 
+/** 지원자 턴의 붙여넣기 정도. 신호 수집 이전 세션은 inputSignals 자체가 없어 null(색 구분 없음). */
+function pasteInfoOf(m: TranscriptMessage) {
+  if (m.role !== "user") return null;
+  const s = m.inputSignals;
+  if (!s) return null;
+  const pasted = s.pastedChars ?? 0;
+  if (pasted <= 0) return null;
+  const total = pasted + (s.typedChars ?? 0);
+  // 집계 리포트(computeTranscriptStats)와 같은 분모 — 두 화면 수치가 어긋나지 않게.
+  return { pasted, ratio: total > 0 ? Math.round((pasted / total) * 100) : 100 };
+}
+
 export function TranscriptModal({
   messages,
   onClose,
 }: {
-  messages: { role: string; content: string }[];
+  messages: TranscriptMessage[];
   onClose: () => void;
 }) {
+  const shown = messages.filter((m, i) => !(i === 0 && m.role === "user"));
+  const hasPasteSignal = shown.some((m) => pasteInfoOf(m));
   return (
     <div
       className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
@@ -911,36 +930,60 @@ export function TranscriptModal({
         className="bg-card rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-5 border-b border-border-default flex justify-between items-center">
+        <div className="p-5 border-b border-border-default flex justify-between items-center gap-3">
           <h3 className="font-bold text-ink">면접 대화록</h3>
+          {/* 색 범례 — 붙여넣기 신호가 실제로 있는 세션에서만. 없으면 설명할 색도 없다. */}
+          {hasPasteSignal && (
+            <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+              <ClipboardPaste className="w-3.5 h-3.5 text-warning" />
+              <span className="w-3 h-3 rounded bg-warning shrink-0" aria-hidden />
+              붙여넣기가 섞인 답변
+            </span>
+          )}
           <button
             onClick={onClose}
             aria-label="닫기"
-            className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-surface-alt text-ink-muted hover:text-ink transition-colors"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-surface-alt text-ink-muted hover:text-ink transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="overflow-y-auto p-5 space-y-3 bg-surface-alt">
-          {messages
-            .filter((m, i) => !(i === 0 && m.role === "user"))
-            .map((m, i) => (
+          {shown.map((m, i) => {
+            const paste = pasteInfoOf(m);
+            return (
               <div
                 key={i}
                 className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
                   className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
-                    m.role === "user"
-                      ? "bg-primary text-surface"
-                      : "bg-card text-ink border border-border-default"
+                    m.role !== "user"
+                      ? "bg-card text-ink border border-border-default"
+                      : paste
+                        ? "bg-warning text-surface"
+                        : "bg-primary text-surface"
                   }`}
                 >
                   {m.content.replace("[INTERVIEW_END]", "")}
+                  {paste && (
+                    // 색만으로 구분하면 색각 이상·흑백 출력에서 사라진다 — 수치를 함께 남긴다.
+                    <div className="mt-1.5 pt-1.5 border-t border-surface/30 text-[11px] text-surface inline-flex items-center gap-1">
+                      <ClipboardPaste className="w-3 h-3" />
+                      붙여넣기 {paste.pasted}자 · 입력의 {paste.ratio}%
+                    </div>
+                  )}
                 </div>
               </div>
-            ))}
+            );
+          })}
         </div>
+        {hasPasteSignal && (
+          <div className="px-5 py-3 border-t border-border-default text-[11px] text-ink-muted leading-relaxed">
+            붙여넣기는 준비한 메모·이력서 인용 등 정당한 사유도 많습니다. 그 자체를
+            부정행위로 보지 말고, 답변 내용과 함께 판단하세요.
+          </div>
+        )}
       </div>
     </div>
   );

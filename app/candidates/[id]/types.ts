@@ -117,13 +117,25 @@ export type PersonalityProfileView = {
   };
 };
 
+/** 대화록 1턴. inputSignals 는 지원자 턴에만 실리고, 신호 수집 이전 세션엔 아예 없다
+ *  (그래서 전부 옵셔널) — schema.ts InterviewMessage 의 화면용 부분집합. */
+export type TranscriptMessage = {
+  role: string;
+  content: string;
+  inputSignals?: {
+    pasteCount?: number;
+    pastedChars?: number;
+    typedChars?: number;
+  } | null;
+};
+
 export type Session = {
   id: number;
   accessToken: string;
   // 지원자가 면접 시작 화면에서 선택한 진행 언어 — 후보자 대면 메일(결정 통보)의 기본 언어에 반영.
   language?: "ko" | "en";
   status: "pending" | "in_progress" | "completed" | "expired";
-  messages: { role: string; content: string }[];
+  messages: TranscriptMessage[];
   evaluation: InterviewEvaluation | null;
   personalityProfile?: PersonalityProfileView | null;
   // 객관식 사전 문항 결과 — mcqScore = 맞힌 수, 총 문항 = mcqResponses.length. 참고용(미반영).
