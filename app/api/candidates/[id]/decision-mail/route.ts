@@ -109,6 +109,7 @@ export async function POST(
       ...mail,
       orgId: candidate.orgId,
       audience: "candidate",
+      kind: "decision_notify",
       attachments: brandingAttachments(branding),
     });
     // 합격 통보만 알림톡 병행 (불합격은 정중한 긴 문구라 메일 유지). 베스트에포트.
@@ -125,7 +126,11 @@ export async function POST(
     }
     await db
       .update(candidates)
-      .set({ decisionEmailCount: sql`${candidates.decisionEmailCount} + 1` })
+      // 큐 해제 — 수동 재발송으로 통보됐으면 저녁 드레인이 중복 발송하지 않도록.
+      .set({
+        decisionEmailCount: sql`${candidates.decisionEmailCount} + 1`,
+        decisionNotifyQueued: false,
+      })
       .where(eq(candidates.id, cid));
     logAudit(req, {
       actor: me!,

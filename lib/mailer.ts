@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { decrypt } from "./crypto";
 import { SITE_INFO, APPEAL_CONTACT } from "./site-info";
 import { notifyOps } from "./error-reporter";
+import { recordMailSend } from "./mail-usage";
 import { readStoredFile, contentTypeFromName } from "./storage";
 import { isValidBrandColor, textColorOn } from "./brand-color";
 import { EMAIL_LOGO_PNG_BASE64 } from "./email-logo-data";
@@ -127,6 +128,8 @@ export type SendMailParams = {
   text?: string;
   orgId?: number | null;
   audience?: MailAudience;
+  /** 발송 종류 태그 — 쿼터 집계(mail_send_events) 분해용. 선택. 예: "decision_reject". */
+  kind?: string;
   attachments?: Array<{
     filename: string;
     content: string | Buffer;
@@ -224,6 +227,7 @@ export async function sendMail({
   text,
   orgId,
   audience = "candidate",
+  kind,
   attachments,
 }: SendMailParams) {
   const { transporter, from, source } = await resolveSmtp(orgId);
@@ -261,6 +265,8 @@ export async function sendMail({
   for (let attempt = 0; ; attempt++) {
     try {
       await transporter.sendMail(message);
+      // 쿼터 집계 — 발송 성공 1건 기록. best-effort: 집계 실패가 발송을 되돌리지 않도록 삼킨다.
+      await recordMailSend(audience, kind).catch(() => {});
       return;
     } catch (e) {
       if (attempt >= MAX_SEND_RETRIES || !isTransientMailError(e)) {

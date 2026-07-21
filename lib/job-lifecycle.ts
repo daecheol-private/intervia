@@ -30,6 +30,7 @@ import { createNotification } from "./notifications";
 import { getBalance, getPricing, writeLedgerIdempotent } from "./tokens";
 import { buildDecisionEmail, purgeOnDecision, resolveCandidateEmailLang } from "./candidate-stage";
 import { sendMail, getOrgEmailBranding, brandingAttachments } from "./mailer";
+import { sentToday } from "./mail-usage";
 import { redactCandidateAuditPii } from "./audit";
 import { after } from "next/server";
 
@@ -383,10 +384,27 @@ export async function closeJob(args: {
     mailsQueued = mailTargets.length;
     if (mailTargets.length > 0) {
       after(async () => {
+        const branding = await getOrgEmailBranding(job.orgId);
+        // Resend 무료 티어 일 100통 캡 대응 — 대량 종결의 불합격 통보를 한 번에 쏘면 캡을
+        // 넘겨 나머지가 발송 실패한다. 낮 시간엔 소프트캡까지만 즉시 발송해 오후 우선메일
+        // (초대·일정 등)용 여유를 남기고, 초과분은 decisionNotifyQueued=true 로 표시해
+        // 저녁 드레인(/api/cron/decision-drain)이 일일 예산 범위에서 며칠에 걸쳐 발송한다.
+        const softCap = Number(process.env.REJECTION_DAYTIME_SOFT_CAP ?? 40);
+        let immediate = Math.max(0, softCap - (await sentToday()));
         let sent = 0;
         let failed = 0;
-        const branding = await getOrgEmailBranding(job.orgId);
+        let queued = 0;
         for (const t of mailTargets) {
+          if (immediate <= 0) {
+            // 낮 예산 소진 — 저녁 드레인 대기로 넘김.
+            await db
+              .update(candidates)
+              .set({ decisionNotifyQueued: true })
+              .where(eq(candidates.id, t.id))
+              .catch(() => {});
+            queued++;
+            continue;
+          }
           try {
             const { subject, html, text } = buildDecisionEmail({
               candidateName: t.name,
@@ -403,27 +421,36 @@ export async function closeJob(args: {
               text,
               orgId: job.orgId,
               audience: "candidate",
+              kind: "decision_reject",
               attachments: brandingAttachments(branding),
             });
-            // 결정 통보 메일 카운트 증가
+            // 결정 통보 카운트 증가 + 드레인 대기 해제(멱등).
             await db
               .update(candidates)
               .set({
                 decisionEmailCount: sql`${candidates.decisionEmailCount} + 1`,
+                decisionNotifyQueued: false,
               })
               .where(eq(candidates.id, t.id));
             sent++;
+            immediate--;
           } catch (e) {
             console.error(
               `closeJob: notification mail failed (cid=${t.id})`,
               e
             );
+            // 발송 실패분은 드레인이 재시도하도록 큐로 표시(유실 방지).
+            await db
+              .update(candidates)
+              .set({ decisionNotifyQueued: true })
+              .where(eq(candidates.id, t.id))
+              .catch(() => {});
             failed++;
           }
         }
-        if (failed > 0) {
+        if (failed > 0 || queued > 0) {
           console.error(
-            `closeJob: 통보 메일 ${failed}건 실패 / 성공 ${sent}건 (job=${args.jobId}) — 후보 상세에서 재발송 가능`
+            `closeJob: 통보 즉시 ${sent}건 / 실패 ${failed}건 / 저녁 드레인 대기 ${queued}건 (job=${args.jobId}) — 대기분은 매일 18:00 KST 예산 내 발송`
           );
         }
       });

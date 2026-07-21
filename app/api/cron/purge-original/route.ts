@@ -4,6 +4,7 @@ import { cleanupOldRateLog } from "@/lib/rate-limit";
 import { runLifecycleSweep } from "@/lib/job-lifecycle";
 import { expireInterviewSessions } from "@/lib/expire-sessions";
 import { cleanupExpiredSessions, getCurrentUser } from "@/lib/auth";
+import { pruneMailEvents } from "@/lib/mail-usage";
 import { secretEquals } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
@@ -34,6 +35,8 @@ export async function GET(req: Request) {
   // 그 등록이 누락/실패하면 만료 세션 자동불합격·만료 PII 폐기가 영원히 안 돈다. 멱등(이미
   // expired/outcome 설정분은 스킵)이라 일일 cron 에도 끼워 단일 실패점을 제거한다.
   const expiry = await expireInterviewSessions();
+  // 메일 발송 집계 로그(mail_send_events) 무한 누적 방지 — 쿼터 창(월)보다 넉넉한 45일 보관.
+  const prunedMailEvents = await pruneMailEvents();
   return Response.json({
     ok: true,
     ...result,
@@ -42,6 +45,7 @@ export async function GET(req: Request) {
     purgedSessions,
     lifecycle,
     expiry,
+    prunedMailEvents,
   });
 }
 

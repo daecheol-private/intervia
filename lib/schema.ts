@@ -459,6 +459,12 @@ export const candidates = sqliteTable("candidates", {
   // 이메일 발송 한도 — 후보자당 면접링크 10회 / 결정 통보 10회
   interviewEmailCount: integer("interview_email_count").notNull().default(0),
   decisionEmailCount: integer("decision_email_count").notNull().default(0),
+  // 대량 종결(closeJob) 시 일일 발송 예산을 초과해 즉시 못 보낸 불합격 통보 표시.
+  // 저녁 드레인 cron(/api/cron/decision-drain)이 예산 범위에서 발송 후 false 로 되돌린다.
+  // 개별·수동 결정 통보(decision-mail 라우트)는 이 플래그를 쓰지 않는다(항상 즉시).
+  decisionNotifyQueued: integer("decision_notify_queued", { mode: "boolean" })
+    .notNull()
+    .default(false),
   // 가장 최근 면접 링크 메일 발송 시각 (경과일 배지 표시용)
   lastInterviewEmailSentAt: text("last_interview_email_sent_at"),
   // 종결 +14일 PII 폐기 시각 (anonymized 마커)
@@ -1808,3 +1814,36 @@ export const dailyDigestLogs = sqliteTable(
 
 export type DailyDigestLog = typeof dailyDigestLogs.$inferSelect;
 export type NewDailyDigestLog = typeof dailyDigestLogs.$inferInsert;
+
+/**
+ * 메일 발송 이벤트 로그 — Resend 무료 티어 쿼터(일 100·월 3,000) 사용량 집계 +
+ * 불합격 저녁 드레인(/api/cron/decision-drain)의 일일 발송 예산 계산에 사용.
+ *
+ * sendMail() 성공 직후 1행 insert (단일 발송 지점 = 전수 집계). 수신자 주소 등 PII 는
+ * 저장하지 않는다(타임스탬프·분류만). per-send 로그라 리셋 모델(UTC 자정/롤링)을 몰라도
+ * 임의 시간창(sentInWindow)·달력월(sentThisMonth) 계산이 가능하다.
+ *
+ * sent_at 은 CURRENT_TIMESTAMP('YYYY-MM-DD HH:MM:SS' UTC) — 집계 쿼리는 같은 UTC 형식과 비교.
+ * 무한 누적 방지: 일일 cron 이 N일 경과분을 정리(lib/mail-usage.pruneMailEvents).
+ * 순수 추가(additive) 테이블 — 기존 데이터에 영향 없음.
+ */
+export const mailSendEvents = sqliteTable(
+  "mail_send_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sentAt: text("sent_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    // "candidate" | "org" — 발송 대상 구분(모니터링 분해용).
+    audience: text("audience").notNull(),
+    // 세부 종류(예: "decision_reject") — 선택. 미지정이면 null.
+    kind: text("kind"),
+  },
+  (t) => ({
+    // 시간창 집계(오늘·이번 달·롤링 24h)의 주 인덱스.
+    sentAtIdx: index("idx_mail_send_events_sent_at").on(t.sentAt),
+  })
+);
+
+export type MailSendEvent = typeof mailSendEvents.$inferSelect;
+export type NewMailSendEvent = typeof mailSendEvents.$inferInsert;
