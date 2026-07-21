@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { listMyNotifications } from "@/lib/notifications";
 import { ReadAllButton } from "./read-all-button";
+import { NotificationLink } from "./notification-link";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +37,10 @@ export default async function NotificationsPage() {
                 key={n.id}
                 className="border-b border-border-default/60 last:border-0"
               >
-                <Link
+                <NotificationLink
+                  id={n.id}
                   href={n.href}
+                  isUnread={isUnread}
                   className={
                     "flex items-start gap-3 px-5 py-4 hover:bg-surface-alt " +
                     (isUnread ? "bg-primary-soft/30" : "")
@@ -67,7 +69,7 @@ export default async function NotificationsPage() {
                   <span className="text-xs text-ink-muted shrink-0">
                     {n.readAt ? "읽음" : "미확인"}
                   </span>
-                </Link>
+                </NotificationLink>
               </li>
             );
           })}

@@ -120,7 +120,11 @@ export function NotificationBell() {
         arr.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x))
       );
       setUnread((c) => Math.max(0, c - 1));
-      void fetch(`/api/notifications/${n.id}/read`, { method: "POST" });
+      // keepalive: 클릭 즉시 네비게이션이 시작돼도(하드 이동 포함) 요청 완료 보장.
+      void fetch(`/api/notifications/${n.id}/read`, {
+        method: "POST",
+        keepalive: true,
+      });
     }
   };
 
