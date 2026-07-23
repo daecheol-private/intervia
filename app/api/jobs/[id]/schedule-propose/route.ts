@@ -297,6 +297,7 @@ export async function POST(
       slots: slotCheck.slots,
       modeOnline,
       address,
+      addressDetail,
       round,
       isReschedule,
       branding,

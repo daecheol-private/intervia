@@ -160,6 +160,7 @@ export async function POST(
           slot: matched,
           modeOnline: sched.modeOnline,
           address: sched.address,
+          addressDetail: sched.addressDetail,
           forInterviewer: false,
           round: sched.round,
           branding,
@@ -190,6 +191,7 @@ export async function POST(
             slot: matched,
             modeOnline: sched.modeOnline,
             address: sched.address,
+            addressDetail: sched.addressDetail,
             forInterviewer: true,
             round: sched.round,
           });

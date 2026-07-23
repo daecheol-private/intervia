@@ -31,6 +31,15 @@ export function roundLabel(round: ScheduleRound | null | undefined): string {
   return round === "round2" ? "2차" : "1차";
 }
 
+/** 도로명 주소 + 상세주소(동·호수 등)를 한 줄로 합침. 둘 다 비면 null. */
+function fullAddressLine(
+  address?: string | null,
+  detail?: string | null,
+): string | null {
+  const parts = [address?.trim(), detail?.trim()].filter(Boolean);
+  return parts.length ? parts.join(" ") : null;
+}
+
 /** 슬롯 검증 — 시작이 미래, end > start, 최대 30일 후까지. */
 export function validateSlots(slots: unknown): {
   ok: true;
@@ -113,6 +122,7 @@ export function buildScheduleProposalEmail(opts: {
   slots: Slot[];
   modeOnline: boolean;
   address?: string | null;
+  addressDetail?: string | null;
   round?: ScheduleRound;
   // 기존 확정 일정을 변경하기 위해 새 시간을 다시 제안하는 경우 — "변경" 맥락 문구.
   isReschedule?: boolean;
@@ -120,6 +130,7 @@ export function buildScheduleProposalEmail(opts: {
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, url, expiresAt, slots, modeOnline, address, isReschedule } =
     opts;
+  const fullAddress = fullAddressLine(address, opts.addressDetail);
   const rl = roundLabel(opts.round);
   const cta = emailCtaColors(opts.branding);
   const expDate = formatLocalDate(expiresAt);
@@ -137,7 +148,7 @@ ${introText}
 다음 시간 중 가능하신 시간을 선택해 주세요:
 ${slotLines}
 
-면접 방식: ${modeOnline ? "온라인" : `오프라인 (${address ?? "주소 별도 안내"})`}
+면접 방식: ${modeOnline ? "온라인" : `오프라인 (${fullAddress ?? "주소 별도 안내"})`}
 
 아래 링크에서 시간을 선택하거나, 가능한 시간이 없으시면 다른 시간을 역제시해 주세요.
 ${url}
@@ -167,7 +178,7 @@ Intervia 채용팀`;
         <ul style="font-size:13px;color:#0f172a;line-height:1.7;margin:0;padding-left:18px;">${slotsHtml}</ul>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:13px;color:#475569;">
           면접 방식: <strong style="color:#0f172a;">${modeOnline ? "온라인" : "오프라인"}</strong>
-          ${!modeOnline && address ? `<br>주소: ${esc(address)}` : ""}
+          ${!modeOnline && fullAddress ? `<br>주소: ${esc(fullAddress)}` : ""}
         </div>
       </div>
       <p style="text-align:center;margin:0 0 12px;">
@@ -316,6 +327,7 @@ export function buildScheduleConfirmedEmail(opts: {
   slot: Slot;
   modeOnline: boolean;
   address?: string | null;
+  addressDetail?: string | null;
   forInterviewer?: boolean;
   round?: ScheduleRound;
   // 기존 확정 일정을 변경(재조정)하는 경우 — 제목·헤더·문구를 "확정"→"변경" 으로.
@@ -323,6 +335,7 @@ export function buildScheduleConfirmedEmail(opts: {
   branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, slot, modeOnline, address, forInterviewer, isReschedule } = opts;
+  const fullAddress = fullAddressLine(address, opts.addressDetail);
   // 법인 브랜딩은 지원자용에만 — 면접관(회사 내부) 메일은 Intervia 헤더 유지.
   const branding = forInterviewer ? null : (opts.branding ?? null);
   const rl = roundLabel(opts.round);
@@ -346,7 +359,7 @@ export function buildScheduleConfirmedEmail(opts: {
   const text = `${greeting}
 
 · 일시: ${slotStr}
-· 방식: ${modeOnline ? "온라인" : `오프라인 (${address ?? "주소 별도 안내"})`}${onlineRescheduleNote ? `\n\n※ ${onlineRescheduleNote}` : ""}
+· 방식: ${modeOnline ? "온라인" : `오프라인 (${fullAddress ?? "주소 별도 안내"})`}${onlineRescheduleNote ? `\n\n※ ${onlineRescheduleNote}` : ""}
 
 Intervia 채용팀`;
   const esc = (s: string) =>
@@ -365,7 +378,7 @@ Intervia 채용팀`;
         <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">방식</p>
         <p style="margin:0;font-size:14px;color:#0f172a;">
           ${modeOnline ? "온라인" : "오프라인"}
-          ${!modeOnline && address ? `<br><span style="font-size:13px;color:#475569;">${esc(address)}</span>` : ""}
+          ${!modeOnline && fullAddress ? `<br><span style="font-size:13px;color:#475569;">${esc(fullAddress)}</span>` : ""}
         </p>
       </div>
       ${onlineRescheduleNote ? `<p style="font-size:12px;color:#64748b;margin:12px 0 0;line-height:1.6;">※ ${esc(onlineRescheduleNote)}</p>` : ""}

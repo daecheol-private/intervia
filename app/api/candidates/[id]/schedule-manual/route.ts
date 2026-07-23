@@ -212,6 +212,7 @@ export async function POST(
           slot,
           modeOnline,
           address,
+          addressDetail,
           forInterviewer: false,
           round,
           isReschedule,
