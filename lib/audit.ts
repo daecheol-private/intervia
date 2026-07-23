@@ -81,7 +81,11 @@ export type AuditAction =
   // 본인 계정 탈퇴 — 되돌릴 수 없는 자가 삭제.
   | "account.self_delete"
   // 스캔 PDF OCR — 마스킹 전 원본 이력서가 AI 수탁자(Vertex)로 전송됨. PII 외부전송이라 critical.
-  | "candidate.scan_ocr";
+  | "candidate.scan_ocr"
+  // 평가 리포트 외부 공유 링크 — Intervia 계정 없는 제3자에게 평가 결과 노출. 발급/열람/폐기 추적.
+  | "shared_report.create"
+  | "shared_report.view"
+  | "shared_report.revoke";
 
 export type AuditEntry = {
   actor?: CurrentUser | null;
@@ -116,6 +120,8 @@ const CRITICAL_AUDIT_ACTIONS = new Set<string>([
   "appeal.response_send_failed",
   "password_reset.confirm",
   "candidate.scan_ocr",
+  // 외부 공유 발급 — 계정 없는 제3자에게 평가(간접 PII) 노출. 분쟁 입증용.
+  "shared_report.create",
 ]);
 
 export function logAudit(req: Request | null, entry: AuditEntry): void {

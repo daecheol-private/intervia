@@ -1856,3 +1856,47 @@ export const mailSendEvents = sqliteTable(
 
 export type MailSendEvent = typeof mailSendEvents.$inferSelect;
 export type NewMailSendEvent = typeof mailSendEvents.$inferInsert;
+
+/**
+ * 평가 리포트 외부 공유 링크. Intervia 계정이 없는 사람(현업 부서장·임원 등)에게 후보자
+ * 평가 결과를 읽기 전용으로 공유하기 위한 무인증 토큰. interview_sessions.accessToken 과
+ * 같은 패턴 — 추측 불가 토큰("sr_" + 192bit) + 만료 + 폐기(revoke). read 라우트가 화이트리스트로
+ * 평가 결론만 내려보내고 원본 이력서·연락처·사진 등 PII 는 절대 노출하지 않는다.
+ * 후보자 삭제(종결 +14일 폐기 포함) 시 링크도 함께 소멸(cascade). 순수 추가(additive) 테이블.
+ */
+export const sharedReports = sqliteTable(
+  "shared_reports",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    candidateId: integer("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    // 테넌트 경계 — 발급 시점 후보자 소속 법인. org 필터·집계용.
+    orgId: integer("org_id").references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    // 무인증 접근 토큰 — "sr_" + randomBytes(24).hex (192bit). 추측 불가.
+    token: text("token").notNull().unique(),
+    // 발급자 (감사·폐기 이력). 계정이 지워져도 링크 행은 남긴다.
+    createdByUserId: integer("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // 만료 — 발급 시 지정(기본 +14일). 지나면 read 라우트가 expired 반환.
+    expiresAt: text("expires_at").notNull(),
+    // 폐기 시각 — 발급자가 링크 즉시 무효화. NOT NULL = 차단.
+    revokedAt: text("revoked_at"),
+    // 조회 추적 (감사 보강 + 발급 UI 표시용). PII 아님.
+    viewCount: integer("view_count").notNull().default(0),
+    lastViewedAt: text("last_viewed_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    candidateIdx: index("idx_shared_reports_candidate").on(t.candidateId),
+    orgIdx: index("idx_shared_reports_org").on(t.orgId),
+  })
+);
+
+export type SharedReport = typeof sharedReports.$inferSelect;
+export type NewSharedReport = typeof sharedReports.$inferInsert;

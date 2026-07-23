@@ -33,6 +33,7 @@ import { confirmDialog, notify } from "@/app/components/Dialog";
 import { AppealsPanel } from "./appeals-panel";
 import { AttachmentsPanel } from "./attachments-panel";
 import { EditCandidateButton } from "./edit-candidate";
+import { ShareReportButton } from "./share-report-button";
 import {
   InterviewEvaluationPending,
   InterviewEvaluationRetry,
@@ -629,6 +630,7 @@ export default function CandidateDetailPage() {
               framed
               onToggle={() => void load()}
             />
+            <ShareReportButton candidateId={candidate.id} />
             <button
               onClick={handleDelete}
               className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:border-danger/50 hover:text-danger hover:bg-danger-soft transition-colors"

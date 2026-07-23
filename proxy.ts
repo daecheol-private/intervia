@@ -122,6 +122,8 @@ export function proxy(req: NextRequest) {
     pathname.startsWith("/invite/") ||
     pathname.startsWith("/schedule/") ||
     pathname.startsWith("/unsubscribe/") ||
+    // 평가 리포트 외부 공유 — Intervia 계정 없는 제3자 열람(토큰 자체가 인증).
+    pathname.startsWith("/shared/") ||
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/client-error" ||
     pathname === "/api/orgs" ||
@@ -159,7 +161,7 @@ export const config = {
   // 단 matcher 에 포함되어야 CSRF 검증도 동작 — api 전반은 포함되어야 함
   matcher: [
     // 인증 가드 대상 경로
-    "/((?!login|signup|privacy|terms|security|how-it-works|features|resume-guide|zoom-guide|pricing|faq|legal|password-reset|verify|interview|invite|schedule|unsubscribe|apply|api/apply|api/auth|api/interview|api/uploads|api/orgs|api/invites|api/schedule|api/cron|api/internal|api/health|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?|ttf|otf|eot)$).*)",
+    "/((?!login|signup|privacy|terms|security|how-it-works|features|resume-guide|zoom-guide|pricing|faq|legal|password-reset|verify|interview|invite|schedule|unsubscribe|shared|apply|api/apply|api/auth|api/interview|api/uploads|api/orgs|api/invites|api/schedule|api/cron|api/internal|api/health|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?|ttf|otf|eot)$).*)",
     // CSRF 검증을 위해 api/auth/* 도 매칭 (proxy 내부에서 인증 가드는 스킵)
     "/api/auth/:path*",
     "/api/orgs/:path*",
