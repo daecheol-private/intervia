@@ -11,7 +11,7 @@ import { db } from "./db";
 import { withDbRetry } from "./db-retry";
 import { notifications, users, jobInterviewers, jobPostings } from "./schema";
 import { and, desc, eq, isNull, isNotNull, inArray, sql } from "drizzle-orm";
-import { sendMail, isSmtpAvailable, wrapEmailCard, escapeHtml } from "./mailer";
+import { sendMail, isSmtpAvailable, wrapEmailCard, escapeHtml, EMAIL_BRAND } from "./mailer";
 import { notifyOps } from "./error-reporter";
 
 export type NotificationType =
@@ -70,7 +70,7 @@ export async function createNotificationFanout(
  * APP_BASE_URL 우선. 미설정 시 dev=localhost:3003(npm run dev 기본 포트) /
  * prod=빈 문자열(상대경로) + 경고 로그(운영에서는 반드시 등록 필요 — 메일 링크가 깨짐).
  */
-function resolveMailBaseUrl(): string {
+export function resolveMailBaseUrl(): string {
   const envBase = process.env.APP_BASE_URL?.trim().replace(/\/$/, "");
   if (envBase) return envBase;
   if (process.env.NODE_ENV === "production") {
@@ -161,10 +161,10 @@ export async function notifyJobInterviewers(
           ${escapeHtml(input.title)}
         </div>
         <p style="text-align:center;margin:0 0 16px;">
-          <a href="${fullUrl}" style="display:inline-block;background:#0d4f3c;color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">자세히 보기</a>
+          <a href="${fullUrl}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">자세히 보기</a>
         </p>
         <p style="font-size:12px;color:#64748b;margin:0;text-align:center;">
-          <a href="${fullUrl}" style="color:#0d4f3c;word-break:break-all;">${fullUrl}</a>
+          <a href="${fullUrl}" style="color:${EMAIL_BRAND.primary};word-break:break-all;">${fullUrl}</a>
         </p>
       `,
       footer: "본 메일은 Intervia 시스템에서 자동 발송되었습니다.",
@@ -240,10 +240,10 @@ export async function notifyOrgAdmins(
           ${escapeHtml(input.title)}
         </div>
         <p style="text-align:center;margin:0 0 16px;">
-          <a href="${fullUrl}" style="display:inline-block;background:#0d4f3c;color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">바로 확인하기</a>
+          <a href="${fullUrl}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">바로 확인하기</a>
         </p>
         <p style="font-size:12px;color:#64748b;margin:0;text-align:center;">
-          <a href="${fullUrl}" style="color:#0d4f3c;word-break:break-all;">${fullUrl}</a>
+          <a href="${fullUrl}" style="color:${EMAIL_BRAND.primary};word-break:break-all;">${fullUrl}</a>
         </p>
       `,
       footer: "본 메일은 Intervia 시스템에서 자동 발송되었습니다.",
@@ -358,10 +358,10 @@ export async function notifySystemAdmins(
           ${escapeHtml(input.title)}
         </div>
         <p style="text-align:center;margin:0 0 16px;">
-          <a href="${fullUrl}" style="display:inline-block;background:#0d4f3c;color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">바로 확인하기</a>
+          <a href="${fullUrl}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">바로 확인하기</a>
         </p>
         <p style="font-size:12px;color:#64748b;margin:0;text-align:center;">
-          <a href="${fullUrl}" style="color:#0d4f3c;word-break:break-all;">${fullUrl}</a>
+          <a href="${fullUrl}" style="color:${EMAIL_BRAND.primary};word-break:break-all;">${fullUrl}</a>
         </p>
       `,
       footer: "본 메일은 Intervia 시스템에서 자동 발송되었습니다.",

@@ -15,29 +15,12 @@
  *  - 감사 로그
  */
 import { db } from "@/lib/db";
-import {
-  interviewSchedules,
-  candidates,
-  jobPostings,
-  organizations,
-  users,
-} from "@/lib/schema";
+import { interviewSchedules, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
-import {
-  isValidMeetingUrl,
-  buildMeetingLinkEmail,
-  buildIcsInvite,
-  roundLabel,
-  type Slot,
-} from "@/lib/schedules";
-import {
-  sendMail,
-  isSmtpAvailable,
-  getOrgEmailBranding,
-  brandingAttachments,
-} from "@/lib/mailer";
+import { isValidMeetingUrl, type Slot } from "@/lib/schedules";
+import { sendScheduleConfirmationEmails } from "@/lib/schedule-notify";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
 
@@ -99,101 +82,25 @@ export async function POST(
     })
     .where(eq(interviewSchedules.id, schedId));
 
-  // 후보자·면접관 정보 로드
+  // 후보자 이름 — 인앱 알림 제목용(메일 정보는 헬퍼가 자체 로드).
   const [cand] = await db
-    .select({ name: candidates.name, email: candidates.email })
+    .select({ name: candidates.name })
     .from(candidates)
     .where(eq(candidates.id, sched.candidateId));
-  const [job] = await db
-    .select({ title: jobPostings.title })
-    .from(jobPostings)
-    .where(eq(jobPostings.id, sched.jobId));
-  const org = sched.orgId
-    ? (
-        await db
-          .select({ name: organizations.name })
-          .from(organizations)
-          .where(eq(organizations.id, sched.orgId))
-      )[0]
-    : null;
 
-  // ICS 본문
-  const rl = roundLabel(sched.round);
-  const icsTitle = `[${org?.name ?? "Intervia"}] ${job?.title ?? "면접"} ${rl} 면접`;
-  const ics = buildIcsInvite({
-    uid: `intervia-sched-${sched.id}@intervia`,
-    slot: selected,
-    title: icsTitle,
-    description: `${cand?.name ?? "후보자"} 님 ${rl} 면접\n미팅: ${url}${note ? "\n\n" + note : ""}`,
-    location: url,
-  });
-  const icsAttachment = {
-    filename: "interview.ics",
-    content: ics,
-    contentType: "text/calendar; charset=utf-8; method=REQUEST",
-  };
-
-  // 메일 발송 — 후보자 + 제시 면접관
-  if (await isSmtpAvailable(sched.orgId)) {
-    if (cand?.email) {
-      try {
-        const branding = await getOrgEmailBranding(sched.orgId);
-        const mail = buildMeetingLinkEmail({
-          candidateName: cand.name,
-          jobTitle: job?.title ?? "공고",
-          orgName: org?.name ?? "법인",
-          slot: selected,
-          meetingUrl: url,
-          note,
-          forInterviewer: false,
-          round: sched.round,
-          branding,
-        });
-        await sendMail({
-          to: cand.email,
-          ...mail,
-          orgId: sched.orgId,
-          audience: "candidate",
-          attachments: [icsAttachment, ...brandingAttachments(branding)],
-        });
-      } catch (e) {
-        console.error("meeting link mail to candidate failed", e);
-      }
-    }
-    if (sched.proposedByUserId) {
-      const [interviewer] = await db
-        .select({ name: users.name, email: users.email })
-        .from(users)
-        .where(eq(users.id, sched.proposedByUserId));
-      if (interviewer?.email) {
-        try {
-          const mail = buildMeetingLinkEmail({
-            candidateName: cand?.name ?? "후보자",
-            jobTitle: job?.title ?? "공고",
-            orgName: org?.name ?? "법인",
-            slot: selected,
-            meetingUrl: url,
-            note,
-            forInterviewer: true,
-            round: sched.round,
-          });
-          await sendMail({
-            to: interviewer.email,
-            ...mail,
-            orgId: sched.orgId,
-            audience: "org",
-            attachments: [icsAttachment],
-          });
-        } catch (e) {
-          console.error("meeting link mail to interviewer failed", e);
-        }
-      }
-    }
+  // 확정 메일 — 후보자 + 면접관 전원에게 미팅 링크 + ICS + 자세히 보기(온라인 확정 케이스).
+  try {
+    await sendScheduleConfirmationEmails({
+      sched,
+      slot: selected,
+      meetingUrl: url,
+      meetingNote: note,
+    });
+  } catch (e) {
+    console.error("[meeting-link] confirmation emails failed", e);
   }
 
-  // in-app 알림 — 공고 면접관 전원.
-  // skipEmail: 제시 면접관은 위 buildMeetingLinkEmail(ICS 포함)을 이미 받았고, 나머지에겐
-  // 링크가 후보자 페이지 + D-1 리마인더 본문으로 전달되므로 개별 메일은 소음.
+  // in-app 알림 — 공고 면접관 전원. 이메일은 위 헬퍼가 담당하므로 skipEmail.
   try {
     await notifyJobInterviewers(
       sched.jobId,

@@ -228,7 +228,10 @@ export async function PATCH(
     } else if (await isSmtpAvailable(candidate.orgId)) {
       try {
         const [job] = await db
-          .select({ title: jobPostings.title })
+          .select({
+            title: jobPostings.title,
+            contactEmail: jobPostings.recruitingContactEmail,
+          })
           .from(jobPostings)
           .where(eq(jobPostings.id, candidate.jobId));
         const [org] = candidate.orgId
@@ -245,6 +248,7 @@ export async function PATCH(
           customMessage: body.customMessage,
           companyName: org?.name ?? null,
           lang: await resolveCandidateEmailLang(cid),
+          contactEmail: job?.contactEmail ?? null,
           branding,
         });
         await sendMail({

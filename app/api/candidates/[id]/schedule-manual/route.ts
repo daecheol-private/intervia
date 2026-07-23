@@ -19,7 +19,7 @@
  *   - 공고 면접관 전원 인앱 알림 (면접관 공유 목적)
  */
 import { db } from "@/lib/db";
-import { interviewSchedules, candidates, organizations } from "@/lib/schema";
+import { interviewSchedules, candidates } from "@/lib/schema";
 import { and, eq, or } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
@@ -28,15 +28,9 @@ import {
   generateScheduleToken,
   scheduleExpiresAt,
   validateSlots,
-  buildScheduleConfirmedEmail,
   roundLabel,
 } from "@/lib/schedules";
-import {
-  sendMail,
-  isSmtpAvailable,
-  getOrgEmailBranding,
-  brandingAttachments,
-} from "@/lib/mailer";
+import { sendScheduleConfirmationEmails } from "@/lib/schedule-notify";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
 import { rateLimit } from "@/lib/rate-limit";
@@ -190,51 +184,22 @@ export async function POST(
       .where(eq(candidates.id, cid));
   }
 
-  // 후보자 통보 (선택) — 줌 자동 생성 성공 시 확정 메일은 생략(중복 방지).
+  // 후보자 통보 (선택) — 줌 자동 생성 시도 후 헬퍼로 후보자에게만 확정 메일 발송.
+  // 면접관은 아래 인앱 알림으로 공유(전화 합의 후 등록이라 전원 메일은 과함).
   let candidateMail: { sent: boolean; error?: string } | null = null;
   if (body.notifyCandidate && candidate.email) {
     const zoom = await tryAutoCreateZoomMeeting(sched);
-    if (zoom.handled) {
-      candidateMail = { sent: true };
-    } else if (await isSmtpAvailable(job.orgId)) {
-      const org = (
-        await db
-          .select({ name: organizations.name })
-          .from(organizations)
-          .where(eq(organizations.id, job.orgId))
-      )[0];
-      try {
-        const branding = await getOrgEmailBranding(job.orgId);
-        const mail = buildScheduleConfirmedEmail({
-          candidateName: candidate.name,
-          jobTitle: job.title,
-          orgName: org?.name ?? "법인",
-          slot,
-          modeOnline,
-          address,
-          addressDetail,
-          forInterviewer: false,
-          round,
-          isReschedule,
-          branding,
-        });
-        await sendMail({
-          to: candidate.email,
-          ...mail,
-          orgId: job.orgId,
-          audience: "candidate",
-          attachments: brandingAttachments(branding),
-        });
-        candidateMail = { sent: true };
-      } catch (e) {
-        candidateMail = {
-          sent: false,
-          error: e instanceof Error ? e.message : String(e),
-        };
-      }
-    } else {
-      candidateMail = { sent: false, error: "메일 서버 미설정" };
-    }
+    const r = await sendScheduleConfirmationEmails({
+      sched,
+      slot,
+      meetingUrl: zoom.handled ? zoom.meetingUrl : null,
+      meetingNote: zoom.handled ? zoom.meetingNote : null,
+      isReschedule,
+      notifyInterviewers: false,
+    });
+    candidateMail = r.candidateEmailSent
+      ? { sent: true }
+      : { sent: false, error: "메일 서버 미설정 또는 발송 실패" };
   }
 
   // 인앱 알림 — 공고 면접관 전원 fanout (면접관 공유 목적. 등록자 본인은 메일 제외)

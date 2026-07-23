@@ -456,7 +456,7 @@ export function emailBrandHeader(): string {
  * (지원자에게 서비스 주체를 각인). 로고는 CID(sendMail 자동 첨부).
  */
 function interviaFooterBrand(): string {
-  return `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
+  return `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-left:auto;"><tr>
       <td width="32" valign="middle" style="width:32px;padding:0;">
         <img src="cid:${INTERVIA_LOGO_CID}" width="32" height="32" alt="Intervia" style="display:block;width:32px;height:32px;border-radius:7px;border:0;" />
       </td>
@@ -495,12 +495,21 @@ export function wrapEmailCard(opts: {
   innerHtml: string;
   footer?: string;
   branding?: OrgEmailBranding | null;
+  // 지원자 대상 메일에 표시할 채용 담당자 문의 연락처(recruitingContactEmail).
+  // 있으면 본문 하단에 안내 박스로 렌더. 면접관/시스템 메일에는 넘기지 않는다.
+  contactEmail?: string | null;
 }): string {
-  // 하단 Intervia 브랜드 서명 — 항상 표시(footer 안내문은 있을 때만 그 아래에).
-  const footerNote = opts.footer
-    ? `<div style="margin-top:14px;font-size:11px;color:#94a3b8;line-height:1.6;">${opts.footer}</div>`
+  // 하단 Intervia 브랜드 서명(로고+서비스명) — 우측 정렬. 안내 문구(opts.footer)는
+  // 로고와 겹쳐 보이는 데다 불필요한 보일러플레이트라 표시하지 않는다
+  // (기존 호출부 호환을 위해 파라미터만 남겨 둠).
+  const footerBlock = `<tr><td style="padding:22px 32px 26px;border-top:1px solid #f1f5f9;">${interviaFooterBrand()}</td></tr>`;
+  // 채용 담당자 문의 안내 — 지원자 메일에만(contactEmail 이 있을 때). 본문 하단, 버튼 아래.
+  const contactBox = opts.contactEmail
+    ? `<div style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:12px;color:#64748b;line-height:1.6;margin-bottom:3px;">문의 사항이 있으시면 채용 담당자에게 연락해 주세요.</div>
+        <a href="mailto:${escapeHtml(opts.contactEmail)}" style="font-size:14px;font-weight:600;color:${EMAIL_BRAND.primary};text-decoration:none;word-break:break-all;">${escapeHtml(opts.contactEmail)}</a>
+      </div>`
     : "";
-  const footerBlock = `<tr><td style="padding:22px 32px 26px;border-top:1px solid #f1f5f9;">${interviaFooterBrand()}${footerNote}</td></tr>`;
   const headerRow = opts.branding
     ? orgBrandBand(opts.branding)
     : `<tr><td style="padding:32px 32px 8px;">${emailBrandHeader()}</td></tr>`;
@@ -512,7 +521,7 @@ export function wrapEmailCard(opts: {
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
         ${headerRow}
-        <tr><td style="padding:0 32px 24px;">${opts.innerHtml}</td></tr>
+        <tr><td style="padding:0 32px 24px;">${opts.innerHtml}${contactBox}</td></tr>
         ${footerBlock}
       </table>
     </td></tr>
@@ -618,6 +627,8 @@ export function buildInterviewReminderEmail(opts: {
   url: string;
   expiresAt: string;
   orgName?: string | null;
+  // 지원자용 메일에 표시할 채용 담당자 문의처.
+  contactEmail?: string | null;
   branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, url, expiresAt, orgName } = opts;
@@ -671,6 +682,7 @@ Thank you.`;
 
   const html = wrapEmailCard({
     branding: opts.branding,
+    contactEmail: opts.contactEmail ?? null,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(candidateName)}님, 안녕하세요.</h1>
       <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
@@ -734,6 +746,8 @@ export function buildInterviewEmail(opts: {
   expiresAt: string;
   /** 면접을 발송한 채용 법인명. 후보자가 발신 주체를 확인할 수 있게 본문에 노출 (피싱 식별). */
   orgName?: string | null;
+  // 지원자용 메일에 표시할 채용 담당자 문의처.
+  contactEmail?: string | null;
   branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, url, expiresAt, orgName } = opts;
@@ -794,6 +808,7 @@ Thank you.`;
 
   const html = wrapEmailCard({
     branding: opts.branding,
+    contactEmail: opts.contactEmail ?? null,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(candidateName)}님, 안녕하세요.</h1>
       <p style="color:#475569;line-height:1.6;margin:0 0 20px;">

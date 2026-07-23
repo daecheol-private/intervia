@@ -258,6 +258,8 @@ export function buildDecisionEmail(opts: {
   companyName?: string | null;
   /** 후보자 면접 언어. 후보자 대면 메일이라 분기(평가 리포트와 별개). 기본 'ko'. */
   lang?: "ko" | "en";
+  // 지원자용 메일에 표시할 채용 담당자 문의처.
+  contactEmail?: string | null;
   branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, decision, customMessage, companyName } = opts;
@@ -289,6 +291,7 @@ export function buildDecisionEmail(opts: {
   const escaped = body.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
   const html = wrapEmailCard({
     branding: opts.branding,
+    contactEmail: opts.contactEmail ?? null,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 16px;color:#0f172a;">${headerMap[decision]}</h1>
       <div style="font-size:14px;line-height:1.7;color:#475569;white-space:pre-wrap;">${escaped}</div>

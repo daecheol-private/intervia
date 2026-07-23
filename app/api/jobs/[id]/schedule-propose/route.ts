@@ -40,6 +40,7 @@ import { sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { isJobExpired } from "@/lib/job-lifecycle";
+import { getJobContactEmail } from "@/lib/job-contact";
 import {
   requireSpendableBalance,
   insufficientTokensResponse,
@@ -203,6 +204,8 @@ export async function POST(
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
   // 법인 브랜딩(로고+컬러) — 일괄 발송이라 루프 밖에서 1회 조회.
   const branding = await getOrgEmailBranding(job.orgId);
+  // 채용 담당자 문의처 — 지원자 메일 하단 안내. 공고 단위라 루프 밖 1회.
+  const contactEmail = await getJobContactEmail(jobId);
   const results: {
     candidateId: number;
     status: "sent" | "skipped" | "failed";
@@ -300,6 +303,7 @@ export async function POST(
       addressDetail,
       round,
       isReschedule,
+      contactEmail,
       branding,
     });
 

@@ -310,6 +310,7 @@ export async function sendAiInterviewReminders(): Promise<{
       candidateStage: candidates.stage,
       candidateOutcome: candidates.outcome,
       jobTitle: jobPostings.title,
+      contactEmail: jobPostings.recruitingContactEmail,
       orgName: organizations.name,
     })
     .from(interviewSessions)
@@ -359,6 +360,7 @@ export async function sendAiInterviewReminders(): Promise<{
         url,
         expiresAt: expiresLabel,
         orgName: null, // sendMail 이 orgId+audience=candidate 로 발신 표시이름에 법인명 주입
+        contactEmail: r.contactEmail ?? null,
         branding,
       });
       try {

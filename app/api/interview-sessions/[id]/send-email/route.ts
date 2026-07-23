@@ -102,7 +102,10 @@ export async function POST(
     );
 
   const [job] = await db
-    .select({ title: jobPostings.title })
+    .select({
+      title: jobPostings.title,
+      contactEmail: jobPostings.recruitingContactEmail,
+    })
     .from(jobPostings)
     .where(eq(jobPostings.id, candidate.jobId));
   if (!job) return new Response("공고 없음", { status: 404 });
@@ -148,6 +151,7 @@ export async function POST(
     url,
     expiresAt: expires,
     orgName: org?.name ?? null,
+    contactEmail: job.contactEmail ?? null,
     branding,
   });
 

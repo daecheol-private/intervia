@@ -1,3 +1,6 @@
+import { db } from "./db";
+import { jobPostings } from "./schema";
+import { eq } from "drizzle-orm";
 import { getEmailDomain, isValidEmail } from "./email-domain";
 
 /**
@@ -26,4 +29,13 @@ export function validateRecruitingContactEmail(
       };
   }
   return { ok: true, email };
+}
+
+/** 공고의 채용 담당자 이메일 조회 — 지원자 메일 하단 문의처. 미설정(구버전 공고) 시 null. */
+export async function getJobContactEmail(jobId: number): Promise<string | null> {
+  const [j] = await db
+    .select({ email: jobPostings.recruitingContactEmail })
+    .from(jobPostings)
+    .where(eq(jobPostings.id, jobId));
+  return j?.email ?? null;
 }

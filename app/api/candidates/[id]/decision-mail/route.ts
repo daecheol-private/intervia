@@ -81,7 +81,10 @@ export async function POST(
   }
 
   const [job] = await db
-    .select({ title: jobPostings.title })
+    .select({
+      title: jobPostings.title,
+      contactEmail: jobPostings.recruitingContactEmail,
+    })
     .from(jobPostings)
     .where(eq(jobPostings.id, candidate.jobId));
 
@@ -100,6 +103,7 @@ export async function POST(
     customMessage: body.customMessage,
     companyName: org?.name ?? null,
     lang: await resolveCandidateEmailLang(cid),
+    contactEmail: job?.contactEmail ?? null,
     branding,
   });
 

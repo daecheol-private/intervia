@@ -361,7 +361,11 @@ export async function closeJob(args: {
 
   // 공고 상태 전환
   const [job] = await db
-    .select({ title: jobPostings.title, orgId: jobPostings.orgId })
+    .select({
+      title: jobPostings.title,
+      orgId: jobPostings.orgId,
+      contactEmail: jobPostings.recruitingContactEmail,
+    })
     .from(jobPostings)
     .where(eq(jobPostings.id, args.jobId));
   await db
@@ -412,6 +416,7 @@ export async function closeJob(args: {
               decision: "rejected",
               companyName: org?.name ?? null,
               lang: await resolveCandidateEmailLang(t.id),
+              contactEmail: job.contactEmail ?? null,
               branding,
             });
             await sendMail({

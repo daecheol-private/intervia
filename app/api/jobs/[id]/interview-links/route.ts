@@ -249,6 +249,7 @@ export async function POST(
       url,
       expiresAt: formatKstDateTime(expiresAt),
       orgName,
+      contactEmail: job.recruitingContactEmail ?? null,
       branding,
     });
     tasks.push({

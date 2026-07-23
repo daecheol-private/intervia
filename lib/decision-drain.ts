@@ -54,6 +54,7 @@ export async function drainQueuedDecisions(now = new Date()): Promise<{
       email: candidates.email,
       orgId: candidates.orgId,
       jobTitle: jobPostings.title,
+      contactEmail: jobPostings.recruitingContactEmail,
       orgName: organizations.name,
     })
     .from(candidates)
@@ -75,6 +76,7 @@ export async function drainQueuedDecisions(now = new Date()): Promise<{
         decision: "rejected",
         companyName: t.orgName ?? null,
         lang: await resolveCandidateEmailLang(t.id),
+        contactEmail: t.contactEmail ?? null,
         branding,
       });
       await sendMail({

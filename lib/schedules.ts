@@ -126,6 +126,8 @@ export function buildScheduleProposalEmail(opts: {
   round?: ScheduleRound;
   // 기존 확정 일정을 변경하기 위해 새 시간을 다시 제안하는 경우 — "변경" 맥락 문구.
   isReschedule?: boolean;
+  // 지원자용 메일에 표시할 채용 담당자 문의처.
+  contactEmail?: string | null;
   branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, url, expiresAt, slots, modeOnline, address, isReschedule } =
@@ -167,6 +169,7 @@ Intervia 채용팀`;
     : `${esc(candidateName)}님, <strong style="color:#0f172a;">${esc(orgName)}</strong>의 <strong style="color:#0f172a;">${esc(jobTitle)}</strong> 포지션 ${rl} 면접 일정 안내드립니다.`;
   const html = wrapEmailCard({
     branding: opts.branding,
+    contactEmail: opts.contactEmail ?? null,
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${rl} 면접 일정 ${isReschedule ? "변경" : "안내"}</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">
@@ -263,6 +266,8 @@ export function buildMeetingLinkEmail(opts: {
   note?: string | null;
   forInterviewer?: boolean;
   round?: ScheduleRound;
+  // 지원자용 메일에 표시할 채용 담당자 문의처. forInterviewer 면 무시.
+  contactEmail?: string | null;
   branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, slot, meetingUrl, note, forInterviewer } =
@@ -287,14 +292,13 @@ export function buildMeetingLinkEmail(opts: {
 Intervia 채용팀`;
   const esc = (s: string) =>
     s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
-  const noteHtml = note?.trim()
-    ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-top:14px;">
-         <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">추가 안내</div>
-         <div style="font-size:13px;color:#0f172a;line-height:1.6;white-space:pre-wrap;">${esc(note.trim())}</div>
-       </div>`
+  const noteInline = note?.trim()
+    ? `<p style="margin:14px 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">추가 안내</p>
+        <p style="margin:0;font-size:13px;color:#0f172a;line-height:1.6;white-space:pre-wrap;">${esc(note.trim())}</p>`
     : "";
   const html = wrapEmailCard({
     branding,
+    contactEmail: forInterviewer ? null : (opts.contactEmail ?? null),
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">🎥 온라인 면접 미팅 안내</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">${esc(greeting)}</p>
@@ -305,11 +309,11 @@ Intervia 채용팀`;
         <p style="margin:0;font-size:13px;color:#0f172a;word-break:break-all;">
           <a href="${esc(meetingUrl)}" style="color:${EMAIL_BRAND.primary};text-decoration:underline;">${esc(meetingUrl)}</a>
         </p>
+        ${noteInline}
       </div>
       <p style="text-align:center;margin:0 0 8px;">
         <a href="${esc(meetingUrl)}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">미팅 참여하기</a>
       </p>
-      ${noteHtml}
       <p style="font-size:12px;color:#64748b;margin:14px 0 0;text-align:center;line-height:1.6;">
         첨부된 캘린더 파일(.ics) 을 열어 본인 캘린더에 등록하실 수 있습니다.
       </p>
@@ -332,12 +336,21 @@ export function buildScheduleConfirmedEmail(opts: {
   round?: ScheduleRound;
   // 기존 확정 일정을 변경(재조정)하는 경우 — 제목·헤더·문구를 "확정"→"변경" 으로.
   isReschedule?: boolean;
+  // 면접관용 "자세히 보기" CTA 대상 URL (후보자 상세 페이지). forInterviewer 일 때만 렌더.
+  detailUrl?: string;
+  // 온라인이지만 미팅 링크가 아직 없음 — "링크는 확정되는 대로 별도 안내" 문구 추가.
+  pendingMeetingLink?: boolean;
+  // 지원자용 메일에 표시할 채용 담당자 문의처. forInterviewer 면 무시.
+  contactEmail?: string | null;
   branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, slot, modeOnline, address, forInterviewer, isReschedule } = opts;
   const fullAddress = fullAddressLine(address, opts.addressDetail);
   // 법인 브랜딩은 지원자용에만 — 면접관(회사 내부) 메일은 Intervia 헤더 유지.
   const branding = forInterviewer ? null : (opts.branding ?? null);
+  const cta = emailCtaColors(branding);
+  // "자세히 보기" CTA 는 면접관 메일에만 — 후보자는 이 페이지 접근 권한이 없다.
+  const detailUrl = forInterviewer ? opts.detailUrl : undefined;
   const rl = roundLabel(opts.round);
   const slotStr = formatSlotKst(slot);
   const action = isReschedule ? "변경" : "확정";
@@ -351,15 +364,17 @@ export function buildScheduleConfirmedEmail(opts: {
     : isReschedule
       ? `${candidateName}님, ${orgName}의 ${jobTitle} 포지션 ${rl} 면접 시간이 변경되었습니다. 아래 변경된 일시를 확인해 주세요.`
       : `${candidateName}님, ${orgName}의 ${jobTitle} 포지션 ${rl} 면접 시간이 확정되었습니다.`;
-  // 온라인 + 변경 시: 기존 미팅 링크는 무효이므로 별도 재안내 예정임을 알림.
-  const onlineRescheduleNote =
-    isReschedule && modeOnline
+  // 온라인 안내 문구: 변경(기존 링크 무효) 또는 링크 대기(아직 미발급) 상황을 알림.
+  const onlineNote =
+    modeOnline && isReschedule
       ? "온라인 미팅 링크는 별도 메일로 다시 안내드립니다."
-      : "";
+      : modeOnline && opts.pendingMeetingLink
+        ? "온라인 미팅 링크는 확정되는 대로 별도 메일로 안내드립니다."
+        : "";
   const text = `${greeting}
 
 · 일시: ${slotStr}
-· 방식: ${modeOnline ? "온라인" : `오프라인 (${fullAddress ?? "주소 별도 안내"})`}${onlineRescheduleNote ? `\n\n※ ${onlineRescheduleNote}` : ""}
+· 방식: ${modeOnline ? "온라인" : `오프라인 (${fullAddress ?? "주소 별도 안내"})`}${onlineNote ? `\n\n※ ${onlineNote}` : ""}${detailUrl ? `\n\n자세히 보기: ${detailUrl}` : ""}
 
 Intervia 채용팀`;
   const esc = (s: string) =>
@@ -369,6 +384,7 @@ Intervia 채용팀`;
     : `✅ ${rl} 면접 시간 확정`;
   const html = wrapEmailCard({
     branding,
+    contactEmail: forInterviewer ? null : (opts.contactEmail ?? null),
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${heading}</h1>
       <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">${esc(greeting)}</p>
@@ -381,7 +397,59 @@ Intervia 채용팀`;
           ${!modeOnline && fullAddress ? `<br><span style="font-size:13px;color:#475569;">${esc(fullAddress)}</span>` : ""}
         </p>
       </div>
-      ${onlineRescheduleNote ? `<p style="font-size:12px;color:#64748b;margin:12px 0 0;line-height:1.6;">※ ${esc(onlineRescheduleNote)}</p>` : ""}
+      ${onlineNote ? `<p style="font-size:12px;color:#64748b;margin:12px 0 0;line-height:1.6;">※ ${esc(onlineNote)}</p>` : ""}
+      ${detailUrl ? `<p style="text-align:center;margin:20px 0 0;">
+        <a href="${detailUrl}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">자세히 보기</a>
+      </p>` : ""}
+    `,
+    footer: "본 메일은 Intervia 채용 플랫폼에서 발송되었습니다.",
+  });
+  return { subject, html, text };
+}
+
+/**
+ * 온라인 면접 확정 + 줌 미연동 시, 제시 면접관에게 미팅 링크 등록을 요청하는 메일.
+ * 링크를 등록하면 buildMeetingLinkEmail 로 후보자·면접관 전원에게 확정 안내가 발송된다.
+ */
+export function buildMeetingLinkRequestEmail(opts: {
+  candidateName: string;
+  jobTitle: string;
+  slot: Slot;
+  detailUrl: string;
+  round?: ScheduleRound;
+}): { subject: string; html: string; text: string } {
+  const { candidateName, jobTitle, slot, detailUrl } = opts;
+  const rl = roundLabel(opts.round);
+  const slotStr = formatSlotKst(slot);
+  const cta = emailCtaColors(null); // 면접관 메일 — Intervia 기본 색
+  const subject = `[Intervia] ${candidateName} 후보자 ${rl} 면접 — 온라인 미팅 링크 등록 필요`;
+  const greeting = `${candidateName} 후보자의 ${jobTitle} ${rl} 면접이 온라인으로 확정되었습니다. 아래에서 화상회의(줌 등) 링크를 등록하시면 후보자와 면접관 전원에게 자동으로 안내됩니다.`;
+  const text = `${greeting}
+
+· 일시: ${slotStr}
+· 방식: 온라인 (미팅 링크 등록 필요)
+
+미팅 링크 등록: ${detailUrl}
+
+Intervia 채용팀`;
+  const esc = (s: string) =>
+    s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
+  const html = wrapEmailCard({
+    innerHtml: `
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">🔗 온라인 미팅 링크 등록 필요</h1>
+      <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">${esc(greeting)}</p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:0 0 20px;">
+        <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">일시</p>
+        <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#0f172a;">${esc(slotStr)}</p>
+        <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">방식</p>
+        <p style="margin:0;font-size:14px;color:#0f172a;">온라인 <span style="font-size:13px;color:#475569;">(미팅 링크 미등록)</span></p>
+      </div>
+      <p style="text-align:center;margin:0 0 12px;">
+        <a href="${detailUrl}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">미팅 링크 등록하기</a>
+      </p>
+      <p style="font-size:12px;color:#64748b;margin:0;text-align:center;line-height:1.6;">
+        링크를 등록하면 후보자와 면접관 전원에게 확정 안내가 발송됩니다.
+      </p>
     `,
     footer: "본 메일은 Intervia 채용 플랫폼에서 발송되었습니다.",
   });

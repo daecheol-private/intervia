@@ -9,7 +9,8 @@
  *   - 아직 onlineMeetingUrl 이 없음 (중복 생성 방지)
  *   - 법인에 줌 연동(orgZoomConfigs)이 설정돼 있음
  *
- * 성공 시: 줌 회의 생성 → onlineMeetingUrl 저장 → 후보자/면접관에게 링크 메일(+ICS) 발송 → handled=true.
+ * 성공 시: 줌 회의 생성 → onlineMeetingUrl 저장 → handled=true + meetingUrl/meetingNote 반환.
+ *          (후보자·면접관 메일은 호출부의 sendScheduleConfirmationEmails 가 통일 발송)
  */
 import { db } from "./db";
 import {
@@ -17,31 +18,20 @@ import {
   candidates,
   jobPostings,
   organizations,
-  users,
   type InterviewSchedule,
 } from "./schema";
 import { eq } from "drizzle-orm";
-import {
-  buildMeetingLinkEmail,
-  buildIcsInvite,
-  type Slot,
-} from "./schedules";
-import {
-  sendMail,
-  isSmtpAvailable,
-  getOrgEmailBranding,
-  brandingAttachments,
-} from "./mailer";
+import { type Slot } from "./schedules";
 import { getZoomCredentials, createMeeting, zoomErrorMessage } from "./zoom";
 
 /**
- * 줌 자동 생성·발송 시도.
- * @returns handled=true 면 호출부는 "확정 통보" 메일을 보내지 말 것(중복 방지) —
- *          이 함수가 더 완전한 "미팅 링크" 메일을 이미 발송했다.
+ * 줌 회의 자동 생성 시도 (메일은 보내지 않는다).
+ * @returns handled=true 면 온라인 미팅 URL 이 생성·저장됨 — 호출부는 meetingUrl/meetingNote 로
+ *          "미팅 링크" 확정 메일을, false 면 오프라인/링크대기 확정 메일을 발송한다.
  */
 export async function tryAutoCreateZoomMeeting(
   sched: InterviewSchedule
-): Promise<{ handled: boolean; meetingUrl?: string }> {
+): Promise<{ handled: boolean; meetingUrl?: string; meetingNote?: string | null }> {
   if (!sched.modeOnline) return { handled: false };
   if (sched.onlineMeetingUrl) return { handled: false };
   if (!sched.selectedSlot) return { handled: false };
@@ -108,75 +98,7 @@ export async function tryAutoCreateZoomMeeting(
     })
     .where(eq(interviewSchedules.id, sched.id));
 
-  // 메일 발송 (SMTP 미설정 시 생략 — URL 은 이미 저장됨)
-  if (await isSmtpAvailable(sched.orgId)) {
-    const icsTitle = `[${orgName}] ${jobTitle} 1차 면접`;
-    const ics = buildIcsInvite({
-      uid: `intervia-sched-${sched.id}@intervia`,
-      slot,
-      title: icsTitle,
-      description: `${candName} 님 1차 면접\n미팅: ${joinUrl}${note ? "\n\n" + note : ""}`,
-      location: joinUrl,
-    });
-    const icsAttachment = {
-      filename: "interview.ics",
-      content: ics,
-      contentType: "text/calendar; charset=utf-8; method=REQUEST",
-    };
-
-    if (cand?.email) {
-      try {
-        const branding = await getOrgEmailBranding(sched.orgId);
-        const mail = buildMeetingLinkEmail({
-          candidateName: candName,
-          jobTitle,
-          orgName,
-          slot,
-          meetingUrl: joinUrl,
-          note,
-          forInterviewer: false,
-          branding,
-        });
-        await sendMail({
-          to: cand.email,
-          ...mail,
-          orgId: sched.orgId,
-          audience: "candidate",
-          attachments: [icsAttachment, ...brandingAttachments(branding)],
-        });
-      } catch (e) {
-        console.error("[schedule-zoom] 후보자 메일 실패", e);
-      }
-    }
-    if (sched.proposedByUserId) {
-      const [interviewer] = await db
-        .select({ name: users.name, email: users.email })
-        .from(users)
-        .where(eq(users.id, sched.proposedByUserId));
-      if (interviewer?.email) {
-        try {
-          const mail = buildMeetingLinkEmail({
-            candidateName: candName,
-            jobTitle,
-            orgName,
-            slot,
-            meetingUrl: joinUrl,
-            note,
-            forInterviewer: true,
-          });
-          await sendMail({
-            to: interviewer.email,
-            ...mail,
-            orgId: sched.orgId,
-            audience: "org",
-            attachments: [icsAttachment],
-          });
-        } catch (e) {
-          console.error("[schedule-zoom] 면접관 메일 실패", e);
-        }
-      }
-    }
-  }
-
-  return { handled: true, meetingUrl: joinUrl };
+  // 메일 발송은 호출부(sendScheduleConfirmationEmails)가 후보자·면접관 전원에게 통일 처리.
+  // 이 함수는 줌 회의 생성 + onlineMeetingUrl 저장까지만 담당한다.
+  return { handled: true, meetingUrl: joinUrl, meetingNote: note };
 }
