@@ -222,6 +222,9 @@ interviewer/
 
 [4] 평가 완료 (status='screened')
     ├─ screening_report / score / 추천 DB 보관
+    │    └─ timeline(이력 타임라인)도 여기 포함 — 마스킹본에서 LLM 이 추출한
+    │       "무슨 일을 했는가" 중심 항목(경력·학력·인턴/대외활동·교육/자격증).
+    │       기관 이름은 마스킹돼 있어 없음. 점수와 무관한 화면 표시 전용.
     └─ careerYears / careerSummary 컬럼에도 추가 반영
 
 [5] N일 경과 (PURGE_AFTER_DAYS=30, 매일 03:30 cron)
@@ -231,7 +234,7 @@ interviewer/
 
 **LLM 에는 절대 원본 텍스트가 전달되지 않음** — `screenCandidate(id, job, textForLLM)` 의 `textForLLM` 은 `resume_masked_text` 만. 원본은 사용자가 UI에서 마스킹 품질 검수용으로만 열람 가능.
 
-**직접 식별자(name/phone/email/age)는 LLM 이 추출하지 않음** — `lib/pii-extract.ts` 가 업로드 시점에 정규식·라벨·DOB→만나이 계산으로 직접 추출 후 candidates 테이블에 저장. LLM 은 `career_years` / `career_summary` (요약·추론 필요한 항목) 만 채움.
+**직접 식별자(name/phone/email/age)는 LLM 이 추출하지 않음** — `lib/pii-extract.ts` 가 업로드 시점에 정규식·라벨·DOB→만나이 계산으로 직접 추출 후 candidates 테이블에 저장. LLM 은 `career_years` / `career_summary` / `timeline`(이력 타임라인) 등 요약·추론·구조화가 필요한 항목만 채운다. **timeline 은 마스킹본 기반이라 회사/학교 이름이 없다** — 실명이 필요하면 정규식으로는 이력서 양식 다양성을 못 잡아 불가하고, 원문은 미보관·LLM 미노출이라 애초에 불가. 대신 "무슨 일을 했는가"(행위·성과)에 집중한다.
 
 **왜 업로드 시점에 미리 마스킹하는가**:
 1. 사용자가 "검토 진행" 누르기 전에 마스킹 결과를 검수할 수 있어야 함

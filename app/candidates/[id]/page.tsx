@@ -49,6 +49,7 @@ import {
   QualitativeReviewBlock,
   RequirementCoverageBlock,
   RequirementGateBadge,
+  ResumeTimelineBlock,
 } from "./screening-report";
 import {
   EmailSentBadge,
@@ -1057,6 +1058,12 @@ export default function CandidateDetailPage() {
                 emphasis
               />
             </div>
+            {candidate.screeningReport.timeline &&
+              candidate.screeningReport.timeline.length > 0 && (
+                <ResumeTimelineBlock
+                  timeline={candidate.screeningReport.timeline}
+                />
+              )}
             {candidate.screeningReport.qualitative_review &&
               candidate.screeningReport.qualitative_review.length > 0 && (
                 <QualitativeReviewBlock

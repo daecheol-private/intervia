@@ -61,6 +61,15 @@ export type Candidate = {
       evidence?: string;
       needs_interview?: boolean;
     }>;
+    // 이력 타임라인 — 점수 무관, 화면 표시용 (기관 이름 없이 "한 일" 중심).
+    timeline?: Array<{
+      kind: "career" | "education" | "activity" | "training";
+      start?: string | null;
+      end?: string | null;
+      ongoing?: boolean;
+      title: string;
+      highlights?: string[];
+    }>;
   } | null;
   stage: string;
   outcome: "hired" | "rejected" | "withdrawn" | null;

@@ -421,6 +421,15 @@ type ScreeningResult = {
     career_years?: number | null;
     career_summary?: string | null;
   };
+  /** 이력 타임라인 — 점수 무관, 화면 표시용. 마스킹본에서 뽑으므로 기관 이름은 없고 "한 일" 중심. */
+  timeline?: Array<{
+    kind: "career" | "education" | "activity" | "training";
+    start?: string | null;
+    end?: string | null;
+    ongoing?: boolean;
+    title: string;
+    highlights?: string[];
+  }>;
   /** 파싱 검증 전용 — 평가에 쓰지 않고 결정적 추출과 대조만 한다. */
   parsed_check?: {
     education_level?: string | null;
@@ -575,6 +584,26 @@ const SCREENING_SCHEMA = {
       },
       propertyOrdering: ["career_years", "career_summary"],
     },
+    // 이력 타임라인 — 점수 무관, 화면 표시용. 마스킹본 기반이라 기관 이름 없이 "한 일" 중심.
+    timeline: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          kind: {
+            type: Type.STRING,
+            enum: ["career", "education", "activity", "training"],
+          },
+          start: { type: Type.STRING, nullable: true },
+          end: { type: Type.STRING, nullable: true },
+          ongoing: { type: Type.BOOLEAN },
+          title: { type: Type.STRING },
+          highlights: { type: Type.ARRAY, items: { type: Type.STRING } },
+        },
+        required: ["kind", "title"],
+        propertyOrdering: ["kind", "start", "end", "ongoing", "title", "highlights"],
+      },
+    },
     // 파싱 검증 전용 — 평가에 쓰지 않는다. 결정적 추출(lib/education-extract)과 대조해
     // 불일치를 로그로 남기고, 그 목록이 다음 개선 대상이 된다.
     parsed_check: {
@@ -612,6 +641,7 @@ const SCREENING_SCHEMA = {
     "interview_focus",
     "qualitative_review",
     "career_info",
+    "timeline",
   ],
 };
 

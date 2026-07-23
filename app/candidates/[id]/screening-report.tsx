@@ -1,5 +1,6 @@
 "use client";
 
+import { Briefcase, GraduationCap, Sparkles, BookOpen } from "lucide-react";
 import { HL, scoreColor, withLeadEmphasis } from "./shared";
 import type { Candidate, Confidence } from "./types";
 
@@ -687,6 +688,217 @@ export function QualitativeReviewBlock({
       <div className="text-xs text-ink-soft mt-2.5 leading-relaxed">
         ※ 자기소개서 등 정성 자료가 없는 이력서는 &quot;면접 확인 필요&quot;로
         분류될 뿐 감점되지 않습니다.
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 이력 타임라인 — 이력서를 세로 타임라인으로 정리 (좌측 연도 · 아이콘 노드 · 제목/카테고리/상세).
+// 마스킹본에서 LLM 이 추출하므로 회사/학교 이름은 없고(개인정보 마스킹), "무슨 일을 했는가" 중심.
+// 경력은 프로젝트/회사 단위로 한 항목씩(가장 상세). 학력은 대학 이상만. 점수 무관·표시 전용.
+// ─────────────────────────────────────────────────────────────
+
+type TimelineEntry = NonNullable<
+  NonNullable<Candidate["screeningReport"]>["timeline"]
+>[number];
+
+type Kind = TimelineEntry["kind"];
+
+// soft = 아이콘 박스 배경, fg = 아이콘·연도 색, bullet = 상세 불릿 색.
+const KIND_META: Record<
+  Kind,
+  { label: string; Icon: typeof Briefcase; soft: string; fg: string; bullet: string }
+> = {
+  career: { label: "경력", Icon: Briefcase, soft: "bg-primary-soft", fg: "text-primary-deep", bullet: "bg-primary" },
+  activity: { label: "인턴·대외활동", Icon: Sparkles, soft: "bg-accent-soft", fg: "text-accent-deep", bullet: "bg-accent" },
+  training: { label: "교육·자격증", Icon: BookOpen, soft: "bg-surface-alt", fg: "text-ink-soft", bullet: "bg-ink-muted" },
+  education: { label: "학력", Icon: GraduationCap, soft: "bg-info-soft", fg: "text-info", bullet: "bg-info" },
+};
+
+// 고등학교·검정고시 학력은 제외 (대학 이상만 표시).
+const HIGH_SCHOOL_RE = /고\s*교|고등\s*학교|검정\s*고시|high\s*school/i;
+
+/** "2018.03" / "2018" → 소수 연도(2018.166…). 파싱 실패·범위밖은 null. */
+function toYear(s?: string | null): number | null {
+  if (!s) return null;
+  const m = String(s).match(/(\d{4})(?:[.\-/\s]+(\d{1,2}))?/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  if (y < 1950 || y > 2100) return null;
+  const mo = m[2] ? Math.min(12, Math.max(1, Number(m[2]))) : 1;
+  return y + (mo - 1) / 12;
+}
+
+/** 좌측 큰 연도 — 시작연도(없으면 종료연도). */
+function bigYear(e: TimelineEntry): string {
+  const s = toYear(e.start);
+  if (s != null) return String(Math.floor(s));
+  const en = toYear(e.end);
+  return en != null ? String(Math.floor(en)) : "";
+}
+
+/** 컴팩트 월 범위 — "09 – 현재" / "01 – 08" / "03 – 2024.02". */
+function monthRange(e: TimelineEntry): string {
+  const sm = e.start?.match(/(\d{4})(?:[.\-/\s]+(\d{1,2}))?/);
+  const startYr = sm?.[1] ?? null;
+  const startMo = sm?.[2] ? sm[2].padStart(2, "0") : null;
+  let right = "";
+  if (e.ongoing) {
+    right = "현재";
+  } else {
+    const em = e.end?.match(/(\d{4})(?:[.\-/\s]+(\d{1,2}))?/);
+    if (em) {
+      const endYr = em[1];
+      const endMo = em[2] ? em[2].padStart(2, "0") : null;
+      right = endYr === startYr ? endMo ?? "" : endMo ? `${endYr}.${endMo}` : endYr;
+    }
+  }
+  const left = startMo ?? "";
+  if (left && right) return `${left} – ${right}`;
+  return left || (right ? `– ${right}` : "");
+}
+
+type TimelineRow = { e: TimelineEntry };
+
+/** 세로 타임라인 한 열 — 항목마다 [연도][아이콘 노드+스파인][제목·카테고리·상세]. */
+function TimelineColumn({ items }: { items: TimelineRow[] }) {
+  return (
+    <ol>
+      {items.map(({ e }, i) => {
+        const m = KIND_META[e.kind] ?? KIND_META.training;
+        const yr = bigYear(e);
+        const mr = monthRange(e);
+        const last = i === items.length - 1;
+        return (
+          <li key={i} className="relative flex gap-3">
+            {/* 좌: 연도 */}
+            <div className="w-11 shrink-0 pt-1 text-right">
+              <div
+                className={`text-[15px] font-bold leading-none tabular-nums ${m.fg}`}
+              >
+                {yr}
+              </div>
+              {mr && (
+                <div className="mt-1 text-[10px] leading-tight text-ink-muted tabular-nums">
+                  {mr}
+                </div>
+              )}
+            </div>
+
+            {/* 중: 아이콘 노드 + 스파인 */}
+            <div className="relative flex w-9 shrink-0 justify-center">
+              {!last && (
+                <span
+                  className="absolute left-1/2 top-9 bottom-0 w-px -translate-x-1/2 bg-border-default"
+                  aria-hidden
+                />
+              )}
+              <div
+                className={`relative z-10 grid h-9 w-9 place-items-center rounded-xl ${m.soft}`}
+              >
+                <m.Icon className={`h-[18px] w-[18px] ${m.fg}`} strokeWidth={2.1} />
+              </div>
+            </div>
+
+            {/* 우: 내용 */}
+            <div className="min-w-0 flex-1 pb-4">
+              <div className="text-sm font-bold text-ink leading-snug">
+                {e.title}
+              </div>
+              <div className={`mt-0.5 text-[11px] font-semibold ${m.fg}`}>
+                {m.label}
+              </div>
+              {e.highlights && e.highlights.length > 0 && (
+                <ul className="mt-1.5 space-y-1">
+                  {e.highlights.map((h, j) => (
+                    <li
+                      key={j}
+                      className="flex gap-1.5 text-[12px] text-ink-soft leading-snug"
+                    >
+                      <span
+                        className={`mt-[6px] h-1 w-1 shrink-0 rounded-full ${m.bullet}`}
+                      />
+                      <span>
+                        <HL text={h} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+export function ResumeTimelineBlock({
+  timeline,
+}: {
+  timeline: TimelineEntry[];
+}) {
+  if (!timeline || timeline.length === 0) return null;
+
+  // 고교 학력 제외 + 시작 시점 내림차순(최신 위). 기간 미상은 원래 순서 유지하며 뒤로.
+  const rows = timeline
+    .filter((e) => !(e.kind === "education" && HIGH_SCHOOL_RE.test(e.title || "")))
+    .map((e, i) => ({ e, i, y: toYear(e.start) ?? toYear(e.end) }))
+    .sort((a, b) => {
+      const ay = a.y ?? -Infinity;
+      const by = b.y ?? -Infinity;
+      if (ay !== by) return by - ay;
+      return a.i - b.i;
+    });
+  if (rows.length === 0) return null;
+
+  // 항목이 넉넉하면 좌우 2열로 — 오른쪽 여백을 채우고 세로 길이를 반으로.
+  // 두 열 높이가 비슷하도록 "제목 1 + highlights×0.6" 가중치로 분할점을 잡는다.
+  // 좁은 컨테이너(@container)에서는 자동으로 1열(전체 시간순)로 접힌다.
+  const twoCol = rows.length >= 4;
+  let colA: typeof rows = rows;
+  let colB: typeof rows = [];
+  if (twoCol) {
+    const weight = (r: (typeof rows)[number]) =>
+      1 + (r.e.highlights?.length ?? 0) * 0.6;
+    const total = rows.reduce((s, r) => s + weight(r), 0);
+    let acc = 0;
+    let idx = rows.length;
+    for (let i = 0; i < rows.length; i++) {
+      acc += weight(rows[i]);
+      if (acc >= total / 2) {
+        idx = i + 1;
+        break;
+      }
+    }
+    idx = Math.max(1, Math.min(rows.length - 1, idx));
+    colA = rows.slice(0, idx);
+    colB = rows.slice(idx);
+  }
+
+  return (
+    <div className="@container space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
+          이력 타임라인
+        </span>
+        <span className="h-px flex-1 bg-border-default" aria-hidden />
+      </div>
+
+      {twoCol ? (
+        <div className="mt-1 grid grid-cols-1 gap-x-8 @2xl:grid-cols-2">
+          <TimelineColumn items={colA} />
+          <TimelineColumn items={colB} />
+        </div>
+      ) : (
+        <div className="mt-1">
+          <TimelineColumn items={colA} />
+        </div>
+      )}
+
+      <div className="text-[10px] text-ink-muted/70">
+        * 일부 기간은 겹칠 수 있습니다.
       </div>
     </div>
   );

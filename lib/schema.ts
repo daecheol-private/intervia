@@ -419,6 +419,15 @@ export const candidates = sqliteTable("candidates", {
       growth_attitude?: { score: number; reason: string };
     };
     interview_focus?: string[];
+    // 이력 타임라인 — 점수 무관, 화면 표시용 (마스킹본에서 추출, 기관 이름 없이 "한 일" 중심).
+    timeline?: Array<{
+      kind: "career" | "education" | "activity" | "training";
+      start?: string | null;
+      end?: string | null;
+      ongoing?: boolean;
+      title: string;
+      highlights?: string[];
+    }>;
   } | null>(),
   // 채용 단계 — `status` 는 평가 상태, `stage` 는 채용 절차 위치.
   // 12-stage 모델 (메인 단계 9 + AI면접 서브 2 + 1차 면접 서브 3).
