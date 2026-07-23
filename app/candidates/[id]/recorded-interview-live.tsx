@@ -113,6 +113,8 @@ export function LiveRecorder({
   const [suggestions, setSuggestions] = useState<string[]>([]); // 추천 질문(누적, 최대 5)
   const [elapsed, setElapsed] = useState(0);
   const [err, setErr] = useState<string | null>(null);
+  // 대면(같은 방, 마이크 1개) vs 온라인(화상, 화면 공유 오디오로 상대 목소리 캡처).
+  const [mode, setMode] = useState<"inperson" | "online">("inperson");
 
   const doneRef = useRef(false);
   const riIdRef = useRef<number | null>(null);
@@ -132,6 +134,9 @@ export function LiveRecorder({
   const audioOkRef = useRef(false); // 병행 녹음 성공 여부(실패 시 텍스트 폴백)
   const audioMimeRef = useRef("audio/webm");
   const appendChainRef = useRef<Promise<void>>(Promise.resolve()); // 청크 IndexedDB 적재 순차 체인
+  // 온라인 모드 전용: 화면 공유(상대 오디오) 스트림 + 마이크와 믹싱하는 AudioContext.
+  const displayStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const beforeUnload = useCallback((e: BeforeUnloadEvent) => {
     e.preventDefault();
@@ -248,6 +253,14 @@ export function LiveRecorder({
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
     }
+    if (displayStreamRef.current) {
+      displayStreamRef.current.getTracks().forEach((t) => t.stop());
+      displayStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      void audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
     window.removeEventListener("beforeunload", beforeUnload);
   };
 
@@ -286,18 +299,60 @@ export function LiveRecorder({
   };
 
   // 병행 오디오 녹음 시작 — 실패(권한 거부 등)해도 라이브 화면은 계속되고, 종료 시 텍스트로 폴백.
-  const startAudioCapture = async (riId: number) => {
+  // displayStream 이 있으면(온라인 모드) 마이크(면접관)와 화면 공유 오디오(지원자)를 Web Audio 로
+  // 한 트랙으로 믹싱해 녹음한다 — 종료 시 이 믹싱 오디오를 재전사해 양쪽 발언이 평가에 담긴다.
+  const startAudioCapture = async (
+    riId: number,
+    displayStream: MediaStream | null
+  ) => {
     audioOkRef.current = false;
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia)
       return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const micStream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
-      mediaStreamRef.current = stream;
+      mediaStreamRef.current = micStream;
+
+      // 녹음할 스트림 — 대면은 마이크 그대로, 온라인은 마이크+화면오디오 믹싱 결과.
+      let recordStream: MediaStream = micStream;
+      if (displayStream) {
+        const dispAudio = displayStream.getAudioTracks();
+        // 사용자가 브라우저 '공유 중지'를 누르면 상대 오디오가 끊긴다 — 자동 종료 처리.
+        if (dispAudio[0]) {
+          dispAudio[0].addEventListener("ended", () => {
+            if (!doneRef.current) {
+              setPhase("finishing");
+              void doFinish();
+            }
+          });
+        }
+        try {
+          const AC =
+            window.AudioContext ??
+            (window as unknown as { webkitAudioContext: typeof AudioContext })
+              .webkitAudioContext;
+          const ac = new AC();
+          audioContextRef.current = ac;
+          // 자동재생 정책으로 suspended 상태면 오디오가 흐르지 않아 무음이 녹음된다 — 명시적 resume.
+          void ac.resume().catch(() => {});
+          const dest = ac.createMediaStreamDestination();
+          ac.createMediaStreamSource(micStream).connect(dest);
+          if (dispAudio[0]) {
+            ac
+              .createMediaStreamSource(new MediaStream([dispAudio[0]]))
+              .connect(dest);
+          }
+          recordStream = dest.stream;
+        } catch {
+          // 믹싱 실패 시 최소한 마이크(면접관)만이라도 녹음 — 상대 목소리는 빠질 수 있음.
+          recordStream = micStream;
+        }
+      }
+
       const chosen = pickAudioMime();
       const mr = new MediaRecorder(
-        stream,
+        recordStream,
         chosen
           ? { mimeType: chosen, audioBitsPerSecond: AUDIO_BITS_PER_SECOND }
           : { audioBitsPerSecond: AUDIO_BITS_PER_SECOND }
@@ -331,6 +386,10 @@ export function LiveRecorder({
         mediaStreamRef.current.getTracks().forEach((t) => t.stop());
         mediaStreamRef.current = null;
       }
+      if (audioContextRef.current) {
+        void audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
       mediaRecorderRef.current = null;
     }
   };
@@ -358,6 +417,14 @@ export function LiveRecorder({
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
     }
+    if (displayStreamRef.current) {
+      displayStreamRef.current.getTracks().forEach((t) => t.stop());
+      displayStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      void audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
   };
 
   const start = async () => {
@@ -367,13 +434,60 @@ export function LiveRecorder({
     setSuggestions([]);
     suggestionsRef.current = [];
     setPhase("starting");
-    if (!voice.supported) {
+    const online = mode === "online";
+
+    // 대면은 브라우저 STT(실시간 받아쓰기)가 핵심 — 미지원 브라우저면 중단.
+    if (!online && !voice.supported) {
       setErr(
         "이 브라우저는 음성 인식을 지원하지 않습니다. Chrome·Edge·Safari 를 권장합니다."
       );
       setPhase("idle");
       return;
     }
+    // 온라인은 화면(탭/시스템) 오디오 캡처가 필수.
+    if (
+      online &&
+      (typeof navigator === "undefined" ||
+        !navigator.mediaDevices?.getDisplayMedia)
+    ) {
+      setErr(
+        "이 브라우저는 화면 오디오 캡처를 지원하지 않습니다. 온라인 모드는 Chrome·Edge 데스크톱을 권장합니다."
+      );
+      setPhase("idle");
+      return;
+    }
+
+    // 온라인: 서버 세션을 만들기 전에 화면 오디오부터 확보 — 여기서 실패하면 세션을 안 만든다
+    // (recording 상태 row 가 남아 '처리 중' 카드로 뜨는 것 방지).
+    let displayStream: MediaStream | null = null;
+    if (online) {
+      try {
+        const disp = await navigator.mediaDevices.getDisplayMedia({
+          video: true, // 오디오 공유 체크박스가 뜨려면 video 요청이 필요(브라우저 정책)
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        });
+        // 비디오는 쓰지 않는다(오디오만 필요) — 즉시 정지.
+        disp.getVideoTracks().forEach((t) => t.stop());
+        if (disp.getAudioTracks().length === 0) {
+          disp.getTracks().forEach((t) => t.stop());
+          throw new Error("NO_DISPLAY_AUDIO");
+        }
+        displayStream = disp;
+      } catch (e) {
+        setPhase("idle");
+        setErr(
+          e instanceof Error && e.message === "NO_DISPLAY_AUDIO"
+            ? "화면 공유 시 '시스템 오디오'(또는 탭 오디오)도 함께 공유해 주세요 — 지원자 목소리가 녹음되지 않습니다. 다시 시도해 주세요."
+            : "화면 공유가 취소되었습니다. 온라인 모드는 화면(탭/시스템) 오디오 공유가 필요합니다."
+        );
+        return;
+      }
+    }
+
     try {
       const r = await fetch(
         `/api/candidates/${candidateId}/recorded-interview/live`,
@@ -395,6 +509,7 @@ export function LiveRecorder({
         throw new Error(msg || "라이브 세션 시작 실패");
       }
       riIdRef.current = ((await r.json()) as { id: number }).id;
+      displayStreamRef.current = displayStream; // cleanup 대상 등록(온라인만 non-null)
 
       try {
         const wl = (navigator as WakeLockNav).wakeLock;
@@ -408,10 +523,11 @@ export function LiveRecorder({
       pendingRef.current = "";
       doneRef.current = false;
       cleanChainRef.current = Promise.resolve();
-      // 병행 오디오 녹음 시작(A안). 마이크 권한을 여기서 먼저 받아 Web Speech 와 공유.
-      await startAudioCapture(riIdRef.current);
+      // 병행 오디오 녹음 시작(A안). 온라인이면 마이크+화면오디오를 믹싱해 녹음.
+      await startAudioCapture(riIdRef.current, displayStream);
       setPhase("recording");
-      voice.start(); // 브라우저 STT 시작
+      // 실시간 받아쓰기·화자정리·추천질문은 대면 전용 — 온라인은 녹음만 하고 종료 후 평가.
+      if (!online) voice.start(); // 브라우저 STT 시작
 
       elapsedTimerRef.current = window.setInterval(() => {
         // 경과는 세션 시작 시각 기준으로 계산(탭 throttle 시 드리프트 방지).
@@ -427,11 +543,14 @@ export function LiveRecorder({
           void doFinish();
         }
       }, 1000);
-      suggestTimerRef.current = window.setInterval(() => {
-        // 백그라운드 탭에서는 LLM 추천 질문 폴링 스킵.
-        if (document.visibilityState === "visible") void pollSuggestion();
-      }, 45_000);
+      if (!online) {
+        suggestTimerRef.current = window.setInterval(() => {
+          // 백그라운드 탭에서는 LLM 추천 질문 폴링 스킵.
+          if (document.visibilityState === "visible") void pollSuggestion();
+        }, 45_000);
+      }
     } catch (e) {
+      if (displayStream) displayStream.getTracks().forEach((t) => t.stop());
       cleanup();
       setPhase("idle");
       setErr(e instanceof Error ? e.message : "녹음을 시작하지 못했습니다.");
@@ -559,17 +678,90 @@ export function LiveRecorder({
     <div className="rounded-xl border border-primary/30 bg-primary-soft/20 p-4 space-y-4">
       {phase === "idle" ? (
         <div className="space-y-3">
-          <p className="text-sm text-ink-soft leading-relaxed">
-            노트북 마이크로{" "}
-            <strong>{round === "round2" ? "2차" : "1차"} 대면 면접</strong>을
-            기록합니다. 말하면 <strong>바로 화면에 텍스트</strong>가 뜨고, 잠깐
-            멈출 때마다 화자(면접관/지원자)별로 정리됩니다. 시작하면 마이크 권한을
-            허용해 주세요. 진행 중 <strong>이 탭을 닫지 마세요.</strong>
-          </p>
-          <p className="text-[11px] text-ink-muted">
-            음성 인식은 브라우저 기능을 사용합니다 — Chrome·Edge·Safari 권장
-            (Firefox 미지원). 정확한 평가를 위해 음성이 함께 녹음되어 전사에만 쓰이며,
-            전사 직후 폐기됩니다(보관하지 않음).
+          {/* 대면 / 온라인 선택 — 방식에 따라 캡처·표시가 달라진다. */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
+              면접 방식
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("inperson");
+                  setErr(null);
+                }}
+                aria-pressed={mode === "inperson"}
+                className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
+                  mode === "inperson"
+                    ? "border-primary bg-primary-soft/50 ring-1 ring-primary/30"
+                    : "border-border-default bg-card hover:bg-surface-alt"
+                }`}
+              >
+                <span className="block text-sm font-medium text-ink">대면</span>
+                <span className="block text-xs text-ink-muted mt-0.5 leading-snug">
+                  같은 공간에서 노트북 마이크로 진행. 실시간 화자 분리·추천 질문
+                  제공.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("online");
+                  setErr(null);
+                }}
+                aria-pressed={mode === "online"}
+                className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
+                  mode === "online"
+                    ? "border-primary bg-primary-soft/50 ring-1 ring-primary/30"
+                    : "border-border-default bg-card hover:bg-surface-alt"
+                }`}
+              >
+                <span className="block text-sm font-medium text-ink">
+                  온라인 (화상)
+                </span>
+                <span className="block text-xs text-ink-muted mt-0.5 leading-snug">
+                  Zoom 등 화상 면접. 화면 공유로 상대 목소리까지 녹음. 녹음만
+                  진행.
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {mode === "inperson" ? (
+            <p className="text-[15px] text-ink-soft leading-relaxed">
+              노트북 마이크로 <strong>대면 면접</strong>을 기록합니다. 말하면{" "}
+              <strong>바로 화면에 텍스트</strong>가 뜨고, 잠깐 멈출 때마다
+              화자(면접관/지원자)별로 정리됩니다. 시작하면 마이크 권한을 허용해
+              주세요. 진행 중 <strong>이 탭을 닫지 마세요.</strong>
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-[15px] text-ink-soft leading-relaxed">
+                <strong>온라인 면접</strong>을 기록합니다. 지원자 목소리는
+                스피커·헤드폰으로 나오기 때문에, 기술적인 이유로{" "}
+                <strong>화면 공유에 담긴 소리를 통해서만</strong> 녹음할 수 있어요.
+                그래서 시작하면 화면 공유 창이 한 번 뜹니다.
+              </p>
+              <p className="text-[15px] text-ink-soft leading-relaxed">
+                화면은 <strong>무엇을 골라도 괜찮아요</strong> — 전체 화면을 골라도
+                됩니다. 중요한 건 화면이 아니라 <strong>소리</strong>거든요. 공유 창
+                아래쪽의 <strong>‘시스템 오디오 공유’</strong>(Zoom을 브라우저 탭으로
+                쓰면 ‘탭 오디오’)를 <strong>꼭 켜 주세요.</strong> 이것만 켜져 있으면
+                지원자 목소리가 녹음됩니다. 공유한 화면 영상은 저장하지 않고 소리만
+                씁니다. 진행 중 <strong>이 탭을 닫지 마세요.</strong>
+              </p>
+              <div className="rounded-lg border border-warning/30 bg-warning-soft/40 px-3 py-2.5 text-sm text-ink-soft leading-relaxed">
+                온라인 모드에서는{" "}
+                <strong>실시간 화자 분리와 추천 질문이 제공되지 않습니다</strong> —
+                녹음만 진행되고 <strong>평가 리포트는 면접 종료 후 생성</strong>
+                됩니다. (양쪽 목소리가 모두 녹음되어 평가 정확도는 대면과
+                동일합니다.) Chrome·Edge 데스크톱 권장.
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-ink-muted">
+            정확한 평가를 위해 음성이 녹음되어 전사에만 쓰이며, 전사 직후
+            폐기됩니다(보관하지 않음).
           </p>
           {err && <p className="text-sm text-danger">{err}</p>}
           <div className="flex gap-2">
@@ -578,7 +770,7 @@ export function LiveRecorder({
               className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-sm font-medium shadow-sm inline-flex items-center gap-1.5"
             >
               <Mic className="w-4 h-4" />
-              녹음 시작
+              {mode === "online" ? "화면 공유하고 녹음 시작" : "녹음 시작"}
             </button>
             <button
               onClick={onClose}
@@ -615,106 +807,133 @@ export function LiveRecorder({
 
           {err && <p className="text-xs text-warning">{err}</p>}
 
-          {/* 정리된 대화 (화자 구분) — 메인 */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
-                정리된 대화 (화자 구분)
-              </span>
-              <span className="text-[10px] text-ink-muted">
-                말이 멈출 때마다 정리
-              </span>
-            </div>
-            <div className="h-72 overflow-y-auto rounded-lg border border-border-default bg-card p-3 space-y-2 text-sm leading-relaxed">
-              {cleaned.length === 0 ? (
-                <p className="text-ink-muted text-xs">
-                  화자별로 정리된 대화가 여기에 쌓입니다. (아래 실시간 인식이 먼저
-                  뜹니다)
+          {mode === "online" ? (
+            /* 온라인: 실시간 화자분리·추천질문 없이 '녹음 중' 표시만. 평가는 종료 후. */
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border-default bg-card p-4 space-y-2">
+                <p className="flex items-center gap-2 text-sm text-ink">
+                  <span className="w-2 h-2 rounded-full bg-danger animate-pulse" />
+                  화면 공유 오디오로{" "}
+                  <strong>양쪽(면접관·지원자) 목소리를 녹음 중</strong>입니다.
                 </p>
-              ) : (
-                groupByRole(cleaned).map((g) => (
-                  <div key={g.segs[0].seq} className="flex gap-2">
-                    <span
-                      className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded h-fit ${
-                        g.role === "candidate"
-                          ? "bg-card text-info border border-info/40"
-                          : "bg-surface-alt text-ink-soft border border-border-default"
-                      }`}
-                    >
-                      {roleKo(g.role)}
+                <p className="text-[11px] text-ink-muted leading-relaxed">
+                  온라인 모드에서는 실시간 화자 분리·추천 질문이 표시되지 않습니다.
+                  면접이 끝나면 <strong>면접 종료</strong>를 눌러 주세요 — 녹음을
+                  재전사해 평가 리포트를 생성합니다. 화면 공유를 중지하면 자동으로
+                  종료됩니다.
+                </p>
+              </div>
+              <p className="text-[11px] text-ink-muted">
+                음성은 종료 후 재전사에만 쓰이며 전사 직후 폐기됩니다.{" "}
+                <strong>최대 1시간까지 녹음되며, 지나면 자동 종료됩니다.</strong>
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* 정리된 대화 (화자 구분) — 메인 */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
+                    정리된 대화 (화자 구분)
+                  </span>
+                  <span className="text-[10px] text-ink-muted">
+                    말이 멈출 때마다 정리
+                  </span>
+                </div>
+                <div className="h-72 overflow-y-auto rounded-lg border border-border-default bg-card p-3 space-y-2 text-sm leading-relaxed">
+                  {cleaned.length === 0 ? (
+                    <p className="text-ink-muted text-xs">
+                      화자별로 정리된 대화가 여기에 쌓입니다. (아래 실시간 인식이
+                      먼저 뜹니다)
+                    </p>
+                  ) : (
+                    groupByRole(cleaned).map((g) => (
+                      <div key={g.segs[0].seq} className="flex gap-2">
+                        <span
+                          className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded h-fit ${
+                            g.role === "candidate"
+                              ? "bg-card text-info border border-info/40"
+                              : "bg-surface-alt text-ink-soft border border-border-default"
+                          }`}
+                        >
+                          {roleKo(g.role)}
+                        </span>
+                        <span className="text-ink">
+                          {g.segs.map((s) => s.text).join(" ")}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                  <div ref={transcriptEndRef} />
+                </div>
+              </div>
+
+              {/* 실시간 인식 (정리 전) — 즉시 피드백 */}
+              <div>
+                <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
+                  실시간 인식
+                </div>
+                <div className="min-h-[3rem] rounded-lg border border-border-default bg-surface-alt p-3 text-sm text-ink-soft leading-relaxed">
+                  {rawTail || voice.interim ? (
+                    <>
+                      <span>{rawTail}</span>{" "}
+                      <span className="text-ink-muted italic">
+                        {voice.interim}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-ink-muted text-xs">
+                      {voice.listening
+                        ? "말씀하세요 — 인식되는 즉시 표시됩니다."
+                        : "마이크 준비 중..."}
                     </span>
-                    <span className="text-ink">
-                      {g.segs.map((s) => s.text).join(" ")}
+                  )}
+                </div>
+              </div>
+
+              {/* 추천 질문 — 누적(최대 5). 클릭하면 사용 처리(목록에서 제거). */}
+              {suggestions.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
+                    추천 질문{" "}
+                    <span className="text-ink-muted normal-case font-normal">
+                      · 클릭하면 목록에서 제거
                     </span>
                   </div>
-                ))
+                  <div className="space-y-1.5">
+                    {suggestions.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        onClick={() => {
+                          setSuggestions((prev) => {
+                            const next = prev.filter((x) => x !== q);
+                            suggestionsRef.current = next; // 폴링 클로저가 즉시 최신값 읽도록
+                            return next;
+                          });
+                          // 45초 폴링을 안 기다리고 즉시 빈자리를 다시 채운다.
+                          void pollSuggestion();
+                        }}
+                        className="block w-full text-left rounded-md border border-primary/20 bg-primary-soft/40 hover:bg-white hover:border-primary/40 px-2.5 py-1.5 text-xs text-primary-deep leading-relaxed transition-colors"
+                        title="클릭하면 목록에서 제거"
+                      >
+                        “{q}”
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
-              <div ref={transcriptEndRef} />
-            </div>
-          </div>
 
-          {/* 실시간 인식 (정리 전) — 즉시 피드백 */}
-          <div>
-            <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
-              실시간 인식
-            </div>
-            <div className="min-h-[3rem] rounded-lg border border-border-default bg-surface-alt p-3 text-sm text-ink-soft leading-relaxed">
-              {rawTail || voice.interim ? (
-                <>
-                  <span>{rawTail}</span>{" "}
-                  <span className="text-ink-muted italic">{voice.interim}</span>
-                </>
-              ) : (
-                <span className="text-ink-muted text-xs">
-                  {voice.listening
-                    ? "말씀하세요 — 인식되는 즉시 표시됩니다."
-                    : "마이크 준비 중..."}
-                </span>
-              )}
-            </div>
-          </div>
+              {voice.error && <p className="text-xs text-warning">{voice.error}</p>}
 
-          {/* 추천 질문 — 누적(최대 5). 클릭하면 사용 처리(목록에서 제거). */}
-          {suggestions.length > 0 && (
-            <div>
-              <div className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1.5">
-                추천 질문{" "}
-                <span className="text-ink-muted normal-case font-normal">
-                  · 클릭하면 목록에서 제거
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {suggestions.map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    onClick={() => {
-                      setSuggestions((prev) => {
-                        const next = prev.filter((x) => x !== q);
-                        suggestionsRef.current = next; // 폴링 클로저가 즉시 최신값 읽도록
-                        return next;
-                      });
-                      // 45초 폴링을 안 기다리고 즉시 빈자리를 다시 채운다.
-                      void pollSuggestion();
-                    }}
-                    className="block w-full text-left rounded-md border border-primary/20 bg-primary-soft/40 hover:bg-white hover:border-primary/40 px-2.5 py-1.5 text-xs text-primary-deep leading-relaxed transition-colors"
-                    title="클릭하면 목록에서 제거"
-                  >
-                    “{q}”
-                  </button>
-                ))}
-              </div>
-            </div>
+              <p className="text-[11px] text-ink-muted">
+                실시간 인식은 즉시, 화자 구분 정리는 몇 초 간격으로 따라붙습니다.
+                종료 시 녹음된 음성을 다시 전사해 더 정확한 평가 리포트를 만들며,
+                음성은 전사 직후 폐기됩니다.{" "}
+                <strong>최대 1시간까지 녹음되며, 지나면 자동 종료됩니다.</strong>
+              </p>
+            </>
           )}
-
-          {voice.error && <p className="text-xs text-warning">{voice.error}</p>}
-
-          <p className="text-[11px] text-ink-muted">
-            실시간 인식은 즉시, 화자 구분 정리는 몇 초 간격으로 따라붙습니다. 종료 시
-            녹음된 음성을 다시 전사해 더 정확한 평가 리포트를 만들며, 음성은 전사 직후
-            폐기됩니다.{" "}
-            <strong>최대 1시간까지 녹음되며, 지나면 자동 종료됩니다.</strong>
-          </p>
         </div>
       )}
     </div>
