@@ -22,6 +22,49 @@ import {
 
 // 서버 MAX_AUDIO_BYTES(18MB) 와 동기 — 초과 시 client upload 전에 미리 거른다.
 const MAX_AUDIO_BYTES = 18 * 1024 * 1024;
+// 서버 MIN_INTERVIEW_DURATION_SECONDS(5분) 와 동기 — 이보다 짧은 녹음은 오녹음으로 보고
+// 업로드(전사·평가·과금) 전에 사전 차단한다. 측정 불가 파일은 통과 → 서버 finalize 안전망이 잡는다.
+const MIN_INTERVIEW_DURATION_SECONDS = 300;
+const TOO_SHORT_INTERVIEW_MESSAGE =
+  "녹음이 5분 미만이라 평가하지 않았습니다. 정상적인 대면 면접 녹음인지 확인해 주세요.";
+
+// 오디오/비디오 파일 길이(초)를 브라우저에서 측정. webm/opus 는 loadedmetadata 시 duration 이
+// Infinity 로 나오는 크로미움 버그가 있어, currentTime 을 큰 값으로 seek 해 실제 duration 을
+// 유도하는 우회를 쓴다. 측정 불가(포맷 미지원·오류·타임아웃)면 null — 호출자는 통과시킨다.
+function getMediaDurationSeconds(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const el = document.createElement("audio");
+    const url = URL.createObjectURL(file);
+    let settled = false;
+    const done = (v: number | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      el.removeAttribute("src");
+      resolve(v);
+    };
+    const timer = window.setTimeout(() => done(null), 10_000);
+    el.preload = "metadata";
+    el.onloadedmetadata = () => {
+      const d = el.duration;
+      if (Number.isFinite(d) && d > 0) return done(Math.round(d));
+      // Infinity(webm/opus) — 큰 값으로 seek 하면 실제 duration 이 채워진다.
+      el.ontimeupdate = () => {
+        el.ontimeupdate = null;
+        const d2 = el.duration;
+        done(Number.isFinite(d2) && d2 > 0 ? Math.round(d2) : null);
+      };
+      try {
+        el.currentTime = 1e101;
+      } catch {
+        done(null);
+      }
+    };
+    el.onerror = () => done(null);
+    el.src = url;
+  });
+}
 
 // 연속 같은 화자 세그먼트를 한 묶음으로 — 문장 단위로 끊긴 전사를 화자별로 합쳐 보여준다.
 function groupByRole<T extends { role: unknown }>(
@@ -237,8 +280,18 @@ export function RecordedInterviewPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId, round]);
 
-  // 이 라운드 건만 표시.
-  const roundInterviews = (interviews ?? []).filter((i) => i.round === round);
+  // 5분 미만 오녹음으로 걸러진 실패는 화면에서 숨긴다 — 종료 순간 이미 안내했고, 재평가해도 또
+  // 막혀 무의미하다(행은 DB 에 남지만 표시만 안 함). 진짜 실패(전사·LLM 오류)는 재업로드가 필요하니
+  // 카드를 유지: too_short 는 status=failed + 0<duration<5분 으로만 식별한다(error 문자열 비의존).
+  const isTooShortReject = (i: RI) =>
+    i.status === "failed" &&
+    i.durationSeconds > 0 &&
+    i.durationSeconds < MIN_INTERVIEW_DURATION_SECONDS;
+
+  // 이 라운드 건만 표시(5분 미만 오녹음은 숨김).
+  const roundInterviews = (interviews ?? []).filter(
+    (i) => i.round === round && !isTooShortReject(i)
+  );
 
   // 화면엔 이 라운드의 **최신 1건만** 노출한다 — 새 대면 면접을 진행하면 새 row 가 최신이 되어
   // 이전 녹음/평가를 화면상 대체한다(사용자 요구로 "덮어쓰기"). 이전 row 는 DB 에 남지만(안전)
@@ -308,6 +361,15 @@ export function RecordedInterviewPanel({
     setUploading(true);
     setUploadPct(null);
     try {
+      // 5분 미만 = 오녹음 — 업로드(전사·평가·과금) 전에 사전 차단. 측정 불가 파일은 통과(서버 안전망).
+      const measured = await getMediaDurationSeconds(file);
+      if (measured != null && measured < MIN_INTERVIEW_DURATION_SECONDS) {
+        notify(TOO_SHORT_INTERVIEW_MESSAGE, {
+          title: "녹음이 너무 짧음",
+          tone: "danger",
+        });
+        return;
+      }
       // Vercel 함수 본문 한도(4.5MB) 회피 — 브라우저에서 Blob 으로 직접 업로드 후 서버엔 URL 만.
       // 미설정 dev 환경은 NEXT_PUBLIC_BLOB_CLIENT_UPLOAD!=1 → 기존 FormData 경로.
       const useBlobUpload = process.env.NEXT_PUBLIC_BLOB_CLIENT_UPLOAD === "1";
@@ -334,6 +396,7 @@ export function RecordedInterviewPanel({
             size: file.size,
             round,
             consentConfirmed: true,
+            ...(measured != null ? { durationSeconds: measured } : {}),
           }),
         });
       } else {
@@ -341,6 +404,7 @@ export function RecordedInterviewPanel({
         fd.append("audio", file);
         fd.append("round", round);
         fd.append("consentConfirmed", "true");
+        if (measured != null) fd.append("durationSeconds", String(measured));
         r = await fetch(`/api/candidates/${candidateId}/recorded-interview`, {
           method: "POST",
           body: fd,

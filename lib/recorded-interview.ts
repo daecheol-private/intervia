@@ -16,6 +16,10 @@ import type { JobInfo, ScreeningContext } from "./prompts";
 import { chargeFeature, chargeRepeatable } from "./tokens";
 import { maskText, type KnownPII } from "./mask";
 import { log } from "./logger";
+import {
+  MIN_INTERVIEW_DURATION_SECONDS,
+  TOO_SHORT_INTERVIEW_MESSAGE,
+} from "./upload-validation";
 
 /**
  * 대면(오프라인) 면접 녹음 → AI 평가 공유 코어 파이프라인.
@@ -314,6 +318,25 @@ export async function finalizeRecordedInterview(
       )
       .orderBy(asc(interviewTranscriptSegments.seq));
     if (segs.length === 0) throw new Error("전사 세그먼트가 없습니다.");
+
+    // 5분 미만 = 오녹음 — 전사까지 진행됐어도 평가·과금을 건너뛴다(최종 방어). 클라이언트/진입점
+    // 사전 차단이 뚫렸거나(파일 메타 측정 실패), 재평가로 들어온 경우가 여기 걸린다.
+    // durationSeconds=0(측정 완전 실패)은 오차단 방지를 위해 통과시킨다. status='failed' 로
+    // 남겨 실패 카드로 노출하고(사유는 error), 후차감(chargeFeature)에 도달하기 전에 return 한다.
+    if (
+      ri.durationSeconds > 0 &&
+      ri.durationSeconds < MIN_INTERVIEW_DURATION_SECONDS
+    ) {
+      await db
+        .update(recordedInterviews)
+        .set({
+          status: "failed",
+          error: TOO_SHORT_INTERVIEW_MESSAGE,
+          completedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(recordedInterviews.id, recordedInterviewId));
+      return; // 평가·과금 skip. throw 안 함 — 워커가 정상 완료로 보고 재큐하지 않는다.
+    }
 
     // 후보자·공고는 서로 독립 조회 — 병렬로 (원격 DB 왕복 2회 직렬 회피).
     // 역할 배정 전에 로드 — 전사 마스킹의 known PII(이름·이메일·전화)로 사용.

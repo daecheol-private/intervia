@@ -7,6 +7,7 @@ import { useVoiceInput } from "@/app/interview/[token]/use-voice-input";
 import {
   idbAppendChunk,
   idbCompleteSession,
+  idbDeleteSession,
   idbStartSession,
   uploadLiveRecording,
   type LiveRecSession,
@@ -20,6 +21,10 @@ import {
 // 청크로 쌓는다. 종료 시 그 오디오를 서버에 올려 Gemini 로 **재전사**한 결과가 최종 리포트의
 // 근거가 된다 — 라이브 인식이 뭉개져도(말 많음·화자 다수) 리포트 품질은 영향받지 않는다.
 // IndexedDB 에 있으므로 업로드 도중 새로고침해도 유실 없이 재개된다. 설계: docs/LIVE_INTERVIEW_PLAN.md
+
+// 서버 MIN_INTERVIEW_DURATION_SECONDS(5분) 와 동기 — 이보다 짧은 라이브 녹음은 오녹음으로 보고
+// 종료 시 오디오 업로드·평가·과금을 전부 건너뛴다(서버 finish 게이트가 too_short 실패로 마킹).
+const MIN_INTERVIEW_DURATION_SECONDS = 300;
 
 // Opus 24kbps mono — 1시간 ≈ 11MB(서버 18MB 한도 여유). 음성 전사엔 충분한 음질.
 const AUDIO_BITS_PER_SECOND = 24_000;
@@ -584,6 +589,34 @@ export function LiveRecorder({
     const durationSeconds = Math.round(
       (Date.now() - sessionStartRef.current) / 1000
     );
+
+    // 5분 미만 = 오녹음 — 오디오 업로드·평가·과금을 전부 스킵. IndexedDB 오디오는 폐기하고,
+    // 서버 recording 행은 finish(too_short)로 실패 마킹시킨다(실패 카드로 노출). 정상 면접이었다면
+    // 사용자가 다시 진행하면 된다.
+    if (durationSeconds < MIN_INTERVIEW_DURATION_SECONDS) {
+      await stopAudioCapture().catch(() => {});
+      await idbDeleteSession(riId).catch(() => {});
+      try {
+        await fetch(`/api/candidates/${candidateId}/recorded-interview/live`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "finish",
+            recordedInterviewId: riId,
+            durationSeconds,
+          }),
+        });
+      } catch {
+        /* 서버 마킹 실패는 비치명적 — recording 행이 남아도 무해(과금 없음) */
+      }
+      notify(
+        "녹음이 5분 미만이라 평가하지 않았습니다. 정상적인 면접이었다면 다시 진행해 주세요.",
+        { title: "녹음이 너무 짧음", tone: "danger" }
+      );
+      onFinished();
+      onClose();
+      return;
+    }
 
     // ── A안 주 경로: 병행 녹음한 오디오를 올려 재전사·평가 ──────────────────────
     // 라이브 화면의 Web Speech 초안이 아니라 이 오디오가 최종 리포트의 근거가 된다.

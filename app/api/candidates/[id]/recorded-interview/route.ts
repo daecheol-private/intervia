@@ -14,7 +14,11 @@ import {
 import { finalizeRecordedInterview } from "@/lib/recorded-interview";
 import { triggerRecordedWorker } from "@/lib/recorded-interview-queue";
 import { deleteFile, saveFile, isAllowedBlobUrl } from "@/lib/storage";
-import { MAX_AUDIO_BYTES } from "@/lib/upload-validation";
+import {
+  MAX_AUDIO_BYTES,
+  MIN_INTERVIEW_DURATION_SECONDS,
+  TOO_SHORT_INTERVIEW_MESSAGE,
+} from "@/lib/upload-validation";
 import { logAudit } from "@/lib/audit";
 import { after } from "next/server";
 
@@ -181,6 +185,27 @@ export async function POST(
         { status: 200 }
       );
     }
+    // 5분 미만 = 오녹음 — 라이브 오디오 재전사·평가 전에 사전 차단(안전망; 주 경로는 doFinish 가
+    // 오디오를 아예 안 올린다). 오디오 폐기 + 기존 행을 too_short 실패로 마킹(실패 카드).
+    if (
+      durValue != null &&
+      durValue > 0 &&
+      durValue < MIN_INTERVIEW_DURATION_SECONDS
+    ) {
+      await deleteFile(audioBlobKey).catch(() => {});
+      await db
+        .update(recordedInterviews)
+        .set({
+          durationSeconds: Math.round(durValue),
+          status: "failed",
+          error: TOO_SHORT_INTERVIEW_MESSAGE,
+          audioBlobKey: null,
+          startedAt: null,
+          completedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(recordedInterviews.id, attachId));
+      return Response.json({ id: attachId, status: "too_short" }, { status: 200 });
+    }
     await db
       .update(recordedInterviews)
       .set({
@@ -212,6 +237,17 @@ export async function POST(
     });
     triggerRecordedWorker(req);
     return Response.json({ id: attachId, status: "queued" }, { status: 202 });
+  }
+
+  // 5분 미만 = 오녹음 — 신규 업로드는 큐 적재(전사·평가·과금) 전에 사전 차단. 측정값이 있을 때만
+  // (프론트가 파일 길이를 재서 보냄); 측정 불가면 durValue=null 로 통과 → finalize 안전망이 잡는다.
+  if (
+    durValue != null &&
+    durValue > 0 &&
+    durValue < MIN_INTERVIEW_DURATION_SECONDS
+  ) {
+    await deleteFile(audioBlobKey).catch(() => {});
+    return new Response(TOO_SHORT_INTERVIEW_MESSAGE, { status: 400 });
   }
 
   // 큐 적재 — status='queued'. 전사·평가는 백그라운드 워커가 수행.

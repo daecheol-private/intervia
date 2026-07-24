@@ -19,6 +19,10 @@ import {
 import type { JobInfo } from "@/lib/prompts";
 import { logAudit } from "@/lib/audit";
 import { log } from "@/lib/logger";
+import {
+  MIN_INTERVIEW_DURATION_SECONDS,
+  TOO_SHORT_INTERVIEW_MESSAGE,
+} from "@/lib/upload-validation";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -221,6 +225,20 @@ export async function POST(
   // ── finish ─────────────────────────────────────────────
   if (body.action === "finish") {
     const dur = Number(body.durationSeconds);
+    // 5분 미만 = 오녹음 — 전사·평가·과금 스킵. recording 행을 too_short 실패로 마킹(실패 카드).
+    // (주 경로인 doFinish 사전 차단이 이 경로도 함께 막지만, 서버에서 한 번 더 방어한다.)
+    if (Number.isFinite(dur) && dur > 0 && dur < MIN_INTERVIEW_DURATION_SECONDS) {
+      await db
+        .update(recordedInterviews)
+        .set({
+          durationSeconds: Math.round(dur),
+          status: "failed",
+          error: TOO_SHORT_INTERVIEW_MESSAGE,
+          completedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(recordedInterviews.id, riId));
+      return Response.json({ status: "too_short" }, { status: 200 });
+    }
     if (Number.isFinite(dur) && dur > 0) {
       await db
         .update(recordedInterviews)
