@@ -9,7 +9,8 @@
  * 받는 사람: job_interviewers 에 배정된 active 사용자 전원(역할 무관). 각자 본인 배정 공고만.
  * 4블록:
  *   ① 오늘(KST) 진행할 확정 면접 — interview_schedules.status='selected' + 오늘 슬롯
- *   ② 결정 대기            — round1_waiting / round1_passed / round2_passed (outcome 미정)
+ *   ② 결정 대기            — round1_passed / round2_passed (outcome 미정, 면접 후 합/불 결정).
+ *      round1_waiting(1차 확정·미실시)은 제외 — D-1 리마인더 + 당일 블록①이 커버.
  *   ③ 신규 지원·검토 대기  — applied / screened / ai_evaluated (outcome 미정)
  *   ④ 자동 종결            — 링크 만료 자동 불합격(outcomeReason 기반), 신규 창 내 발생분.
  *      expire cron(24시간 가동)의 개별 알림 메일을 대체한다 — 야간·주말 메일 소스 제거.
@@ -48,8 +49,13 @@ import { formatSlotKst } from "./schedules";
 import { roundLabel } from "./schedules";
 import { STAGE_WAITER, isScheduleSuperseded, type Stage } from "./stage-meta";
 
-/** "결정 대기"로 묶는 stage — 면접이 어느 정도 진행돼 합/불·다음 단계를 정해야 하는 단계. */
-const DECISION_STAGES: Stage[] = ["round1_waiting", "round1_passed", "round2_passed"];
+/**
+ * "결정 대기"로 묶는 stage — 면접을 이미 치러 합/불·다음 단계를 정해야 하는 단계.
+ * round1_waiting(1차 면접 확정·미실시)은 제외: 아직 면접 전이라 '결정'할 게 없고,
+ * 면접일까지 매일 반복 발송되는 소음이다. 확정 면접은 D-1 리마인더 + 당일 블록①(오늘
+ * 진행할 면접)이 적시에 커버하므로 digest 결정 블록에 넣지 않는다.
+ */
+const DECISION_STAGES: Stage[] = ["round1_passed", "round2_passed"];
 /** "신규 지원·검토 대기"로 묶는 stage — 면접 전 단계에서 검토·진행 결정이 필요한 단계. */
 const REVIEW_STAGES: Stage[] = ["applied", "screened", "ai_evaluated"];
 
