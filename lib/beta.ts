@@ -49,7 +49,7 @@ export const LIST_PRICING: Record<Key, number> = {
 export const BETA = {
   active: true,
   label: "오픈베타",
-  endsAtLabel: "2026년 7월 31일",
+  endsAtLabel: "2026년 8월 31일",
   note: "오픈베타 기간이며, 기간·가격은 변동될 수 있습니다.",
 } as const;
 
