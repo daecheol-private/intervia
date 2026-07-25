@@ -1,8 +1,12 @@
 /**
- * SaaS 무료 티어 쿼터 모니터 — Resend(일 100·월 3,000통) + Turso(행 읽기/쓰기·저장용량).
+ * 사용량 쿼터 모니터 — 메일 발송(일·월 한도) + Turso(행 읽기/쓰기·저장용량).
  * 일일 cron(/api/cron/quota-alerts)이 재서 임계 초과 시 Slack + 운영 메일로 통지.
  *
  * 순수 수집/판정만 — 발송은 cron 라우트가 담당(ops-alerts 와 동일 구조).
+ *
+ * 메일 한도는 발신 서버의 정책 한도라 env 로 주입한다(주 경로=회사 SMTP, 장애 시 Resend 로
+ * 수동 전환 — RUNBOOK §5. 전환 시 한도가 크게 낮아지므로 env 도 함께 조정해야 한다).
+ * 구 이름(RESEND_*)도 계속 읽는다 — 기존 운영 환경변수가 무효화되지 않게.
  */
 import { sentToday, sentThisMonth } from "./mail-usage";
 import { fetchTursoUsage } from "./turso-usage";
@@ -24,24 +28,30 @@ export async function collectQuotaReport(): Promise<QuotaReport> {
   const alerts: QuotaAlert[] = [];
   const lines: string[] = [];
 
-  // ── Resend ─────────────────────────────────────────────────────────────
+  // ── 메일 발송 ───────────────────────────────────────────────────────────
   const dailyCap = Number(process.env.MAIL_DAILY_BUDGET ?? 100);
-  const monthlyCap = Number(process.env.RESEND_MONTHLY_CAP ?? 3000);
-  const warnDaily = Number(process.env.RESEND_WARN_DAILY ?? 80);
-  const warnMonthly = Number(process.env.RESEND_WARN_MONTHLY ?? 2400);
+  const monthlyCap = Number(
+    process.env.MAIL_MONTHLY_CAP ?? process.env.RESEND_MONTHLY_CAP ?? 3000
+  );
+  const warnDaily = Number(
+    process.env.MAIL_WARN_DAILY ?? process.env.RESEND_WARN_DAILY ?? 80
+  );
+  const warnMonthly = Number(
+    process.env.MAIL_WARN_MONTHLY ?? process.env.RESEND_WARN_MONTHLY ?? 2400
+  );
   const today = await sentToday();
   const month = await sentThisMonth();
-  lines.push(`📧 Resend — 오늘 ${today}/${dailyCap} · 이번달 ${month}/${monthlyCap}`);
+  lines.push(`📧 메일 발송 — 오늘 ${today}/${dailyCap} · 이번달 ${month}/${monthlyCap}`);
   if (today >= warnDaily) {
     alerts.push({
       level: today >= dailyCap ? "critical" : "warn",
-      message: `Resend 일일 발송 ${today}/${dailyCap} (경고 임계 ${warnDaily}). 캡 도달 시 이후 발송 실패 — 초대·불합격 통보 지연 가능.`,
+      message: `메일 일일 발송 ${today}/${dailyCap} (경고 임계 ${warnDaily}). 한도 도달 시 이후 발송 실패 — 초대·불합격 통보 지연 가능.`,
     });
   }
   if (month >= warnMonthly) {
     alerts.push({
       level: month >= monthlyCap ? "critical" : "warn",
-      message: `Resend 월간 발송 ${month}/${monthlyCap} (경고 임계 ${warnMonthly}). 월 캡 초과 시 발송 전면 중단 — Pro 업그레이드 검토.`,
+      message: `메일 월간 발송 ${month}/${monthlyCap} (경고 임계 ${warnMonthly}). 발신 서버 한도·평판을 점검하고, 필요하면 한도 상향을 요청할 것.`,
     });
   }
 
@@ -82,7 +92,7 @@ export async function collectQuotaReport(): Promise<QuotaReport> {
     alerts,
     report: lines.join("\n"),
     metrics: {
-      resend: { today, month, dailyCap, monthlyCap },
+      mail: { today, month, dailyCap, monthlyCap },
       turso: turso?.raw ?? null,
     },
   };

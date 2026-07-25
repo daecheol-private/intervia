@@ -15,10 +15,10 @@ import { EMAIL_LOGO_PNG_BASE64 } from "./email-logo-data";
 // 모든 발송 transporter 는 pooled (페이싱·연결 재사용) — verify 용 일회성 제외.
 type Transporter = nodemailer.Transporter<SMTPPool.SentMessageInfo>;
 
-// 발송 페이싱 — Resend 는 팀 단위 rate limit(기본 5rps, 구계정 2rps)이 있어 동시 발송이
-// 몰리면 일부가 429 로 거부된다 (일괄 불합격 통보 6건 중 4건 누락 사고).
+// 발송 페이싱 — 발신 서버가 초당 발송률을 제한하면 동시 발송이 몰릴 때 일부가 4xx 로
+// 거부된다 (일괄 불합격 통보 6건 중 4건 누락 사고 — 당시 발신 서버의 5rps 팀 한도).
 // nodemailer pooled transport 의 rateDelta/rateLimit 가 프로세스 내 발송 속도를 강제한다.
-// Resend 한도 상향 후엔 MAIL_RATE_PER_SEC 만 올리면 됨.
+// 발신 서버 한도가 넉넉하면 MAIL_RATE_PER_SEC 만 올리면 됨(기본은 보수적으로 2rps).
 const MAIL_RATE_PER_SEC = Number(process.env.MAIL_RATE_PER_SEC ?? 2);
 
 function poolOpts() {
@@ -198,7 +198,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const MAX_SEND_RETRIES = 3;
 
 // ── 발송 실패 Slack 경보 ──────────────────────────────────────────────────────
-// 메일 장애(특히 Resend 무료 티어 일 100통 캡 초과)는 메일로 알릴 수 없으므로 Slack 이
+// 메일 장애(발신 서버 다운·인증 실패·발송률 초과 등)는 메일로 알릴 수 없으므로 Slack 이
 // 유일한 경보 채널. 폭주 방지: 10분 창당 1회만 통지. 인스턴스별 상태라 서버리스 다중
 // 인스턴스에서 몇 건 중복될 수 있음 — 유실보단 낫다. 수신 주소(PII)는 마스킹.
 const MAIL_FAIL_WINDOW_MS = 10 * 60_000;
@@ -215,7 +215,9 @@ function reportMailFailure(e: unknown): void {
   const quotaSuspect = /\b429\b|quota|too many|rate ?limit|daily|limit exceeded/i.test(msg);
   void notifyOps(
     `📪 메일 발송 실패 감지${
-      quotaSuspect ? " — Resend 쿼터/전송률 한도 초과 의심 (무료 티어 일 100통·월 3,000통)" : ""
+      quotaSuspect
+        ? " — 발신 서버 발송량/전송률 한도 초과 의심 (일·월 한도, 초당 발송률 확인)"
+        : ""
     }\n원인: ${msg.slice(0, 300)}\n(반복 실패는 10분당 1회만 통지 — Vercel 로그에서 전체 확인)`
   ).catch(() => {});
 }

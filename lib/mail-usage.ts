@@ -1,14 +1,14 @@
 /**
- * 메일 발송량 집계 — Resend 무료 티어 쿼터(일 100·월 3,000통) 모니터링 +
+ * 메일 발송량 집계 — 발신 서버 일·월 한도 모니터링(/api/cron/quota-alerts) +
  * 불합격 저녁 드레인(/api/cron/decision-drain)의 일일 발송 예산 계산.
  *
  * 집계 원천은 mail_send_events (sendMail 성공마다 1행, 수신자 PII 없음).
  * sent_at 은 CURRENT_TIMESTAMP('YYYY-MM-DD HH:MM:SS' UTC) 형식이라 같은 UTC 형식으로 비교한다.
  *
- * "오늘"·"이번 달" 은 UTC 달력 기준이다 — Resend 의 정확한 리셋 시각은 문서화돼 있지 않으나
- * UTC 자정 리셋이 가장 유력하고, 달력일 기준은 매일 같은 시각 드레인에서 경계 정체(직전
- * 드레인분이 롤링 창 끝에 걸려 예산이 0이 되는 문제)를 피한다. 리셋 불확실성은 드레인의
- * 버퍼(MAIL_DAILY_BUFFER)가 흡수한다.
+ * "오늘"·"이번 달" 은 UTC 달력 기준이다 — 발신 서버의 한도 리셋 시각을 알 수 없어도,
+ * 달력일 기준은 매일 같은 시각 드레인에서 경계 정체(직전 드레인분이 롤링 창 끝에 걸려
+ * 예산이 0이 되는 문제)를 피한다. 리셋 시각 불확실성은 드레인의 버퍼(MAIL_DAILY_BUFFER)가
+ * 흡수한다.
  */
 import { db } from "./db";
 import { mailSendEvents } from "./schema";

@@ -587,20 +587,24 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 **필수 4개**: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` (없으면 mailer가 에러 throw)
 **선택**: `SMTP_FROM` (없으면 `SMTP_USER`로 fallback), `MAIL_RATE_PER_SEC` (기본 2)
 
-**Gmail App Password 발급**: https://myaccount.google.com/apppasswords (2단계 인증 활성화 후 가능)
+⚠️ **`SMTP_USER` 는 전체 이메일 주소**여야 하는 서버가 많다 — 로컬파트만 넣으면 `535 인증 실패`
+(2026-07-25 회사 SMTP 전환 때 실제로 겪음). 실패 메시지가 "인증 실패"면 이걸 가장 먼저 볼 것.
+
+**포트 판정**: 코드가 `port === 465` 일 때만 `secure: true`. 587 서버는 STARTTLS 로 붙는다.
 
 ### 동시 발송 rate limit (2026-06-11 사고)
 
-Resend 는 **팀 단위 rate limit**(기본 5rps, 구계정 2rps)이 있어 동시 발송이 몰리면 일부가
-429 로 조용히 거부된다 (일괄 불합격 통보 6건 중 4건 누락). 대응은 `lib/mailer.ts` 에 내장:
+발신 서버가 **초당 발송률을 제한**하면 동시 발송이 몰릴 때 일부가 4xx 로 조용히 거부된다
+(일괄 불합격 통보 6건 중 4건 누락 — 당시 발신 SaaS 의 5rps 팀 한도). 발신 경로를
+회사 SMTP 로 옮긴 뒤에도 서버마다 한도가 있으니 전제는 그대로다. 대응은 `lib/mailer.ts` 에 내장:
 
 - 모든 transporter 가 **pooled** + `rateLimit`(`MAIL_RATE_PER_SEC`, 기본 2/s) 로 발송 페이싱.
 - 일시 오류(SMTP 421/429/45x, 소켓 오류)는 **지수 백오프로 3회 재시도**.
 - 법인 SMTP transporter 는 orgId 별 캐시 (설정 변경 시 fingerprint 로 자동 재생성).
 
 → 대량 발송 경로를 새로 만들 때 `sendMail` 만 쓰면 페이싱이 자동 적용된다. 단 **페이싱은
-프로세스 단위** — 서버리스 다중 인스턴스 합산이 팀 한도를 넘기면 재시도가 흡수한다.
-Resend 한도 상향(서포트 요청) 후엔 `MAIL_RATE_PER_SEC` 만 올리면 됨.
+프로세스 단위** — 서버리스 다중 인스턴스 합산이 서버 한도를 넘기면 재시도가 흡수한다.
+발신 서버 한도가 넉넉해지면 `MAIL_RATE_PER_SEC` 만 올리면 됨.
 
 **대량 발송 라우트 컨벤션** (2026-06-12): 페이싱 때문에 발송 시간 = 통수 ÷ 2/s. 그래서
 ① N 이 사용자 선택(≤50)인 라우트는 `maxDuration 120` (interview-links·schedule-propose),

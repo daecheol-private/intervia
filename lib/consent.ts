@@ -33,6 +33,12 @@ import type { Lang } from "./i18n/interview";
 //         도쿄(일본) 리전에서 임시 처리될 수 있음을 cross_border 에 병합(§28의8① 1호 동의 유지 +
 //         처리방침 §5 고지 병행). 스캔 원본(OCR)·음성은 폴백 제외(항상 국내) 명시.
 //         마스킹 텍스트 기능의 실제 폴백 발동은 세션 동의 버전 ≥1.9.0 게이트와 함께만 (COMPLIANCE_SOP §4).
+// (버전 무변경) 2026-07-25 — 시스템 기본 메일 발송이 국내 메일 서버로 전환되고 Resend 는
+//         점검·장애 시 **대체 경로**로만 남음(계정·DNS 보존, env 주석). cross_border·processors
+//         문구에서 Resend 의 성격을 '대체 경로'로 정정하고 평시 발송이 국내임을 명시.
+//         이전 대상 축소·정확화라 정보주체에 불리한 변경이 아니어서 버전 bump·재동의 없음
+//         (사용자 결정 2026-07-25, PRIVACY 1.6.0 과 동일 논리). ⚠️ 주 발송 서버 수탁자 표기는
+//         아직 미기재 — 위탁 근거 결정 후 반영(docs/USER_TODO.md C-4-2).
 export const CONSENT_VERSION = "1.9.0-2026-07-11";
 
 export type ConsentItem = {
@@ -72,10 +78,10 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     required: true,
     title: "개인정보 국외이전 동의",
     summary:
-      "국외 이전: Vercel(미국)·Turso(일본)·Resend(미국) · " +
+      "국외 이전: Vercel(미국)·Turso(일본)·Resend(미국, 메일 발송 장애 시 대체 경로) · " +
       "AI 평가·면접은 국내(서울) 처리 원칙, 국내 장애 시에만 마스킹된 텍스트가 일본(도쿄)에서 임시 처리될 수 있음 · 거부 시 면접 불가",
     description:
-      "서비스 운영을 위해 위 개인정보가 다음과 같이 국외로 이전됩니다. 이전받는 자·국가·목적: Vercel Inc.(미국, 호스팅·이력서 파일 저장), Turso(일본 도쿄, 데이터베이스), Resend(미국, 시스템 기본 메일 발송 — 법인이 자체 SMTP 를 등록한 경우 해당 서버). " +
+      "서비스 운영을 위해 위 개인정보가 다음과 같이 국외로 이전됩니다. 이전받는 자·국가·목적: Vercel Inc.(미국, 호스팅·이력서 파일 저장), Turso(일본 도쿄, 데이터베이스), Resend(미국, 메일 발송의 대체 경로 — 기본 발송 서버 점검·장애 시에 한해 사용). 안내·통보 메일은 원칙적으로 국내 메일 발송 서버((주) 엑스퍼넷, 대한민국)에서 발송되며, 법인이 자체 SMTP 를 등록한 경우 해당 서버에서 발송됩니다. " +
       "이전 항목: 위 수집 항목 및 면접 대화록. 이전 시기·방법: 서비스 이용 전 과정에서 HTTPS 로 전송·저장. 보유기간: 위 수집·이용 동의와 동일. " +
       "AI 평가·면접은 Google Cloud 서울 리전(asia-northeast3)에서 처리하는 것을 원칙으로 합니다. 다만 서울 리전 장애(일시적 처리 불가) 시에 한해, 식별 가능한 정보를 자동 마스킹 처리한 이력서 텍스트·면접 대화록이 Google LLC 의 일본 도쿄 리전(asia-northeast1)으로 이전되어 임시 처리될 수 있습니다(TLS 암호화 API 전송, 응답 처리 즉시 폐기, AI 학습 미사용, 문의: https://policies.google.com/privacy). 스캔 이력서 원본·음성 데이터는 이 임시 처리 대상이 아니며 항상 국내에서만 처리됩니다. 거부 시 면접 진행이 불가합니다.",
     legalBasis: "PIPA §28의8",
@@ -99,10 +105,10 @@ export const CONSENT_ITEMS: readonly ConsentItem[] = [
     required: false,
     title: "처리위탁 수탁자 안내",
     summary:
-      "Google Cloud Korea·Vercel·Turso·Resend 에 개인정보 처리를 위탁합니다. " +
+      "Google Cloud Korea·Vercel·Turso·(주) 엑스퍼넷(메일 발송, 장애 시 대체 경로 Resend) 에 개인정보 처리를 위탁합니다. " +
       "수탁자·위탁업무·국가·보유기간 전체는 개인정보 처리방침 §5 에서 확인하실 수 있습니다.",
     description:
-      "원활한 서비스 제공을 위해 Google Cloud Korea(AI 평가·면접, 서울 asia-northeast3 — 장애 시 일본 도쿄 임시 처리)·Vercel(호스팅·파일 저장)·Turso(DB)·Resend(메일 발송)에 개인정보 처리를 위탁합니다. 수탁자·위탁업무·국가·보유기간 전체와 처리위탁계약(DPA) 안내는 개인정보 처리방침 §5 에서 확인하실 수 있습니다.",
+      "원활한 서비스 제공을 위해 Google Cloud Korea(AI 평가·면접, 서울 asia-northeast3 — 장애 시 일본 도쿄 임시 처리)·Vercel(호스팅·파일 저장)·Turso(DB)·(주) 엑스퍼넷(대한민국, 메일 발송 서버 운영 — 안내·통보 메일 발송. 점검·장애 시에는 대체 경로로 Resend 를 사용)에 개인정보 처리를 위탁합니다. 수탁자·위탁업무·국가·보유기간 전체와 처리위탁계약(DPA) 안내는 개인정보 처리방침 §5 에서 확인하실 수 있습니다.",
     legalBasis: "PIPA §26",
   },
 ] as const;
@@ -134,10 +140,10 @@ const CONSENT_TEXT_EN: Record<
   cross_border: {
     title: "Consent to Overseas Transfer of Personal Information",
     summary:
-      "Overseas transfer: Vercel (USA)·Turso (Japan)·Resend (USA) · " +
+      "Overseas transfer: Vercel (USA)·Turso (Japan)·Resend (USA — backup email route during a mail-server outage) · " +
       "AI evaluation·interview processed in Korea (Seoul) in principle; only during a Korea-region outage, masked text may be temporarily processed in Japan (Tokyo) · Refusal: interview unavailable",
     description:
-      "To operate the service, the above personal information is transferred overseas as follows. Recipient·country·purpose: Vercel Inc. (USA — hosting·resume file storage), Turso (Tokyo, Japan — database), Resend (USA — default system email delivery; the company's own SMTP server is used instead if registered). " +
+      "To operate the service, the above personal information is transferred overseas as follows. Recipient·country·purpose: Vercel Inc. (USA — hosting·resume file storage), Turso (Tokyo, Japan — database), Resend (USA — backup email delivery route, used only while the primary mail server is under maintenance or unavailable). Notification emails are sent from a mail server in Korea (Expernet, Republic of Korea) in principle, or from the company's own SMTP server if the company has registered one. " +
       "Items transferred: the items collected above and the interview transcript. Timing·method: transmitted and stored over HTTPS throughout service use. Retention period: same as the collection·use consent above. " +
       "AI evaluation·interview is processed in the Google Cloud Seoul region (asia-northeast3) in principle. Only during a Seoul-region outage, resume text and interview transcripts with identifiable information automatically masked may be transferred to and temporarily processed in Google LLC's Tokyo region (asia-northeast1) (TLS-encrypted API transmission, discarded immediately after the response, not used for AI training; contact: https://policies.google.com/privacy). Scanned resume originals and voice data are excluded from this temporary processing and are always processed within Korea. If you refuse, the interview cannot proceed.",
   },
@@ -153,10 +159,10 @@ const CONSENT_TEXT_EN: Record<
   processors: {
     title: "Notice on Entrusted Processors",
     summary:
-      "Personal information processing is entrusted to Google Cloud Korea·Vercel·Turso·Resend. " +
+      "Personal information processing is entrusted to Google Cloud Korea·Vercel·Turso·Expernet (email delivery, with Resend as a backup route during an outage). " +
       "The full list of processors·tasks·countries·retention is available in §5 of the Privacy Policy.",
     description:
-      "For smooth service provision, personal information processing is entrusted to Google Cloud Korea (AI evaluation·interview, Seoul asia-northeast3 — Tokyo, Japan fallback during an outage)·Vercel (hosting·file storage)·Turso (database)·Resend (email delivery). " +
+      "For smooth service provision, personal information processing is entrusted to Google Cloud Korea (AI evaluation·interview, Seoul asia-northeast3 — Tokyo, Japan fallback during an outage)·Vercel (hosting·file storage)·Turso (database)·Expernet (Republic of Korea — operates the mail delivery server for notification emails; Resend is used as a backup route while the primary mail server is under maintenance or unavailable). " +
       "The full list of processors·entrusted tasks·countries·retention and the data processing agreement (DPA) details are available in §5 of the Privacy Policy.",
   },
 };

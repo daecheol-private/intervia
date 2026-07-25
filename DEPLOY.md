@@ -142,11 +142,15 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `TURSO_AUTH_TOKEN` | `eyJhbGc...` |
 | `BLOB_READ_WRITE_TOKEN` | (Blob 생성 시 자동) |
 | `APP_BASE_URL` | `https://intervia.kr` |
-| `SMTP_HOST` | `smtp.resend.com` (운영 권장) 또는 `smtp.gmail.com` |
-| `SMTP_PORT` | `465` |
-| `SMTP_USER` | `resend` (Resend 사용 시 문자 그대로) / Gmail 주소 |
-| `SMTP_PASS` | Resend API 키 (`re_...`) / Gmail App Password |
-| `SMTP_FROM` | `Intervia <noreply@your-domain.com>` (검증된 도메인) |
+| `SMTP_HOST` | 발신 메일 서버 호스트 (운영: 회사 메일 서버, SMTPS) |
+| `SMTP_PORT` | `465` (SMTPS. 587 이면 STARTTLS — 코드가 `port===465` 로 secure 판정) |
+| `SMTP_USER` | **로그인 ID 는 전체 이메일 주소**(`user@company.co.kr`). ⚠️ 로컬파트만 넣으면 `535 인증 실패` |
+| `SMTP_PASS` | 메일 계정 비밀번호 (앱 비밀번호가 있으면 그것) |
+| `SMTP_FROM` | `Intervia <noreply@intervia.kr>` (SPF 로 발신 서버를 인가한 도메인) |
+| `MAIL_RATE_PER_SEC` | (선택) 프로세스 내 초당 발송 상한. 기본 `2`. 발신 서버 한도가 넉넉하면 상향 |
+| `MAIL_DAILY_BUDGET` / `MAIL_DAILY_BUFFER` | (선택) 불합격 저녁 드레인 예산·버퍼. 기본 `100` / `20`. 발신 한도에 맞춰 올릴 것 |
+| `MAIL_MONTHLY_CAP` / `MAIL_WARN_DAILY` / `MAIL_WARN_MONTHLY` | (선택) 쿼터 경보 임계. 기본 `3000` / `80` / `2400`. 구 이름(`RESEND_*`)도 계속 읽음(호환) |
+| `REJECTION_DAYTIME_SOFT_CAP` | (선택) 공고 종결 시 낮에 즉시 보낼 불합격 통보 상한. 기본 `40`, 초과분은 18시 드레인 |
 | `MAIL_OVERRIDE_TO` | **Preview/Staging 환경에만 등록** (예: `admin.intervia@gmail.com`). 등록 시 지원자(candidate) 메일만 이 주소로 리다이렉트 — HR/면접관 메일은 그대로 실제 발송됨. Production 에는 절대 등록 X. |
 | `BUSINESS_REGISTRY_API_KEY` | data.go.kr 국세청 사업자등록정보 API **운영키** (가입 페이지 진위확인) |
 | `CRON_SECRET` | 32바이트 hex (`.env.local` 값 재사용 또는 신규 생성) |
@@ -156,7 +160,7 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `SCREENING_WORKER_MAX_JOBS` | **미설정 권장**(= concurrency 와 동일, 1실행 1라운드). 동시성보다 크게 잡으면(예: 100) 1실행이 maxDuration(120s)을 넘겨 함수가 self-chain 전에 죽고 큐가 cron(매분)까지 정체된다. 워커에 70s 벽시계 가드가 있어 이제 멈추진 않지만, 동시성과 어긋난 큰 값은 self-chain 횟수만 늘릴 뿐 이득 없음 → 비워두거나 `SCREENING_WORKER_CONCURRENCY` 와 같은 값으로. |
 | `NEXT_PUBLIC_BLOB_CLIENT_UPLOAD` | `1` (이력서 100MB 직접 업로드 활성화 — 프로덕션에서만 `1`) |
 | `SENTRY_DSN` | (선택) 오류 추적. 설정 시 instrumentation 이 전 라우트 미처리 예외를 Sentry 로 자동 전송 |
-| `SLACK_WEBHOOK_URL` | (선택) 운영자 Slack 통지 채널(Incoming Webhook URL). **서버 500 오류(고객 신고 전 사전 인지 — 라우트별 10분당 1회 스로틀)·화면 렌더 크래시(client-error 비콘, 전역 30분당 1회)·과금 실패(매출 누락 가능, 10분당 1회)** + critical 에러 + 운영 알림(ops-alerts) + **토큰 충전 완료(매출, 첫 지급만)** + **메일 발송 실패(Resend 쿼터 초과 등, 10분당 1회 스로틀)** + **시스템 관리자 알림 전반**(신규 법인·담당자 승격 요청·도메인 신고·고객 문의·이의제기 — PII 없는 유형 라벨만). 오류·경보 메시지는 PII 스크럽 적용. 미설정 시 전부 조용히 skip |
+| `SLACK_WEBHOOK_URL` | (선택) 운영자 Slack 통지 채널(Incoming Webhook URL). **서버 500 오류(고객 신고 전 사전 인지 — 라우트별 10분당 1회 스로틀)·화면 렌더 크래시(client-error 비콘, 전역 30분당 1회)·과금 실패(매출 누락 가능, 10분당 1회)** + critical 에러 + 운영 알림(ops-alerts) + **토큰 충전 완료(매출, 첫 지급만)** + **메일 발송 실패(발신 서버 인증·한도 초과 등, 10분당 1회 스로틀)** + **시스템 관리자 알림 전반**(신규 법인·담당자 승격 요청·도메인 신고·고객 문의·이의제기 — PII 없는 유형 라벨만). 오류·경보 메시지는 PII 스크럽 적용. 미설정 시 전부 조용히 skip |
 | `OPS_ALERT_EMAIL` | (선택) 운영 알림 수신 메일. 미설정 시 회사 이메일(`site-info` COMPANY_INFO.email)로 발송 |
 | `OPS_QUEUE_BACKLOG` / `OPS_FAILED_LAST_HOUR` / `OPS_STUCK` / `OPS_BALANCE_FLOOR` | (선택) 운영 알림 임계값. 기본 50 / 20 / 5 / (잔액 알림 비활성). `OPS_BALANCE_FLOOR` 설정 시 최저 잔액이 그 값 이하면 알림 |
 | `HEALTH_TOKEN` | (선택) `/api/health` 상세 모드(큐 통계·env 진단) 토큰. 미설정 시 공개 ping 만 |
@@ -168,17 +172,24 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 
 dev/MVP에서는 무료 티어 + 테스트용 키로 동작하지만, **실고객 트래픽 받기 전 반드시 업그레이드해야 하는 항목들**입니다.
 
-### ✉️ 이메일 (Resend)
+### ✉️ 이메일 (회사 메일 서버 SMTP · 2026-07-25 전환 완료)
 
-| 항목 | dev 상태 | 운영 전 필요 작업 |
+시스템 기본 발송은 **회사 메일 서버(SMTPS 465)** 를 쓴다. 발송량 제약이 사실상 없다.
+외부 메일 SaaS(Resend)는 **점검·장애 시 수동 전환용 대체 경로로 보존** — 계정·API 키·DNS 레코드를
+살려 두고 env 만 주석 처리한 상태다. 전환 절차는 [docs/RUNBOOK.md](docs/RUNBOOK.md) §5.
+
+| 항목 | 현재 | 점검 포인트 |
 |---|---|---|
-| 발신 도메인 | `onboarding@resend.dev` (본인 메일에만 발송 가능) | **본인 도메인 등록 + DNS DKIM/SPF/Return-Path 레코드 추가** → 모든 수신자에게 발송 가능 |
-| 요금제 | Free (월 3,000통, 일 100통) | 트래픽 예상: 후보자 1명 가입 시 인증·면접안내·결정통보 약 3통 → **Pro $20/월 (월 5만통)** 부터 검토 |
-| 도메인 verify | X | Resend 대시보드 → Domains → Add Domain → 발급되는 TXT/CNAME 레코드를 도메인 등록사(가비아 등) DNS 패널에 추가 → Verify |
-| `SMTP_FROM` 변경 | `Intervia <onboarding@resend.dev>` | `Intervia <noreply@your-domain.com>` |
-| Reply-To | 없음 | 고객 문의 받을 메일 (`support@your-domain.com`) 별도 설정 권장 |
+| 발신 주소 | `noreply@intervia.kr` | 발신 도메인 SPF 에 발신 서버가 인가돼 있어야 함 (`a:` 또는 `include:`) |
+| 인증 | 계정 로그인 (`SMTP_USER` = **전체 이메일 주소**) | 로컬파트만 넣으면 `535` — 전환 당시 실제로 겪은 실패 |
+| SPF | 루트 도메인 TXT 에 발신 서버 인가 | `nslookup -type=txt intervia.kr` 로 확인 |
+| DKIM | 없음 | 서버가 DKIM 서명을 지원하면 추가 권장(수신 평판↑). 없어도 SPF 정합으로 발송은 됨 |
+| 발송 한도 | 서버 정책 한도 | 새 발신 IP 는 **워밍업** 필요 — 예산(`MAIL_DAILY_BUDGET`)을 낮게 시작해 단계적으로 올린다 |
+| 발송률 | `MAIL_RATE_PER_SEC` 기본 2 | 서버가 초당 발송을 제한하면 4xx 로 일부 누락 — 페이싱은 여기서 조절 |
+| Reply-To | 미설정 | 고객 문의 수신 주소를 별도 지정 권장 |
 
-> **트리거:** 본인 외 다른 이메일로 가입 시도 → 발송 실패. 이게 보이면 운영 도메인 등록이 안 된 상태.
+> **트리거:** 로그인 인증 실패(535)·발신 거부(550 SPF)면 위 3행(인증·SPF·발신 주소)을 먼저 본다.
+> 대량 발송 중 일부만 도달하면 발송률·일일 한도(`MAIL_RATE_PER_SEC`·`MAIL_DAILY_BUDGET`)를 본다.
 
 ### 🏢 법인명 자동완성 (DART OpenAPI)
 
@@ -237,13 +248,13 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 활성화는 아래 순서 — Vercel 와일드카드는 **네임서버 방식 검증이 필수**라 DNS 를 Cloudflare → Vercel 로 이관해야 한다.
 
 1. **레코드 인벤토리**: Cloudflare 대시보드 → intervia.kr → DNS Records 전체 캡처
-   (Resend 인증 TXT/`resend._domainkey`·send 서브도메인 MX 등. MX 없음·프록시 미사용 확인됨 2026-07-09).
+   (메일 발신 인증 레코드 — 루트 SPF TXT 등. MX 없음·프록시 미사용 확인됨 2026-07-09).
 2. **Vercel DNS 에 동일 레코드 미리 생성**: Vercel → Domains → intervia.kr → DNS Records.
-   ⚠️ 이 단계 전에 네임서버부터 바꾸면 그 레코드들이 조회 불가 → **Resend 발신(DKIM) 깨짐**.
+   ⚠️ 이 단계 전에 네임서버부터 바꾸면 그 레코드들이 조회 불가 → **메일 발신(SPF) 깨짐**.
 3. **레지스트라에서 네임서버 변경**: Cloudflare NS → Vercel 이 안내하는 `ns1/ns2.vercel-dns.com`.
    Cloudflare 쪽 레코드는 지우지 말 것(롤백 = NS 되돌리기 한 번).
 4. **전파 후 검증**: `Resolve-DnsName intervia.kr -Type NS` 가 vercel-dns 를 반환하는지,
-   `resend._domainkey.intervia.kr` TXT 조회, Resend 대시보드 도메인 상태 Verified, 테스트 메일 발송.
+   루트 SPF TXT 조회(`nslookup -type=txt intervia.kr`), 테스트 메일 발송 후 수신함 도달 확인.
 5. **와일드카드 도메인 추가**: Vercel 프로젝트 → Settings → Domains → `*.intervia.kr` 추가.
 6. **기능 ON**: Vercel 환경변수 `SUBDOMAIN_APPLY_ENABLED=1` (Production) → Redeploy.
    이후 지원 링크가 `https://{회사}.intervia.kr/apply/...` 로 발급되고, 기존 apex 링크는

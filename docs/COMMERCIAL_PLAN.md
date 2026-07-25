@@ -87,9 +87,12 @@
 - [x] **K-4**: **Vercel 프로젝트 연결 + Pro 티어** (2026-06-07). cron 은 `vercel.json` 네이티브 실행.
 - [x] **K-4-2**: ~~cron-job.org 등록~~ → **불필요** (Pro 전환으로 vercel.json cron 네이티브). cron-job.org 가이드는 `DEPLOY.md` §5 에 Hobby 대안으로만 유지.
 - [x] **K-5**: **CRON_SECRET / INTERNAL_API_SECRET / MASTER_ENCRYPTION_KEY** → `.env.local` 자동 주입 완료 (2026-05-16)
-- [ ] **K-6**: **SMTP_*** 환경변수 (시스템 기본 메일서버) — 법인 SMTP 미등록 시 폴백.
-  - dev: Resend Free + `onboarding@resend.dev` (본인 메일에만 발송, 월 3,000통) — 적용 완료 (2026-05-20)
-  - **운영 전환 시**: ① 본인 도메인 등록 + DKIM/SPF DNS 레코드 → Resend Domains에서 verify, ② `SMTP_FROM`을 `noreply@your-domain.com`으로 교체, ③ 트래픽 늘면 Resend Pro ($20/월, 5만통)
+- [x] **K-6**: **SMTP_*** 환경변수 (시스템 기본 메일서버) — 법인 SMTP 미등록 시 폴백. **완료 (2026-07-25)**
+  - 현재: **회사 메일 서버 SMTPS(465)** + 발신 `noreply@intervia.kr`. 루트 도메인 SPF 로 발신 서버 인가(DKIM 없음).
+    ⚠️ `SMTP_USER` 는 전체 이메일 주소여야 함(로컬파트만 → 535). 발송 한도·워밍업은 `MAIL_DAILY_BUDGET` 등 env 로 조절.
+  - 이력: 2026-05-20 Resend Free 로 시작 → 2026-06-05 도메인 verify 로 전체 발송 → **2026-07-25 회사 SMTP 를 주 경로로 전환**
+  - **Resend = 대체 경로로 보존** (점검·장애 시 수동 전환). 계정·API 키·DNS 유지, env 는 주석 처리. 전환 절차는 `docs/RUNBOOK.md` §5.
+    코드·운영문서의 "Resend 무료 캡 전제" 서술은 발신 서버 중립으로 정리 완료. 남은 과제: 처리방침 §5 에 **주 발송 경로(회사 메일서버) 수탁자 표기 누락** — `docs/USER_TODO.md` C-4-2.
   - 상세: `DEPLOY.md` §3-1
 - [ ] **K-6-3**: **DART_API_KEY** — opendart.fss.or.kr (전자공시시스템) 상장사·외감법인 회사명 자동완성 데이터 생성용
   - dev: 가입 즉시 무료 발급 (일 10,000건). `.env.local` 입력 후 `npm run dart:fetch` 1회 실행 → `lib/dart-corps.json` 생성 (~3,500개)

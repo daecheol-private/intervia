@@ -8,8 +8,8 @@ export const runtime = "nodejs";
  * 불합격 통보 저녁 드레인 cron. 권장 주기: 매일 18:00 KST (vercel.json `0 9 * * *` = 09:00 UTC).
  *
  * 대량 종결(closeJob)이 낮 소프트캡을 넘겨 즉시 못 보낸 불합격 통보를 일일 발송 예산 범위에서
- * 발송한다. 예산 초과분은 큐에 남아 다음 날 재처리 — Resend 무료 티어 일 100통 캡을 넘지 않게
- * 며칠에 걸쳐 자동 분산. 상세: lib/decision-drain.ts.
+ * 발송한다. 예산 초과분은 큐에 남아 다음 날 재처리 — 발신 서버 일일 한도를 넘지 않게 며칠에
+ * 걸쳐 자동 분산. 예산·소프트캡은 env 로 조정. 상세: lib/decision-drain.ts.
  */
 async function authorize(req: Request): Promise<Response | null> {
   const secret = process.env.CRON_SECRET;

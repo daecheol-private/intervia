@@ -83,15 +83,22 @@
 4. **stuck 누적** — `cleanupStuck`(매분 cron 내) 가 5분+ lock 을 복구. stuck 이 계속 쌓이면 워커가 maxDuration(120s) 초과로 반복 사망 의심 → `SCREENING_WORKER_MAX_JOBS` 가 동시성보다 크게 박혀있지 않은지(env) 확인, 비우거나 동시성과 동일하게(DEPLOY.md §3).
 5. **잔액 0 법인** — 잔액 ≤0 법인 잡은 `paused`(정상, 타 법인 안 굶김). 충전되면 ~1분 내 자동 재개. 큐 적체가 특정 법인 paused 때문이면 정상.
 
-## 5. 메일 발송 실패 (Resend / SMTP)
+## 5. 메일 발송 실패 (회사 SMTP / 법인 SMTP)
 
-**증상**: 면접 안내·인증·결과 통보 메일 미도착. "본인 외 이메일로 발송 실패".
+**증상**: 면접 안내·인증·결과 통보 메일 미도착. Slack 에 `📪 메일 발송 실패 감지`.
 
-1. **가장 흔한 원인** — `MAIL_OVERRIDE_TO` 가 production 에 남아있음(지원자 메일이 그쪽으로 감) 또는 Resend 도메인 미verify(본인 메일만 발송 가능). → LAUNCH_CHECKLIST §1.
-2. **Resend 상태** — resend.com 대시보드 발송 로그·도메인 verify 상태·일/월 한도(Free 100/일·3000/월).
-3. **법인 SMTP** — 법인이 자체 SMTP 등록한 경우 그 계정 문제일 수 있음. `/api/orgs/smtp` 의 verify 로 재확인.
-4. **부분 실패는 비치명적** — 자동불합격 알림·리마인더 등은 best-effort(실패해도 cron 흐름 안 막음). 핵심은 면접 링크·결과 통보.
-5. **지속 장애** — 한도 초과면 Resend Pro 전환, 도메인 문제면 DNS(DKIM/SPF) 재점검.
+1. **가장 흔한 원인** — `MAIL_OVERRIDE_TO` 가 production 에 남아있음(지원자 메일이 그쪽으로 감). → LAUNCH_CHECKLIST §1.
+2. **인증 실패(535)** — `SMTP_USER` 가 **전체 이메일 주소**인지 확인(로컬파트만 넣으면 실패). 비밀번호 변경·만료도 확인.
+3. **수신 거부(550/SPF)** — 발신 도메인 루트 SPF 에 발신 서버가 인가돼 있는지(`nslookup -type=txt intervia.kr`).
+4. **일부만 도달** — 발송률·일일 한도. `MAIL_RATE_PER_SEC`(기본 2) / `MAIL_DAILY_BUDGET` 확인, `/api/cron/quota-alerts` 응답의 `metrics.mail` 로 오늘·이번달 발송량 확인.
+5. **법인 SMTP** — 법인이 자체 SMTP 등록한 경우 그 계정 문제일 수 있음. `/api/orgs/smtp` 의 verify 로 재확인.
+6. **부분 실패는 비치명적** — 자동불합격 알림·리마인더 등은 best-effort(실패해도 cron 흐름 안 막음). 핵심은 면접 링크·결과 통보.
+7. **지속 장애 → Resend 로 수동 전환** — 회사 메일 서버 점검·장애면 법인 SMTP 미등록 법인의 메일이 전부 멈춘다. 대체 경로(Resend)를 보존해 두었으니 아래 순서로 되돌린다.
+   1. **Vercel 환경변수 교체** — `SMTP_HOST=smtp.resend.com` / `SMTP_PORT=465` / `SMTP_USER=resend` / `SMTP_PASS=<Resend API 키>` / `SMTP_FROM` 유지 → **Redeploy**(env 변경은 재배포 전까지 반영 안 됨).
+   2. **DNS 는 손대지 않는다.** Resend 는 Return-Path 를 `send.intervia.kr` 로 쓰므로 SPF 는 그 서브도메인의 `v=spf1 include:amazonses.com ~all` 로 통과하고, `From: noreply@intervia.kr` 의 DMARC 정렬은 `resend._domainkey` DKIM 이 맡는다. **루트 SPF(회사 서버 단독)는 Resend 발송에 관여하지 않는다** — 2026-06~07 Resend 운영 기간에 루트 SPF 가 회사 서버 값이 아니었는데도 정상 발송된 것으로 실증됨. (반대로 루트에 `include:amazonses.com` 을 넣으면 인가 범위만 넓어지고 SPF lookup 도 늘어난다.)
+   3. **발송 한도 되돌리기** — Resend 무료 티어는 일 100·월 3,000통. `MAIL_DAILY_BUDGET`·`REJECTION_DAYTIME_SOFT_CAP` 을 그 범위로 낮춰야 대량 통보가 캡에 걸려 유실되지 않는다(저녁 드레인이 며칠에 걸쳐 분산).
+   4. **복귀** — 회사 서버가 복구되면 env 를 되돌리고 Redeploy + 한도 원복. `.env.local`·`.env.production.local` 에 두 블록이 주석으로 함께 있어 값 참조용으로 쓸 수 있다.
+   5. ⚠️ **처리방침 정합** — Resend 로 발송하는 동안은 지원자 개인정보가 미국을 경유한다. 고지(수탁자·국외이전)에 Resend 가 기재된 상태를 유지할 것(§26·§28의8).
 
 ## 6. 파일 저장소 (Vercel Blob) 장애 / 용량
 
@@ -126,7 +133,7 @@
 | Gemini/Vertex | GCP 결제 한도 | 429/quota | GCP 할당량·결제 한도 상향 |
 | Turso | 9GB / 1억 read | `turso db inspect` | 유료 전환 / 데이터 정리 |
 | Vercel Blob | 1GB | 업로드 실패 | 유료 / 폐기 cron 확인 |
-| Resend | 100/일·3000/월 | 발송 실패 | Pro($20/월) |
+| 메일 발송 (회사 SMTP) | 서버 정책 한도 (env `MAIL_DAILY_BUDGET`·`MAIL_MONTHLY_CAP`) | 발송 실패·Slack 경보 | 한도 상향 요청 / 발송 페이싱 조정 / 장애 시 Resend 전환(§5) |
 | Vercel | Hobby 대역폭 | — | Pro(상업 트래픽 시 의무) |
 
 `ops-alerts` 의 잔액 알림(`OPS_BALANCE_FLOOR`)으로 특정 법인 비정상 마이너스(과금 버그·악용) 조기 포착.
@@ -227,7 +234,7 @@ turso db shell <운영DB> < restore-org-<id>.sql
 | 대상 | 연락 |
 |---|---|
 | 운영 책임자(대표·DPO 겸직) | `OPS_ALERT_EMAIL` / 회사 이메일(site-info COMPANY_INFO) |
-| 외부 서비스 | Turso(support@turso.tech) · Vercel(대시보드 support) · Resend(대시보드) · GCP(콘솔 지원) |
+| 외부 서비스 | Turso(support@turso.tech) · Vercel(대시보드 support) · GCP(콘솔 지원) · 메일 서버 운영 담당자 · Resend(대시보드, 대체 발송 경로) |
 | 개인정보 침해 | [COMPLIANCE_SOP.md](COMPLIANCE_SOP.md) — 72시간 신고·정보주체 통지 |
 
 ## 6. 사후 (Postmortem)

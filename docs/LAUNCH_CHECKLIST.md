@@ -71,11 +71,15 @@ DELETE FROM organizations WHERE /* 테스트 조건 */;
 ```
 → Vercel cron 인증을 위해 `CRON_SECRET` 이 Vercel 환경변수에 있어야 함. 수동 트리거 스크립트(`scripts/process-now.ps1`)는 비상용으로 유지.
 
-### 6. Resend Pro 검토
-- Free: 일 100통, 월 3,000통
-- 후보자 1명 ≈ 3통 (인증·면접·결정)
-- 일 30명 유입 = 한도 도달
-- 트래픽 예측되면 사전에 Pro $20/월 업그레이드
+### 6. 메일 발송 한도 · 발신 IP 워밍업 (회사 SMTP · 2026-07-25 전환)
+- 후보자 1명 ≈ 3통 (인증·면접·결정) — 일 30명 유입이면 하루 약 90통
+- 발신 서버 정책 한도를 확인하고 `MAIL_DAILY_BUDGET` / `MAIL_MONTHLY_CAP` 을 그에 맞춰 설정
+- **새 발신 IP 는 워밍업 필요** — 예산을 낮게 시작해 단계적으로 올린다(첫날부터 최대치 X)
+- 발송률은 `MAIL_RATE_PER_SEC`(기본 2/s). 대량 발송 시간 = 통수 ÷ 초당 발송률
+- 루트 도메인 SPF 에 발신 서버가 인가돼 있어야 함 — 현재 `intervia.kr TXT: v=spf1 a:mail.expernet.co.kr ~all`
+  (DKIM 은 회사 서버가 서명을 지원하면 추가 권장. 없으면 DMARC 정렬이 SPF 단독이라 **포워딩 시 실패**할 수 있어 `p=none` 유지가 안전)
+- 대체 경로(Resend)용 레코드는 `send` 서브도메인(SPF·feedback MX)+`resend._domainkey`(DKIM) 에 분리돼 있어 **루트와 충돌하지 않는다** — 지우지 말 것
+- ⚠️ **대체 경로로 전환하면 한도가 일 100·월 3,000통으로 급감** — 전환 시 예산 env 를 함께 낮출 것 (RUNBOOK §5. DNS 변경은 불필요)
 
 ### 7. data.go.kr 사업자등록 API 운영 키 발급
 - dev/MVP는 "개발용" 키 (일 1,000건)
@@ -108,5 +112,5 @@ DELETE FROM organizations WHERE /* 테스트 조건 */;
 |---|---|
 | 매일 | Vercel Logs 에러 0건 확인, Sentry 알림 |
 | 주 1회 | Turso DB 용량 / Vercel Blob 사용량 |
-| 월 1회 | Resend / Vertex AI 사용량 vs 한도 |
+| 월 1회 | 메일 발송량(`/api/cron/quota-alerts` `metrics.mail`) / Vertex AI 사용량 vs 한도 |
 | 분기 1회 | `lib/dart-corps.json` 재생성 (`npm run dart:fetch`) — 신규 상장사 반영 |
