@@ -7,6 +7,7 @@ import { getUnlockChecker } from "@/lib/job-lock";
 import JobsAllList from "../jobs-list-all";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ClipboardList } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +97,10 @@ export default async function JobsListPage() {
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-ink">공고</h1>
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-6 h-6 text-primary" />
+            <h1 className="text-2xl font-bold text-ink">공고</h1>
+          </div>
           <p className="text-sm text-ink-soft mt-1">
             법인 전체 공고 {serialized.length}건 · 내가 면접관인 공고를 먼저 표시
           </p>

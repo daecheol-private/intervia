@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Settings } from "lucide-react";
 import type { CultureFitProfile, QualItem } from "@/lib/prompts";
 import { defaultCultureFitProfile } from "@/lib/culture-fit-defaults";
 import { textColorOn } from "@/lib/brand-color";
@@ -372,7 +373,10 @@ export default function OrgSettingsPage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-ink">법인 설정</h1>
+        <div className="flex items-center gap-2">
+          <Settings className="w-6 h-6 text-primary" />
+          <h1 className="text-2xl font-bold text-ink">법인 설정</h1>
+        </div>
         <p className="text-sm text-ink-soft mt-1">
           법인 전체에 적용되는 정책입니다. 법인 관리자만 변경할 수 있습니다.
         </p>

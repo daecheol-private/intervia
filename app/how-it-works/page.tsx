@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackHomeLink } from "@/app/components/BackHomeLink";
 import {
   ArrowRight,
   ClipboardList,
@@ -117,9 +118,7 @@ export default async function HowItWorksPage() {
   const welcomeKrw = (WELCOME_BONUS_TOKENS * TOKEN_KRW).toLocaleString();
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      <Link href="/" className="text-xs text-ink-muted hover:underline">
-        ← 홈
-      </Link>
+      <BackHomeLink />
       <h1 className="text-2xl font-bold text-ink mt-3">
         Intervia 는 이렇게 작동합니다
       </h1>

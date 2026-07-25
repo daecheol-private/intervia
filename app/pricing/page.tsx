@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackHomeLink } from "@/app/components/BackHomeLink";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { SITE_INFO } from "@/lib/site-info";
 import { WELCOME_BONUS_TOKENS } from "@/lib/tokens";
@@ -65,9 +66,7 @@ export default async function PricingPage() {
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      <Link href="/" className="text-xs text-ink-muted hover:underline">
-        ← 홈
-      </Link>
+      <BackHomeLink />
       <h1 className="text-2xl font-bold text-ink mt-3">요금</h1>
       <p className="text-sm text-ink-soft leading-relaxed mt-2">
         월 구독료가 없습니다. 쓴 만큼만 토큰으로 차감되는 방식이라, 채용이 없는

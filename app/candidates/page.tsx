@@ -8,6 +8,7 @@ import { candidateOrgFilter } from "@/lib/tenant";
 import { getUnlockChecker } from "@/lib/job-lock";
 import { AppShell } from "@/app/components/AppShell";
 import { CandidateTable, type CandidateRow } from "./candidate-table";
+import { Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +132,10 @@ export default async function CandidatesPage() {
     >
       <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         <header className="mb-6">
-          <h1 className="text-2xl font-bold text-ink">후보자</h1>
+          <div className="flex items-center gap-2">
+            <Users className="w-6 h-6 text-primary" />
+            <h1 className="text-2xl font-bold text-ink">후보자</h1>
+          </div>
           <p className="text-sm text-ink-soft mt-1">
             {me.role === "org_admin"
               ? "법인의 모든 공고 후보자를 한 곳에서 확인하세요."

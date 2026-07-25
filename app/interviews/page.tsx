@@ -194,7 +194,10 @@ export default async function InterviewsPage() {
     >
       <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
         <header className="mb-6">
-          <h1 className="text-2xl font-bold text-ink">면접 일정</h1>
+          <div className="flex items-center gap-2">
+            <CalendarClock className="w-6 h-6 text-primary" />
+            <h1 className="text-2xl font-bold text-ink">면접 일정</h1>
+          </div>
           <p className="text-sm text-ink-soft mt-1">
             {me.role === "org_admin"
               ? "법인의 대면 1·2차 면접 일정을 한 곳에서 확인하세요."

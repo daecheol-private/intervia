@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Link from "next/link";
+import { BackHomeLink } from "@/app/components/BackHomeLink";
 import type { ReactNode } from "react";
 import {
   ArrowRight,
@@ -90,9 +91,7 @@ export const metadata = {
 export default function ResumeGuidePage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      <Link href="/" className="text-xs text-ink-muted hover:underline">
-        ← 홈
-      </Link>
+      <BackHomeLink />
       <h1 className="text-2xl font-bold text-ink mt-3">이력서 등록 방법 4가지</h1>
       <p className="text-sm text-ink-soft leading-relaxed mt-2">
         이력서를 Intervia 로 받는 방법은 크게 두 가지입니다 — <b>지원 링크</b>로 지원자가

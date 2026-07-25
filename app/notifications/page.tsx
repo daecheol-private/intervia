@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { listMyNotifications } from "@/lib/notifications";
 import { ReadAllButton } from "./read-all-button";
 import { NotificationLink } from "./notification-link";
+import { Bell } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,10 @@ export default async function NotificationsPage() {
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-ink">알림</h1>
+          <div className="flex items-center gap-2">
+            <Bell className="w-6 h-6 text-primary" />
+            <h1 className="text-2xl font-bold text-ink">알림</h1>
+          </div>
           <p className="text-sm text-ink-soft mt-1">
             최근 100건. 클릭하면 해당 항목으로 이동합니다.
           </p>

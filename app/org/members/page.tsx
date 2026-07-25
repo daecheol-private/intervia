@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useStepUpFetch } from "@/app/components/StepUpModal";
+import { Users } from "lucide-react";
 
 type Member = {
   id: number;
@@ -157,7 +158,10 @@ export default function OrgMembersPage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-ink">법인 멤버 관리</h1>
+        <div className="flex items-center gap-2">
+          <Users className="w-6 h-6 text-primary" />
+          <h1 className="text-2xl font-bold text-ink">법인 멤버 관리</h1>
+        </div>
         <p className="text-sm text-ink-soft mt-1">
           멤버 권한을 부여·비활성화하거나, 법인 합류 요청을 승인할 수 있습니다.
         </p>

@@ -6,7 +6,7 @@ import {
   SITE_INFO,
   APPEAL_CONTACT,
 } from "@/lib/site-info";
-import Link from "next/link";
+import { BackHomeLink } from "@/app/components/BackHomeLink";
 
 export const metadata = {
   title: `${SITE_INFO.serviceName} 개인정보 처리방침`,
@@ -15,9 +15,7 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      <Link href="/" className="text-xs text-ink-muted hover:underline">
-        ← 홈
-      </Link>
+      <BackHomeLink />
       <h1 className="text-2xl font-bold text-ink mt-3">
         {SITE_INFO.serviceName} 개인정보 처리방침
       </h1>

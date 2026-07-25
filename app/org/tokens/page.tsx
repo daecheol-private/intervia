@@ -6,6 +6,7 @@ import { formatLocalDateTime } from "@/lib/utils";
 import { BETA, LIST_PRICING } from "@/lib/beta";
 import ChargePanel from "./ChargePanel";
 import RedeemCoupon from "./RedeemCoupon";
+import { Coins } from "lucide-react";
 
 type Pricing = {
   job_post: number;
@@ -90,7 +91,10 @@ export default function TokensPage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-ink">토큰</h1>
+        <div className="flex items-center gap-2">
+          <Coins className="w-6 h-6 text-primary" />
+          <h1 className="text-2xl font-bold text-ink">토큰</h1>
+        </div>
         <p className="text-sm text-ink-soft mt-1">법인의 토큰 잔액 및 사용 내역.</p>
       </div>
 

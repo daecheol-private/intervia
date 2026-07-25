@@ -1,5 +1,6 @@
 import { SITE_INFO } from "@/lib/site-info";
 import Link from "next/link";
+import { BackHomeLink } from "@/app/components/BackHomeLink";
 import {
   MapPin,
   EyeOff,
@@ -55,9 +56,7 @@ const HIGHLIGHTS = [
 export default function SecurityPage() {
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      <Link href="/" className="text-xs text-ink-muted hover:underline">
-        ← 홈
-      </Link>
+      <BackHomeLink />
       <h1 className="text-2xl font-bold text-ink mt-3">보안과 데이터 보호</h1>
       <p className="text-sm text-ink-soft leading-relaxed mt-2">
         <strong>{SITE_INFO.serviceName}</strong> 는 지원자의 개인정보와 채용

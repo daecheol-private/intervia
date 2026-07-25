@@ -11,7 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { ChevronDown, ChevronRight, List, Search, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, List, Search, X } from "lucide-react";
 import { GUIDE, type GuideCategory } from "./guide-data";
 import { searchGuide, splitByTokens, tokenize } from "./guide-search";
 
@@ -119,7 +119,10 @@ export function GuideView() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold text-ink">사용 가이드</h1>
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-6 h-6 text-primary" />
+          <h1 className="text-2xl font-bold text-ink">사용 가이드</h1>
+        </div>
         <p className="mt-1 text-sm text-ink-soft">
           공고 등록부터 채용 프로세스, 기능·상태·용어까지 안내합니다.
         </p>

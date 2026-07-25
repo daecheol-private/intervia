@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { BackHomeLink } from "@/app/components/BackHomeLink";
 import type { ReactNode } from "react";
-import { ChevronDown, ArrowRight } from "lucide-react";
+import { ChevronDown, ArrowRight, CircleHelp } from "lucide-react";
 import { SITE_INFO } from "@/lib/site-info";
 import { WELCOME_BONUS_TOKENS } from "@/lib/tokens";
 import { TOKEN_KRW } from "@/lib/beta";
@@ -164,10 +165,11 @@ export default async function FaqPage() {
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
-      <Link href="/" className="text-xs text-ink-muted hover:underline">
-        ← 홈
-      </Link>
-      <h1 className="text-2xl font-bold text-ink mt-3">자주 묻는 질문</h1>
+      <BackHomeLink />
+      <div className="flex items-center gap-2 mt-3">
+        <CircleHelp className="w-6 h-6 text-primary" />
+        <h1 className="text-2xl font-bold text-ink">자주 묻는 질문</h1>
+      </div>
       <p className="text-sm text-ink-soft leading-relaxed mt-2">
         서비스·요금·AI 평가·면접 진행·데이터 보안에 대해 자주 묻는 질문을
         모았습니다. 더 궁금한 점은{" "}
