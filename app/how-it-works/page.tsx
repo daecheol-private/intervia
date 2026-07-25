@@ -12,6 +12,7 @@ import {
 import { SITE_INFO } from "@/lib/site-info";
 import { WELCOME_BONUS_TOKENS } from "@/lib/tokens";
 import { TOKEN_KRW } from "@/lib/beta";
+import { getCurrentUser } from "@/lib/auth";
 
 export const metadata = {
   title: `작동 방식 — ${SITE_INFO.serviceName}`,
@@ -110,7 +111,9 @@ const STEP_IMAGES = [
   "/how-7-report.png",
 ];
 
-export default function HowItWorksPage() {
+export default async function HowItWorksPage() {
+  // 로그인 상태에선 좌측 레일 셸 안에서 열리므로 가입 유도 CTA 를 숨긴다(이미 고객).
+  const loggedIn = !!(await getCurrentUser());
   const welcomeKrw = (WELCOME_BONUS_TOKENS * TOKEN_KRW).toLocaleString();
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
@@ -172,7 +175,8 @@ export default function HowItWorksPage() {
         ))}
       </ol>
 
-      {/* CTA */}
+      {/* CTA — 비로그인 방문자에게만 */}
+      {!loggedIn && (
       <div className="mt-12 rounded-2xl border border-border-default bg-surface-alt/50 p-6 text-center">
         <p className="text-sm font-semibold text-ink">지금 바로 시작해 보세요</p>
         <p className="text-xs text-ink-soft mt-1">
@@ -199,6 +203,7 @@ export default function HowItWorksPage() {
           </Link>
         </div>
       </div>
+      )}
     </main>
   );
 }

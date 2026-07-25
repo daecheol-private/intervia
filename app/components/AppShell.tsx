@@ -28,6 +28,7 @@ import {
   Compass,
   Target,
   BookOpen,
+  CircleHelp,
 } from "lucide-react";
 import { LogoMark } from "./Logo";
 import { matchPageGuide } from "@/lib/tour-pages";
@@ -322,6 +323,15 @@ function SidebarInner({
             >
               <BookOpen className="w-[18px] h-[18px] shrink-0" />
               {!collapsed && <span>사용 가이드</span>}
+            </Link>
+            <Link
+              href="/faq"
+              onClick={onNavigate}
+              title={collapsed ? "자주 묻는 질문" : undefined}
+              className={navItemClass(isActive(pathname, "/faq"), collapsed)}
+            >
+              <CircleHelp className="w-[18px] h-[18px] shrink-0" />
+              {!collapsed && <span>자주 묻는 질문</span>}
             </Link>
             <Link
               href="/support"

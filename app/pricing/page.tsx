@@ -10,6 +10,7 @@ import {
   CHARGE_BONUS_BOOSTED,
   TOKEN_KRW,
 } from "@/lib/beta";
+import { getCurrentUser } from "@/lib/auth";
 
 export const metadata = {
   title: `요금 — ${SITE_INFO.serviceName}`,
@@ -24,7 +25,9 @@ const priceLabel = (tokens: number) =>
 // 공개 마케팅 페이지 — 정책 표준가(EFFECTIVE_PRICING: 베타 활성 시 베타가, 아니면 정가)를 표시.
 // org 별 협상가(token_pricing override)에 노출되지 않도록 getAllPricing() 대신 코드 정책가를 쓴다.
 // 정가(LIST_PRICING)와 다르면 취소선으로 함께 노출한다.
-export default function PricingPage() {
+export default async function PricingPage() {
+  // 로그인 상태에선 좌측 레일 셸 안에서 열리므로 가입 유도 CTA 를 숨긴다(이미 고객).
+  const loggedIn = !!(await getCurrentUser());
   const welcomeKrw = (WELCOME_BONUS_TOKENS * TOKEN_KRW).toLocaleString();
 
   const rows = [
@@ -224,7 +227,8 @@ export default function PricingPage() {
         )}
       </section>
 
-      {/* CTA */}
+      {/* CTA — 비로그인 방문자에게만 */}
+      {!loggedIn && (
       <div className="mt-12 rounded-2xl border border-border-default bg-surface-alt/50 p-6 text-center">
         <p className="text-sm font-semibold text-ink">
           무료 체험으로 먼저 확인해 보세요
@@ -253,6 +257,7 @@ export default function PricingPage() {
           </Link>
         </div>
       </div>
+      )}
     </main>
   );
 }
