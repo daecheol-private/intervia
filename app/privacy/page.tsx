@@ -158,7 +158,7 @@ export default function PrivacyPage() {
               <th>위탁 항목</th>
               <th>처리 국가</th>
               <th>보유 기간</th>
-              <th>연락처</th>
+              <th>문의·정책 링크</th>
             </tr>
           </thead>
           <tbody>
@@ -180,7 +180,7 @@ export default function PrivacyPage() {
           장애 시에 한해 식별가능정보를 자동 마스킹한 텍스트만 Google LLC 일본
           도쿄 리전(asia-northeast1)으로 이전되어 임시 처리될 수 있습니다(이전
           방법: TLS 암호화 API 전송·미저장, 목적: AI 평가·면접 처리, 보유: 응답
-          처리 즉시 폐기·학습 미사용, 문의: 위 표의 연락처). 스캔 이력서
+          처리 즉시 폐기·학습 미사용, 문의: 위 표의 문의·정책 링크). 스캔 이력서
           원본(OCR)·음성 데이터는 항상 국내에서만 처리됩니다. 위 임시 처리 및
           호스팅(Vercel·미국)·데이터베이스(Turso·일본 도쿄)·메일
           발송(Resend·미국) 등 인프라 단계의 국외이전은 PIPA §28의8 에 따라 본

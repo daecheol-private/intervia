@@ -328,7 +328,7 @@ export default function AiEvaluationDisclosurePage() {
               <th className="px-3 py-2 text-left">수탁자</th>
               <th className="px-3 py-2 text-left">목적</th>
               <th className="px-3 py-2 text-left">국가</th>
-              <th className="px-3 py-2 text-left">연락처</th>
+              <th className="px-3 py-2 text-left">문의·정책 링크</th>
             </tr>
           </thead>
           <tbody className="text-ink-soft">
