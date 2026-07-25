@@ -44,6 +44,9 @@ type Band = {
 export default async function InsightsPage() {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
+  // 평가 정확도는 법인 단위 집계 지표 — 법인 담당자(org_admin)·시스템 관리자 전용.
+  // 일반 면접관(member)은 네비에서 숨길 뿐 아니라 URL 직접 접근도 대시보드로 돌려보낸다.
+  if (me.role === "member") redirect("/");
 
   const candWhere = candidateOrgFilter(me); // system_admin 은 undefined(전체)
 

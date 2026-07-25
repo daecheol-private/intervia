@@ -65,7 +65,6 @@ function buildSections(role: Role): NavSection[] {
         { href: "/jobs", label: "공고", Icon: ClipboardList },
         { href: "/candidates", label: "후보자", Icon: Users },
         { href: "/interviews", label: "면접 일정", Icon: CalendarClock },
-        { href: "/insights", label: "평가 정확도", Icon: Target },
         { href: "/support", label: "고객센터", Icon: LifeBuoy },
       ],
     });
@@ -77,6 +76,8 @@ function buildSections(role: Role): NavSection[] {
         { href: "/org/tokens", label: "토큰 지갑", Icon: Coins },
         { href: "/org/members", label: "멤버", Icon: Users },
         { href: "/org/settings", label: "법인 설정", Icon: Settings },
+        // 평가 정확도(법인 집계) — 법인 담당자 전용.
+        { href: "/insights", label: "평가 정확도", Icon: Target },
         // 메일 서버 설정은 데스크톱 전용 — 모바일 메뉴에서 숨김
       ],
     });
@@ -176,7 +177,6 @@ export function NavBar({
                     label="면접 일정"
                     Icon={CalendarClock}
                   />
-                  <NavLink href="/insights" label="평가 정확도" Icon={Target} />
                 </>
               )}
               {canManageOrg && (
@@ -188,6 +188,8 @@ export function NavBar({
                     { href: "/org/members", label: "멤버", Icon: Users },
                     // 메일 서버·줌 연동은 법인 설정 > 외부 연동으로 이동 (첫 화면 단순화)
                     { href: "/org/settings", label: "법인 설정", Icon: Settings },
+                    // 평가 정확도(법인 집계) — 법인 담당자 전용.
+                    { href: "/insights", label: "평가 정확도", Icon: Target },
                     { href: "/support", label: "고객센터", Icon: LifeBuoy },
                   ]}
                 />
