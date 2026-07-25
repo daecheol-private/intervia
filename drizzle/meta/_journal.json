@@ -414,6 +414,13 @@
       "when": 1784830807150,
       "tag": "0058_tearful_menace",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1784957031062,
+      "tag": "0059_kind_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

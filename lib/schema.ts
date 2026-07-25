@@ -118,6 +118,10 @@ export const users = sqliteTable("users", {
   // "공고/후보 페이지 첫 진입 시 그 페이지 가이드가 한 번 뜨고, 본 뒤로는 안 뜸" 방식이라,
   // 본 가이드 키를 여기 누적해 재노출을 막는다. 개인 단위(계정별). null = 아직 아무것도 안 봄.
   seenMemberGuides: text("seen_member_guides"),
+  // 일일 업무 요약 메일(daily digest, 매일 아침 09:00 발송)을 본인이 끈 시각 — 개인 단위.
+  // null = 수신(기본). 값 있으면 그 면접관에겐 digest 를 보내지 않는다(sendDailyDigests 가 필터).
+  // 이 설정은 daily digest 에만 적용 — 면접 일정·합격 통지 등 다른 운영 메일과 무관하다.
+  dailyDigestOptOutAt: text("daily_digest_opt_out_at"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),

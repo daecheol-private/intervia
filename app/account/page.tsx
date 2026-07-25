@@ -14,8 +14,10 @@ import { formatLocalDateTime } from "@/lib/utils";
 export default function AccountPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [org, setOrg] = useState<{ name?: string; emailDomain?: string | null } | null>(null);
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirm: "" });
   const [busy, setBusy] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const [msg, setMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
   useEffect(() => {
@@ -29,6 +31,14 @@ export default function AccountPage() {
         setUser(d.user);
       });
   }, [router]);
+
+  useEffect(() => {
+    void fetch("/api/orgs/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((o) => {
+        if (o && o.id) setOrg({ name: o.name, emailDomain: o.emailDomain });
+      });
+  }, []);
 
   const submit = async () => {
     setMsg(null);
@@ -64,6 +74,7 @@ export default function AccountPage() {
     }
     setMsg({ type: "success", text: "비밀번호가 변경되었습니다." });
     setForm({ currentPassword: "", newPassword: "", confirm: "" });
+    setPwOpen(false);
   };
 
   if (!user)
@@ -80,54 +91,23 @@ export default function AccountPage() {
       </Link>
       <h1 className="text-2xl font-bold mt-3 mb-6">계정 설정</h1>
 
-      <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm mb-6">
+      <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm">
         <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">
           내 정보
         </h2>
         <div className="space-y-2 text-sm">
           <Row label="이름" value={user.name} />
           <Row label="이메일" value={user.email} />
+          {org?.name && <Row label="법인명" value={org.name} />}
+          {org?.emailDomain && (
+            <Row label="이메일 도메인" value={org.emailDomain} />
+          )}
         </div>
-      </section>
 
-      <OrgInfoPanel />
-
-      <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm">
-        <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">
-          비밀번호 변경
-        </h2>
-        <div className="space-y-4">
-          <Field label="현재 비밀번호">
-            <PasswordInput
-              className={inputCls}
-              autoComplete="current-password"
-              value={form.currentPassword}
-              onChange={(v) => setForm({ ...form, currentPassword: v })}
-            />
-          </Field>
-          <Field label="새 비밀번호">
-            <PasswordInput
-              className={inputCls}
-              autoComplete="new-password"
-              placeholder="10자 이상, 3종 이상 조합"
-              value={form.newPassword}
-              onChange={(v) => setForm({ ...form, newPassword: v })}
-            />
-            <PasswordStrength password={form.newPassword} />
-          </Field>
-          <Field label="새 비밀번호 확인">
-            <PasswordInput
-              className={inputCls}
-              autoComplete="new-password"
-              value={form.confirm}
-              onChange={(v) => setForm({ ...form, confirm: v })}
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-            />
-          </Field>
-
+        <div className="border-t border-border-default mt-5 pt-5">
           {msg && (
             <div
-              className={`text-xs rounded-lg px-3 py-2 ${
+              className={`mb-4 text-xs rounded-lg px-3 py-2 ${
                 msg.type === "error"
                   ? "text-danger bg-danger-soft border border-danger/30"
                   : "text-primary-deep bg-primary-soft border border-primary/30"
@@ -136,19 +116,81 @@ export default function AccountPage() {
               {msg.text}
             </div>
           )}
-
-          <button
-            onClick={submit}
-            disabled={busy}
-            className="bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium px-5 py-2 rounded-lg shadow-sm"
-          >
-            {busy ? "변경 중..." : "비밀번호 변경"}
-          </button>
+          {!pwOpen ? (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-ink">비밀번호</p>
+                <p className="text-xs text-ink-muted mt-0.5">
+                  주기적으로 변경하면 계정을 더 안전하게 보호할 수 있습니다.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setMsg(null);
+                  setPwOpen(true);
+                }}
+                className="shrink-0 bg-surface-alt hover:bg-surface-alt/70 border border-border-strong text-ink-soft text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                비밀번호 변경
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-ink">비밀번호 변경</p>
+              <Field label="현재 비밀번호">
+                <PasswordInput
+                  className={inputCls}
+                  autoComplete="current-password"
+                  value={form.currentPassword}
+                  onChange={(v) => setForm({ ...form, currentPassword: v })}
+                />
+              </Field>
+              <Field label="새 비밀번호">
+                <PasswordInput
+                  className={inputCls}
+                  autoComplete="new-password"
+                  placeholder="10자 이상, 3종 이상 조합"
+                  value={form.newPassword}
+                  onChange={(v) => setForm({ ...form, newPassword: v })}
+                />
+                <PasswordStrength password={form.newPassword} />
+              </Field>
+              <Field label="새 비밀번호 확인">
+                <PasswordInput
+                  className={inputCls}
+                  autoComplete="new-password"
+                  value={form.confirm}
+                  onChange={(v) => setForm({ ...form, confirm: v })}
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
+                />
+              </Field>
+              <div className="flex gap-2">
+                <button
+                  onClick={submit}
+                  disabled={busy}
+                  className="bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium px-5 py-2 rounded-lg shadow-sm"
+                >
+                  {busy ? "변경 중..." : "비밀번호 저장"}
+                </button>
+                <button
+                  onClick={() => {
+                    setPwOpen(false);
+                    setForm({ currentPassword: "", newPassword: "", confirm: "" });
+                    setMsg(null);
+                  }}
+                  className="bg-slate-100 hover:bg-slate-200 text-ink-soft text-sm font-medium px-5 py-2 rounded-lg border border-border-strong"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
       <TwoFactorPanel />
       <SessionsPanel />
+      <DigestEmailPanel />
       <MarketingEmailPanel />
 
       <section className="mt-8 bg-card border border-border-default rounded-2xl p-6 shadow-sm">
@@ -671,6 +713,89 @@ function SessionsPanel() {
   );
 }
 
+function DigestEmailPanel() {
+  const [optIn, setOptIn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/account/digest-preference")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) setOptIn(!!d.optIn);
+      });
+  }, []);
+
+  const toggle = async () => {
+    if (optIn === null || busy) return;
+    const next = !optIn;
+    setBusy(true);
+    setMsg(null);
+    const r = await fetch("/api/account/digest-preference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ optIn: next }),
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setMsg({ type: "error", text: await r.text() });
+      return;
+    }
+    setOptIn(next);
+    setMsg({
+      type: "success",
+      text: next
+        ? "매일 아침 할 일 요약 메일을 받습니다."
+        : "요약 메일을 껐습니다. 면접 일정·합격 통지 등 다른 안내 메일은 계속 받습니다.",
+    });
+  };
+
+  if (optIn === null) return null;
+
+  return (
+    <section className="mt-8 bg-card border border-border-default rounded-2xl p-6 shadow-sm">
+      <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">
+        오늘의 할 일 요약 메일
+      </h2>
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-ink-soft leading-relaxed">
+          매일 아침(오전 9시경), 회원님이 면접관으로 배정된 공고에서 처리할 항목(오늘 진행할
+          면접·합격 결정 대기·신규 지원 등)을 모아 한 통의 메일로 보내드립니다. 끄면 이 요약
+          메일만 중단되며, 면접 일정·합격 통지 등 다른 안내 메일은 이 설정과 무관하게 계속
+          발송됩니다. 처리할 항목이 없는 날에는 메일을 보내지 않습니다.
+        </p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={optIn}
+          onClick={toggle}
+          disabled={busy}
+          className={`relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
+            optIn ? "bg-primary" : "bg-slate-300"
+          }`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-card shadow transition-transform ${
+              optIn ? "translate-x-5" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+      </div>
+      {msg && (
+        <div
+          className={`mt-3 text-xs rounded-lg px-3 py-2 ${
+            msg.type === "error"
+              ? "text-danger bg-danger-soft border border-danger/30"
+              : "text-primary-deep bg-primary-soft border border-primary/30"
+          }`}
+        >
+          {msg.text}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function MarketingEmailPanel() {
   const [optIn, setOptIn] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -776,82 +901,3 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function OrgInfoPanel() {
-  type Org = {
-    id: number | null;
-    name?: string;
-    emailDomain?: string | null;
-    officeAddress?: string | null;
-    officeAddressDetail?: string | null;
-  };
-  const [org, setOrg] = useState<Org | null>(null);
-  const [canEdit, setCanEdit] = useState(false);
-
-  const load = async () => {
-    const [orgRes, statusRes] = await Promise.all([
-      fetch("/api/orgs/me"),
-      fetch("/api/auth/status"),
-    ]);
-    if (orgRes.ok) {
-      const o = (await orgRes.json()) as Org;
-      setOrg(o);
-    }
-    if (statusRes.ok) {
-      const s = await statusRes.json();
-      setCanEdit(
-        s.user?.role === "org_admin" || s.user?.role === "system_admin"
-      );
-    }
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  if (!org || !org.id) return null;
-
-  return (
-    <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm mb-6">
-      <div className="flex items-baseline justify-between mb-3">
-        <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
-          소속 법인
-        </h2>
-        {canEdit && (
-          <Link
-            href="/org/settings"
-            className="text-xs text-primary hover:underline"
-          >
-            법인 설정에서 수정 →
-          </Link>
-        )}
-      </div>
-      <div className="space-y-2 text-sm">
-        <Row label="법인명" value={org.name ?? "-"} />
-        {org.emailDomain && (
-          <Row label="이메일 도메인" value={org.emailDomain} />
-        )}
-        <Row label="회사 주소" value={org.officeAddress ?? "(미설정)"} />
-        {org.officeAddressDetail && (
-          <Row label="상세 주소" value={org.officeAddressDetail} />
-        )}
-        {!org.officeAddress && (
-          <p className="text-[11px] text-ink-muted bg-surface-alt rounded-md px-3 py-2 mt-1">
-            오프라인 면접 일정 메일에 회사 주소가 포함됩니다.
-            {canEdit
-              ? " 법인 설정에서 등록해 두면 매번 입력하지 않아도 됩니다."
-              : " 법인 관리자에게 등록을 요청하세요."}
-          </p>
-        )}
-        {canEdit && (
-          <p className="text-[11px] text-ink-muted bg-surface-alt rounded-md px-3 py-2 mt-1">
-            회사 주소·스캔 PDF AI OCR 등 법인 단위 설정은{" "}
-            <Link href="/org/settings" className="text-primary hover:underline">
-              법인 설정
-            </Link>
-            에서 변경할 수 있습니다.
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}

@@ -144,6 +144,7 @@ export async function sendDailyDigests(): Promise<{
       email: users.email,
       orgId: users.orgId,
       status: users.status,
+      digestOptOutAt: users.dailyDigestOptOutAt,
     })
     .from(jobInterviewers)
     .innerJoin(users, eq(users.id, jobInterviewers.userId));
@@ -153,7 +154,8 @@ export async function sendDailyDigests(): Promise<{
     { name: string; email: string; orgId: number | null; jobIds: Set<number> }
   >();
   for (const a of assignments) {
-    if (a.status !== "active" || !a.email) continue;
+    // 비활성·이메일 없음, 그리고 본인이 요약 메일을 끈 경우(계정 설정 opt-out) 제외.
+    if (a.status !== "active" || !a.email || a.digestOptOutAt != null) continue;
     let g = byUser.get(a.userId);
     if (!g) {
       g = { name: a.name, email: a.email, orgId: a.orgId, jobIds: new Set() };

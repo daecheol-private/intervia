@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `daily_digest_opt_out_at` text;
