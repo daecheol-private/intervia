@@ -21,6 +21,7 @@ const TIMELINE_ACTIONS = [
   "job.finalize_draft",
   "job.update",
   "job.close",
+  "job.reopen",
   "job.extend",
   "job.interviewer_add",
   "job.interviewer_remove",

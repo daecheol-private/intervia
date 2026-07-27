@@ -43,6 +43,31 @@ export function LifecyclePanel({
     if (r.ok) setInfo(await r.json());
   };
 
+  // 재개 — 종결 예정일이 아직 남은 공고만. 실수로 닫았거나 전원 불합격으로 닫힌 공고를 되살린다.
+  // 종결 때 일괄 불합격된 후보자는 되돌아오지 않으므로 미리 알린다.
+  const doReopen = async () => {
+    if (
+      !(await confirmDialog(
+        "공고를 다시 진행 상태로 되돌립니다. 종결 시 불합격 처리된 후보자는 복구되지 않습니다.",
+        { title: "공고 재개", confirmText: "재개" }
+      ))
+    )
+      return;
+    setBusy(true);
+    const r = await fetch(`/api/jobs/${job.id}/reopen`, { method: "POST" });
+    setBusy(false);
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      notify(data?.message ?? "재개 실패", { tone: "danger", title: "재개 실패" });
+      return;
+    }
+    notify("공고를 다시 진행 상태로 되돌렸습니다.", {
+      tone: "success",
+      title: "공고 재개 완료",
+    });
+    onChanged();
+  };
+
   const doExtend = async () => {
     setBusy(true);
     const r = await fetch(`/api/jobs/${job.id}/extend`, { method: "POST" });
@@ -106,6 +131,15 @@ export function LifecyclePanel({
           )}
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
+          {status === "closed" && dLeft != null && dLeft > 0 && (
+            <button
+              onClick={doReopen}
+              disabled={busy}
+              className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary-deep hover:bg-primary-soft text-sm disabled:opacity-50"
+            >
+              공고 재개
+            </button>
+          )}
           {status === "active" && dLeft != null && dLeft <= 14 && (
             <button
               onClick={openExtend}

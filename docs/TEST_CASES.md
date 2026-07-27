@@ -483,8 +483,10 @@
   > ✅ blocker 없음 → status=closed, closed_at 세팅, rejectedCount:0. (blocker 409 경로는 §12 진행중 후보로 검증)
 - [x] **TC-8.3.6** **만료된 링크는 blocker 아님** (expiresAt < now ISO 비교) → 종결 가능
   > ✅ 코드 검증: checkCloseable 이 expiresAt<now(ISO) 링크 제외. 실데이터 검증은 §14.
-- [x] **TC-8.3.7** 모든 후보 결정 완료 시 자동 종결(maybeAutoCloseJob) 동작
-  > ✅ 코드 검증: maybeAutoCloseJob. 실데이터는 §16 결정 통보 후.
+- [x] **TC-8.3.7** 모든 후보 결정 완료돼도 공고는 열려 있다 (자동 종결 제거, 2026-07-27)
+  > ✅ 전원 불합격은 채용 종료가 아니라 계속 모집해야 하는 상태다. 과거 `maybeAutoCloseJob` 이
+  > 이 경우 공고를 닫아 지원 링크가 410 으로 막히고, extendJob 의 '보관 이력서 0건' 가드 때문에
+  > 되살릴 수도 없었다. 종결은 `POST /api/jobs/[id]/close` 로만, 되돌리기는 `reopen`.
 
 ### 8.4 JD URL 임포트 (`/api/jobs/import-from-url`)
 - [ ] **TC-8.4.1** 채용포털 URL → 텍스트 추출 + confidence 반환
@@ -813,8 +815,8 @@
   > ✅ slotIndex 99→400, selected 후 재select→409, 만료 410 분기(code route:46).
 - [x] **TC-14.2.5** counter: 역제안 슬롯 저장 → status=counter_proposed, 면접관 알림
   > ✅ counter 역제시 → 200, status=counter_proposed+candidateNote, notification schedule_counter_proposed 생성.
-- [x] **TC-14.2.6** withdraw: 이메일 본인확인(없으면 403) → outcome=withdrawn + 폐기 + 자동종결 체크
-  > ✅ 186: 이메일 미입력→403, 틀린 이메일→403, 정확 이메일→200. outcome=withdrawn/candidate_withdrew, resume_masked_text 폐기(purged), schedule status=withdrawn. maybeAutoCloseJob 호출(코드).
+- [x] **TC-14.2.6** withdraw: 이메일 본인확인(없으면 403) → outcome=withdrawn + 폐기
+  > ✅ 186: 이메일 미입력→403, 틀린 이메일→403, 정확 이메일→200. outcome=withdrawn/candidate_withdrew, resume_masked_text 폐기(purged), schedule status=withdrawn. (자동 종결 호출은 2026-07-27 제거)
 
 ### 14.3 확정 / 미팅링크 / 리마인더
 - [x] **TC-14.3.1** `/api/schedules/[id]/confirm` → 확정 처리

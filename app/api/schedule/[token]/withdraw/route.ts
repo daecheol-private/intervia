@@ -6,7 +6,6 @@ import { db } from "@/lib/db";
 import { interviewSchedules, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { purgeOnDecision } from "@/lib/candidate-stage";
-import { maybeAutoCloseJob } from "@/lib/job-lifecycle";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
 import { rateLimit } from "@/lib/rate-limit";
@@ -105,11 +104,6 @@ export async function POST(
   // 본문 폐기 (PIPA)
   await purgeOnDecision(sched.candidateId).catch((e) =>
     console.error("purgeOnDecision after withdraw failed", e)
-  );
-
-  // 모든 지원자가 종결되면 공고 자동 종결.
-  await maybeAutoCloseJob(sched.jobId).catch((e) =>
-    console.error("maybeAutoCloseJob after schedule withdraw failed", e)
   );
 
   const [cand] = await db

@@ -65,6 +65,7 @@ export type AuditAction =
   | "interview.start"
   | "interview.complete"
   | "job.close"
+  | "job.reopen"
   | "job.extend"
   | "job.interviewer_add"
   | "job.interviewer_remove"

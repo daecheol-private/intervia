@@ -6,7 +6,6 @@ import { db } from "@/lib/db";
 import { interviewSessions, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { purgeOnDecision } from "@/lib/candidate-stage";
-import { maybeAutoCloseJob } from "@/lib/job-lifecycle";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -88,13 +87,6 @@ export async function POST(
   await purgeOnDecision(session.candidateId).catch((e) =>
     console.error("purgeOnDecision after AI-interview withdraw failed", e)
   );
-
-  // 모든 지원자가 종결되면 공고 자동 종결.
-  if (prev?.jobId) {
-    await maybeAutoCloseJob(prev.jobId).catch((e) =>
-      console.error("maybeAutoCloseJob after AI-interview withdraw failed", e)
-    );
-  }
 
   return Response.json({ ok: true });
 }

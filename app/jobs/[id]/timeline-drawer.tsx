@@ -98,6 +98,15 @@ function describe(e: TimelineEvent): {
         tone: "warn",
       };
     }
+    case "job.reopen": {
+      const until = typeof m.closesAt === "string" ? formatLocalDate(m.closesAt) : null;
+      return {
+        icon: CalendarPlus,
+        title: "공고 재개",
+        detail: until ? `종결 예정일 ${until}` : null,
+        tone: "neutral",
+      };
+    }
     case "job.extend": {
       const until = typeof m.newClosesAt === "string" ? formatLocalDate(m.newClosesAt) : null;
       return {
