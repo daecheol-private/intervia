@@ -8,7 +8,8 @@
  *     slot: { start: ISO, end: ISO },
  *     modeOnline?: boolean,                 // 기본 true
  *     address?, addressDetail?,             // modeOnline=false 시 address 필수
- *     notifyCandidate?: boolean             // true 면 후보자에게 확정 메일 발송 (기본 false)
+ *     notifyCandidate?: boolean,            // true 면 후보자에게 확정 메일 발송 (기본 false)
+ *     shareRecipients?: [{email, name?, userId?}]  // 일정 공유 대상(선택)
  *   }
  *
  * 동작:
@@ -16,6 +17,7 @@
  *   - status='selected' + selectedSlot 로 즉시 확정 row 생성
  *   - round1 이면 candidate.stage → round1_waiting (확정 흐름과 동일)
  *   - notifyCandidate 시 줌 자동 생성 시도 → 폴백 확정 메일
+ *   - 공유 수신자에겐 후보자 통보 여부와 무관하게 확정 안내 발송
  *   - 공고 면접관 전원 인앱 알림 (면접관 공유 목적)
  */
 import { db } from "@/lib/db";
@@ -31,6 +33,7 @@ import {
   roundLabel,
 } from "@/lib/schedules";
 import { sendScheduleConfirmationEmails } from "@/lib/schedule-notify";
+import { normalizeShareRecipients } from "@/lib/schedule-share";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
 import { rateLimit } from "@/lib/rate-limit";
@@ -72,8 +75,12 @@ export async function POST(
     address?: string;
     addressDetail?: string;
     notifyCandidate?: boolean;
+    shareRecipients?: unknown;
   } | null;
   if (!body?.slot) return new Response("slot { start, end } 필요", { status: 400 });
+
+  const share = normalizeShareRecipients(body.shareRecipients);
+  if (!share.ok) return new Response(share.error, { status: 400 });
 
   const round: "round1" | "round2" =
     body.round === "round2" ? "round2" : "round1";
@@ -171,6 +178,7 @@ export async function POST(
       status: "selected",
       selectedSlot: slot,
       proposedByUserId: me!.id,
+      shareRecipients: share.list.length > 0 ? share.list : null,
       expiresAt: scheduleExpiresAt(),
       respondedAt: now,
     })
@@ -186,20 +194,25 @@ export async function POST(
 
   // 후보자 통보 (선택) — 줌 자동 생성 시도 후 헬퍼로 후보자에게만 확정 메일 발송.
   // 면접관은 아래 인앱 알림으로 공유(전화 합의 후 등록이라 전원 메일은 과함).
+  // 공유 수신자가 지정돼 있으면 후보자 통보를 끄더라도 헬퍼를 태운다 — 회의실·임원 안내는
+  // 후보자 통보 여부와 별개다. 줌 자동 생성은 기존대로 후보자 통보 시에만.
+  const wantCandidateMail = !!body.notifyCandidate && !!candidate.email;
   let candidateMail: { sent: boolean; error?: string } | null = null;
-  if (body.notifyCandidate && candidate.email) {
-    const zoom = await tryAutoCreateZoomMeeting(sched);
+  if (wantCandidateMail || share.list.length > 0) {
+    const zoom = wantCandidateMail ? await tryAutoCreateZoomMeeting(sched) : null;
     const r = await sendScheduleConfirmationEmails({
       sched,
       slot,
-      meetingUrl: zoom.handled ? zoom.meetingUrl : null,
-      meetingNote: zoom.handled ? zoom.meetingNote : null,
+      meetingUrl: zoom?.handled ? zoom.meetingUrl : null,
+      meetingNote: zoom?.handled ? zoom.meetingNote : null,
       isReschedule,
       notifyInterviewers: false,
+      notifyCandidate: wantCandidateMail,
     });
-    candidateMail = r.candidateEmailSent
-      ? { sent: true }
-      : { sent: false, error: "메일 서버 미설정 또는 발송 실패" };
+    if (wantCandidateMail)
+      candidateMail = r.candidateEmailSent
+        ? { sent: true }
+        : { sent: false, error: "메일 서버 미설정 또는 발송 실패" };
   }
 
   // 인앱 알림 — 공고 면접관 전원 fanout (면접관 공유 목적. 등록자 본인은 메일 제외)
@@ -225,7 +238,13 @@ export async function POST(
     resourceId: sched.id,
     orgId: job.orgId,
     jobId: job.id,
-    metadata: { candidateId: cid, round, slot, notified: !!candidateMail?.sent },
+    metadata: {
+      candidateId: cid,
+      round,
+      slot,
+      notified: !!candidateMail?.sent,
+      shareRecipients: share.list.map((r) => r.email),
+    },
   });
 
   return Response.json({

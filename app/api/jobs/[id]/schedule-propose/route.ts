@@ -6,6 +6,7 @@
  *  - slots: [{start, end}]   (1~10개, 미래 시각)
  *  - modeOnline: boolean
  *  - address?, addressDetail?  (modeOnline=false 시 필수)
+ *  - shareRecipients?: [{email, name?, userId?}]  일정 확정·변경·취소를 함께 받을 사람(선택)
  *
  * 동작:
  *  - 각 후보자별로 기존 active 스케쥴(pending/counter_proposed) 을 'cancelled' 로 마킹
@@ -13,6 +14,8 @@
  *  - candidates.stage = 'round1_scheduling'
  *  - 후보자에게 메일 발송 (/schedule/[token])
  *  - 회사 주소가 비어있고 입력이 들어오면 organizations 에 저장
+ *
+ * GET: 이 공고·차수의 직전 제안에 쓰인 공유 수신자 반환 — 모달이 프리필한다.
  */
 import { db } from "@/lib/db";
 import {
@@ -21,7 +24,7 @@ import {
   interviewSchedules,
   organizations,
 } from "@/lib/schema";
-import { and, eq, inArray, sql, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, isNull, isNotNull, or } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import {
@@ -45,6 +48,10 @@ import {
   requireSpendableBalance,
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
+import {
+  normalizeShareRecipients,
+  sendScheduleShareEmails,
+} from "@/lib/schedule-share";
 
 export const runtime = "nodejs";
 // 동기 발송 최대 50명 × MAIL_RATE_PER_SEC(기본 2/s) 페이싱 ≈ 25s + 재시도 여유.
@@ -76,8 +83,12 @@ export async function POST(
     address?: string;
     addressDetail?: string;
     round?: string;
+    shareRecipients?: unknown;
   } | null;
   if (!body) return new Response("바디 필요", { status: 400 });
+
+  const share = normalizeShareRecipients(body.shareRecipients);
+  if (!share.ok) return new Response(share.error, { status: 400 });
 
   // 면접 차수 — round2 는 "1차 합격(round1_passed)" 후보에게만 제시 가능.
   // round2 는 별도 세부 단계를 만들지 않으므로 stage 는 round1_passed 로 유지된다(2차 합격 결정 시 수동 전환).
@@ -232,8 +243,9 @@ export async function POST(
       continue;
     }
     // 기존 확정(selected)이 있으면 이번 제안은 "변경 재제안" — 메일을 변경형 문구로.
-    const priorSelected = await db
-      .select({ id: interviewSchedules.id })
+    // 공유 수신자 통지에 쓸 옛 확정 정보(시간·수신자)도 같이 확보한다.
+    const [priorSelected] = await db
+      .select()
       .from(interviewSchedules)
       .where(
         and(
@@ -242,7 +254,7 @@ export async function POST(
           eq(interviewSchedules.status, "selected")
         )
       );
-    const isReschedule = priorSelected.length > 0;
+    const isReschedule = !!priorSelected;
 
     // 같은 차수의 이전 active 스케쥴 cancel — 확정(selected) 포함.
     // 확정 후 변경 재제안 시 옛 확정이 남아 화면이 "확정"으로 잘못 표시되거나
@@ -262,6 +274,22 @@ export async function POST(
         )
       );
 
+    // 확정돼 있던 일정을 무르는 경우 — 회의실을 잡아둔 공유 수신자에게 취소를 알린다.
+    // 새 시간은 아직 미정이라 확정 안내는 지원자가 시간을 고른 뒤 별도로 나간다.
+    if (priorSelected?.selectedSlot) {
+      try {
+        await sendScheduleShareEmails({
+          sched: priorSelected,
+          slot: priorSelected.selectedSlot,
+          kind: "cancelled",
+          cancelReason:
+            "면접 일정 변경으로 기존 일정이 취소되었습니다. 새 일정이 확정되면 다시 안내드립니다.",
+        });
+      } catch (e) {
+        console.error("[schedule-propose] 기존 일정 취소 공유 실패", e);
+      }
+    }
+
     const token = generateScheduleToken();
     const expiresAt = scheduleExpiresAt();
     const [sched] = await db
@@ -278,6 +306,7 @@ export async function POST(
         addressDetail,
         status: "pending",
         proposedByUserId: me!.id,
+        shareRecipients: share.list.length > 0 ? share.list : null,
         expiresAt,
       })
       .returning();
@@ -351,10 +380,52 @@ export async function POST(
       sent: results.filter((r) => r.status === "sent").length,
       skipped: results.filter((r) => r.status === "skipped").length,
       failed: results.filter((r) => r.status === "failed").length,
+      // 후보자 정보가 면접관 외 누구에게 나가는지 추적 — 주소 자체를 남긴다(내부 감사용).
+      shareRecipients: share.list.map((r) => r.email),
     },
   });
 
   void isNull;
   void sql;
   return Response.json({ ok: true, results });
+}
+
+/**
+ * 이 공고·차수에서 마지막으로 지정된 공유 수신자 — 일정 모달이 프리필한다.
+ * 공유 수신자는 제안 건별 스냅샷이라 재제안 때 다시 입력해야 하는 것을 덜어준다.
+ */
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const me = await getCurrentUser();
+  const userGuard = requireUser(me);
+  if (userGuard) return userGuard;
+
+  const { id } = await params;
+  const jobId = Number(id);
+  const [job] = await db
+    .select({ orgId: jobPostings.orgId })
+    .from(jobPostings)
+    .where(eq(jobPostings.id, jobId));
+  if (!job) return new Response("Not found", { status: 404 });
+  if (!ownsOrg(me!, job.orgId))
+    return new Response("Not found", { status: 404 });
+
+  const url = new URL(req.url);
+  const round = url.searchParams.get("round") === "round2" ? "round2" : "round1";
+  const [last] = await db
+    .select({ shareRecipients: interviewSchedules.shareRecipients })
+    .from(interviewSchedules)
+    .where(
+      and(
+        eq(interviewSchedules.jobId, jobId),
+        eq(interviewSchedules.round, round),
+        isNotNull(interviewSchedules.shareRecipients)
+      )
+    )
+    .orderBy(desc(interviewSchedules.id))
+    .limit(1);
+
+  return Response.json({ shareRecipients: last?.shareRecipients ?? [] });
 }

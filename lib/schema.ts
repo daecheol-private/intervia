@@ -1062,6 +1062,12 @@ export const interviewSchedules = sqliteTable("interview_schedules", {
     .$type<Array<{ start: string; end: string }> | null>(),
   // 지원자 코멘트 (역제시·취소 사유 등)
   candidateNote: text("candidate_note"),
+  // 일정 확정·변경·취소 안내를 면접관 외에 함께 받을 사람 — 제안 시점 입력(선택).
+  // 회의실·인사팀 담당자, 앱 계정이 없는 임원 등. userId 는 법인 멤버 선택 시에만 채워지고
+  // 발송 시점에 최신 이메일을 다시 조회한다(퇴사·주소 변경 대응). 제안 건별 스냅샷이라
+  // 재제안 시 새 row 에는 UI 가 직전 값을 프리필해 넘긴다.
+  shareRecipients: text("share_recipients", { mode: "json" })
+    .$type<Array<{ email: string; name?: string; userId?: number }> | null>(),
   status: text("status", {
     enum: ["pending", "selected", "counter_proposed", "withdrawn", "cancelled"],
   })

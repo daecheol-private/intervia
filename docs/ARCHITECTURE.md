@@ -78,6 +78,8 @@ interviewer/
 │   ├── prompts.ts                  # 면접관 시스템 프롬프트 + 평가 프롬프트
 │   ├── gemini.ts                   # Gemini API 래퍼 (스트리밍 + JSON 모드)
 │   ├── mailer.ts                   # nodemailer + 메일 HTML 템플릿 (지원자 메일은 법인 브랜딩 밴드 — getOrgEmailBranding, 로고 CID 첨부)
+│   ├── schedule-notify.ts          # 일정 확정 메일 통합 발송 (후보자 + 면접관 전원 + 공유 수신자)
+│   ├── schedule-share.ts           # 일정 공유 수신자 — 면접관 아닌 담당자·미가입 임원에게 확정/변경/취소 안내
 │   ├── utils.ts                    # 토큰/날짜/점수 헬퍼
 │   └── pdf-parse.d.ts              # pdf-parse 서브경로 타입 선언
 ├── proxy.ts                        # Next.js 16 미들웨어 (인증 가드)

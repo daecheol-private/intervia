@@ -7,6 +7,7 @@ import { interviewSchedules, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { purgeOnDecision } from "@/lib/candidate-stage";
 import { notifyJobInterviewers } from "@/lib/notifications";
+import { sendScheduleShareEmails } from "@/lib/schedule-share";
 import { logAudit } from "@/lib/audit";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -105,6 +106,22 @@ export async function POST(
   await purgeOnDecision(sched.candidateId).catch((e) =>
     console.error("purgeOnDecision after withdraw failed", e)
   );
+
+  // 확정돼 있던 일정이면 공유 수신자(회의실·인사팀·임원)에게 취소를 알린다 —
+  // 이들은 확정 안내를 받고 회의실을 잡아둔 상태라 취소를 모르면 빈 예약이 남는다.
+  // 확정 전(pending)이었다면 애초에 안내가 나간 적이 없어 보내지 않는다.
+  if (sched.status === "selected" && sched.selectedSlot) {
+    try {
+      await sendScheduleShareEmails({
+        sched,
+        slot: sched.selectedSlot,
+        kind: "cancelled",
+        cancelReason: "지원자가 지원을 취소했습니다.",
+      });
+    } catch (e) {
+      console.error("schedule withdraw share notify failed", e);
+    }
+  }
 
   const [cand] = await db
     .select({ name: candidates.name })

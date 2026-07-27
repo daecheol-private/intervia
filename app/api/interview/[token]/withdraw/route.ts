@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { interviewSessions, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { purgeOnDecision } from "@/lib/candidate-stage";
+import { notifyShareCancelOnCandidateClosed } from "@/lib/schedule-share";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -86,6 +87,11 @@ export async function POST(
 
   await purgeOnDecision(session.candidateId).catch((e) =>
     console.error("purgeOnDecision after AI-interview withdraw failed", e)
+  );
+
+  // 예정된 확정 면접이 있으면 일정 공유 수신자에게 취소 통지 (대부분 no-op).
+  await notifyShareCancelOnCandidateClosed(session.candidateId, "withdrawn").catch(
+    (e) => console.error("share cancel notify after AI-interview withdraw failed", e)
   );
 
   return Response.json({ ok: true });

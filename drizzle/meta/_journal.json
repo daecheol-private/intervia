@@ -421,6 +421,13 @@
       "when": 1784957031062,
       "tag": "0059_kind_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "6",
+      "when": 1785118632174,
+      "tag": "0060_last_franklin_storm",
+      "breakpoints": true
     }
   ]
 }

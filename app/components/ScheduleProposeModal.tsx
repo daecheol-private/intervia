@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, Pencil, Monitor, Building2 } from "lucide-react";
 import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
+import {
+  ShareRecipientPicker,
+  type ShareRecipient,
+} from "@/app/components/ShareRecipientPicker";
 
 export type ProposeResult = {
   candidateId: number;
@@ -52,6 +56,8 @@ export function ScheduleProposeModal({
   const [addressDetail, setAddressDetail] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // 확정·변경·취소 안내를 함께 받을 사람(면접관 외). 직전 제안 값으로 프리필한다.
+  const [shareRecipients, setShareRecipients] = useState<ShareRecipient[]>([]);
   const [results, setResults] = useState<{ results: ProposeResult[] } | null>(
     null
   );
@@ -93,6 +99,18 @@ export function ScheduleProposeModal({
       .catch(() => {});
   }, [open]);
 
+  // 직전 제안에서 쓴 공유 수신자 프리필 — 회의실·인사팀 담당자는 보통 매번 같다.
+  useEffect(() => {
+    if (!open) return;
+    void fetch(`/api/jobs/${jobId}/schedule-propose?round=${round}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (Array.isArray(d?.shareRecipients) && d.shareRecipients.length > 0)
+          setShareRecipients(d.shareRecipients);
+      })
+      .catch(() => {});
+  }, [open, jobId, round]);
+
   if (!open) return null;
 
   const submit = async () => {
@@ -129,6 +147,7 @@ export function ScheduleProposeModal({
               address: modeOnline ? null : address.trim(),
               addressDetail: modeOnline ? null : addressDetail.trim(),
               notifyCandidate: notify,
+              shareRecipients,
             }),
           });
           if (r.ok) {
@@ -172,6 +191,7 @@ export function ScheduleProposeModal({
         address: modeOnline ? null : address.trim(),
         addressDetail: modeOnline ? null : addressDetail.trim(),
         round,
+        shareRecipients,
       }),
     });
     setBusy(false);
@@ -197,6 +217,7 @@ export function ScheduleProposeModal({
     setMode("propose");
     setNotify(false);
     setDurationMin(60);
+    setShareRecipients([]); // 다음 열림에 직전 제안 값으로 다시 프리필된다.
     onClose();
   };
 
@@ -355,6 +376,12 @@ export function ScheduleProposeModal({
                   </p>
                 </div>
               )}
+
+              <ShareRecipientPicker
+                jobId={jobId}
+                value={shareRecipients}
+                onChange={setShareRecipients}
+              />
 
               {mode === "direct" && (
                 <label className="flex items-start gap-2 cursor-pointer">

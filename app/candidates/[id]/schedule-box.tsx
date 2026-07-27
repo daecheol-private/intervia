@@ -211,6 +211,19 @@ export function ScheduleBox({
         )}
       </div>
 
+      {/* 면접관 외 공유 대상 — 확정·변경·취소 안내가 함께 나가는 사람. 누구에게 후보자
+          정보가 전달되는지 화면에서 확인할 수 있어야 한다. */}
+      {schedule.shareRecipients && schedule.shareRecipients.length > 0 && (
+        <div className="text-xs">
+          <span className="text-ink-muted">일정 공유 </span>
+          <span className="text-ink-soft">
+            {schedule.shareRecipients
+              .map((r) => (r.name ? `${r.name}(${r.email})` : r.email))
+              .join(", ")}
+          </span>
+        </div>
+      )}
+
       {schedule.modeOnline && schedule.status === "selected" && (
         <MeetingLinkPanel schedule={schedule} onChanged={onChanged} />
       )}

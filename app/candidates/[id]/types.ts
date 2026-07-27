@@ -186,6 +186,8 @@ export type Schedule = {
   onlineMeetingUrl: string | null;
   onlineMeetingNote: string | null;
   meetingLinkSentAt: string | null;
+  /** 면접관 외에 확정·변경·취소 안내를 함께 받는 사람 (일정 제시 시 지정). */
+  shareRecipients: Array<{ email: string; name?: string; userId?: number }> | null;
   expiresAt: string;
   respondedAt: string | null;
   createdAt: string;

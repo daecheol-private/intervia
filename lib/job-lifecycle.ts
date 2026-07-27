@@ -39,6 +39,7 @@ import { buildDecisionEmail, purgeOnDecision, resolveCandidateEmailLang } from "
 import { sendMail, getOrgEmailBranding, brandingAttachments } from "./mailer";
 import { sentToday } from "./mail-usage";
 import { redactCandidateAuditPii } from "./audit";
+import { notifyShareCancelOnCandidateClosed } from "./schedule-share";
 import { after } from "next/server";
 
 export const DEFAULT_JOB_DURATION_DAYS = 30;
@@ -365,6 +366,16 @@ export async function closeJob(args: {
       console.error(`closeJob: purgeOnDecision failed (cid=${t.id})`, e)
     );
   }
+
+  // 예정돼 있던 확정 면접의 공유 수신자(회의실·인사팀·임원)에게 취소 통지.
+  // 대부분의 후보자는 공유 수신자가 없어 no-op — 실제 발송량은 지정된 건에 한정된다.
+  after(async () => {
+    for (const t of targets) {
+      await notifyShareCancelOnCandidateClosed(t.id, "rejected").catch((e) =>
+        console.error(`closeJob: share cancel notify failed (cid=${t.id})`, e)
+      );
+    }
+  });
 
   // 공고 상태 전환
   const [job] = await db

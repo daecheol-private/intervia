@@ -408,6 +408,125 @@ Intervia 채용팀`;
 }
 
 /**
+ * 일정 공유 수신자용 메일 — 면접관이 아닌 사람(회의실·인사팀 담당자, 앱 계정 없는 임원)에게
+ * 확정·변경·취소를 알린다. 후보자 연락처·이력서·평가는 넣지 않는다(오발송 시 유출 최소화).
+ * detailUrl 은 법인 멤버로 선택된 수신자에게만 — 미가입자는 로그인 벽에 막힌다.
+ */
+export function buildScheduleShareEmail(opts: {
+  candidateName: string;
+  jobTitle: string;
+  orgName: string;
+  slot: Slot;
+  kind: "confirmed" | "rescheduled" | "cancelled";
+  modeOnline: boolean;
+  address?: string | null;
+  addressDetail?: string | null;
+  meetingUrl?: string | null;
+  /** 취소 사유(지원자 철회 등) — kind='cancelled' 일 때만 표시. */
+  cancelReason?: string | null;
+  /** 온라인이지만 미팅 링크가 아직 없음 — "링크는 추후 안내" 문구. */
+  pendingMeetingLink?: boolean;
+  /** 가입 멤버 수신자에게만 전달 — 후보자 상세 CTA. */
+  detailUrl?: string | null;
+  round?: ScheduleRound;
+}): { subject: string; html: string; text: string } {
+  const { candidateName, jobTitle, orgName, slot, kind, modeOnline, meetingUrl } = opts;
+  const fullAddress = fullAddressLine(opts.address, opts.addressDetail);
+  const rl = roundLabel(opts.round);
+  const slotStr = formatSlotKst(slot);
+  const cta = emailCtaColors(null); // 회사 내부 메일 — Intervia 기본 색
+  const action =
+    kind === "cancelled" ? "취소" : kind === "rescheduled" ? "변경" : "확정";
+  const subject = `[Intervia] ${candidateName} 후보자 ${rl} 면접 일정 ${action} — ${jobTitle}`;
+  const greeting =
+    kind === "cancelled"
+      ? `${orgName} ${jobTitle} 포지션 ${candidateName} 후보자의 ${rl} 면접 일정이 취소되었습니다. 아래는 취소된 일정입니다.`
+      : kind === "rescheduled"
+        ? `${orgName} ${jobTitle} 포지션 ${candidateName} 후보자의 ${rl} 면접 일정이 아래와 같이 변경되었습니다.`
+        : `${orgName} ${jobTitle} 포지션 ${candidateName} 후보자의 ${rl} 면접 일정이 아래와 같이 확정되었습니다.`;
+  const modeText = modeOnline
+    ? "온라인"
+    : `오프라인${fullAddress ? ` (${fullAddress})` : ""}`;
+  const onlineNote =
+    kind !== "cancelled" && modeOnline && !meetingUrl && opts.pendingMeetingLink
+      ? "온라인 미팅 링크는 확정되는 대로 별도 안내됩니다."
+      : "";
+  const reasonLine =
+    kind === "cancelled" && opts.cancelReason?.trim()
+      ? `\n· 사유: ${opts.cancelReason.trim()}`
+      : "";
+  const text = `${greeting}
+
+· 후보자: ${candidateName}
+· 공고: ${jobTitle}
+· 일시: ${slotStr}
+· 방식: ${modeText}${meetingUrl && kind !== "cancelled" ? `\n· 미팅 링크: ${meetingUrl}` : ""}${reasonLine}${onlineNote ? `\n\n※ ${onlineNote}` : ""}${opts.detailUrl ? `\n\n자세히 보기: ${opts.detailUrl}` : ""}
+
+본 안내는 면접 일정 공유 대상으로 지정되어 발송되었습니다.
+Intervia 채용팀`;
+  const esc = (s: string) =>
+    s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
+  const heading =
+    kind === "cancelled"
+      ? `⚠️ ${rl} 면접 일정 취소`
+      : kind === "rescheduled"
+        ? `🔄 ${rl} 면접 일정 변경`
+        : `📅 ${rl} 면접 일정 확정`;
+  const row = (label: string, value: string) => `
+        <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">${label}</p>
+        <p style="margin:0 0 14px;font-size:14px;color:#0f172a;">${value}</p>`;
+  const html = wrapEmailCard({
+    innerHtml: `
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${heading}</h1>
+      <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 20px;">${esc(greeting)}</p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:0 0 8px;${
+        kind === "cancelled" ? "opacity:0.75;" : ""
+      }">
+        ${row("후보자", esc(candidateName))}
+        ${row("공고", esc(jobTitle))}
+        <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">일시</p>
+        <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#0f172a;${
+          kind === "cancelled" ? "text-decoration:line-through;color:#64748b;" : ""
+        }">${esc(slotStr)}</p>
+        <p style="margin:0 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">방식</p>
+        <p style="margin:0;font-size:14px;color:#0f172a;">
+          ${modeOnline ? "온라인" : "오프라인"}
+          ${!modeOnline && fullAddress ? `<br><span style="font-size:13px;color:#475569;">${esc(fullAddress)}</span>` : ""}
+        </p>
+        ${
+          meetingUrl && kind !== "cancelled"
+            ? `<p style="margin:14px 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">미팅 링크</p>
+        <p style="margin:0;font-size:13px;word-break:break-all;"><a href="${esc(meetingUrl)}" style="color:${EMAIL_BRAND.primary};text-decoration:underline;">${esc(meetingUrl)}</a></p>`
+            : ""
+        }
+        ${
+          kind === "cancelled" && opts.cancelReason?.trim()
+            ? `<p style="margin:14px 0 4px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">사유</p>
+        <p style="margin:0;font-size:13px;color:#0f172a;">${esc(opts.cancelReason.trim())}</p>`
+            : ""
+        }
+      </div>
+      ${onlineNote ? `<p style="font-size:12px;color:#64748b;margin:12px 0 0;line-height:1.6;">※ ${esc(onlineNote)}</p>` : ""}
+      ${
+        kind !== "cancelled"
+          ? `<p style="font-size:12px;color:#64748b;margin:14px 0 0;line-height:1.6;">첨부된 캘린더 파일(.ics) 로 본인 캘린더에 등록하실 수 있습니다.</p>`
+          : ""
+      }
+      ${
+        opts.detailUrl
+          ? `<p style="text-align:center;margin:20px 0 0;">
+        <a href="${opts.detailUrl}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">자세히 보기</a>
+      </p>`
+          : ""
+      }
+    `,
+    footer:
+      "본 안내는 면접 일정 공유 대상으로 지정되어 발송되었습니다. 수신을 원하지 않으시면 채용 담당자에게 알려 주세요.",
+  });
+  return { subject, html, text };
+}
+
+/**
  * 온라인 면접 확정 + 줌 미연동 시, 제시 면접관에게 미팅 링크 등록을 요청하는 메일.
  * 링크를 등록하면 buildMeetingLinkEmail 로 후보자·면접관 전원에게 확정 안내가 발송된다.
  */
