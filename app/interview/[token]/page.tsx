@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { memo, useEffect, useRef, useState } from "react";
 import { useVoiceInput } from "./use-voice-input";
 import { LogoMark, Logo, PoweredByIntervia } from "@/app/components/Logo";
+import { RecruiterContact } from "@/app/components/RecruiterContact";
 import { MicHelpModal } from "@/app/components/MicHelpModal";
 import { t, normalizeLang, type Lang } from "@/lib/i18n/interview";
 import { isValidBrandColor, textColorOn } from "@/lib/brand-color";
@@ -66,6 +67,8 @@ type SessionInfo = {
     employmentType: string;
     tone: string;
     interviewDurationMinutes?: number;
+    /** 채용 담당자 문의처(공고 recruitingContactEmail) — 구버전 공고는 null. */
+    contactEmail?: string | null;
   };
   expired: boolean;
   withdrawn?: boolean;
@@ -498,6 +501,7 @@ export default function InterviewPage() {
         brand={brand}
         items={info.consentItems}
         steps={steps}
+        contactEmail={info.job.contactEmail}
         onLanguageChange={changeLanguage}
         onAccepted={() => {
           setInfo({ ...info, consentRequired: false });
@@ -876,6 +880,11 @@ export default function InterviewPage() {
               </a>
             </div>
           </div>
+          <RecruiterContact
+            email={info.job.contactEmail}
+            note={t(lang, "interview.contactRecruiter")}
+            className="mt-5 bg-card"
+          />
         </div>
       )}
 
@@ -1884,6 +1893,7 @@ function ConsentGate({
   brand,
   items,
   steps,
+  contactEmail,
   onLanguageChange,
   onAccepted,
 }: {
@@ -1895,6 +1905,7 @@ function ConsentGate({
   brand: Brand;
   items: ConsentItem[];
   steps: Step[];
+  contactEmail?: string | null;
   onLanguageChange: (chosen: Lang) => Promise<void>;
   onAccepted: () => void;
 }) {
@@ -2202,6 +2213,11 @@ function ConsentGate({
               {t(lang, "consent.withdraw")}
             </button>
           </div>
+          <RecruiterContact
+            email={contactEmail}
+            note={t(lang, "interview.contactRecruiter")}
+            className="mt-4 bg-card"
+          />
         </div>
       </div>
       <PoweredByIntervia className="mt-4 shrink-0" />

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
 import { Logo, PoweredByIntervia } from "@/app/components/Logo";
+import { RecruiterContact } from "@/app/components/RecruiterContact";
 import { formatLocalDate } from "@/lib/utils";
 
 type Slot = { start: string; end: string };
@@ -40,6 +41,7 @@ type Info = {
   jobTitle: string;
   jobPosition: string;
   orgName: string;
+  contactEmail: string | null;
 };
 
 function fmtSlot(s: Slot): string {
@@ -223,9 +225,17 @@ export default function SchedulePage() {
               </div>
             )}
           </div>
-          <p className="mt-5 text-xs text-ink-muted leading-relaxed">
-            일정 변경이나 취소가 필요하시면 채용 담당자에게 문의해 주세요.
-          </p>
+          {info.contactEmail ? (
+            <RecruiterContact
+              email={info.contactEmail}
+              note="일정 변경이나 취소가 필요하시면 채용 담당자에게 문의해 주세요."
+              className="mt-5"
+            />
+          ) : (
+            <p className="mt-5 text-xs text-ink-muted leading-relaxed">
+              일정 변경이나 취소가 필요하시면 채용 담당자에게 문의해 주세요.
+            </p>
+          )}
         </div>
         <PoweredByIntervia className="mt-6" />
       </main>
@@ -322,6 +332,12 @@ export default function SchedulePage() {
             }}
           />
         )}
+
+        <RecruiterContact
+          email={info.contactEmail}
+          note="제시된 시간이 모두 어렵거나 문의 사항이 있으시면 채용 담당자에게 연락해 주세요."
+          className="mt-5"
+        />
 
         <p className="text-[10px] text-ink-muted text-center mt-6">
           링크 유효기간:{" "}

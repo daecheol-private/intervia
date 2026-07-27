@@ -47,7 +47,11 @@ export async function GET(
     .from(candidates)
     .where(eq(candidates.id, sched.candidateId));
   const [job] = await db
-    .select({ title: jobPostings.title, position: jobPostings.position })
+    .select({
+      title: jobPostings.title,
+      position: jobPostings.position,
+      contactEmail: jobPostings.recruitingContactEmail,
+    })
     .from(jobPostings)
     .where(eq(jobPostings.id, sched.jobId));
   const org = sched.orgId
@@ -75,6 +79,8 @@ export async function GET(
     candidateName: cand?.name ?? "지원자",
     jobTitle: job?.title ?? "",
     jobPosition: job?.position ?? "",
+    // 채용 담당자 문의처 — 지원자 메일 하단 안내와 같은 값. 구버전 공고면 null.
+    contactEmail: job?.contactEmail ?? null,
     orgName: org?.name ?? "법인",
   });
 }

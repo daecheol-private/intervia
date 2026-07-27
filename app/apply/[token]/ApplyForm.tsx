@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FileText, Paperclip, X } from "lucide-react";
 import { upload } from "@vercel/blob/client";
 import { isValidBrandColor, textColorOn } from "@/lib/brand-color";
+import { RecruiterContact } from "@/app/components/RecruiterContact";
 
 const MAX_FILE_MB = 10;
 const ACCEPT = ".pdf,.docx,.hwpx";
@@ -17,12 +18,14 @@ export default function ApplyForm({
   jobTitle,
   logoUrl,
   brandColor,
+  contactEmail,
 }: {
   token: string;
   companyName: string;
   jobTitle: string;
   logoUrl?: string | null;
   brandColor?: string | null;
+  contactEmail?: string | null;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -235,6 +238,11 @@ export default function ApplyForm({
             <br />
             제출하신 이력서는 채용 절차에 따라 검토됩니다.
           </p>
+          <RecruiterContact
+            email={contactEmail}
+            note="지원 관련 문의는 채용 담당자에게 연락해 주세요."
+            className="mt-5"
+          />
         </div>
       </div>
     );
@@ -442,6 +450,11 @@ export default function ApplyForm({
       >
         {submitting ? "제출 중…" : "지원서 제출"}
       </button>
+
+      <RecruiterContact
+        email={contactEmail}
+        note="지원 관련 문의는 채용 담당자에게 연락해 주세요."
+      />
       </div>
     </form>
   );

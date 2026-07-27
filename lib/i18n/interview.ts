@@ -72,6 +72,9 @@ const ko: Dict = {
   "interview.micHint": " · 🎙 마이크로 음성 입력 가능 (Chrome·Edge·Safari)",
   "interview.micTrouble": "마이크가 안 되나요?",
   "interview.report": "문제가 있나요? 신고 / 문의",
+  // 채용 담당자 문의처 (공고 recruitingContactEmail) — 지원자 메일 하단 안내와 동일
+  "interview.contactRecruiter":
+    "면접 진행에 대한 문의는 채용 담당자에게 연락해 주세요.",
   "interview.confirmEnd": "면접을 종료하시겠습니까?",
   "interview.tooShort": "대화가 너무 짧습니다. 답변을 더 진행해 주세요.",
   // 종료 카드
@@ -220,6 +223,8 @@ const en: Dict = {
   "interview.micHint": " · 🎙 Voice input available (Chrome·Edge·Safari)",
   "interview.micTrouble": "Microphone not working?",
   "interview.report": "Having trouble? Report / Contact",
+  "interview.contactRecruiter":
+    "For any questions about the interview process, please contact the recruiter.",
   "interview.confirmEnd": "Are you sure you want to end the interview?",
   "interview.tooShort":
     "The conversation is too short. Please answer a few more questions.",

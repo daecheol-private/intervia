@@ -162,6 +162,8 @@ export async function GET(
       employmentType: job.employmentType,
       tone: job.tone,
       interviewDurationMinutes: job.interviewDurationMinutes,
+      // 채용 담당자 문의처 — 지원자 메일 하단 안내와 같은 값. 구버전 공고면 null.
+      contactEmail: job.recruitingContactEmail,
     },
     expired: false,
     // 면접 진행 언어 — 지원자가 시작 화면에서 고른 값. 동의 항목도 이 언어로 내려준다.

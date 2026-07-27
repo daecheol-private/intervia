@@ -53,6 +53,7 @@ export default async function ApplyPage({
       status: jobPostings.status,
       closesAt: jobPostings.closesAt,
       closedAt: jobPostings.closedAt,
+      contactEmail: jobPostings.recruitingContactEmail,
       orgName: organizations.name,
       logoFileKey: organizations.logoFileKey,
       brandColor: organizations.brandColor,
@@ -95,6 +96,7 @@ export default async function ApplyPage({
         jobTitle={job.title}
         logoUrl={job.logoFileKey ? `/api/apply/${encodeURIComponent(token)}/logo` : null}
         brandColor={job.brandColor}
+        contactEmail={job.contactEmail}
       />
     </Shell>
   );
