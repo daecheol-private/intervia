@@ -405,13 +405,52 @@ function extractEmbeddedContentImages(html: string): string[] {
   return dedup(urls);
 }
 
+/** 회사명 비교용 정규화 — 법인격 표기·공백·구두점 제거. */
+function companyCore(s: string): string {
+  return s
+    .replace(/㈜|\(주\)|\(유\)|\(재\)|\(사\)|주식회사|유한회사|재단법인|사단법인/g, "")
+    .replace(/[\s.,·・_-]/g, "")
+    .toLowerCase();
+}
+
+/**
+ * 채용사이트가 제목 앞에 자동으로 덧붙인 회사명 접두사 제거.
+ * 사람인 `[(주)엑스퍼넷] [엑스퍼넷] 부설연구소…`, 잡코리아 `㈜시에리텍 채용 - [시에리텍] …`
+ * 처럼 사이트가 회사명을 붙이기 때문에, 회사가 직접 쓴 제목에도 회사명이 있으면 두 번 들어간다.
+ * 회사가 쓴 원 제목은 그대로 두고 사이트가 붙인 쪽만 뗀다.
+ */
+function stripSiteCompanyPrefix(
+  title: string,
+  rawDesc: string,
+  site: string | undefined
+): string {
+  // 잡코리아 — `{회사명} 채용 - {원제목}` 고정 포맷 (og:description 에 회사명이 없다)
+  if (site === "jobkorea") {
+    const m = title.match(/^.{1,40}?\s*채용\s+-\s+/);
+    if (m && m[0].length < title.length) return title.slice(m[0].length).trim();
+    return title;
+  }
+  // 사람인 — `[{회사명}] {원제목}`. 원 제목의 대괄호 태그(`[GST] …`)와 구분하려고
+  // og:description 첫 필드(= 회사명)와 대조해서 일치할 때만 뗀다.
+  if (site === "saramin") {
+    const core = companyCore(rawDesc.split(",")[0] ?? "");
+    const m = title.match(/^\[([^\]]{1,40})\]\s*/);
+    if (core.length >= 2 && m && companyCore(m[1]) === core)
+      return title.slice(m[0].length).trim();
+  }
+  return title;
+}
+
 /**
  * 페이지 메타데이터에서 '정식 공고 제목' 후보 추출.
  * 사람인 등은 상세 본문을 이미지/JS iframe 으로 올려서, 본문(이미지)에 박힌 제목이
  * 실제 공고 제목과 다를 수 있다 (회사가 옛 공고 이미지를 재사용하고 제목만 새로 설정 등).
  * og:title/<title>/og:description 는 사이트가 보장하는 공식 제목이므로 본문보다 우선 신뢰한다.
  */
-function extractTitleHint(html: string): { title: string; description: string } {
+export function extractTitleHint(
+  html: string,
+  site?: string
+): { title: string; description: string } {
   const $ = cheerio.load(html);
   const attr = (sel: string) => ($(sel).attr("content") || "").trim();
   const rawTitle =
@@ -430,7 +469,10 @@ function extractTitleHint(html: string): { title: string; description: string } 
       .replace(/\(\s*D[-+]?\s*\d+\s*\)/gi, "")
       .replace(/\s{2,}/g, " ")
       .trim();
-  return { title: clean(rawTitle), description: clean(rawDesc) };
+  return {
+    title: stripSiteCompanyPrefix(clean(rawTitle), rawDesc, site),
+    description: clean(rawDesc),
+  };
 }
 
 /** 메타 제목 힌트를 프롬프트 fragment 로. 비어 있으면 빈 문자열(기존 동작 유지). */
@@ -495,6 +537,7 @@ const EXTRACTION_SCHEMA_HINT = `
 - **학력·전공 요건은 추출하지 말 것** (블라인드 채용 — 채용절차 공정화법). requirements·idealProfile 에서 최종학력(고졸/초대졸/대졸/석사/박사 등) 조건과 전공(관련 전공 우대 등) 항목은 제외한다. 나이·성별·출신지역 등 차별 금지 항목도 동일하게 제외.
 - title~idealProfile 은 추측·날조 X. 페이지에 없으면 빈 문자열(levelMin/levelMax 는 null).
 - **title 은 아래에 '정식 공고 제목'이 주어지면 그것을 근거로 작성한다.** 본문 텍스트나 이미지 안에 다른 제목·배너 문구(회사가 이전 공고에서 남긴 제목 등)가 있어도 무시하고 정식 공고 제목을 따른다. 사이트명·마감일(D-n) 표시는 제외.
+- title 에 같은 회사명이 두 번 이상 나오면(예: '[(주)엑스퍼넷] [엑스퍼넷] …') 한 번만 남긴다. 회사명을 새로 덧붙이지도 말 것.
 - preferredTraits 는 위 규칙의 예외 — 담당 업무·자격 요건을 분석해 직무 성격에서 추론한다 (공고에 명시되지 않아도 됨). 키는 영어 그대로, 아래 5개 중에서만 선택:
   - "openness" (개방성·도전): 새로운 기술·방식을 시도하고 변화가 잦은 환경에 강함. 예) 신규 서비스 개발, 기획, R&D, 신기술 도입.
   - "conscientiousness" (성실성·꼼꼼함): 계획적이고 세부를 꼼꼼히 챙겨 끝까지 마무리. 예) 회계·재무, QA, 운영, 품질·정확성이 중요한 직무.
@@ -638,7 +681,7 @@ export async function importJobFromUrl(rawUrl: string): Promise<ImportedJob> {
   const html = htmlBuf.toString("utf8");
 
   // 정식 공고 제목 — 메인 페이지 메타데이터에서만 추출 (iframe/추가 본문은 신뢰하지 않음).
-  const titleHint = buildTitleHintBlock(extractTitleHint(html));
+  const titleHint = buildTitleHintBlock(extractTitleHint(html, siteHint));
 
   let { text, imageUrls } = extractMainText(html);
 
