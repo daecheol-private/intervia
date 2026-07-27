@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatLocalDateTime } from "@/lib/utils";
+import { AUDIT_ACTION_LABELS } from "@/lib/audit-labels";
 
 type AuditRow = {
   id: number;
@@ -20,73 +21,69 @@ type AuditRow = {
   createdAt: string;
 };
 
+/** KST 기준 오늘/N일 전의 'YYYY-MM-DD' — date input 값과 서버 필터가 같은 기준을 쓰게. */
+function kstDay(offsetDays = 0): string {
+  return new Date(Date.now() + offsetDays * 86_400_000).toLocaleDateString(
+    "en-CA",
+    { timeZone: "Asia/Seoul" }
+  );
+}
+
+const PRESETS: Array<{ label: string; days: number }> = [
+  { label: "오늘", days: 0 },
+  { label: "7일", days: 6 },
+  { label: "30일", days: 29 },
+  { label: "90일", days: 89 },
+];
+
 export default function AuditPage() {
   const [rows, setRows] = useState<AuditRow[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [err, setErr] = useState("");
-  const [days, setDays] = useState(7);
-  const [actionFilter, setActionFilter] = useState("");
+  const [start, setStart] = useState(() => kstDay(-6));
+  const [end, setEnd] = useState(() => kstDay());
+  // 입력 중인 검색어와 실제 질의어를 분리 — 타이핑마다 조회하지 않는다.
+  const [queryInput, setQueryInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [limit, setLimit] = useState(200);
+  const [loading, setLoading] = useState(false);
+
+  const params = () => {
+    const p = new URLSearchParams();
+    if (start) p.set("start", start);
+    if (end) p.set("end", end);
+    if (query) p.set("q", query);
+    return p;
+  };
 
   const load = async () => {
     setErr("");
-    const url = new URL("/api/admin/audit", window.location.origin);
-    url.searchParams.set("days", String(days));
-    if (actionFilter) url.searchParams.set("action", actionFilter);
-    const r = await fetch(url);
+    setLoading(true);
+    const p = params();
+    p.set("limit", String(limit));
+    const r = await fetch(`/api/admin/audit?${p.toString()}`);
+    setLoading(false);
     if (!r.ok) {
       setErr(await r.text());
       return;
     }
-    setRows(await r.json());
+    const data = (await r.json()) as { rows: AuditRow[]; total: number };
+    setRows(data.rows);
+    setTotal(data.total);
   };
 
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days, actionFilter]);
+  }, [start, end, query, limit]);
+
+  const applyPreset = (days: number) => {
+    setStart(kstDay(-days));
+    setEnd(kstDay());
+  };
 
   const fmt = (s: string) => formatLocalDateTime(s);
-  const actionLabel: Record<string, string> = {
-    "login.success": "로그인",
-    "candidate.view": "후보자 조회",
-    "candidate.download_resume": "이력서 다운로드",
-    "candidate.delete": "후보자 삭제",
-    "candidate.bulk_delete": "후보자 일괄 삭제",
-    "screen.trigger": "AI 평가 시작",
-    "screen.bulk_trigger": "AI 평가 일괄 시작",
-    "interview.send_email": "면접 메일 발송",
-    "appeal.submit": "이의제기 접수",
-    "appeal.status_change": "이의제기 상태 변경",
-    "user.role_change": "권한 변경",
-    "user.status_change": "계정 상태 변경",
-    "org.smtp_update": "SMTP 설정 변경",
-    "org.smtp_delete": "SMTP 설정 삭제",
-    "tokens.refund": "토큰 환불",
-    "tokens.adjust": "토큰 수동 조정",
-    "org.update": "법인 정보 수정",
-    "org.suspend": "법인 정지",
-    "org.resume": "법인 재개",
-    "session.force_logout": "강제 로그아웃",
-    "user.password_reset_email": "비밀번호 리셋 메일 발송",
-    "candidate.admin_delete": "후보자 강제 삭제 (cross-org)",
-    "org.admin_transfer": "법인 관리자 이전",
-    "candidate.stage_change": "후보자 단계 변경",
-    "interview.create": "면접 링크/녹음 생성",
-    "interview.start": "AI 면접 시작 (지원자)",
-    "interview.complete": "AI 면접 완료 (지원자)",
-    "interview.reevaluate": "AI 면접 재평가",
-    "job.create": "공고 등록",
-    "job.update": "공고 수정",
-    "job.close": "공고 종결",
-    "job.extend": "공고 연장",
-    "job.delete": "공고 삭제",
-    "job.interviewer_add": "면접관 등록",
-    "job.interviewer_remove": "면접관 제외",
-    "schedule.select": "면접 시간 확정 (지원자)",
-    "schedule.counter": "면접 시간 역제안 (지원자)",
-    "schedule.withdraw": "지원 취소 (지원자)",
-    "schedule.hr_confirm": "면접 일정 확정 (HR)",
-    "schedule.manual_confirm": "면접 일정 수동 등록",
-  };
+  const truncated = rows != null && total > rows.length;
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
@@ -100,37 +97,93 @@ export default function AuditPage() {
         </p>
       </div>
 
-      <div className="flex gap-3 mb-4 flex-wrap items-center">
-        <select
-          value={days}
-          onChange={(e) => setDays(Number(e.target.value))}
-          className="border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
-        >
-          <option value={1}>최근 1일</option>
-          <option value={7}>최근 7일</option>
-          <option value={30}>최근 30일</option>
-          <option value={90}>최근 90일</option>
-        </select>
-        <input
-          type="text"
-          placeholder="action 필터 (예: candidate.delete)"
-          value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value)}
-          className="flex-1 min-w-[200px] border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
-        />
-        <button
-          onClick={load}
-          className="px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-sm"
-        >
-          새로고침
-        </button>
-        <a
-          href={`/api/admin/audit/export?days=${days}${actionFilter ? `&action=${encodeURIComponent(actionFilter)}` : ""}`}
-          className="px-3 py-2 rounded-lg border border-primary/40 hover:bg-primary-soft text-sm text-primary-deep font-medium"
-          title="현재 필터로 CSV 다운로드 (UTF-8 BOM, 엑셀 호환)"
-        >
-          CSV 다운로드
-        </a>
+      <div className="space-y-3 mb-4">
+        {/* 기간 — 날짜 직접 지정 + 자주 쓰는 범위 프리셋 */}
+        <div className="flex gap-2 flex-wrap items-center">
+          <input
+            type="date"
+            value={start}
+            max={end || undefined}
+            onChange={(e) => setStart(e.target.value)}
+            className="border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
+            aria-label="시작일"
+          />
+          <span className="text-ink-muted text-sm">~</span>
+          <input
+            type="date"
+            value={end}
+            min={start || undefined}
+            onChange={(e) => setEnd(e.target.value)}
+            className="border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
+            aria-label="종료일"
+          />
+          <div className="flex gap-1">
+            {PRESETS.map((p) => (
+              <button
+                key={p.label}
+                onClick={() => applyPreset(p.days)}
+                className="px-2.5 py-2 rounded-lg border border-border-strong text-xs hover:bg-surface-alt"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value))}
+            className="border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
+            aria-label="표시 건수"
+          >
+            <option value={200}>200건</option>
+            <option value={500}>500건</option>
+            <option value={1000}>1000건</option>
+            <option value={2000}>2000건</option>
+          </select>
+        </div>
+
+        {/* 통합 검색 — 액터·액션·대상·법인·IP·메타 전체 */}
+        <div className="flex gap-2 flex-wrap items-center">
+          <input
+            type="text"
+            placeholder="액터·액션·대상·법인·IP·메타 검색 (예: 홍길동, 공고 종결, candidate#12, 1.2.3.4)"
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") setQuery(queryInput.trim());
+            }}
+            className="flex-1 min-w-[240px] border border-border-strong rounded-lg px-3 py-2 text-sm bg-card"
+          />
+          <button
+            onClick={() => setQuery(queryInput.trim())}
+            className="px-3 py-2 rounded-lg border border-primary/40 hover:bg-primary-soft text-sm text-primary-deep font-medium"
+          >
+            검색
+          </button>
+          {query && (
+            <button
+              onClick={() => {
+                setQueryInput("");
+                setQuery("");
+              }}
+              className="px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-sm"
+            >
+              초기화
+            </button>
+          )}
+          <button
+            onClick={load}
+            className="px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-sm"
+          >
+            새로고침
+          </button>
+          <a
+            href={`/api/admin/audit/export?${params().toString()}`}
+            className="px-3 py-2 rounded-lg border border-primary/40 hover:bg-primary-soft text-sm text-primary-deep font-medium"
+            title="현재 필터 그대로 CSV 다운로드 (UTF-8 BOM, 엑셀 호환)"
+          >
+            CSV 다운로드
+          </a>
+        </div>
       </div>
 
       {err && (
@@ -139,11 +192,26 @@ export default function AuditPage() {
         </div>
       )}
 
+      {rows != null && (
+        <div className="flex items-center justify-between gap-3 mb-2 text-xs">
+          <span className="text-ink-soft">
+            전체 <span className="font-semibold text-ink">{total}</span>건
+            {truncated ? ` 중 최근 ${rows.length}건 표시` : ""}
+            {query ? ` · 검색어 "${query}"` : ""}
+          </span>
+          {truncated && (
+            <span className="text-warning">
+              표시 건수 상한에 걸렸습니다. 기간을 좁히거나 표시 건수를 늘리세요.
+            </span>
+          )}
+        </div>
+      )}
+
       {!rows ? (
         <div className="text-sm text-ink-muted">불러오는 중...</div>
       ) : rows.length === 0 ? (
         <div className="text-sm text-ink-muted bg-card border border-border-default rounded-2xl p-8 text-center">
-          기록이 없습니다.
+          {loading ? "불러오는 중..." : "기록이 없습니다."}
         </div>
       ) : (
         <div className="bg-card border border-border-default rounded-2xl shadow-sm overflow-x-auto">
@@ -179,7 +247,7 @@ export default function AuditPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2 font-mono text-ink-soft">
-                      {actionLabel[r.action] ?? r.action}
+                      {AUDIT_ACTION_LABELS[r.action] ?? r.action}
                       {isCrossOrg ? (
                         <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning font-semibold">
                           타법인접근
@@ -195,7 +263,10 @@ export default function AuditPage() {
                       {r.orgName ?? (r.orgId ? `#${r.orgId}` : "-")}
                     </td>
                     <td className="px-3 py-2 text-ink-muted">{r.ip ?? "-"}</td>
-                    <td className="px-3 py-2 text-ink-muted max-w-[200px] truncate">
+                    <td
+                      className="px-3 py-2 text-ink-muted max-w-[200px] truncate"
+                      title={r.metadata ? JSON.stringify(r.metadata) : ""}
+                    >
                       {r.metadata ? JSON.stringify(r.metadata) : "-"}
                     </td>
                   </tr>
@@ -205,10 +276,6 @@ export default function AuditPage() {
           </table>
         </div>
       )}
-
-      <p className="text-xs text-ink-muted mt-4">
-        최대 500건 표시. 더 오래된 기록은 일자 범위를 늘리세요.
-      </p>
     </main>
   );
 }

@@ -29,7 +29,8 @@
 
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
-| GET | `/api/admin/audit` | 🔒 🏢 (admin) | 감사 로그 조회. query: `days`, `action`, `orgId` |
+| GET | `/api/admin/audit` | 🔒 🏢 (admin) | 감사 로그 조회. query: `q`(통합 검색 — 액터 이름·이메일·역할 / 액션 원문·**한글 라벨** / 대상 `type#id` / 법인명 / IP / 메타 JSON 전문), `start`·`end`(`YYYY-MM-DD`, **KST 기준**·양끝 포함), `days`(start·end 없을 때 폴백, 기본 7), `limit`(기본 200·최대 2000), `orgId`. 응답 `{rows, total, limit}` — **total 은 필터 전체 건수**라 화면이 잘림을 표시할 수 있다. 조건 조립은 `lib/audit-query.ts` 가 CSV export 와 공유 |
+| GET | `/api/admin/audit/export` | 🔒 🏢 (admin) | 위와 **동일한 필터**(`q`/`start`/`end`/`days`/`orgId`)로 CSV 다운로드 (UTF-8 BOM). limit 없음(전량) |
 | GET | `/api/admin/appeals` | 🔒 🏢 (admin) | 자동화 의사결정 이의제기 개요 (PIPA §37의2). system_admin=전체 / org_admin=자기 법인. query: `status`(pending/reviewed/resolved/rejected). pending 우선 정렬 + `pendingCount`. DPO 알림 메일이 링크하는 `/admin/appeals` 페이지 데이터 소스 |
 | GET | `/api/admin/inquiries` | 🔒 👑 (sysadmin) | 고객센터 문의 인박스 — **system_admin 전용**. query: `status`(open/in_progress/resolved). open 우선 정렬 + `openCount` |
 | PATCH | `/api/admin/inquiries/[id]` | 🔒 👑 (sysadmin) | 문의 상태/답변 업데이트 — **system_admin 전용**. body: `{status?, adminNote?}`. resolved 전환 시 resolved_at/by 세팅. adminNote 는 고객 문의 내역에 노출 |
@@ -89,9 +90,10 @@
 |---|---|---|
 | GET | `/api/jobs/[id]/candidates` | 🔑 후보자 목록 + 최근 면접 세션 머지 + `round1ScheduleStatus`/`round2ScheduleStatus`(라운드별 최신 활성 스케줄 상태 — 응답 대기 vs 역제시 구분, 1차/2차 대기 그룹 분리용) + `commentCount`/`unreadCommentCount`(면접관 토론 — 카드의 토론 배지용. `unreadCommentCount`=현재 사용자가 안 읽은 남의 코멘트 수, 서버 읽음선 `candidate_comment_reads` LEFT JOIN 으로 계산 — 기기 무관). 목록 페이지는 `?stage=counter_proposed` pseudo 필터로 역제시 건만 표시 가능 (대시보드 역제시 알림 딥링크) |
 | GET | `/api/jobs/[id]/round1-schedule` | 🔑 확정 면접 일정(1·2차 통합) — `status=selected` + `outcome IS NULL` + (round1·`stage=round1_waiting` OR round2·`stage=round1_passed`) 조인 → 후보자별 `round`·선택 슬롯·온오프라인·주소, 시간 빠른 순. "면접 일정" 팝업용 (라우트 경로는 호환 위해 유지) |
-| POST | `/api/jobs/[id]/schedule-propose` | 🔑 후보자 다수에게 면접 슬롯 제시 + 메일. `round`(round1/round2, 기본 round1) — **round2 는 `round1_passed` 후보만** 가드, stage 변경 없음(round1 은 round1_scheduling 으로 전환). 같은 시간대 다수 후보 확정 허용 — 더블부킹 검사 없음 (2026-06-12) |
+| POST | `/api/jobs/[id]/schedule-propose` | 🔑 후보자 다수에게 면접 슬롯 제시 + 메일. `round`(round1/round2, 기본 round1) — **round2 는 `round1_passed` 후보만** 가드, stage 변경 없음(round1 은 round1_scheduling 으로 전환). 같은 시간대 다수 후보 확정 허용 — 더블부킹 검사 없음 (2026-06-12). body `shareRecipients?: [{email, name?, userId?}]` (최대 10) — 일정 공유 수신자, 새 스케쥴 row 에 저장. 확정돼 있던 일정을 무르는 재제안이면 **옛 수신자에게 취소 안내** 발송 |
+| GET | `/api/jobs/[id]/schedule-propose` | 🔑 `?round=` 의 직전 제안 공유 수신자 → `{shareRecipients}`. 일정 모달 프리필용 |
 | POST | `/api/jobs/[id]/reopen` | 🔑 종결된 공고를 `active` 로 되돌림 (`closedAt=null`). **토큰 재과금 없음**. `closesAt` 이 아직 남았을 때만 — 이미 지났으면 409 `expired`(연장으로 유도). 종결 시 일괄 불합격된 후보자는 복구하지 않음. 감사 로그 `job.reopen`. **자동 종결은 2026-07-27 전면 제거** — 전원 불합격돼도 공고는 열려 있고, 종결은 `POST /api/jobs/[id]/close` 로만 |
-| POST | `/api/candidates/[id]/schedule-manual` | 🔑 전화 등으로 협의된 1·2차 면접 시간을 제시 절차 없이 **즉시 확정 등록**(`status=selected`). body `{round?, slot, modeOnline?, address?, notifyCandidate?}`. round2 는 `round1_passed` 후보만, round1 은 stage→round1_waiting. `notifyCandidate` 시 후보자 확정 메일(줌 연동 시 자동 생성), 면접관 인앱 알림 fanout. 🪙 잔액 0 이하 402 |
+| POST | `/api/candidates/[id]/schedule-manual` | 🔑 전화 등으로 협의된 1·2차 면접 시간을 제시 절차 없이 **즉시 확정 등록**(`status=selected`). body `{round?, slot, modeOnline?, address?, notifyCandidate?, shareRecipients?}`. round2 는 `round1_passed` 후보만, round1 은 stage→round1_waiting. `notifyCandidate` 시 후보자 확정 메일(줌 연동 시 자동 생성), 면접관 인앱 알림 fanout. **공유 수신자는 `notifyCandidate` 와 무관하게 확정 안내 수신**. 🪙 잔액 0 이하 402 |
 | POST | `/api/jobs/[id]/candidates` | 🔑 multipart 또는 JSON manifest 업로드. **`applicantConsentConfirmed=true` 필수** — 미체크 시 400 + `{code:"applicant_consent_required"}`. 채용기업이 지원자 동의 취득 책임 확인. 업로드 후 자동 큐 enqueue (과금은 평가 성공 시 후차감). 감사 로그 `candidate.upload_with_consent` |
 | POST | `/api/candidates/[id]/screen` | 수동 트리거 (신규 평가 + **재평가** + **재시도 대기 즉시 재시도** 공용). 백그라운드 LLM 평가. **과금은 평가 성공 시 후차감** (오류면 과금 X). 동작: `processing`→409, `queued`(백오프 포함)→새 job 안 만들고 백오프 해제 후 즉시 재시도, 그 외(done/failed/미시작)→새 job enqueue. **지원자 동의 확인 누락(2026-05-22 이후 row) 시 400** |
 | GET | `/api/candidates/[id]` | 🔑 |

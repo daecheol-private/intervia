@@ -2,14 +2,15 @@
  * 감사 로그 CSV export — 컴플라이언스 감사 대응.
  * system_admin 전용 (전체) / org_admin 은 본인 법인만.
  *
- * `?days=N` (기본 30, 최대 365) `?action=...` (선택)
+ * 화면(/api/admin/audit)과 동일한 필터를 받는다 — `q` / `start` / `end` / `days`(폴백).
+ * 조건 조립을 lib/audit-query 로 공유해 "화면과 CSV 가 다른" 상황을 막는다.
  */
 import { db } from "@/lib/db";
 import { auditLogs, users, organizations } from "@/lib/schema";
-import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
-import { sqliteTimestamp } from "@/lib/utils";
+import { buildAuditWhere } from "@/lib/audit-query";
 
 export const runtime = "nodejs";
 
@@ -32,7 +33,9 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const daysBack = Math.min(Number(url.searchParams.get("days") ?? 30), 365);
-  const actionFilter = url.searchParams.get("action");
+  const start = url.searchParams.get("start");
+  const end = url.searchParams.get("end");
+  const q = url.searchParams.get("q");
   const orgIdParam = url.searchParams.get("orgId");
 
   let orgFilter: number | null = null;
@@ -43,12 +46,13 @@ export async function GET(req: Request) {
     orgFilter = Number(orgIdParam);
   }
 
-  // createdAt(공백 포맷)과 같은 포맷으로 비교 — toISOString(T)과 섞으면 기준일 당일분이
-  // 컴플라이언스 export 에서 누락된다(GOTCHAS §0-0).
-  const since = sqliteTimestamp(new Date(Date.now() - daysBack * 86_400_000));
-  const conditions: SQL[] = [gte(auditLogs.createdAt, since)];
-  if (orgFilter !== null) conditions.push(eq(auditLogs.orgId, orgFilter));
-  if (actionFilter) conditions.push(eq(auditLogs.action, actionFilter));
+  const where = buildAuditWhere({
+    q,
+    start,
+    end,
+    days: daysBack,
+    orgId: orgFilter,
+  });
 
   const rows = await db
     .select({
@@ -68,7 +72,7 @@ export async function GET(req: Request) {
     .from(auditLogs)
     .leftJoin(users, eq(users.id, auditLogs.actorUserId))
     .leftJoin(organizations, eq(organizations.id, auditLogs.orgId))
-    .where(and(...conditions))
+    .where(where)
     .orderBy(desc(auditLogs.id));
 
   // CSV — UTF-8 BOM 으로 엑셀 한글 깨짐 방지
@@ -109,7 +113,8 @@ export async function GET(req: Request) {
   }
   const csv = "﻿" + lines.join("\r\n");
 
-  const filename = `audit-log-${new Date().toISOString().slice(0, 10)}-${daysBack}d.csv`;
+  const range = start || end ? `${start ?? "all"}_${end ?? "now"}` : `${daysBack}d`;
+  const filename = `audit-log-${new Date().toISOString().slice(0, 10)}-${range}.csv`;
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
@@ -118,6 +123,3 @@ export async function GET(req: Request) {
     },
   });
 }
-
-// satisfy lint
-void sql;

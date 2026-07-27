@@ -1,12 +1,23 @@
 /**
  * 감사 로그 조회. system_admin 또는 org_admin (본인 법인만).
+ *
+ * 파라미터:
+ *   q      통합 검색 — 액터(이름·이메일·역할) / 액션(원문·한글 라벨) / 대상 / 법인 / IP / 메타
+ *   start  'YYYY-MM-DD' (KST) 시작일 포함
+ *   end    'YYYY-MM-DD' (KST) 종료일 포함
+ *   days   start·end 가 없을 때만 쓰는 "최근 N일" 폴백 (기본 7)
+ *   limit  기본 200, 최대 2000
+ *
+ * 응답 `{ rows, total, limit }` — total 은 필터에 걸린 전체 건수라, 화면이 "전체 N건 중 M건"
+ * 으로 잘림을 드러낼 수 있다. 예전엔 limit 100 이 조용히 잘려서 "30일을 골라도 3일치만
+ * 나온다"로 보였다(로그는 정상 저장되고 있었다).
  */
 import { db } from "@/lib/db";
 import { auditLogs, users, organizations } from "@/lib/schema";
-import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
-import { sqliteTimestamp } from "@/lib/utils";
+import { buildAuditWhere } from "@/lib/audit-query";
 
 export const runtime = "nodejs";
 
@@ -20,10 +31,11 @@ export async function GET(req: Request) {
   if (pwGuard) return pwGuard;
 
   const url = new URL(req.url);
-  const limit = Math.min(Number(url.searchParams.get("limit") ?? 100), 500);
+  const limit = Math.min(
+    Math.max(Number(url.searchParams.get("limit") ?? 200), 1),
+    2000
+  );
   const orgIdParam = url.searchParams.get("orgId");
-  const actionFilter = url.searchParams.get("action");
-  const daysBack = Number(url.searchParams.get("days") ?? 7);
 
   // 권한 분기: org_admin 은 본인 법인만, system_admin 은 전체 또는 지정
   let orgFilter: number | null = null;
@@ -34,11 +46,13 @@ export async function GET(req: Request) {
     orgFilter = Number(orgIdParam);
   }
 
-  // createdAt(공백 포맷)과 같은 포맷으로 비교 — toISOString(T)과 섞으면 기준일 당일분 누락(GOTCHAS §0-0).
-  const since = sqliteTimestamp(new Date(Date.now() - daysBack * 86_400_000));
-  const conditions: SQL[] = [gte(auditLogs.createdAt, since)];
-  if (orgFilter !== null) conditions.push(eq(auditLogs.orgId, orgFilter));
-  if (actionFilter) conditions.push(eq(auditLogs.action, actionFilter));
+  const where = buildAuditWhere({
+    q: url.searchParams.get("q"),
+    start: url.searchParams.get("start"),
+    end: url.searchParams.get("end"),
+    days: Number(url.searchParams.get("days") ?? 7),
+    orgId: orgFilter,
+  });
 
   const rows = await db
     .select({
@@ -59,15 +73,17 @@ export async function GET(req: Request) {
     .from(auditLogs)
     .leftJoin(users, eq(users.id, auditLogs.actorUserId))
     .leftJoin(organizations, eq(organizations.id, auditLogs.orgId))
-    .where(and(...conditions))
+    .where(where)
     .orderBy(desc(auditLogs.id))
     .limit(limit);
 
-  return Response.json(rows);
-}
+  // 같은 조건의 전체 건수 — 검색이 leftJoin 컬럼(액터명·법인명)을 참조하므로 조인 유지.
+  const [agg] = await db
+    .select({ n: count() })
+    .from(auditLogs)
+    .leftJoin(users, eq(users.id, auditLogs.actorUserId))
+    .leftJoin(organizations, eq(organizations.id, auditLogs.orgId))
+    .where(where);
 
-// 감사 로그 통계 — system_admin 대시보드용 (액션별 카운트 24h)
-export async function POST() {
-  void sql; // unused export — POST 미사용
-  return new Response("Method not allowed", { status: 405 });
+  return Response.json({ rows, total: Number(agg?.n ?? 0), limit });
 }
