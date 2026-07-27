@@ -430,6 +430,31 @@ SDK: **`@google/genai`** 단일 (vertexai: true 고정).
 
 **과거 메모** (참고): 2026-04 무료 티어 daily limit=0 으로 flash-lite 고정 → 2026-05 paid 전환 → 2026-05-26 모든 task Vertex 서울+flash 로 통합.
 
+## 1-1. LLM 응답은 재현되지 않는다 — 점수 안정성은 캐시가 전부 (2026-07-27)
+
+**증상**: 서류평가 프롬프트를 한 줄 고쳤더니 후보 점수가 46 → 56 → 47 로 널뛴다.
+
+**실측** (candidate 291, gemini-2.5-flash, `temperature: 0`, responseSchema 적용):
+
+| 조건 | 결과 |
+|---|---|
+| 동일 프롬프트 2회 | 66점 / 56점 (6축 tech 85↔75, exp 50↔30) |
+| `seed: 7` 고정 3회 | 54 / 44 / 50점 |
+
+`temperature: 0` 도 `seed` 도 재현성을 주지 못한다. Vertex 의 seed 는 best-effort 이고
+thinking 모델(thinkingBudget)에서는 사실상 무효다. **종합 점수가 호출마다 ±10점 흔들린다.**
+
+**그런데 왜 평소엔 안정적인가**: `screening.ts` 의 `screening_cache` 가 `promptHash`
+(= scoring version + jobId + 프롬프트 전문) 로 결과를 캐시하기 때문. 같은 이력서·공고·프롬프트면
+첫 계산 결과를 계속 재사용한다. **이 캐시가 점수 안정성의 유일한 장치다.**
+
+**따라서**:
+- `lib/prompts.ts` / `lib/screening.ts` 의 프롬프트를 고치면 cache miss → **이후 재평가되는 모든
+  후보의 점수가 재추첨**된다. 오탈자 수정도 평가 결과를 바꾸는 변경으로 취급할 것.
+- 프롬프트 A/B 를 단발 호출로 비교하지 마라. 노이즈(±10)가 웬만한 실제 차이보다 크다 —
+  실제로 후보 6명 1회씩 비교해 나온 "평균 5점 차" 는 노이즈와 구분되지 않았다.
+  유의미하게 재려면 조건당 N회 반복 평균이 필요하고, 그만큼 호출 비용이 든다.
+
 ## 2. Google AI Studio 키 발급
 
 **증상**: 발급한 키도 `limit: 0`

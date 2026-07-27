@@ -1012,6 +1012,11 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
   // 결과 캐시 키 = 공고ID + 평가 프롬프트 전체 해시. 입력(공고 평가기준 + 이력서 내용 + 첨부)이
   // 동일하면 LLM 재호출 없이 같은 결과를 재사용 → 재평가/중복 시 점수가 흔들리지 않고 토큰도 절약.
   // 공고 평가기준을 바꾸면 프롬프트가 달라져 cache miss → 자동으로 새로 평가.
+  //
+  // ⚠️ 이 캐시가 점수 안정성의 *유일한* 장치다. temperature:0 도 seed 도 재현성을 주지 못한다
+  //    (실측 2026-07-27: 동일 프롬프트 2회가 종합 10점차). 그래서 **프롬프트(이 파일·prompts.ts)를
+  //    고치면 이후 재평가되는 모든 후보의 점수가 재추첨된다** — 문구 하나 바꾸는 것도 평가 결과를
+  //    바꾸는 변경으로 취급할 것.
   const promptHash = createHash("sha256")
     .update(`v${SCREENING_SCORING_VERSION}\n${job.id}\n${prompt}`)
     .digest("hex");

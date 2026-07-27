@@ -62,6 +62,69 @@ const RE_DOB = new RegExp(
 // lib/pii-extract.ts RE_BIRTH_YEAR 와 같은 표기를 대상으로 함.
 const RE_BIRTH_YEAR = /(?<!\d)(?:19\d{2}|20\d{2}|\d{2})\s*년\s*[생生]/g;
 
+// 이벤트 날짜 예외 — YYYY.MM.DD 가 전부 생년월일인 것은 아니다.
+// 프로젝트 수행 기간·수상일·자격증 취득일까지 [생년월일] 로 삼키면 평가 근거(시점·기간)가
+// 통째로 사라진다. 실측(2026-07-27): 이력서 한 건에서 24곳, 첨부 포트폴리오에서 36곳이
+// 먹혀 수행 기간 7건 중 6건과 수상 3건 전부의 시점이 소실됐고, 서류평가 타임라인에서 해당
+// 항목이 누락되거나 LLM 이 없는 날짜를 지어냈다.
+// 아래 두 컨텍스트에서만 예외로 두고 나머지는 종전대로 가린다 — 기본값은 여전히 "가린다".
+//   ① 날짜 범위의 일부 ("2021.09.01~2021.12.03")
+//   ② 기간·이벤트 라벨이 날짜 바로 앞(같은 줄 40자 이내)에 있음 ("수행 기간 : …", "수상 내역 : …(2022.09.30)")
+// 단, 같은 줄에 생년월일 라벨이 있으면 예외를 적용하지 않는다(생년월일 판정이 항상 우선).
+// 범위 구분자는 `~`/dash 뿐 아니라 *공백만* 인 경우도 받는다 — 표 PDF 는 시작·종료를
+// "2003.11.01  2005.03.31" 처럼 구분자 없이 나란히 뱉는다(실측 #83, 한 파일에서 47건).
+// 개행은 제외(다음 줄의 무관한 날짜까지 기간으로 오인하지 않도록).
+// 개행 1개(빈 줄 제외)도 구분자로 인정한다 — 표 PDF 는 시작·종료 셀을 줄바꿈으로 떨군다
+// (실측 #87). 대신 아래 maskDobDates 가 생년월일 라벨을 *앞 2줄* 까지 확인해, 라벨과 값이
+// 줄바꿈으로 떨어진 인적사항이 이 예외로 새지 않게 막는다.
+const RE_RANGE_SEP = String.raw`(?:\s*[~∼〜–—-]\s*|[ \t]{1,6}|[ \t]*\n[ \t]*)`;
+const RE_RANGE_AFTER = new RegExp(
+  `^${RE_RANGE_SEP}(?:(?:19|20)\\d{2}|현\\s*재|재\\s*직)`
+);
+// 앞 날짜는 "2015.03(.01)" 과 "2015년 3월( 1일)" 두 표기를 모두 받는다 — 한쪽만 받으면
+// "2018년 06월 ~ 2019년 05월" 의 *종료일* 만 생년월일로 오인된다(실측 #116).
+const RE_RANGE_BEFORE = new RegExp(
+  String.raw`(?:19|20)\d{2}\s*(?:[.\-/]\s*\d{1,2}(?:\s*[.\-/]\s*\d{1,2})?` +
+    String.raw`|[년年]\s*\d{1,2}\s*[월月](?:\s*\d{1,2}\s*[일日])?)` +
+    `${RE_RANGE_SEP}$`
+);
+const RE_EVENT_LABEL =
+  /기\s*간|수\s*행|재\s*직|근\s*무|활\s*동|프로젝트|수\s*상|취\s*득|발\s*급|입\s*사|퇴\s*사|입\s*학|졸\s*업|수\s*료|참\s*여|경\s*력|이\s*력|일\s*자/;
+const RE_DOB_LABEL_SAMELINE =
+  /생\s*년|출\s*생|생\s*일|Date\s*of\s*Birth|D\.?O\.?B|Birth/i;
+// 날짜 *뒤*에 자격증명이 오는 목록형 — "자격증" 헤더 아래 `취득일 자격증명` 이 여러 줄 이어지면
+// 라벨(앞 2줄) 규칙은 세 번째 항목부터 범위를 벗어난다(실측 #132: 취득일 4건이 전부 먹혔다).
+// 자격증 이름 자체를 신호로 쓴다 — 생년월일 뒤에 이런 토큰이 붙는 경우는 없다.
+const RE_CERT_AFTER =
+  /기사|기술사|자격|[1-3]\s*급|SQLD|SQLP|ADsP|AICE|MOS|OPIc|TOEIC|TEPS|JLPT|HSK|정보처리|정보보안|리눅스|네트워크관리사|컴퓨터활용/i;
+
+/** RE_DOB 매치가 생년월일이 아니라 기간·이벤트 날짜로 보이면 원문을 보존한다. */
+function maskDobDates(text: string): string {
+  return text.replace(RE_DOB, (m: string, _sep: string, offset: number) => {
+    // "(생)" / "출생" 접미사를 함께 삼킨 매치는 생년월일 확정.
+    if (/[생出]/.test(m)) return "[생년월일]";
+    const lineStart = text.lastIndexOf("\n", offset - 1) + 1;
+    // 생년월일 라벨은 앞 2줄까지 본다 — 표 양식은 라벨과 값이 다른 셀(=다른 줄)로 떨어지고,
+    // LABELS.dob 는 `[^\n]` 이라 줄을 넘지 못해 여기가 마지막 방어선이다.
+    const prevLineStart = text.lastIndexOf("\n", lineStart - 2) + 1;
+    const near = text.slice(prevLineStart, offset);
+    if (RE_DOB_LABEL_SAMELINE.test(near)) return "[생년월일]";
+    const after = text.slice(offset + m.length, offset + m.length + 20);
+    // 범위 판정은 줄 경계를 넘어서 본다 — 표 PDF 는 "2022년 3월\n~ 2026년 2월" 처럼
+    // 구분자를 다음 줄로 떨군다. 40자 창으로 거리를 제한해 무관한 날짜와 엮이지 않게 한다.
+    if (
+      RE_RANGE_AFTER.test(after) ||
+      RE_RANGE_BEFORE.test(text.slice(Math.max(0, offset - 40), offset))
+    )
+      return m;
+    // 이벤트 라벨은 앞 2줄(표 헤더가 윗줄인 "취득일 | 자격증명 | 발급기관" 양식) 또는
+    // 바로 뒤("2005.03.02(시작일자)")에서 찾는다.
+    if (RE_EVENT_LABEL.test(near) || RE_EVENT_LABEL.test(after)) return m;
+    if (RE_CERT_AFTER.test(after)) return m;
+    return "[생년월일]";
+  });
+}
+
 // 생년월일 라벨 뒤 2자리 연도 날짜("생년월일 … 83.01.24").
 // 표 양식은 라벨과 값이 다른 셀로 떨어져 같은 줄 전용 라벨 규칙(LABELS.dob)도,
 // 4자리 전용 RE_DOB 도 못 잡는다. lib/pii-extract.ts 가 이 표기를 생년월일로 인식하므로
@@ -237,9 +300,7 @@ function applyLabels(text: string): string {
 }
 
 function applyBasic(text: string): string {
-  return text
-    .replace(RE_RRN, "[주민번호]")
-    .replace(RE_DOB, "[생년월일]")
+  return maskDobDates(text.replace(RE_RRN, "[주민번호]"))
     .replace(RE_BIRTH_YEAR, "[생년월일]")
     .replace(RE_AGE_INLINE, "[나이]")
     .replace(RE_PHONE, "[전화]")

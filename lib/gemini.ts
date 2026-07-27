@@ -267,6 +267,11 @@ export async function generateJSON<T>(
       if (opts?.responseSchema) {
         config.responseSchema = opts.responseSchema;
       }
+      // ⚠️ 재현성은 여기서 보장되지 않는다. 실측(2026-07-27, gemini-2.5-flash):
+      // 동일 프롬프트 + temperature:0 을 2회 호출하면 서류평가 6축이 갈려 종합이 10점차
+      // (66 vs 56), seed 를 고정해도 3회가 54/44/50 으로 제각각이었다(Vertex seed 는
+      // best-effort 이고 thinking 모델에서는 사실상 무효). 서류 점수의 안정성은 전적으로
+      // screening.ts 의 promptHash 캐시가 담보한다 — 프롬프트를 고치면 전 후보가 재추첨된다.
       if (thinkingBudget !== undefined) {
         config.thinkingConfig = { thinkingBudget };
       }

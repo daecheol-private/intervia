@@ -17,6 +17,7 @@
     "db:seed-test": "node scripts/seed-test.mjs",
     "test:critical": "tsx tests/critical/critical.test.ts",
     "check:parsing": "tsx scripts/check-parsing.ts",
+    "check:masking": "tsx scripts/check-masking.ts",
     "db:seed-test-appeal": "node scripts/seed-test-appeal.mjs",
     "dart:fetch": "node scripts/fetch-dart-corps.mjs"
   },
