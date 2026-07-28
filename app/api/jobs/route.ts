@@ -23,6 +23,7 @@ import {
   serializeChecklist,
 } from "@/lib/job-checklist";
 import { traitProfileInputToJson } from "@/lib/personality";
+import { normalizeSourceUrl } from "@/lib/job-source";
 import { MCQ_TARGET_COUNT } from "@/lib/mcq";
 import { log } from "@/lib/logger";
 
@@ -145,6 +146,9 @@ export async function POST(req: Request) {
   // 문항을 생성해 저장하고 mcqEnabled=true 로 켠다(HR 검토 없이 바로 적용, 불일치는 버튼색 경고).
   const wantMcq = body.mcqAutoGenerate === true;
 
+  // 자동 채우기로 가져온 원본 공고 URL (임포트 성공 시에만 클라이언트가 보낸다).
+  const sourceUrl = normalizeSourceUrl(body.sourceUrl);
+
   const now = new Date();
   const [row] = await db
     .insert(jobPostings)
@@ -170,6 +174,8 @@ export async function POST(req: Request) {
       interviewDurationMinutes: body.interviewDurationMinutes ?? 20,
       passwordHash,
       recruitingContactEmail: contact.email,
+      sourceUrl,
+      sourceImportedAt: sourceUrl ? now.toISOString() : null,
       publishedAt: now.toISOString(),
       closesAt: defaultClosesAt(now),
       createdByUserId: me!.id,

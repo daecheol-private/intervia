@@ -8,6 +8,7 @@ import { defaultClosesAt } from "@/lib/job-lifecycle";
 import { generateApplyToken } from "@/lib/apply-link";
 import { stripBiasedLines } from "@/lib/job-bias-filter";
 import { traitProfileInputToJson } from "@/lib/personality";
+import { normalizeSourceUrl } from "@/lib/job-source";
 import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
@@ -60,6 +61,8 @@ export async function POST(req: Request) {
 
   const orgId = me!.orgId;
   const now = new Date();
+  // 임시공고도 URL 자동 채우기 출처를 남긴다 — 정식 전환 때 "다시 불러오기"로 이어진다.
+  const sourceUrl = normalizeSourceUrl(body.sourceUrl);
 
   const [row] = await db
     .insert(jobPostings)
@@ -82,6 +85,8 @@ export async function POST(req: Request) {
       interviewDurationMinutes: duration,
       passwordHash,
       recruitingContactEmail: str(body.recruitingContactEmail, 200).trim() || me!.email,
+      sourceUrl,
+      sourceImportedAt: sourceUrl ? now.toISOString() : null,
       publishedAt: now.toISOString(),
       closesAt: defaultClosesAt(now),
       createdByUserId: me!.id,

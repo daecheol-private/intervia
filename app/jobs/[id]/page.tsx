@@ -15,6 +15,7 @@ import { JobExpiredDecisionModal } from "@/app/components/JobExpiredDecisionModa
 import { notify, confirmDialog } from "@/app/components/Dialog";
 import Link from "next/link";
 import { compositeScore, formatKstDateTime } from "@/lib/utils";
+import { sourceUrlLabel } from "@/lib/job-source";
 import { isEncryptedZipFile } from "@/lib/zip-encrypted-client";
 import {
   Loader2,
@@ -22,6 +23,7 @@ import {
   BarChart3,
   Check,
   Download,
+  ExternalLink,
   Folder,
   Mail,
   Pencil,
@@ -1442,6 +1444,24 @@ export default function JobDetailPage() {
             <div className="text-xs text-ink-muted mt-3">
               등록 {formatKstDateTime(job.createdAt)}
             </div>
+            {/* URL 자동 채우기로 만든 공고 — 어느 공고에서 가져왔는지 원본으로 바로 이동. */}
+            {job.sourceUrl && (
+              <div className="text-xs text-ink-muted mt-1 flex flex-wrap items-center gap-x-1.5">
+                <span>원본</span>
+                <a
+                  href={job.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary-deep hover:underline break-all"
+                >
+                  <ExternalLink className="w-3 h-3 shrink-0" />
+                  {sourceUrlLabel(job.sourceUrl)}
+                </a>
+                {job.sourceImportedAt && (
+                  <span>· {formatKstDateTime(job.sourceImportedAt)} 불러옴</span>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex gap-2 flex-wrap sm:shrink-0 items-center">
             {/* 이력서 받기 — 후보가 1명+ 일 때 헤더 1차 버튼(클릭 시 드로어).

@@ -16,6 +16,9 @@ export type Job = {
   companyName?: string | null;
   // 임시 공고 여부 — 객관식 문제 생성은 정식 공고에서만 가능.
   isDraft?: boolean;
+  // "기존 공고 URL로 자동 채우기"로 가져온 원본 공고 주소 + 마지막 가져온 시각.
+  sourceUrl?: string | null;
+  sourceImportedAt?: string | null;
 };
 
 export type Candidate = {

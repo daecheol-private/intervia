@@ -270,6 +270,12 @@ export const jobPostings = sqliteTable("job_postings", {
   aiScreeningDisabled: integer("ai_screening_disabled", { mode: "boolean" })
     .notNull()
     .default(false),
+  // "기존 공고 URL로 자동 채우기"로 내용을 가져온 원본 채용공고 주소(정규화된 URL).
+  // null = 직접 작성/붙여넣기. 원본이 수정됐을 때 다시 불러오거나, 어느 공고에서 가져왔는지
+  // 확인하는 용도. 임포트 성공 후 저장할 때만 갱신된다(임포트 없는 저장은 기존 값 유지).
+  sourceUrl: text("source_url"),
+  // 위 URL 로 마지막 자동 채우기를 한 시각(ISO). 내용이 얼마나 오래된 사본인지 판단용.
+  sourceImportedAt: text("source_imported_at"),
   // 공고별 공개 지원 링크 토큰 — /apply/[token]. 후보자(비로그인)가 사람인 등에서 넘어와 직접 이력서 업로드.
   // null = 링크 미발급. HR 이 "지원 링크 생성" 시 부여. uniqueIndex 로 충돌 방지(NULL 다수 허용).
   applyToken: text("apply_token"),

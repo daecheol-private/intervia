@@ -428,6 +428,13 @@
       "when": 1785118632174,
       "tag": "0060_last_franklin_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "6",
+      "when": 1785250814539,
+      "tag": "0061_acoustic_ezekiel_stane",
+      "breakpoints": true
     }
   ]
 }

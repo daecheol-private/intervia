@@ -146,6 +146,8 @@
 | created_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 최초 공고 생성자 — 자동으로 면접관(`job_interviewers`)에 포함 |
 | applicant_consent_confirmed_at | TEXT NULL | 인사담당자가 "지원자로부터 AI 평가·국외이전·처리위탁 동의를 받았음"을 attest 한 시각. NULL=미확인 → 이력서 업로드 차단. PIPA 책임 전가 메커니즘 |
 | applicant_consent_confirmed_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | attest 한 사용자 |
+| source_url | TEXT NULL | "기존 공고 URL로 자동 채우기"로 내용을 가져온 원본 채용공고 주소(서버가 정규화한 URL). NULL=직접 작성·붙여넣기. 공고 상세 헤더의 "원본" 링크 + 수정 화면의 "다시 불러오기"에 사용. **임포트 성공 후 저장할 때만 갱신** — 일반 수정 저장(키 미전송)은 기존 값 유지 (0061) |
+| source_imported_at | TEXT NULL | 위 URL 로 마지막 자동 채우기를 한 시각(ISO). 내용이 얼마나 오래된 사본인지 판단용 (0061) |
 | status | TEXT NOT NULL DEFAULT 'active' | `active` / `closed`. cron 이 closes_at 도래 시 closed 로 전환 |
 | published_at | TEXT NOT NULL | 공고 게시 시각 (= 생성 시각으로 채움) |
 | closes_at | TEXT NOT NULL | 종결 예정. 기본 published_at + 60일. 연장 시 +30일 |

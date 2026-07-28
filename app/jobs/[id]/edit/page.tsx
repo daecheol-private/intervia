@@ -3,7 +3,7 @@
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Sparkles, Link2, Loader2 } from "lucide-react";
+import { Sparkles, Link2, Loader2, ExternalLink } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { TraitProfileSelector } from "@/app/components/TraitProfileSelector";
@@ -14,6 +14,8 @@ import {
   type TraitProfile,
 } from "@/lib/personality";
 import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
+import { sourceUrlLabel } from "@/lib/job-source";
+import { formatKstDateTime } from "@/lib/utils";
 import {
   careerInputsFrom,
   careerInputsToText,
@@ -57,6 +59,10 @@ export default function EditJobPage() {
   const [importing, setImporting] = useState(false);
   const [importErr, setImportErr] = useState("");
   const [importInfo, setImportInfo] = useState<string | null>(null);
+  // 공고에 기록된 자동 채우기 출처 — 어디서 가져온 공고인지 확인 + "다시 불러오기" 용도.
+  const [source, setSource] = useState<{ url: string; importedAt: string | null } | null>(null);
+  // 이번 편집에서 임포트를 새로 했을 때만 저장 시 전송(출처·시각 갱신). null 이면 기존 값 유지.
+  const [reimportedUrl, setReimportedUrl] = useState<string | null>(null);
   // 채용 담당자 이메일 기본값/도메인 검증용 — 로그인 사용자 이메일.
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const myDomain = myEmail ? getEmailDomain(myEmail) : null;
@@ -75,6 +81,11 @@ export default function EditJobPage() {
       const j = await fetch(`/api/jobs/${id}`).then((r) => r.json());
       setIsDraft(!!j.isDraft);
       setCareer(careerInputsFrom(j.level));
+      if (j.sourceUrl) {
+        setSource({ url: j.sourceUrl, importedAt: j.sourceImportedAt ?? null });
+        // 입력칸에 미리 채워 둔다 — 원본이 바뀌었으면 그대로 "가져오기"만 누르면 된다.
+        setImportUrl(j.sourceUrl);
+      }
       setForm({
         title: j.title === "(작성 중인 임시 공고)" ? "" : j.title,
         position: j.position,
@@ -98,10 +109,12 @@ export default function EditJobPage() {
     })();
   }, [id]);
 
-  const importFromUrl = async () => {
+  // url 인자는 "다시 불러오기"용 — setImportUrl 반영을 기다리지 않고 바로 그 주소로 가져온다.
+  const importFromUrl = async (url?: string) => {
     setImportErr("");
     setImportInfo(null);
-    if (!importUrl.trim()) {
+    const target = (url ?? importUrl).trim();
+    if (!target) {
       setImportErr("URL을 입력하세요.");
       return;
     }
@@ -109,7 +122,7 @@ export default function EditJobPage() {
     const r = await fetch("/api/jobs/import-from-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: importUrl.trim() }),
+      body: JSON.stringify({ url: target }),
     });
     setImporting(false);
     if (!r.ok) {
@@ -126,8 +139,17 @@ export default function EditJobPage() {
       idealProfile: string;
       preferredTraits: string[];
       confidence: number;
-      meta: { usedImageFallback: boolean; imageCount: number; siteHint?: string };
+      meta: {
+        usedImageFallback: boolean;
+        imageCount: number;
+        siteHint?: string;
+        normalizedUrl?: string;
+      };
     };
+    // 서버가 정규화한 URL 을 출처로 기록(사람인 relay/view → view 등). 저장해야 반영된다.
+    const src = d.meta.normalizedUrl || target;
+    setReimportedUrl(src);
+    setSource({ url: src, importedAt: null });
     const EMPLOYMENT = ["정규직", "계약직", "인턴", "프리랜서"];
     // 서버가 준 캐노니컬 텍스트("신입~10년" 등)를 range 입력값으로 역변환
     setCareer(careerInputsFrom(d.level));
@@ -195,6 +217,8 @@ export default function EditJobPage() {
       ...form,
       level: careerInputsToText(career),
     };
+    // 이번 편집에서 URL 자동 채우기를 했을 때만 출처를 갱신(키가 없으면 서버가 기존 값 유지).
+    if (reimportedUrl) payload.sourceUrl = reimportedUrl;
     if (form.clearPassword) payload.password = "";
     else if (!form.password) delete payload.password;
     delete payload.hasPassword;
@@ -261,13 +285,15 @@ export default function EditJobPage() {
               placeholder="https://www.saramin.co.kr/zf_user/jobs/view?rec_idx=..."
               value={importUrl}
               onChange={(e) => setImportUrl(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !importing && importFromUrl()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !importing) void importFromUrl();
+              }}
               disabled={importing}
             />
           </div>
           <button
             type="button"
-            onClick={importFromUrl}
+            onClick={() => void importFromUrl()}
             disabled={importing || !importUrl.trim()}
             className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep disabled:opacity-50 text-surface text-sm font-medium whitespace-nowrap inline-flex items-center gap-1.5"
           >
@@ -283,6 +309,41 @@ export default function EditJobPage() {
         {importInfo && (
           <div className="mt-2 text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
             {importInfo}
+          </div>
+        )}
+        {source && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-muted">
+            <span className="font-medium text-ink-soft">이 공고의 원본</span>
+            <a
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary-deep hover:underline break-all"
+            >
+              <ExternalLink className="w-3 h-3 shrink-0" />
+              {sourceUrlLabel(source.url)}
+            </a>
+            <span>
+              ·{" "}
+              {reimportedUrl
+                ? "방금 불러옴 (저장해야 기록됩니다)"
+                : source.importedAt
+                  ? `${formatKstDateTime(source.importedAt)} 불러옴`
+                  : "불러온 시각 미기록"}
+            </span>
+            {!reimportedUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setImportUrl(source.url);
+                  void importFromUrl(source.url);
+                }}
+                disabled={importing}
+                className="text-primary-deep font-medium hover:underline disabled:opacity-50"
+              >
+                다시 불러오기
+              </button>
+            )}
           </div>
         )}
       </div>

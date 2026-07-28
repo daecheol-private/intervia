@@ -14,6 +14,7 @@ import {
   type TraitProfile,
 } from "@/lib/personality";
 import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
+import { sourceUrlLabel } from "@/lib/job-source";
 import {
   careerInputsFrom,
   careerInputsToText,
@@ -91,6 +92,8 @@ export default function NewJobPage() {
   const [importing, setImporting] = useState(false);
   const [importErr, setImportErr] = useState("");
   const [importInfo, setImportInfo] = useState<string | null>(null);
+  // 마지막으로 성공한 자동 채우기 출처 URL — 저장 시 공고에 기록해 나중에 원본 확인·재임포트에 쓴다.
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
 
   // 붙여넣기(텍스트/이미지) 임포트 상태 — URL 가져오기가 거절될 때의 우회 경로.
   const [pasteText, setPasteText] = useState("");
@@ -140,9 +143,16 @@ export default function NewJobPage() {
       return;
     }
     const d = (await r.json()) as Extracted & {
-      meta: { usedImageFallback: boolean; imageCount: number; siteHint?: string };
+      meta: {
+        usedImageFallback: boolean;
+        imageCount: number;
+        siteHint?: string;
+        normalizedUrl?: string;
+      };
     };
     applyExtracted(d);
+    // 서버가 정규화한 URL 을 출처로 기록(사람인 relay/view → view 등).
+    setSourceUrl(d.meta.normalizedUrl || importUrl.trim());
     const bits = [
       `${d.meta.siteHint ?? "외부 사이트"}에서 추출`,
       `신뢰도 ${(d.confidence * 100).toFixed(0)}%`,
@@ -314,7 +324,12 @@ export default function NewJobPage() {
     const res = await fetch("/api/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, level: careerInputsToText(career), applyToken }),
+      body: JSON.stringify({
+        ...form,
+        level: careerInputsToText(career),
+        applyToken,
+        sourceUrl,
+      }),
     });
     if (!res.ok) {
       const text = await res.text();
@@ -337,7 +352,12 @@ export default function NewJobPage() {
     const res = await fetch("/api/jobs/draft", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, level: careerInputsToText(career), applyToken }),
+      body: JSON.stringify({
+        ...form,
+        level: careerInputsToText(career),
+        applyToken,
+        sourceUrl,
+      }),
     });
     if (!res.ok) {
       alert("임시저장 실패: " + (await res.text()));
@@ -461,6 +481,12 @@ export default function NewJobPage() {
           <div className="mt-2 text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
             {importInfo}
           </div>
+        )}
+        {sourceUrl && (
+          <p className="mt-2 text-[11px] text-ink-muted">
+            저장하면 원본 주소({sourceUrlLabel(sourceUrl)})가 이 공고에 함께 기록됩니다 — 나중에
+            공고 수정 화면에서 다시 불러올 수 있어요.
+          </p>
         )}
       </div>
 

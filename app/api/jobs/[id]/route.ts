@@ -13,6 +13,7 @@ import { chargeFeature, refundFeature } from "@/lib/tokens";
 import { stripBiasedLines } from "@/lib/job-bias-filter";
 import { parseDbTimestamp } from "@/lib/utils";
 import { traitProfileInputToJson } from "@/lib/personality";
+import { normalizeSourceUrl } from "@/lib/job-source";
 import {
   generateRequirementChecklist,
   serializeChecklist,
@@ -142,6 +143,14 @@ export async function PUT(
   );
   if (!contact.ok) return new Response(contact.message, { status: 400 });
   update.recruitingContactEmail = contact.email;
+
+  // 자동 채우기 출처 URL — 이번 저장에서 임포트를 새로 했을 때만 클라이언트가 보낸다.
+  // 키가 없으면(일반 수정 저장) 기존 값 유지. 임포트 시각도 그때 갱신한다.
+  const sourceUrl = "sourceUrl" in body ? normalizeSourceUrl(body.sourceUrl) : null;
+  if (sourceUrl) {
+    update.sourceUrl = sourceUrl;
+    update.sourceImportedAt = new Date().toISOString();
+  }
 
   // 키가 없으면 기존 값 유지 (부분 업데이트 클라이언트 호환)
   if ("traitProfile" in body) {
