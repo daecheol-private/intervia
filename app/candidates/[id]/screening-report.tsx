@@ -705,15 +705,54 @@ type TimelineEntry = NonNullable<
 
 type Kind = TimelineEntry["kind"];
 
-// soft = 아이콘 박스 배경, fg = 아이콘·연도 색, bullet = 상세 불릿 색.
-const KIND_META: Record<
-  Kind,
-  { label: string; Icon: typeof Briefcase; soft: string; fg: string; bullet: string }
-> = {
-  career: { label: "경력", Icon: Briefcase, soft: "bg-primary-soft", fg: "text-primary-deep", bullet: "bg-primary" },
-  activity: { label: "인턴·대외활동", Icon: Sparkles, soft: "bg-accent-soft", fg: "text-accent-deep", bullet: "bg-accent" },
-  training: { label: "교육·자격증", Icon: BookOpen, soft: "bg-surface-alt", fg: "text-ink-soft", bullet: "bg-ink-muted" },
-  education: { label: "학력", Icon: GraduationCap, soft: "bg-info-soft", fg: "text-info", bullet: "bg-info" },
+// 카테고리별 색은 유지하되, 경력만 한 단계 위로 띄운다 —
+// 아이콘 노드를 솔리드 네이비로, 내용에 옅은 네이비 배경 + 코랄 좌측 바.
+// node = 아이콘 박스 배경, icon = 아이콘 색, fg = 연도·카테고리 라벨 색,
+// bullet = 상세 불릿 색, block = 내용 블록 배경(경력만).
+type KindStyle = {
+  label: string;
+  Icon: typeof Briefcase;
+  node: string;
+  icon: string;
+  fg: string;
+  bullet: string;
+  block?: string;
+};
+
+const KIND_META: Record<Kind, KindStyle> = {
+  career: {
+    label: "경력",
+    Icon: Briefcase,
+    node: "bg-primary shadow-sm",
+    icon: "text-surface",
+    fg: "text-primary-deep",
+    bullet: "bg-primary",
+    block: "bg-primary-soft/60",
+  },
+  activity: {
+    label: "인턴·대외활동",
+    Icon: Sparkles,
+    node: "bg-accent-soft",
+    icon: "text-accent-deep",
+    fg: "text-accent-deep",
+    bullet: "bg-accent",
+  },
+  training: {
+    label: "교육·자격증",
+    Icon: BookOpen,
+    node: "bg-surface-alt",
+    icon: "text-ink-soft",
+    fg: "text-ink-soft",
+    bullet: "bg-ink-muted",
+  },
+  education: {
+    label: "학력",
+    Icon: GraduationCap,
+    node: "bg-info-soft",
+    icon: "text-info",
+    fg: "text-info",
+    bullet: "bg-info",
+  },
 };
 
 // 고등학교·검정고시 학력은 제외 (대학 이상만 표시).
@@ -855,40 +894,45 @@ function TimelineColumn({ items, nowM }: { items: TimelineRow[]; nowM: number })
                 />
               )}
               <div
-                className={`relative z-10 grid h-9 w-9 place-items-center rounded-xl ${m.soft}`}
+                className={`relative z-10 grid h-9 w-9 place-items-center rounded-xl ${m.node}`}
               >
-                <m.Icon className={`h-[18px] w-[18px] ${m.fg}`} strokeWidth={2.1} />
+                <m.Icon
+                  className={`h-[18px] w-[18px] ${m.icon}`}
+                  strokeWidth={2.1}
+                />
               </div>
             </div>
 
-            {/* 우: 내용 */}
+            {/* 우: 내용 — 경력만 옅은 배경 블록 (padding 은 공통이라 제목 시작선이 어긋나지 않는다) */}
             <div className="min-w-0 flex-1 pb-4">
-              <div className="text-sm font-bold text-ink leading-snug">
-                {e.title}
-              </div>
-              <div className={`mt-0.5 text-[11px] font-semibold ${m.fg}`}>
-                {m.label}
-                {dur && (
-                  <span className="font-bold tabular-nums"> · {dur}</span>
+              <div className={`rounded-lg py-1.5 pl-3 pr-2 ${m.block ?? ""}`}>
+                <div className="text-sm font-bold text-ink leading-snug">
+                  {e.title}
+                </div>
+                <div className={`mt-0.5 text-[11px] font-semibold ${m.fg}`}>
+                  {m.label}
+                  {dur && (
+                    <span className="font-bold tabular-nums"> · {dur}</span>
+                  )}
+                </div>
+                {e.highlights && e.highlights.length > 0 && (
+                  <ul className="mt-1.5 space-y-1">
+                    {e.highlights.map((h, j) => (
+                      <li
+                        key={j}
+                        className="flex gap-1.5 text-[12px] text-ink-soft leading-snug"
+                      >
+                        <span
+                          className={`mt-[6px] h-1 w-1 shrink-0 rounded-full ${m.bullet}`}
+                        />
+                        <span>
+                          <HL text={h} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
-              {e.highlights && e.highlights.length > 0 && (
-                <ul className="mt-1.5 space-y-1">
-                  {e.highlights.map((h, j) => (
-                    <li
-                      key={j}
-                      className="flex gap-1.5 text-[12px] text-ink-soft leading-snug"
-                    >
-                      <span
-                        className={`mt-[6px] h-1 w-1 shrink-0 rounded-full ${m.bullet}`}
-                      />
-                      <span>
-                        <HL text={h} />
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           </li>
         );
