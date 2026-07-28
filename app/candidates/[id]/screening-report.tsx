@@ -738,6 +738,63 @@ function bigYear(e: TimelineEntry): string {
   return en != null ? String(Math.floor(en)) : "";
 }
 
+/** "2018.03" → 절대 개월 수(2018×12+2). 파싱 실패는 null. */
+function toMonths(s?: string | null): number | null {
+  const y = toYear(s);
+  return y == null ? null : Math.round(y * 12);
+}
+
+/** 경력 한 건의 재직 구간 [시작, 끝) — 절대 개월. 기간 미상(마스킹 등)이면 null. */
+function careerSpan(e: TimelineEntry, nowM: number): [number, number] | null {
+  const s = toMonths(e.start);
+  if (s == null) return null;
+  const raw = e.ongoing ? nowM : toMonths(e.end);
+  if (raw == null) return null;
+  // 이력서 관행상 종료월도 재직에 포함 (2023.09~2025.07 = 1년 11개월) → 반개구간으로 +1.
+  const end = raw + 1;
+  return end > s ? [s, end] : null;
+}
+
+/** 개월 → "2년 3개월" / "2년" / "5개월". */
+function formatDuration(months: number): string {
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  if (y === 0) return `${m}개월`;
+  if (m === 0) return `${y}년`;
+  return `${y}년 ${m}개월`;
+}
+
+/**
+ * 총 경력 개월 — 구간을 병합해서 계산한다.
+ * 경력은 프로젝트/회사 단위로 한 항목씩이라 같은 시기가 여러 줄로 겹치는데,
+ * 단순 합산하면 실제보다 부풀려진다.
+ */
+function totalCareerMonths(entries: TimelineEntry[], nowM: number): number {
+  const spans = entries
+    .filter((e) => e.kind === "career")
+    .map((e) => careerSpan(e, nowM))
+    .filter((s): s is [number, number] => s !== null)
+    .sort((a, b) => a[0] - b[0]);
+
+  let total = 0;
+  let curStart = 0;
+  let curEnd = -1;
+  for (const [s, en] of spans) {
+    if (curEnd < 0) {
+      curStart = s;
+      curEnd = en;
+    } else if (s <= curEnd) {
+      curEnd = Math.max(curEnd, en);
+    } else {
+      total += curEnd - curStart;
+      curStart = s;
+      curEnd = en;
+    }
+  }
+  if (curEnd >= 0) total += curEnd - curStart;
+  return total;
+}
+
 /** 컴팩트 월 범위 — "09 – 현재" / "01 – 08" / "03 – 2024.02". */
 function monthRange(e: TimelineEntry): string {
   const sm = e.start?.match(/(\d{4})(?:[.\-/\s]+(\d{1,2}))?/);
@@ -762,7 +819,7 @@ function monthRange(e: TimelineEntry): string {
 type TimelineRow = { e: TimelineEntry };
 
 /** 세로 타임라인 한 열 — 항목마다 [연도][아이콘 노드+스파인][제목·카테고리·상세]. */
-function TimelineColumn({ items }: { items: TimelineRow[] }) {
+function TimelineColumn({ items, nowM }: { items: TimelineRow[]; nowM: number }) {
   return (
     <ol>
       {items.map(({ e }, i) => {
@@ -770,6 +827,9 @@ function TimelineColumn({ items }: { items: TimelineRow[] }) {
         const yr = bigYear(e);
         const mr = monthRange(e);
         const last = i === items.length - 1;
+        // 재직기간은 경력만. 기간을 못 읽은 항목은 표시하지 않는다.
+        const span = e.kind === "career" ? careerSpan(e, nowM) : null;
+        const dur = span ? formatDuration(span[1] - span[0]) : null;
         return (
           <li key={i} className="relative flex gap-3">
             {/* 좌: 연도 */}
@@ -808,6 +868,9 @@ function TimelineColumn({ items }: { items: TimelineRow[] }) {
               </div>
               <div className={`mt-0.5 text-[11px] font-semibold ${m.fg}`}>
                 {m.label}
+                {dur && (
+                  <span className="font-bold tabular-nums"> · {dur}</span>
+                )}
               </div>
               {e.highlights && e.highlights.length > 0 && (
                 <ul className="mt-1.5 space-y-1">
@@ -840,6 +903,10 @@ export function ResumeTimelineBlock({
   timeline: TimelineEntry[];
 }) {
   if (!timeline || timeline.length === 0) return null;
+
+  const now = new Date();
+  const nowM = now.getFullYear() * 12 + now.getMonth();
+  const careerM = totalCareerMonths(timeline, nowM);
 
   // 고교 학력 제외 + 시작 시점 내림차순(최신 위). 기간 미상은 원래 순서 유지하며 뒤로.
   const rows = timeline
@@ -883,22 +950,28 @@ export function ResumeTimelineBlock({
         <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">
           이력 타임라인
         </span>
+        {careerM > 0 && (
+          <span className="rounded-md bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary-deep tabular-nums">
+            총 경력 {formatDuration(careerM)}
+          </span>
+        )}
         <span className="h-px flex-1 bg-border-default" aria-hidden />
       </div>
 
       {twoCol ? (
         <div className="mt-1 grid grid-cols-1 gap-x-8 @2xl:grid-cols-2">
-          <TimelineColumn items={colA} />
-          <TimelineColumn items={colB} />
+          <TimelineColumn items={colA} nowM={nowM} />
+          <TimelineColumn items={colB} nowM={nowM} />
         </div>
       ) : (
         <div className="mt-1">
-          <TimelineColumn items={colA} />
+          <TimelineColumn items={colA} nowM={nowM} />
         </div>
       )}
 
       <div className="text-[10px] text-ink-muted/70">
-        * 일부 기간은 겹칠 수 있습니다.
+        * 일부 기간은 겹칠 수 있으며, 총 경력은 겹치는 기간을 한 번만 계산한
+        값입니다.
       </div>
     </div>
   );
