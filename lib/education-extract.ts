@@ -182,6 +182,26 @@ function detectStandaloneDept(line: string): string | null {
   return cleanMajor(m[1]);
 }
 
+/**
+ * 학교명 뒤 캠퍼스 표기를 붙인다 — "고려대학교 (세종)" → "고려대학교(세종)".
+ *
+ * 같은 대학이라도 캠퍼스가 다르면 다른 학교로 취급되는 게 통례라 표기해 준다.
+ * 학교명 뒤 괄호에는 캠퍼스 말고도 학제·학위·부서가 오므로(실측 93건에서 "(4년제)" "(2·3년제)"
+ * "(석사과정)" "(편입)" "(학술정보팀)" 등) 아래를 캠퍼스가 **아닌** 것으로 걸러낸다.
+ */
+const CAMPUS_NOT =
+  /\d|학위|과정|편입|입학|졸업|재학|수료|년제|학사|석사|박사|[팀실소과부처원]$/;
+function withCampus(text: string, school: string | null): string | null {
+  if (!school) return school;
+  const esc = school.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = text.match(
+    new RegExp(`${esc}\\s*\\(\\s*([가-힣A-Za-z][가-힣A-Za-z ]{0,9})\\s*\\)`)
+  );
+  const campus = m?.[1].trim();
+  if (!campus || CAMPUS_NOT.test(campus)) return school;
+  return `${school}(${campus})`;
+}
+
 /** 사전 미등재 학교 fallback — "○○대학교/대학원" 일반 패턴. 공백 없이 전공이 붙어도 학교명만 잡음. */
 function detectSchoolGeneric(line: string): string | null {
   // 학점은행제는 학교가 아니지만 이력서 학력란의 "학교명" 칸에 이렇게 적힌다 — 그대로 쓴다.
@@ -247,6 +267,22 @@ export function extractEducation(rawText: string): Education {
   const hits: { rank: Rank; status: string | null; lineIdx: number }[] = [];
   lines.forEach((line, idx) => {
     let rank = detectLevel(line);
+    // "○○대학원" 행 — 대학원 과정은 석사가 기본이다("석사" 를 안 쓰고 "일반대학원" 으로만
+    // 적는 이력서가 흔하다. 박사는 "박사" 표기를 detectLevel 이 별도로 잡는다).
+    // 표 양식은 "숭실대학교 일반대학원" / "IT융합학과 졸업" 처럼 학교와 졸업 상태를 다른 셀
+    // (=다른 줄)로 떨구므로 상태는 인접 ±2줄에서 확인한다.
+    // ⚠️ 자기소개 산문("대학원을 진학하게 되었고")까지 인정하면 그 줄이 최종학력 행이 되어
+    // 학교·전공을 놓친다 — 학력 행의 형태(학교명 동반 또는 짧은 표 셀)일 때만 잡는다.
+    if (
+      rank == null &&
+      /대\s*학\s*원/.test(line) &&
+      (uniByLine.has(idx) || detectSchoolGeneric(line) || line.trim().length <= 20) &&
+      /(졸\s*업|수\s*료|재\s*학|휴\s*학|중\s*퇴)/.test(
+        lines.slice(Math.max(0, idx - 2), idx + 3).join(" ")
+      )
+    ) {
+      rank = 4;
+    }
     // 키워드 없지만 4년제 대학명 + 졸업/재학 류가 있으면 학사로 추정
     // (전문대·대학원 줄은 제외 — 전문대=전문학사, 대학원=등급 모호)
     // detectSchoolGeneric 도 근거로 쓴다 — 표 셀이 붙어 추출된
@@ -309,7 +345,7 @@ export function extractEducation(rawText: string): Education {
     const anyUni = uniByLine.values().next();
     return {
       level: null,
-      school: anyUni.done ? null : anyUni.value,
+      school: anyUni.done ? null : withCampus(norm, anyUni.value),
       major: null,
     };
   }
@@ -371,6 +407,8 @@ export function extractEducation(rawText: string): Education {
   // 전체에서 "단독 학과명 줄"(예: "디지털전자과")을 fallback 스캔.
   // ⚠️ 문서 전체를 훑으므로 **다른 학력 행의 전공**을 집을 수 있다(석사가 최종학력인데 학사
   // 행의 "물리학과" 를 주워오는 식). 학교명 앵커가 실패했을 때의 마지막 수단으로만 둔다.
+  // ⚠️ 스캔 방향을 "최종학력 줄 아래" 로 제한해봤다가 더 나빠졌다(2026-07-28) — 학력 섹션을
+  // 지나 본문까지 훑어 "및주요성과" 같은 산문 조각을 전공으로 집는다. 전체 스캔을 유지할 것.
   if (!major) {
     for (const l of lines) {
       const d = detectStandaloneDept(l.trim());
@@ -381,5 +419,7 @@ export function extractEducation(rawText: string): Education {
     }
   }
 
-  return { level, school, major };
+  // 캠퍼스 표기는 마지막에 붙인다 — 전공 추출이 stripSchoolTokens 로 원문의 학교 토큰을
+  // 지우는데, 여기서 미리 붙이면 원문과 어긋나 제거가 실패한다.
+  return { level, school: withCampus(norm, school), major };
 }
