@@ -40,6 +40,7 @@ import {
   buildInterviewQuestionsPrompt,
   buildExecutiveInterviewQuestionsPrompt,
   hasCultureFit,
+  QUESTION_SHEET_SCHEMA,
   type CultureFitProfile,
 } from "@/lib/prompts";
 import { logAudit } from "@/lib/audit";
@@ -48,7 +49,9 @@ import { after } from "next/server";
 
 export const runtime = "nodejs";
 // 백그라운드(after) 생성이 maxDuration 안에 끝나야 함 — Vertex 서울 기준 LLM 1회 수십 초.
-export const maxDuration = 120;
+// 질문지 분량을 2배로 늘린 뒤(1차 48~64문항 / 2차 24~36문항) 출력 토큰도 2배라 300 으로 상향.
+// stale 판정(QUESTION_GEN_STALE_MS=5분)과 같은 값이라, 함수가 죽으면 곧바로 failed 로 노출된다.
+export const maxDuration = 300;
 
 // generating 표시가 이 시간을 넘으면 함수 중단 등으로 간주 → GET 이 failed 로 노출(재생성 허용).
 const QUESTION_GEN_STALE_MS = 5 * 60 * 1000;
@@ -308,8 +311,11 @@ export async function POST(
       // 후보자의 최신 동의가 도쿄 폴백 고지(1.9.0+)를 포함할 때만 폴백 —
       // AI 면접 동의 이력이 없는 후보(수동 등록 등)는 서울 전용.
       const allowFallback = await candidateAllowsPiiFallback(cid);
+      // responseSchema 필수 — 분량 2배 이후 자유서술이 길어져 스키마 없이는 간헐적으로
+      // 깨진 JSON 이 나온다(실측 3회 중 1회 파싱 실패). Vertex 가 유효 JSON 을 보장한다.
       const sheet = await generateJSON<InterviewQuestionSheet>(prompt, {
         task: "questionGen",
+        responseSchema: QUESTION_SHEET_SCHEMA,
         allowFallback,
       });
       if (!sheet || !Array.isArray(sheet.sections) || sheet.sections.length === 0)

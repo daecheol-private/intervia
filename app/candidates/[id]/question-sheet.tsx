@@ -253,7 +253,7 @@ export function InterviewQuestionsPanel({
                   // 백그라운드 생성 중 — 새로고침/재방문해도 폴링이 이어받아 자동 반영.
                   <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-surface-alt text-primary-deep text-sm font-medium">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    생성 중... (최대 1분 · 새로고침해도 됩니다)
+                    생성 중... (최대 3분 · 새로고침해도 됩니다)
                   </span>
                 ) : sheet ? (
                   <button
