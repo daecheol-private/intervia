@@ -6,6 +6,9 @@ import type { NextConfig } from "next";
 const securityHeaders = [
   // 클릭재킹 방어(frame-ancestors) + 플러그인 실행 차단(object-src) + <base> 태그 주입 차단(base-uri).
   // 세 지시어 모두 정상 앱 동작에 영향 없음. script-src/style-src 는 nonce 작업 후 별도 추가.
+  // ⚠️ script-src 를 추가할 때 t1.daumcdn.net(다음 우편번호 스크립트) 과 frame-src 의
+  //    postcode.map.daum.net(검색 팝업) 을 허용할 것 — 빠뜨리면 주소 찾기 버튼이 죽는다
+  //    (app/components/AddressSearch.tsx).
   {
     key: "Content-Security-Policy",
     value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self'",

@@ -3,10 +3,13 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, Pencil, Monitor, Building2 } from "lucide-react";
 import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
+import { AddressSearchButton } from "@/app/components/AddressSearch";
 import {
   ShareRecipientPicker,
   type ShareRecipient,
 } from "@/app/components/ShareRecipientPicker";
+
+type OrgAddress = { id: number; address: string; addressDetail: string | null };
 
 export type ProposeResult = {
   candidateId: number;
@@ -54,6 +57,9 @@ export function ScheduleProposeModal({
   const [modeOnline, setModeOnline] = useState(false);
   const [address, setAddress] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
+  // 법인에 등록된 면접 장소 주소(사무실 여러 곳). "custom" 은 이번 면접에만 쓰는 일회성 장소.
+  const [orgAddresses, setOrgAddresses] = useState<OrgAddress[]>([]);
+  const [pickedAddrId, setPickedAddrId] = useState<number | "custom">("custom");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   // 확정·변경·취소 안내를 함께 받을 사람(면접관 외). 직전 제안 값으로 프리필한다.
@@ -87,17 +93,34 @@ export function ScheduleProposeModal({
     );
   };
 
-  // 모달 열릴 때 org 주소 미리 채움
+  // 모달 열릴 때 법인 주소 목록 로드 — 첫 주소를 기본 선택으로 채운다.
   useEffect(() => {
     if (!open) return;
-    void fetch(`/api/orgs/me`)
+    void fetch(`/api/orgs/me/addresses`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (d?.officeAddress) setAddress(d.officeAddress);
-        if (d?.officeAddressDetail) setAddressDetail(d.officeAddressDetail);
+        const list: OrgAddress[] = Array.isArray(d?.addresses) ? d.addresses : [];
+        setOrgAddresses(list);
+        if (list.length > 0) {
+          setPickedAddrId(list[0].id);
+          setAddress(list[0].address);
+          setAddressDetail(list[0].addressDetail ?? "");
+        }
       })
       .catch(() => {});
   }, [open]);
+
+  const pickSaved = (a: OrgAddress) => {
+    setPickedAddrId(a.id);
+    setAddress(a.address);
+    setAddressDetail(a.addressDetail ?? "");
+  };
+
+  const pickCustom = () => {
+    setPickedAddrId("custom");
+    setAddress("");
+    setAddressDetail("");
+  };
 
   // 직전 제안에서 쓴 공유 수신자 프리필 — 회의실·인사팀 담당자는 보통 매번 같다.
   useEffect(() => {
@@ -357,23 +380,70 @@ export function ScheduleProposeModal({
               {!modeOnline && (
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-ink-soft block">
-                    회사 주소
+                    면접 장소
                   </label>
-                  <input
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="예: 서울시 강남구 테헤란로 123"
-                    className="w-full text-sm border border-border-strong rounded-lg px-3 py-2"
-                  />
-                  <input
-                    value={addressDetail}
-                    onChange={(e) => setAddressDetail(e.target.value)}
-                    placeholder="상세 (호수·층 등, 선택)"
-                    className="w-full text-sm border border-border-strong rounded-lg px-3 py-2"
-                  />
-                  <p className="text-[11px] text-ink-muted">
-                    법인 설정에 주소가 없으면 자동 저장됩니다.
-                  </p>
+
+                  {orgAddresses.length > 0 && (
+                    <div className="space-y-1.5">
+                      {orgAddresses.map((a) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => pickSaved(a)}
+                          className={`w-full text-left px-3 py-2 rounded-lg border text-sm ${
+                            pickedAddrId === a.id
+                              ? "bg-primary-soft border-primary/40 text-primary-deep"
+                              : "bg-card border-border-default text-ink-muted"
+                          }`}
+                        >
+                          {a.address}
+                          {a.addressDetail && (
+                            <span className="block text-[11px] opacity-80 mt-0.5">
+                              {a.addressDetail}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={pickCustom}
+                        className={`w-full text-left px-3 py-2 rounded-lg border text-sm ${
+                          pickedAddrId === "custom"
+                            ? "bg-primary-soft border-primary/40 text-primary-deep"
+                            : "bg-card border-border-default text-ink-muted"
+                        }`}
+                      >
+                        다른 장소 직접 입력
+                        <span className="block text-[11px] opacity-80 mt-0.5">
+                          이번 면접에만 사용 (주소록에 저장되지 않음)
+                        </span>
+                      </button>
+                    </div>
+                  )}
+
+                  {(orgAddresses.length === 0 || pickedAddrId === "custom") && (
+                    <div className="space-y-2 pt-1">
+                      <AddressSearchButton onSelect={(value) => setAddress(value)} />
+                      <input
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="예: 서울시 강남구 테헤란로 123"
+                        className="w-full text-sm border border-border-strong rounded-lg px-3 py-2"
+                      />
+                      <input
+                        value={addressDetail}
+                        onChange={(e) => setAddressDetail(e.target.value)}
+                        placeholder="상세 (호수·층 등, 선택)"
+                        className="w-full text-sm border border-border-strong rounded-lg px-3 py-2"
+                      />
+                      {orgAddresses.length === 0 && (
+                        <p className="text-[11px] text-ink-muted">
+                          법인에 등록된 주소가 없어, 여기 입력한 주소가 법인
+                          설정에 자동 저장됩니다.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

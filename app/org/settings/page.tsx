@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { Settings, Trash2 } from "lucide-react";
+import { AddressSearchButton } from "@/app/components/AddressSearch";
 import type { CultureFitProfile, QualItem } from "@/lib/prompts";
 import { defaultCultureFitProfile } from "@/lib/culture-fit-defaults";
 import { textColorOn } from "@/lib/brand-color";
@@ -21,12 +22,16 @@ type Org = {
   name?: string;
   emailDomain?: string | null;
   bizRegistrationNo?: string | null;
-  officeAddress?: string | null;
-  officeAddressDetail?: string | null;
   allowScanOcr?: boolean;
   cultureFitProfile?: CultureFitProfile | null;
   brandColor?: string | null;
   hasLogo?: boolean;
+};
+
+type OrgAddress = {
+  id: number;
+  address: string;
+  addressDetail: string | null;
 };
 
 // 지원 페이지 포인트 컬러 프리셋 — 흰 배경 위 버튼으로 무난한 진한 톤만
@@ -115,6 +120,8 @@ export default function OrgSettingsPage() {
   const [role, setRole] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
+  // 면접 장소 주소는 다건 — 사무실이 여러 곳인 법인이 일정 제시에서 골라 쓴다.
+  const [addresses, setAddresses] = useState<OrgAddress[]>([]);
   const [addr, setAddr] = useState("");
   const [detail, setDetail] = useState("");
   const [bizNo, setBizNo] = useState("");
@@ -137,16 +144,21 @@ export default function OrgSettingsPage() {
   const [logoBusy, setLogoBusy] = useState(false);
 
   const load = async () => {
-    const [orgRes, statusRes, cfRes] = await Promise.all([
+    const [orgRes, statusRes, cfRes, addrRes] = await Promise.all([
       fetch("/api/orgs/me"),
       fetch("/api/auth/status"),
       fetch("/api/orgs/me/culture-fit"),
+      fetch("/api/orgs/me/addresses"),
     ]);
+    if (addrRes.ok) {
+      const { addresses } = (await addrRes.json()) as {
+        addresses: OrgAddress[];
+      };
+      setAddresses(addresses);
+    }
     if (orgRes.ok) {
       const o = (await orgRes.json()) as Org;
       setOrg(o);
-      setAddr(o.officeAddress ?? "");
-      setDetail(o.officeAddressDetail ?? "");
       setBizNo(o.bizRegistrationNo ?? "");
       setBrandColor(o.brandColor ?? "");
       setHasLogo(!!o.hasLogo);
@@ -176,15 +188,19 @@ export default function OrgSettingsPage() {
 
   const canEdit = role === "org_admin" || role === "system_admin";
 
-  const saveAddr = async () => {
+  const addAddr = async () => {
+    if (!addr.trim()) {
+      setMsg({ section: "addr", type: "error", text: "주소를 입력하세요." });
+      return;
+    }
     setAddrBusy(true);
     setMsg(null);
-    const r = await fetch("/api/orgs/me/address", {
-      method: "PUT",
+    const r = await fetch("/api/orgs/me/addresses", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        officeAddress: addr.trim() || null,
-        officeAddressDetail: detail.trim() || null,
+        address: addr.trim(),
+        addressDetail: detail.trim() || null,
       }),
     });
     setAddrBusy(false);
@@ -192,16 +208,32 @@ export default function OrgSettingsPage() {
       setMsg({ section: "addr", type: "error", text: await r.text() });
       return;
     }
-    setOrg((o) =>
-      o
-        ? {
-            ...o,
-            officeAddress: addr.trim() || null,
-            officeAddressDetail: detail.trim() || null,
-          }
-        : o
+    const { address, duplicated } = (await r.json()) as {
+      address: OrgAddress;
+      duplicated?: boolean;
+    };
+    setAddresses((prev) =>
+      prev.some((a) => a.id === address.id) ? prev : [...prev, address]
     );
-    setMsg({ section: "addr", type: "success", text: "회사 주소가 저장되었습니다." });
+    setAddr("");
+    setDetail("");
+    setMsg({
+      section: "addr",
+      type: "success",
+      text: duplicated
+        ? "이미 등록된 주소입니다."
+        : "주소가 추가되었습니다.",
+    });
+  };
+
+  const deleteAddr = async (id: number) => {
+    setMsg(null);
+    const r = await fetch(`/api/orgs/me/addresses/${id}`, { method: "DELETE" });
+    if (!r.ok) {
+      setMsg({ section: "addr", type: "error", text: await r.text() });
+      return;
+    }
+    setAddresses((prev) => prev.filter((a) => a.id !== id));
   };
 
   const saveBizNo = async () => {
@@ -442,34 +474,74 @@ export default function OrgSettingsPage() {
               className="pt-4 mt-4 border-t border-border-default space-y-2"
             >
               <label className="text-sm font-medium text-ink-soft">
-                회사 주소
+                면접 장소 주소
               </label>
-              <input
-                value={addr}
-                onChange={(e) => setAddr(e.target.value)}
-                placeholder="예: 서울시 강남구 테헤란로 123"
-                className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                value={detail}
-                onChange={(e) => setDetail(e.target.value)}
-                placeholder="상세 (호수·층 등, 선택)"
-                className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
               <p className="text-[11px] text-ink-muted">
                 주소는 같은 법인 모든 멤버에게 공유되며, 오프라인 면접 일정
-                메일에 자동으로 포함됩니다.
+                메일에 자동으로 포함됩니다. 사무실이 여러 곳이면 모두 등록해 두고
+                일정을 잡을 때 골라 쓸 수 있습니다.
               </p>
-              <div className="pt-1">
-                <button
-                  onClick={saveAddr}
-                  disabled={addrBusy}
-                  className="px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
-                >
-                  {addrBusy ? "저장 중..." : "주소 저장"}
-                </button>
-                <SaveMsg msg={msg} section="addr" />
-              </div>
+
+              {addresses.length > 0 ? (
+                <ul className="space-y-1.5 pt-1">
+                  {addresses.map((a) => (
+                    <li
+                      key={a.id}
+                      className="flex items-start justify-between gap-3 border border-border-default rounded-lg px-3 py-2"
+                    >
+                      <div className="text-sm text-ink">
+                        <div>{a.address}</div>
+                        {a.addressDetail && (
+                          <div className="text-xs text-ink-muted mt-0.5">
+                            {a.addressDetail}
+                          </div>
+                        )}
+                      </div>
+                      {canEdit && (
+                        <button
+                          onClick={() => deleteAddr(a.id)}
+                          aria-label="주소 삭제"
+                          className="shrink-0 p-1.5 rounded-md text-ink-muted hover:text-danger hover:bg-danger-soft transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" strokeWidth={2.25} />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-ink-muted pt-1">
+                  등록된 주소가 없습니다.
+                </p>
+              )}
+
+              {canEdit && (
+                <div className="pt-2 space-y-2">
+                  <AddressSearchButton onSelect={(value) => setAddr(value)} />
+                  <input
+                    value={addr}
+                    onChange={(e) => setAddr(e.target.value)}
+                    placeholder="예: 서울시 강남구 테헤란로 123"
+                    className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <input
+                    value={detail}
+                    onChange={(e) => setDetail(e.target.value)}
+                    placeholder="상세 (호수·층 등, 선택)"
+                    className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <div>
+                    <button
+                      onClick={addAddr}
+                      disabled={addrBusy}
+                      className="px-3 py-1.5 rounded-md bg-primary hover:bg-primary-deep text-surface text-sm font-medium disabled:opacity-50"
+                    >
+                      {addrBusy ? "추가 중..." : "주소 추가"}
+                    </button>
+                    <SaveMsg msg={msg} section="addr" />
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 

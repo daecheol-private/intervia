@@ -14,7 +14,7 @@
  *  - 새 interview_schedules row 생성 (status='pending')
  *  - candidates.stage = 'round1_scheduling'
  *  - 후보자에게 메일 발송 (/schedule/[token])
- *  - 회사 주소가 비어있고 입력이 들어오면 organizations 에 저장
+ *  - 법인에 등록된 면접 장소 주소가 하나도 없고 입력이 들어오면 org_addresses 에 저장
  *
  * GET: 이 공고·차수의 직전 제안에 쓰인 공유 수신자 반환 — 모달이 프리필한다.
  */
@@ -24,7 +24,9 @@ import {
   candidates,
   interviewSchedules,
   organizations,
+  orgAddresses,
 } from "@/lib/schema";
+import { ensureOrgAddress } from "@/lib/org-address";
 import { and, desc, eq, inArray, sql, isNull, isNotNull, or } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
@@ -149,24 +151,22 @@ export async function POST(
   if (body.candidateIds.length > 50)
     return new Response("한 번에 최대 50명까지 가능합니다.", { status: 400 });
 
-  // 회사 주소 자동 저장 (org 에 아직 주소 없으면)
+  // 메일·알림톡 발신자 표기에 쓰는 법인명.
   const [org] = await db
-    .select()
+    .select({ name: organizations.name })
     .from(organizations)
     .where(eq(organizations.id, job.orgId));
-  if (
-    org &&
-    address &&
-    !org.officeAddress &&
-    !modeOnline
-  ) {
-    await db
-      .update(organizations)
-      .set({
-        officeAddress: address,
-        officeAddressDetail: addressDetail,
-      })
-      .where(eq(organizations.id, job.orgId));
+
+  // 회사 주소 자동 저장 — 법인에 등록된 주소가 하나도 없을 때만.
+  // (주소가 이미 있으면 여기서 입력한 건 일회성 장소로 보고 주소록을 건드리지 않는다.)
+  if (address && !modeOnline) {
+    const saved = await db
+      .select({ id: orgAddresses.id })
+      .from(orgAddresses)
+      .where(eq(orgAddresses.orgId, job.orgId))
+      .limit(1);
+    if (saved.length === 0)
+      await ensureOrgAddress(job.orgId, address, addressDetail);
   }
 
   // 대상 후보자 로드 + 검증 — 일정 제시에 쓰는 컬럼만(id·name·email·phone·stage·outcome).

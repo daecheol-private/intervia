@@ -12,7 +12,9 @@ export const organizations = sqliteTable("organizations", {
   name: text("name").notNull(),
   bizRegistrationNo: text("biz_registration_no"),
   emailDomain: text("email_domain"),
-  // 오프라인 면접 시 후보자에게 안내될 회사 주소 (1차 면접 스케쥴 제시에서 사용)
+  // [deprecated] 단일 회사 주소. 사무실이 여러 곳인 법인을 위해 org_addresses(다건)로
+  // 이관됨 — 읽기·쓰기는 모두 org_addresses 를 쓴다. 컬럼은 백필 소스·이력 보존용으로
+  // 유지(DROP 금지).
   officeAddress: text("office_address"),
   officeAddressDetail: text("office_address_detail"),
   // 스캔 PDF(텍스트 레이어 없음) 이력서를 Gemini 멀티모달 OCR 로 처리할지.
@@ -65,6 +67,24 @@ export const organizations = sqliteTable("organizations", {
   domainIdx: index("idx_org_email_domain").on(t.emailDomain),
   // 서브도메인은 법인당 고유 (NULL 다중 허용 — SQLite unique 는 NULL 을 구분)
   subdomainIdx: uniqueIndex("idx_org_subdomain").on(t.subdomain),
+}));
+
+// 오프라인 면접 장소로 쓰는 회사 주소. 사무실이 여러 곳인 법인이 면접마다 골라 쓸 수
+// 있도록 다건으로 저장한다(명칭 없음 — 주소 자체로 구분). 일정 제시 시 여기서 선택하거나
+// 일회성 장소를 직접 입력한다.
+export const orgAddresses = sqliteTable("org_addresses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  // 다음 우편번호 검색 결과는 "(06234) 서울 강남구 테헤란로 123" 형태로 우편번호를 포함한다.
+  address: text("address").notNull(),
+  addressDetail: text("address_detail"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+}, (t) => ({
+  orgIdx: index("idx_org_addresses_org").on(t.orgId),
 }));
 
 export const users = sqliteTable("users", {

@@ -56,6 +56,9 @@
 | POST | `/api/orgs/coupons/redeem` | 🏢 (admin) | 쿠폰 등록 — `{code}`(16자리, 대시 무관). `redeemCoupon`(원자적·멱등) 으로 토큰 지급. 성공 `{granted, balance, groupName}`. 실패 400 `{error, code}` (`invalid`/`expired`/`group_redeemed`). **법인당 한 그룹 1개**(DB 유니크 강제). 멤버 불가(org_admin only). rate-limit 10회/10분 |
 | GET | `/api/orgs/me/member-guides` | 🔒 | 끈(다시 보지 않기) 페이지 가이드 키 `{seen: string[]}` — **법인담당자·면접관 공통**. 공고/후보 페이지 첫 진입 시 자동 가이드, 끄기 전엔 매번. system_admin 은 가이드 미마운트라 사실상 빈 배열 |
 | POST | `/api/orgs/me/member-guides` | 🔒 | 가이드 끄기 기록 — `{key}`(`job_page`/`candidate_page`)를 `users.seen_member_guides`에 누적(멱등). 가이드 끝 '다시 보지 않기' 체크 후 종료 시에만 호출(키별=페이지별) |
+| GET | `/api/orgs/me/addresses` | 🔒 | 법인 면접 장소 주소 목록 `{addresses: [{id, address, addressDetail}]}` (id 순). 일정 제시 모달이 선택지로 사용 — 멤버도 조회 가능 |
+| POST | `/api/orgs/me/addresses` | 🛡️ | 주소 추가 `{address, addressDetail?}`. 같은 주소면 새 행 대신 기존 행 반환(`{address, duplicated: true}`), 20개 초과 400 |
+| DELETE | `/api/orgs/me/addresses/[id]` | 🛡️ | 주소 삭제. 타 법인 주소는 404 (org_id 조건 동시 적용). 확정된 일정·발송 메일에는 영향 없음 |
 | GET/PUT | `/api/orgs/me/culture-fit` | 🔒 / 🛡️ | 컬처핏 프로필 조회·저장 (`CultureFitProfile` — 인재상 + 정성 항목 6종). Big Five 선호 특성은 공고 단위로 이동 (`job_postings.trait_profile`) — 법인 JSON 의 `traitProfile` 은 레거시·미사용 |
 | PUT | `/api/orgs/me/branding` | 🛡️ | 지원 페이지 포인트 컬러 저장 — `{brandColor: "#rrggbb" \| null}`. 형식 위반 400 |
 | GET/POST/DELETE | `/api/orgs/me/branding/logo` | 🔒 / 🛡️ / 🛡️ | 지원 페이지 로고 — GET 미리보기 스트리밍(멤버 가능), POST multipart `file`(PNG·JPG·WebP, 2MB, 매직바이트 검증, 교체 시 이전 파일 삭제), DELETE 제거 |

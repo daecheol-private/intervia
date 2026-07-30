@@ -14,8 +14,8 @@
 | name | TEXT NOT NULL | 법인명 |
 | biz_registration_no | TEXT NULL | 사업자등록번호 (검색용) |
 | email_domain | TEXT NULL | 자동매칭 키. 공용도메인(gmail 등)은 저장 X. **UNIQUE 아님** — 같은 도메인 1:N 법인 허용(비유니크 인덱스, `lib/schema.ts`). check-email 이 `matchedOrgs[]` 배열로 반환해 사용자가 합류할 법인 선택 (ARCHITECTURE §8) |
-| office_address | TEXT NULL | 오프라인 면접 시 후보자에게 안내될 회사 주소 (1차 면접 스케쥴 제시에 사용) |
-| office_address_detail | TEXT NULL | 상세 주소 |
+| office_address | TEXT NULL | **[deprecated]** 단일 회사 주소. 사무실 여러 곳을 지원하려고 `org_addresses`(다건)로 이관됨(0062 마이그레이션에서 첫 행으로 백필). 읽기·쓰기는 모두 `org_addresses`. 백필 소스·이력 보존용으로 유지(DROP 금지) |
+| office_address_detail | TEXT NULL | **[deprecated]** 위와 동일 |
 | allow_scan_ocr | INTEGER NOT NULL DEFAULT 0 | **OCR 개인정보 게이트** (boolean) — 스캔 PDF(텍스트 레이어 없음)를 Gemini 멀티모달 OCR 로 처리할지. OCR 은 마스킹 전 **원본** 이력서를 AI 수탁자에 전송하므로 처리방침·동의를 정비한 법인만 ON. OFF 면 스캔 PDF 는 평가 실패 → 재업로드 안내 |
 | culture_fit_profile | TEXT NULL | 법인 전반의 선호 인재상·정성 평가 기준 (`CultureFitProfile` JSON — 선호 인재상 + 정성 평가 항목 6종). `/org/settings` 에서 입력 — JD 와 별개로 AI 이력서 평가·면접 질문지(1·2차) 생성에 자동 반영. NULL=미설정. **존재 여부가 인성검사 출제 게이트**. JSON 내 `traitProfile` 은 레거시 — Big Five 선호 특성은 `job_postings.trait_profile` 로 이동(2026-06), 읽기 경로는 전부 공고 값 사용 |
 | logo_file_key | TEXT NULL | **법인 브랜딩** — 회사 로고 파일 키(`saveFile()` 반환: Blob URL 또는 로컬 파일명). 지원 페이지(`/apply/[token]`)·AI 면접 화면·법인 설정 미리보기에 스트리밍 프록시로 노출(Blob URL 비노출) + **지원자 발송 메일 전체**에 CID 인라인 첨부로 동봉(`lib/mailer.ts` `getOrgEmailBranding`). NULL=미설정 (0053) |
@@ -30,6 +30,22 @@
 | verification_note | TEXT NULL | 운영자 검토 메모 |
 | created_by_user_id | INTEGER NULL | 최초 등록자 (FK는 없음 — 순환 의존 회피) |
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+
+## org_addresses
+
+오프라인 면접 장소로 쓰는 회사 주소. 사무실이 여러 곳인 법인이 면접마다 골라 쓸 수 있도록 다건으로 저장한다 (명칭 필드 없음 — 주소 자체로 구분). 법인당 최대 20개(`lib/org-address.ts` `MAX_ORG_ADDRESSES`, API 에서 강제).
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| org_id | INTEGER NOT NULL FK organizations(id) ON DELETE CASCADE | 테넌트 |
+| address | TEXT NOT NULL | 다음 우편번호 검색 결과는 `(06234) 서울 강남구 테헤란로 123 (건물명)` 형태로 우편번호 포함. 직접 입력도 허용 |
+| address_detail | TEXT NULL | 상세 (호수·층 등) |
+| created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | 목록 정렬은 id 순 |
+
+인덱스: `idx_org_addresses_org (org_id)`.
+
+일정 제시(`POST /api/jobs/[id]/schedule-propose`)에서 오프라인 주소를 입력했을 때, **법인에 등록된 주소가 하나도 없을 때만** 여기에 자동 저장한다(`ensureOrgAddress`). 이미 주소가 있으면 입력값은 그 면접 한정 장소로 보고 주소록을 건드리지 않는다. 확정된 일정에는 주소 문자열이 `interview_schedules` 에 복사되므로, 여기서 주소를 지워도 과거 일정·발송된 메일에는 영향이 없다.
 
 ## users
 
@@ -768,6 +784,7 @@ organizations ─< users (org_id, role)
       ├─< org_join_requests ─> users (user_id)
       ├─< org_invites (job_id ─> 공유한 공고)
       ├─< org_smtp_configs / org_zoom_configs (각 1:1)
+      ├─< org_addresses (면접 장소, 다건)
       ├─< token_wallets (1:1)
       ├─< token_ledger
       ├─< payment_orders
