@@ -9,6 +9,7 @@
  *  - 사용자가 다른 법인 멤버 → 거절
  *  - system_admin 은 거절 (이미 전체 접근)
  */
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { orgInvites, users, jobInterviewers, orgJoinRequests } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -122,15 +123,18 @@ export async function POST(
 
   // 승인해야만 신규 직원이 입장 가능 — 매일 로그인 안 하는 관리자도 메일로 인지.
   // (자가 합류요청 경로 orgs/join-requests 와 동일하게 email:true)
-  void notifyOrgAdmins(
-    inv.orgId,
-    {
-      type: "join_request",
-      title: `${me!.name} (${me!.email}) 님이 공고 공유로 합류를 요청했습니다`,
-      href: "/org/members",
-      payload: { userId: me!.id, orgId: inv.orgId, jobId: inv.jobId },
-    },
-    { email: true }
+  // after() — 응답 반환 후 실행 보장. void fire-and-forget 은 서버리스 suspend 로 유실됨.
+  after(() =>
+    notifyOrgAdmins(
+      inv.orgId,
+      {
+        type: "join_request",
+        title: `${me!.name} (${me!.email}) 님이 공고 공유로 합류를 요청했습니다`,
+        href: "/org/members",
+        payload: { userId: me!.id, orgId: inv.orgId, jobId: inv.jobId },
+      },
+      { email: true }
+    ).catch((e) => console.error("[invite-accept] 법인 담당자 통지 실패:", e))
   );
 
   await deleteSession(me!.sessionToken);

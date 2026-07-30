@@ -11,6 +11,7 @@
  * email_verified_at 을 채운다(별도 인증 메일 불필요). 초대 토큰은 consume 하지 않는다 —
  * 승인 핸들러가 미사용 초대를 조회해 면접관 등록 + consume 한다.
  */
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { users, orgInvites, orgJoinRequests } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -118,15 +119,18 @@ export async function POST(req: Request) {
 
   // 승인해야만 신규 직원이 입장 가능 — 매일 로그인 안 하는 관리자도 메일로 인지.
   // (자가 합류요청 경로 orgs/join-requests 와 동일하게 email:true)
-  void notifyOrgAdmins(
-    inv.orgId,
-    {
-      type: "join_request",
-      title: `${userName} (${email}) 님이 공고 공유로 합류를 요청했습니다`,
-      href: "/org/members",
-      payload: { userId: user.id, orgId: inv.orgId, jobId: inv.jobId },
-    },
-    { email: true }
+  // after() — 응답 반환 후 실행 보장. void fire-and-forget 은 서버리스 suspend 로 유실됨.
+  after(() =>
+    notifyOrgAdmins(
+      inv.orgId,
+      {
+        type: "join_request",
+        title: `${userName} (${email}) 님이 공고 공유로 합류를 요청했습니다`,
+        href: "/org/members",
+        payload: { userId: user.id, orgId: inv.orgId, jobId: inv.jobId },
+      },
+      { email: true }
+    ).catch((e) => console.error("[signup-via-invite] 법인 담당자 통지 실패:", e))
   );
 
   return Response.json({

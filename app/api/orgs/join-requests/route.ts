@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { users, organizations, orgJoinRequests } from "@/lib/schema";
 import { and, eq, desc, count } from "drizzle-orm";
@@ -175,16 +176,21 @@ export async function POST(req: Request) {
     mailSent = false;
   }
 
-  void notifyOrgAdmins(
-    orgId,
-    {
-      type: "join_request",
-      title: `${name} (${normalizedEmail}) 님이 합류를 요청했습니다`,
-      href: "/org/members",
-      payload: { userId: user.id, orgId },
-    },
-    // 승인해야만 신규 직원이 입장 가능 — 매일 로그인 안 하는 관리자도 메일로 인지.
-    { email: true }
+  // after() — 응답 반환 후 실행 보장. void fire-and-forget 은 서버리스 suspend 로 유실됨
+  // (인앱 알림만 남고 담당자 메일은 유실되거나 수 분 뒤 다음 요청 때 나가던 원인.
+  //  운영 실측 4건 전수 대조: GOTCHAS §0-1).
+  after(() =>
+    notifyOrgAdmins(
+      orgId,
+      {
+        type: "join_request",
+        title: `${name} (${normalizedEmail}) 님이 합류를 요청했습니다`,
+        href: "/org/members",
+        payload: { userId: user.id, orgId },
+      },
+      // 승인해야만 신규 직원이 입장 가능 — 매일 로그인 안 하는 관리자도 메일로 인지.
+      { email: true }
+    ).catch((e) => console.error("[join-request] 법인 담당자 통지 실패:", e))
   );
 
   // 승인할 법인 담당자(active org_admin)가 하나도 없으면 — 예: 유일 담당자가 탈퇴해
@@ -202,14 +208,18 @@ export async function POST(req: Request) {
       )
     );
   if (activeAdmins === 0) {
-    void notifySystemAdmins(
-      {
-        type: "admin_promotion",
-        title: `「${org.name}」에 ${name} 님이 합류를 요청했으나 승인할 법인 담당자가 없습니다. 신원 확인 후 법인 담당자로 승격해 주세요.`,
-        href: `/admin/orgs/${orgId}/transfer-admin`,
-        payload: { orgId, requesterUserId: user.id },
-      },
-      { email: true }
+    after(() =>
+      notifySystemAdmins(
+        {
+          type: "admin_promotion",
+          title: `「${org.name}」에 ${name} 님이 합류를 요청했으나 승인할 법인 담당자가 없습니다. 신원 확인 후 법인 담당자로 승격해 주세요.`,
+          href: `/admin/orgs/${orgId}/transfer-admin`,
+          payload: { orgId, requesterUserId: user.id },
+        },
+        { email: true }
+      ).catch((e) =>
+        console.error("[join-request] 담당자 공석 에스컬레이션 실패:", e)
+      )
     );
   }
 
