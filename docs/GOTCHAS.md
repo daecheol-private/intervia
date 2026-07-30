@@ -332,9 +332,13 @@ Next 16 의 `after(async () => ...)` (from `next/server`) 는 Vercel 이 응답 
 같은 요청 안에서 인증메일(`await`)은 +1초, 담당자 메일(`void`)은 +292초로 갈렸고,
 일정 확정 메일(`await sendScheduleConfirmationEmails`)은 9건이 3초 안에 전량 나갔다.
 
-합류요청 3경로(`orgs/join-requests`, `auth/signup-via-invite`, `invites/[token]/accept`)는
-`after()` 로 교체됨. **`notify*` 를 `{email:true}` 로 호출하는 새 코드는 반드시 `after()` 로
-감쌀 것** — 나머지 `void notify*` 호출부(이의제기·도메인 신고·신규 법인·AI 평가 실패)는 아직 미수정.
+**`notify*` 를 `{email:true}` 로 호출하는 새 코드는 반드시 `after()` 로 감쌀 것.**
+메일이 걸린 경로는 2026-07-30 기준 전부 정리됐다 — 합류요청 3경로(`orgs/join-requests`,
+`auth/signup-via-invite`, `invites/[token]/accept`), 이의제기(`interview/[token]/appeal`),
+도메인 신고(`orgs/domain-review`), 신규 법인·동일 도메인 통지(`orgs`).
+남은 `void notify*` 는 `skipEmail`/`email:false` 라 메일이 없는 인앱·Slack 전용 호출뿐이다
+(`complete:192·253`, `stage:169`, `admin-request:76`) — 인앱 fanout 은 첫 await 라 대체로
+살아남지만, Slack 통지는 같은 이유로 유실될 수 있다.
 ⚠️ 로컬 dev 는 함수가 죽지 않아 이 버그가 **재현되지 않는다** — 로컬 통과 ≠ 운영 정상.
 
 ## 0-2. 이력서 업로드 → **자동 평가 enqueue** (과금은 평가 성공 시 후차감)

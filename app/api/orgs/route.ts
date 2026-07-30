@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { users, organizations, tokenWallets } from "@/lib/schema";
 import { eq, and, ne } from "drizzle-orm";
@@ -254,28 +255,37 @@ export async function POST(req: Request) {
     await grantWelcomeBonus(org.id, user.id);
   }
 
-  void notifySystemAdmins({
-    type: "new_org",
-    title: `신규 법인 "${org.name}" 이(가) 등록되었습니다 (대표: ${user.name})`,
-    href: "/admin/orgs",
-    payload: { orgId: org.id, userId: user.id },
-  });
+  // after() — void 는 응답 후 서버리스 suspend 로 잘려 유실된다(GOTCHAS §0-1).
+  after(() =>
+    notifySystemAdmins({
+      type: "new_org",
+      title: `신규 법인 "${org.name}" 이(가) 등록되었습니다 (대표: ${user.name})`,
+      href: "/admin/orgs",
+      payload: { orgId: org.id, userId: user.id },
+    }).catch((e) => console.error("[orgs] 신규 법인 운영자 통지 실패:", e))
+  );
 
   // 같은 도메인에 기존 법인이 있으면 그 법인 담당자들에게 통지 — 관계사 여부 교차확인(섀도우 법인 백스톱).
   // 자동검증(verified)으로 통과한 경우에도, 남의 공개 사업자번호를 도용한 사칭을 사람이 잡도록 한다.
+  // 이 알림이 도메인 신고(/api/orgs/domain-review)의 유일한 출발점이라 유실되면 사칭 탐지가 멈춘다.
   if (domainTaken) {
-    for (const existing of existingOnDomain) {
-      void notifyOrgAdmins(
-        existing.id,
-        {
-          type: "new_org",
-          title: `같은 도메인(${emailDomain})에 새 법인 "${org.name}"이(가) 등록되었습니다 — 아는 관계사인지 확인해 주세요`,
-          href: "/org/members",
-          payload: { newOrgId: org.id, domain: emailDomain },
-        },
-        { email: true }
-      );
-    }
+    const targets = existingOnDomain.map((e) => e.id);
+    after(async () => {
+      for (const existingId of targets) {
+        await notifyOrgAdmins(
+          existingId,
+          {
+            type: "new_org",
+            title: `같은 도메인(${emailDomain})에 새 법인 "${org.name}"이(가) 등록되었습니다 — 아는 관계사인지 확인해 주세요`,
+            href: "/org/members",
+            payload: { newOrgId: org.id, domain: emailDomain },
+          },
+          { email: true }
+        ).catch((e) =>
+          console.error(`[orgs] 동일 도메인 법인 통지 실패 (org=${existingId}):`, e)
+        );
+      }
+    });
   }
 
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;

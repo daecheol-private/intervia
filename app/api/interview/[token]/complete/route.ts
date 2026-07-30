@@ -273,13 +273,18 @@ export async function POST(
     // 후차감 모델 — 평가 실패 시 애초에 과금하지 않았으므로 환불도 불필요(서류평가와 동일).
     //   운영자가 reevaluate 로 재평가에 성공하면 그 시점에 1건 과금된다.
     // 평가 실패해도 면접 자체는 종료 — 면접관에게 재평가 필요 알림.
+    // 인앱만: 재평가는 화면에서 하는 작업이라 메일까지 보낼 일이 아니다(사용자 결정 2026-07-30).
     if (nextStage === "ai_evaluated") {
-      void notifyJobInterviewers(candidate!.jobId, {
-        type: "ai_interview_done",
-        title: `${candidate!.name} 후보자의 AI 면접이 종료되었습니다 (자동 평가 실패 — 재평가 필요 · 오류 코드 ${ref})`,
-        href: `/candidates/${candidate!.id}`,
-        payload: { candidateId: candidate!.id, jobId: candidate!.jobId },
-      });
+      void notifyJobInterviewers(
+        candidate!.jobId,
+        {
+          type: "ai_interview_done",
+          title: `${candidate!.name} 후보자의 AI 면접이 종료되었습니다 (자동 평가 실패 — 재평가 필요 · 오류 코드 ${ref})`,
+          href: `/candidates/${candidate!.id}`,
+          payload: { candidateId: candidate!.id, jobId: candidate!.jobId },
+        },
+        { skipEmail: true }
+      );
     }
     // 후보자에겐 기술 에러(evaluation_error)도 노출하지 않는다 — 안전 응답으로 통일.
     // 평가 실패 사실/원인은 면접관 알림·서버 로그로만 전달된다.

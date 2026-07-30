@@ -6,6 +6,7 @@
  *
  * 제출 시 DPO 에게 알림 메일 (있을 때만 — 실패해도 DB 저장은 성공 응답).
  */
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import {
   interviewSessions,
@@ -100,58 +101,63 @@ export async function POST(
     metadata: { email, reason_length: reason.length },
   });
 
-  // DPO 메일 알림 — 실패해도 제출은 성공 처리 (사용자 응답 보장)
-  void notifyDpo({
-    candidateName: candidate.name,
-    candidateEmail: email,
-    reason,
-    jobId: candidate.jobId,
-    orgId: candidate.orgId,
-  }).catch((e) => console.error("[appeal] DPO 메일 실패:", e));
-
-  // 인앱 알림 — 면접관 + 법인 관리자
+  // 아래 통지는 모두 after() — 응답 반환 후 실행 보장. void fire-and-forget 은
+  // 서버리스 suspend 로 잘려 유실된다(GOTCHAS §0-1). §37의2 는 회신 기한이 있어 유실 금지.
   const apTitle = `${candidate.name} 후보자가 AI 평가에 이의를 제기했습니다`;
   const apHref = `/candidates/${candidate.id}`;
-  // org_admin 겸직 면접관은 아래 notifyOrgAdmins 메일과 중복 — 면접관 fanout 에선 메일만 제외.
-  const adminIds = candidate.orgId
-    ? (
-        await db
-          .select({ id: users.id })
-          .from(users)
-          .where(and(eq(users.orgId, candidate.orgId), eq(users.role, "org_admin")))
-      ).map((r) => r.id)
-    : [];
-  void notifyJobInterviewers(
-    candidate.jobId,
-    {
-      type: "candidate_appeal",
-      title: apTitle,
-      href: apHref,
-      payload: { candidateId: candidate.id, jobId: candidate.jobId },
-    },
-    adminIds.length ? { excludeEmailUserIds: adminIds } : undefined
+
+  after(() =>
+    // DPO 메일 알림 — 실패해도 제출은 성공 처리 (사용자 응답 보장)
+    notifyDpo({
+      candidateName: candidate.name,
+      candidateEmail: email,
+      reason,
+      jobId: candidate.jobId,
+      orgId: candidate.orgId,
+    }).catch((e) => console.error("[appeal] DPO 메일 실패:", e))
   );
-  if (candidate.orgId) {
-    void notifyOrgAdmins(
-      candidate.orgId,
+
+  // 면접관은 인앱만 — 검토·회신 주체는 법인 담당자라 면접관 메일은 소음(사용자 결정 2026-07-30).
+  after(() =>
+    notifyJobInterviewers(
+      candidate.jobId,
       {
         type: "candidate_appeal",
         title: apTitle,
         href: apHref,
         payload: { candidateId: candidate.id, jobId: candidate.jobId },
       },
-      // PIPA §37의2 이의제기 — 관리자 검토 의무. 메일로도 통지.
-      { email: true }
+      { skipEmail: true }
+    ).catch((e) => console.error("[appeal] 면접관 알림 실패:", e))
+  );
+
+  if (candidate.orgId) {
+    const orgId = candidate.orgId;
+    after(() =>
+      notifyOrgAdmins(
+        orgId,
+        {
+          type: "candidate_appeal",
+          title: apTitle,
+          href: apHref,
+          payload: { candidateId: candidate.id, jobId: candidate.jobId },
+        },
+        // PIPA §37의2 이의제기 — 관리자 검토 의무. 메일로도 통지.
+        { email: true }
+      ).catch((e) => console.error("[appeal] 법인 담당자 통지 실패:", e))
     );
   }
+
   // 운영자(시스템 관리자)에게도 인앱+Slack — §37의2 는 7영업일 회신 기한이 있어 운영자 인지 필수.
   // 이메일은 위 notifyDpo 가 DPO 앞으로 이미 발송하므로 중복 생략.
-  void notifySystemAdmins({
-    type: "candidate_appeal",
-    title: apTitle,
-    href: "/admin/appeals",
-    payload: { candidateId: candidate.id, jobId: candidate.jobId },
-  });
+  after(() =>
+    notifySystemAdmins({
+      type: "candidate_appeal",
+      title: apTitle,
+      href: "/admin/appeals",
+      payload: { candidateId: candidate.id, jobId: candidate.jobId },
+    }).catch((e) => console.error("[appeal] 운영자 통지 실패:", e))
+  );
 
   return Response.json({ ok: true });
 }

@@ -7,6 +7,7 @@
  * 직접 차단 권한은 주지 않는다 (한 도메인을 여러 법인이 공유하는 정상 케이스에서
  * 코테넌트 간 악용·분쟁 방지) — 최종 거절/정지는 sysadmin 이 /admin/orgs 에서 판단.
  */
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { organizations, orgDomainReviews } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
@@ -96,19 +97,23 @@ export async function POST(req: Request) {
     });
 
   if (action === "report") {
-    void notifySystemAdmins(
-      {
-        type: "new_org",
-        title: `[도메인 신고] '${myOrg.name}'(${me!.email})가 같은 도메인(${myOrg.emailDomain})의 법인 '${target.name}'을 모르는 법인으로 신고 — 검토 필요`,
-        href: "/admin/orgs",
-        payload: {
-          reportedOrgId: orgId,
-          reporterOrgId: me!.orgId,
-          domain: myOrg.emailDomain,
-          reason: trimmedReason,
+    // after() — 사칭 신고는 즉시 운영자에게 닿아야 한다. void 는 서버리스 suspend 로
+    // 잘려 유실된다(GOTCHAS §0-1).
+    after(() =>
+      notifySystemAdmins(
+        {
+          type: "new_org",
+          title: `[도메인 신고] '${myOrg.name}'(${me!.email})가 같은 도메인(${myOrg.emailDomain})의 법인 '${target.name}'을 모르는 법인으로 신고 — 검토 필요`,
+          href: "/admin/orgs",
+          payload: {
+            reportedOrgId: orgId,
+            reporterOrgId: me!.orgId,
+            domain: myOrg.emailDomain,
+            reason: trimmedReason,
+          },
         },
-      },
-      { email: true }
+        { email: true }
+      ).catch((e) => console.error("[domain-review] 운영자 신고 통지 실패:", e))
     );
     logAudit(req, {
       actor: me,
