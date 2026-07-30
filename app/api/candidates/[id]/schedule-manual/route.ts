@@ -9,7 +9,8 @@
  *     modeOnline?: boolean,                 // 기본 true
  *     address?, addressDetail?,             // modeOnline=false 시 address 필수
  *     notifyCandidate?: boolean,            // true 면 후보자에게 확정 메일 발송 (기본 false)
- *     shareRecipients?: [{email, name?, userId?}]  // 일정 공유 대상(선택)
+ *     shareRecipients?: [{email, name?, userId?, report?}]  // 일정 공유 대상(선택).
+ *                                                          // report=true 면 평가 리포트 링크 동봉
  *   }
  *
  * 동작:
@@ -244,6 +245,7 @@ export async function POST(
       slot,
       notified: !!candidateMail?.sent,
       shareRecipients: share.list.map((r) => r.email),
+      shareReport: share.list.some((r) => r.report),
     },
   });
 

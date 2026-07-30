@@ -187,7 +187,13 @@ export type Schedule = {
   onlineMeetingNote: string | null;
   meetingLinkSentAt: string | null;
   /** 면접관 외에 확정·변경·취소 안내를 함께 받는 사람 (일정 제시 시 지정). */
-  shareRecipients: Array<{ email: string; name?: string; userId?: number }> | null;
+  shareRecipients: Array<{
+    email: string;
+    name?: string;
+    userId?: number;
+    /** 확정 안내 메일에 평가 리포트 공유 링크가 함께 나가는 수신자. */
+    report?: boolean;
+  }> | null;
   expiresAt: string;
   respondedAt: string | null;
   createdAt: string;

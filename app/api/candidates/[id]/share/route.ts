@@ -4,13 +4,17 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
-import { generateShareToken, shareState } from "@/lib/shared-report";
+import {
+  generateShareToken,
+  shareState,
+  SHARE_LINK_DEFAULT_DAYS,
+} from "@/lib/shared-report";
 import { addDays, sqliteTimestamp } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
-const DEFAULT_DAYS = 14;
+const DEFAULT_DAYS = SHARE_LINK_DEFAULT_DAYS;
 const MAX_DAYS = 90;
 
 type SharedReportRow = typeof sharedReports.$inferSelect;

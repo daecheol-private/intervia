@@ -1072,8 +1072,15 @@ export const interviewSchedules = sqliteTable("interview_schedules", {
   // 회의실·인사팀 담당자, 앱 계정이 없는 임원 등. userId 는 법인 멤버 선택 시에만 채워지고
   // 발송 시점에 최신 이메일을 다시 조회한다(퇴사·주소 변경 대응). 제안 건별 스냅샷이라
   // 재제안 시 새 row 에는 UI 가 직전 값을 프리필해 넘긴다.
+  // report=true 인 수신자에겐 확정·변경 안내에 평가 리포트 공유 링크(/shared/[token])가
+  // 함께 나간다 — 별도 컬럼 대신 이 스냅샷에 얹어 확정 4경로 전체에 자동 반영시킨다.
   shareRecipients: text("share_recipients", { mode: "json" })
-    .$type<Array<{ email: string; name?: string; userId?: number }> | null>(),
+    .$type<Array<{
+      email: string;
+      name?: string;
+      userId?: number;
+      report?: boolean;
+    }> | null>(),
   status: text("status", {
     enum: ["pending", "selected", "counter_proposed", "withdrawn", "cancelled"],
   })

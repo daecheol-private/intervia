@@ -14,13 +14,71 @@ import {
   jobPostings,
   interviewSessions,
   recordedInterviews,
+  sharedReports,
 } from "./schema";
 import type { InterviewEvaluation, RecordedInterviewReport } from "./schema";
-import { parseDbTimestamp } from "./utils";
+import { addDays, parseDbTimestamp, sqliteTimestamp } from "./utils";
+
+/** 공유 링크 기본 유효기간(일). 발급 UI·자동 발급 공통 기본값. */
+export const SHARE_LINK_DEFAULT_DAYS = 14;
 
 /** 무인증 공유 토큰 — "sr_" + 192bit. interview accessToken 과 동일한 추측 불가 패턴. */
 export function generateShareToken(): string {
   return "sr_" + randomBytes(24).toString("hex");
+}
+
+/**
+ * 활성 공유 링크를 보장한다 — 있으면 재사용, 없으면 발급.
+ *
+ * `POST /api/candidates/[id]/share`(수동 발급)와 달리 **기존 링크를 폐기하지 않는다**.
+ * 일정 확정 메일처럼 시스템이 자동으로 링크를 첨부하는 경로가 이미 배포된 링크를
+ * 무효화하면, 먼저 링크를 받은 사람이 영문도 모르고 접근을 잃는다.
+ *
+ * minValidUntil 은 만료 하한 — 재사용 링크가 그보다 먼저 끊기면 연장한다(폐기 아님).
+ */
+export async function ensureActiveShareLink(opts: {
+  candidateId: number;
+  orgId: number | null;
+  createdByUserId?: number | null;
+  /** 최소 이 시각까지 유효해야 함. 면접 후에 나오는 평가를 열람하므로 면접일 이후로 잡는다. */
+  minValidUntil?: Date;
+}): Promise<{ token: string; expiresAt: string; created: boolean }> {
+  const floor = addDays(new Date(), SHARE_LINK_DEFAULT_DAYS);
+  const target =
+    opts.minValidUntil && opts.minValidUntil.getTime() > floor.getTime()
+      ? opts.minValidUntil
+      : floor;
+
+  const rows = await db
+    .select()
+    .from(sharedReports)
+    .where(eq(sharedReports.candidateId, opts.candidateId))
+    .orderBy(desc(sharedReports.createdAt));
+  const active = rows.find((r) => shareState(r) === "active");
+
+  if (active) {
+    if (parseDbTimestamp(active.expiresAt).getTime() < target.getTime()) {
+      const expiresAt = sqliteTimestamp(target);
+      await db
+        .update(sharedReports)
+        .set({ expiresAt })
+        .where(eq(sharedReports.id, active.id));
+      return { token: active.token, expiresAt, created: false };
+    }
+    return { token: active.token, expiresAt: active.expiresAt, created: false };
+  }
+
+  const [row] = await db
+    .insert(sharedReports)
+    .values({
+      candidateId: opts.candidateId,
+      orgId: opts.orgId ?? null,
+      token: generateShareToken(),
+      createdByUserId: opts.createdByUserId ?? null,
+      expiresAt: sqliteTimestamp(target),
+    })
+    .returning();
+  return { token: row.token, expiresAt: row.expiresAt, created: true };
 }
 
 export type ShareState = "active" | "expired" | "revoked";

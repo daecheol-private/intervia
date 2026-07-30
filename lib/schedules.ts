@@ -428,9 +428,18 @@ export function buildScheduleShareEmail(opts: {
   pendingMeetingLink?: boolean;
   /** 가입 멤버 수신자에게만 전달 — 후보자 상세 CTA. */
   detailUrl?: string | null;
+  /** 평가 리포트 공유 링크(/shared/[token]) — 제시자가 이 수신자에게 지정했을 때만. */
+  reportUrl?: string | null;
+  /** 위 링크 만료 시각(DB 타임스탬프) — 있으면 안내 문구에 날짜 표기. */
+  reportExpiresAt?: string | null;
   round?: ScheduleRound;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, orgName, slot, kind, modeOnline, meetingUrl } = opts;
+  // 취소 안내에는 평가 링크를 넣지 않는다 — 호출부에서도 막지만 빌더에서 한 번 더.
+  const reportUrl = kind === "cancelled" ? null : (opts.reportUrl ?? null);
+  const reportExpiry = opts.reportExpiresAt
+    ? formatLocalDate(opts.reportExpiresAt)
+    : null;
   const fullAddress = fullAddressLine(opts.address, opts.addressDetail);
   const rl = roundLabel(opts.round);
   const slotStr = formatSlotKst(slot);
@@ -455,12 +464,17 @@ export function buildScheduleShareEmail(opts: {
     kind === "cancelled" && opts.cancelReason?.trim()
       ? `\n· 사유: ${opts.cancelReason.trim()}`
       : "";
+  const reportText = reportUrl
+    ? `\n\n[평가 리포트]\n${candidateName} 후보자의 평가 결과를 아래 링크에서 열람하실 수 있습니다.\n${reportUrl}${
+        reportExpiry ? `\n(${reportExpiry} 까지 유효)` : ""
+      }\n※ 링크를 가진 사람은 누구나 열람할 수 있습니다. 전달하지 말아 주세요.`
+    : "";
   const text = `${greeting}
 
 · 후보자: ${candidateName}
 · 공고: ${jobTitle}
 · 일시: ${slotStr}
-· 방식: ${modeText}${meetingUrl && kind !== "cancelled" ? `\n· 미팅 링크: ${meetingUrl}` : ""}${reasonLine}${onlineNote ? `\n\n※ ${onlineNote}` : ""}${opts.detailUrl ? `\n\n자세히 보기: ${opts.detailUrl}` : ""}
+· 방식: ${modeText}${meetingUrl && kind !== "cancelled" ? `\n· 미팅 링크: ${meetingUrl}` : ""}${reasonLine}${onlineNote ? `\n\n※ ${onlineNote}` : ""}${reportText}${opts.detailUrl ? `\n\n자세히 보기: ${opts.detailUrl}` : ""}
 
 본 안내는 면접 일정 공유 대상으로 지정되어 발송되었습니다.
 Intervia 채용팀`;
@@ -510,6 +524,16 @@ Intervia 채용팀`;
       ${
         kind !== "cancelled"
           ? `<p style="font-size:12px;color:#64748b;margin:14px 0 0;line-height:1.6;">첨부된 캘린더 파일(.ics) 로 본인 캘린더에 등록하실 수 있습니다.</p>`
+          : ""
+      }
+      ${
+        reportUrl
+          ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:16px 0 0;">
+        <p style="margin:0 0 6px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">평가 리포트</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.6;">${esc(candidateName)} 후보자의 평가 결과를 아래에서 열람하실 수 있습니다.${reportExpiry ? ` (${reportExpiry} 까지 유효)` : ""}</p>
+        <a href="${reportUrl}" style="display:inline-block;background:${cta.bg};color:${cta.fg};text-decoration:none;font-weight:600;padding:10px 22px;border-radius:10px;font-size:13px;">평가 결과 보기</a>
+        <p style="margin:12px 0 0;font-size:11px;color:#94a3b8;line-height:1.6;">링크를 가진 사람은 누구나 열람할 수 있습니다. 다른 사람에게 전달하지 말아 주세요.</p>
+      </div>`
           : ""
       }
       ${

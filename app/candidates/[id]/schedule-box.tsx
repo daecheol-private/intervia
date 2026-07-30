@@ -221,6 +221,12 @@ export function ScheduleBox({
               .map((r) => (r.name ? `${r.name}(${r.email})` : r.email))
               .join(", ")}
           </span>
+          {/* 평가 결과까지 나가는 건 일정 안내보다 민감하다 — 화면에서 드러나야 한다. */}
+          {schedule.shareRecipients.some((r) => r.report) && (
+            <span className="ml-1.5 inline-flex items-center rounded-full bg-primary-soft text-primary-deep px-2 py-0.5 text-[11px] font-semibold">
+              평가 리포트 포함
+            </span>
+          )}
         </div>
       )}
 

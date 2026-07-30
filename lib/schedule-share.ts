@@ -10,8 +10,10 @@
  *   rescheduled — 확정본을 변경 재제시해 기존 일정이 무효가 됨 (새 시간은 미정)
  *   cancelled   — 지원자 철회로 일정 자체가 사라짐
  *
- * 본문에는 후보자 이름·공고·일시·장소만 담는다. 연락처·이력서·평가는 넣지 않는다 —
+ * 본문에는 후보자 이름·공고·일시·장소만 담는다. 연락처·이력서는 넣지 않는다 —
  * 외부 주소 오타 시 유출 범위를 최소화하기 위한 의도적 제한.
+ * 예외는 평가 리포트 링크(recipient.report) — 제시자가 수신자별로 명시 선택했을 때만
+ * 확정·변경 안내에 읽기 전용 공유 링크를 덧붙인다(취소 안내에는 넣지 않는다).
  */
 import { db } from "./db";
 import {
@@ -26,12 +28,21 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { sendMail, isSmtpAvailable } from "./mailer";
 import { buildScheduleShareEmail, buildIcsInvite, roundLabel, type Slot } from "./schedules";
 import { resolveMailBaseUrl } from "./notifications";
+import { ensureActiveShareLink, SHARE_LINK_DEFAULT_DAYS } from "./shared-report";
+import { addDays } from "./utils";
+import { logAudit } from "./audit";
 
 export type ShareRecipient = {
   email: string;
   name?: string;
   /** 법인 멤버로 선택된 경우만 — 발송 시점에 최신 이메일을 다시 조회한다. */
   userId?: number;
+  /**
+   * 확정·변경 안내에 평가 리포트 공유 링크(/shared/[token])를 함께 보낼지.
+   * 별도 컬럼 대신 수신자 스냅샷에 얹는다 — 마이그레이션 없이 확정 4경로 전체에
+   * 자동 반영되고, 나중에 수신자별로 갈라 줄 여지도 남는다.
+   */
+  report?: boolean;
 };
 
 /** 확정 1건당 추가 발송량 상한 — 메일 일일 예산 보호 + 오발송 시 유출 범위 제한. */
@@ -80,7 +91,12 @@ export function normalizeShareRecipients(
       typeof userIdRaw === "number" && Number.isInteger(userIdRaw) && userIdRaw > 0
         ? userIdRaw
         : undefined;
-    out.push({ email: normalized, name, userId });
+    // 평가 열람은 명시 opt-in — true 가 아닌 값(문자열 "true" 포함)은 전부 미포함 처리.
+    const report =
+      typeof raw === "object" && (raw as ShareRecipient).report === true
+        ? true
+        : undefined;
+    out.push({ email: normalized, name, userId, report });
   }
   if (out.length > MAX_SHARE_RECIPIENTS)
     return {
@@ -171,6 +187,43 @@ export async function sendScheduleShareEmails(opts: {
             : [sched.address, sched.addressDetail].filter(Boolean).join(" ") || "미정",
         });
 
+  // 평가 리포트 링크 — 수신자 중 명시 선택이 있고, 취소 안내가 아닐 때만.
+  // 후보자당 활성 링크 1개를 재사용한다(수동 발급분 포함) — 새로 발급하면 먼저 링크를
+  // 받은 사람이 끊긴다. 면접 뒤에 나오는 평가를 열람해야 하므로 만료 하한은 면접일 이후.
+  let reportUrl: string | null = null;
+  let reportExpiresAt: string | null = null;
+  if (kind !== "cancelled" && list.some((r) => r.report)) {
+    try {
+      const link = await ensureActiveShareLink({
+        candidateId: sched.candidateId,
+        orgId: sched.orgId,
+        minValidUntil: addDays(new Date(slot.start), SHARE_LINK_DEFAULT_DAYS),
+      });
+      reportUrl = `${resolveMailBaseUrl()}/shared/${link.token}`;
+      reportExpiresAt = link.expiresAt;
+      if (link.created)
+        logAudit(null, {
+          actorRole: "system",
+          action: "shared_report.create",
+          resourceType: "candidate",
+          resourceId: sched.candidateId,
+          orgId: sched.orgId,
+          jobId: sched.jobId,
+          metadata: {
+            trigger: "schedule_share",
+            scheduleId: sched.id,
+            recipients: list.filter((r) => r.report).map((r) => r.email),
+          },
+        });
+    } catch (e) {
+      // 링크 발급 실패가 일정 안내 자체를 막지는 않는다 — 일정 통지가 더 시급하다.
+      console.error(
+        "[schedule-share] 평가 공유 링크 발급 실패",
+        e instanceof Error ? e.message : e
+      );
+    }
+  }
+
   const excluded = new Set(
     [...(opts.excludeEmails ?? [])].map((e) => e.trim().toLowerCase())
   );
@@ -209,6 +262,9 @@ export async function sendScheduleShareEmails(opts: {
         cancelReason: opts.cancelReason ?? null,
         // 미가입 외부 수신자에게는 링크를 주지 않는다 — 로그인 벽에 막힌다.
         detailUrl: r.userId != null ? detailUrl : null,
+        // 평가 링크는 지정된 수신자에게만 — 같은 목록 안에서도 사람마다 갈린다.
+        reportUrl: r.report ? reportUrl : null,
+        reportExpiresAt: r.report ? reportExpiresAt : null,
         round: sched.round,
       });
       await sendMail({

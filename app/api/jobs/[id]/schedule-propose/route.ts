@@ -6,7 +6,8 @@
  *  - slots: [{start, end}]   (1~10개, 미래 시각)
  *  - modeOnline: boolean
  *  - address?, addressDetail?  (modeOnline=false 시 필수)
- *  - shareRecipients?: [{email, name?, userId?}]  일정 확정·변경·취소를 함께 받을 사람(선택)
+ *  - shareRecipients?: [{email, name?, userId?, report?}]  일정 확정·변경·취소를 함께 받을 사람(선택).
+ *    report=true 면 확정·변경 안내에 평가 리포트 공유 링크가 함께 나간다(취소 안내엔 미포함).
  *
  * 동작:
  *  - 각 후보자별로 기존 active 스케쥴(pending/counter_proposed) 을 'cancelled' 로 마킹
@@ -382,6 +383,8 @@ export async function POST(
       failed: results.filter((r) => r.status === "failed").length,
       // 후보자 정보가 면접관 외 누구에게 나가는지 추적 — 주소 자체를 남긴다(내부 감사용).
       shareRecipients: share.list.map((r) => r.email),
+      // 평가 결론까지 나가는 지정이면 별도 표시 — 일정 정보보다 민감하다.
+      shareReport: share.list.some((r) => r.report),
     },
   });
 

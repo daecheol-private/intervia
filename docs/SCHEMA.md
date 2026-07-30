@@ -288,7 +288,7 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 | selected_slot | JSON NULL | 지원자가 선택한 슬롯 `{start, end}` |
 | counter_slots | JSON NULL | 지원자가 역제시한 슬롯 후보 |
 | candidate_note | TEXT NULL | 지원자 코멘트 (역제시·취소 사유 등) |
-| share_recipients | JSON NULL | 일정 공유 수신자 `[{email, name?, userId?}]` — 면접관이 아닌 회의실·인사팀 담당자, 미가입 임원. 제안 시점 입력(최대 10명), 건별 스냅샷. `userId` 는 법인 멤버 선택분이며 발송 시점에 최신 이메일을 재조회(비활성 계정 skip). 확정·변경·취소 시 `lib/schedule-share.ts` 가 발송 |
+| share_recipients | JSON NULL | 일정 공유 수신자 `[{email, name?, userId?, report?}]` — 면접관이 아닌 회의실·인사팀 담당자, 미가입 임원. 제안 시점 입력(최대 10명), 건별 스냅샷. `userId` 는 법인 멤버 선택분이며 발송 시점에 최신 이메일을 재조회(비활성 계정 skip). 확정·변경·취소 시 `lib/schedule-share.ts` 가 발송. `report:true` 면 확정·변경 안내에 평가 리포트 공유 링크(`shared_reports` 활성 토큰 재사용, 없으면 자동 발급 — 만료 하한 면접일+14일)를 동봉. 취소 안내엔 넣지 않음 |
 | status | TEXT NOT NULL DEFAULT 'pending' | 라이프사이클 아래 참조 |
 | proposed_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 슬롯을 제시한 면접관 |
 | expires_at | TEXT NOT NULL | 응답 기한 |
