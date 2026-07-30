@@ -32,6 +32,46 @@ import {
 
 export type SpeakerRole = "candidate" | "interviewer" | "unknown";
 
+/**
+ * 녹음 오디오 파트 — 긴 면접은 여러 파트로 나눠 각각 전사한다.
+ *
+ * 왜 나누나: 40분 이상을 한 번에 전사시키면 모델이 성실도를 잃는다(2026-07-30 운영 실측 —
+ * 42분 녹음이 61턴으로 뭉치고 타임스탬프를 실제의 1.8배로 지어냄, 30분 녹음은 뒤 22% 누락).
+ * 파트를 나누면 각 요청의 부담이 작아져 뭉침·누락·시각 환각이 함께 사라진다.
+ *
+ * `recorded_interviews.audio_blob_key`(text) 에 단일 키(기존·업로드 모드) 또는 파트 배열
+ * JSON 을 담는다 — 마이그레이션 없이 확장하기 위한 인코딩. 워커는 한 실행에 한 파트만
+ * 전사하고 남은 파트를 다시 써 넣어(status='queued') 다음 실행으로 넘긴다.
+ */
+export type AudioPart = { key: string; offsetMs: number; index: number };
+
+export function parseAudioParts(value: string | null | undefined): AudioPart[] {
+  if (!value) return [];
+  if (!value.startsWith("[")) return [{ key: value, offsetMs: 0, index: 0 }];
+  try {
+    const arr = JSON.parse(value) as Array<{ k?: string; o?: number; i?: number }>;
+    return arr
+      .filter((p): p is { k: string; o?: number; i?: number } => typeof p?.k === "string")
+      .map((p, n) => ({
+        key: p.k,
+        offsetMs: Math.max(0, Math.round(Number(p.o) || 0)),
+        index: Number.isInteger(p.i) ? Number(p.i) : n,
+      }));
+  } catch {
+    return [{ key: value, offsetMs: 0, index: 0 }];
+  }
+}
+
+export function serializeAudioParts(parts: AudioPart[]): string | null {
+  if (parts.length === 0) return null;
+  // 단일 파트이고 오프셋도 0 이면 기존 포맷(평문 키) 유지 — 업로드 모드와 하위호환.
+  if (parts.length === 1 && parts[0].offsetMs === 0 && parts[0].index === 0)
+    return parts[0].key;
+  return JSON.stringify(
+    parts.map((p) => ({ k: p.key, o: p.offsetMs, i: p.index }))
+  );
+}
+
 export type TranscribedSegment = {
   speakerLabel: string;
   startMs: number | null;
@@ -46,41 +86,106 @@ export type TranscribedSegment = {
  * baseMs: 라이브 청크의 누적 시작 오프셋(ms) — 청크 내 상대 시각에 더해 절대 시각화.
  */
 /**
- * 전사 정확도용 직무 맥락 힌트 — 해당 분야 전문 용어·약어·고유명사를 정확히 받아쓰게 한다.
+ * 전사 정확도용 맥락 힌트 — 해당 분야 전문 용어·약어·고유명사를 정확히 받아쓰게 한다.
  * (예: 보안 직무면 "HMAC/SAML/SOAR/OAuth" 등을 그 분야 전문가처럼 표기)
+ *
+ * 지원자·면접관 이름과 이력서 발췌까지 넣는 이유: 음성만으로는 사람 이름·회사명·학교명이
+ * 거의 매번 틀린다(실측). **이 힌트는 전사 단계에만 쓴다** — 후속 역할배정·평가 프롬프트는
+ * 기존대로 maskText 를 거치므로, 실명이 평가 LLM 에 흘러가지는 않는다. 전사가 정확해지면
+ * 오히려 maskText 의 known-PII 매칭이 정확해져 마스킹 품질도 같이 오른다.
  */
-export function buildTranscriptionDomainHint(job: {
-  position: string;
-  level?: string | null;
-  responsibilities?: string | null;
-  requirements?: string | null;
-}): string {
+export function buildTranscriptionDomainHint(
+  job: {
+    position: string;
+    level?: string | null;
+    responsibilities?: string | null;
+    requirements?: string | null;
+  },
+  people?: {
+    candidateName?: string | null;
+    interviewerNames?: string[];
+    resumeExcerpt?: string | null;
+  }
+): string {
   const parts = [
+    people?.candidateName ? `지원자 이름: ${people.candidateName}` : "",
+    people?.interviewerNames?.length
+      ? `면접관 이름: ${people.interviewerNames.join(", ")}`
+      : "",
     `직무: ${job.position}${job.level ? ` (${job.level})` : ""}`,
     job.requirements ? `자격요건: ${job.requirements}` : "",
     job.responsibilities ? `주요업무: ${job.responsibilities}` : "",
+    people?.resumeExcerpt
+      ? `지원자 이력서 발췌(회사·학교·기술 표기 참고):\n${people.resumeExcerpt.slice(0, 2500)}`
+      : "",
   ].filter(Boolean);
-  return parts.join("\n").slice(0, 1000);
+  return parts.join("\n").slice(0, 4000);
+}
+
+/**
+ * 모델이 낸 화자 라벨 정규화. 숫자만 뽑아 "화자N" 으로 통일한다 —
+ * 실제 운영 전사에서 "화2", "3" 같은 파편 라벨이 섞여 같은 사람이 별개 화자로 갈라졌다(2026-07-30 실측).
+ * prefix 는 파트 분할 전사에서 파트 간 라벨 충돌(파트마다 화자1 이 다른 사람)을 막는다.
+ */
+function normalizeSpeakerLabel(
+  raw: string | undefined,
+  prefix?: string
+): string {
+  const s = (raw ?? "").toString().trim();
+  const n = s.match(/(\d+)/)?.[1];
+  const base = n ? `화자${n}` : s.slice(0, 12) || "화자1";
+  return prefix ? `${prefix}#${base}` : base;
 }
 
 export async function transcribeAudio(
   audioBase64: string,
   mimeType: string,
-  opts?: { baseMs?: number; timeoutMs?: number; domainHint?: string }
+  opts?: {
+    baseMs?: number;
+    timeoutMs?: number;
+    domainHint?: string;
+    /** 여러 파트로 쪼갠 녹음일 때 이 파트의 위치 안내(경계에서 말이 잘릴 수 있음을 알림). */
+    partHint?: string;
+    /** 파트별 화자 라벨 고유화 접두어(예: "P2") — 파트마다 화자1 이 다른 사람일 수 있으므로. */
+    labelPrefix?: string;
+  }
 ): Promise<TranscribedSegment[]> {
   const baseMs = opts?.baseMs ?? 0;
-  // 직무 맥락 주입 — 해당 분야 전문어를 정확히 받아쓰되, 안 들린 말은 지어내지 않게.
+  // 직무·인물 맥락 주입 — 전문어와 고유명사를 정확히 받아쓰되, 안 들린 말은 지어내지 않게.
   const domainBlock = opts?.domainHint
     ? `
-- **직무 맥락(전문 용어 정확도용)**: 이 면접은 아래 분야다. 이 분야의 전문 용어·기술명·약어·고유명사가 등장하면 그 분야 전문가가 알아듣듯 정확히 표기하라. 단, **들리지 않은 말을 지어내지 말 것 — 어디까지나 받아쓰기다.**
+
+## 맥락 (고유명사·전문용어 표기 참고)
+아래는 이 면접의 배경이다. 등장하는 이름·회사명·학교명·기술명·약어는 그 분야 전문가가
+알아듣듯 정확히 표기하라. 단 **들리지 않은 말을 지어내는 근거로 쓰지 말 것 — 받아쓰기다.**
 ${opts.domainHint}`
     : "";
-  const prompt = `이 오디오는 한국어 대면 면접 녹음이다. 발화를 화자별로 분리해 받아쓰기하라.
-- 화자는 "화자1", "화자2" … 로 라벨링(등장 순서). 같은 사람은 같은 라벨을 유지하라.
-- 각 발화 단위(turn)를 하나의 세그먼트로 나눈다.
+  const partBlock = opts?.partHint
+    ? `
+
+## 이 오디오의 위치
+${opts.partHint}
+시작·끝이 문장 중간일 수 있다. 잘린 말은 들린 만큼만 적고, 앞뒤를 상상해 채우지 마라.`
+    : "";
+  const prompt = `이 오디오는 한국어 대면 면접 녹음이다. 발화를 화자별로 분리해 **처음부터 끝까지 빠짐없이** 받아쓰기하라.
+
+## 화자 분리
+- 화자는 "화자1", "화자2" … 로 라벨링(등장 순서). **같은 사람은 끝까지 같은 라벨**을 유지하라.
+- 라벨은 반드시 "화자"+숫자 형식만 쓴다(예: 화자1). 다른 형식·축약 금지.
+- **한 세그먼트에는 한 사람의 말만** 담는다. 말하는 사람이 바뀌면 반드시 세그먼트를 나눠라.
+- 맞장구·되묻기·끼어들기도 별개 세그먼트로 나누고, 원래 화자가 이어 말하면 그 사람 라벨로 되돌린다.
+- 목소리가 비슷해 헷갈려도 **여러 사람을 한 라벨로 뭉치지 마라** — 대화 흐름(질문하는 쪽 / 답하는 쪽)으로 갈라라.
+
+## 분량
+- 한 세그먼트 = 한 발화(turn). 한 사람이 길게 말하면 문장 경계에서 나눠 **30초·200자를 넘지 않게** 한다.
+- 오디오 **끝까지** 받아쓴다. 중간을 건너뛰거나, 뒤로 갈수록 요약하거나, 도중에 멈추지 마라.
+
+## 시각
+- start_ms/end_ms 는 이 오디오 시작 기준 실제 밀리초. **추정값으로 채우지 말 것** — 확실하지 않으면 null.
+
+## 표기
 - 잘 안 들리거나 불확실한 구간은 low_confidence=true 로 표시.
-- start_ms/end_ms 는 이 오디오 시작 기준 밀리초. 알 수 없으면 null.
-- 군더더기(음…, 어…)는 과도하면 정리하되 의미는 보존. **받아쓰기만 — 요약·창작 금지.**${domainBlock}
+- 군더더기(음…, 어…)는 과도하면 정리하되 의미는 보존. **받아쓰기만 — 요약·창작 금지.**${domainBlock}${partBlock}
 
 출력(JSON 만, 마크다운 금지):
 { "segments": [ { "speaker": "화자1", "start_ms": 0, "end_ms": 4200, "text": "발화 내용", "low_confidence": false } ] }`;
@@ -101,7 +206,7 @@ ${opts.domainHint}`
   const segs = Array.isArray(result.segments) ? result.segments : [];
   return segs
     .map((s) => ({
-      speakerLabel: (s.speaker ?? "화자1").toString().trim().slice(0, 20) || "화자1",
+      speakerLabel: normalizeSpeakerLabel(s.speaker, opts?.labelPrefix),
       startMs:
         typeof s.start_ms === "number" && Number.isFinite(s.start_ms)
           ? Math.max(0, Math.round(s.start_ms)) + baseMs
@@ -114,6 +219,34 @@ ${opts.domainHint}`
       lowConfidence: s.low_confidence === true,
     }))
     .filter((s) => s.text.length > 0);
+}
+
+/**
+ * 라벨별로 고르게 뽑아 한도 안에 담는다 — 각 라벨이 판정 근거를 갖도록.
+ * 원래 대화 순서는 유지한다(질문→답변 인접성이 역할 판정의 핵심 단서라서).
+ */
+function sampleLinesPerLabel(
+  lines: string[],
+  labels: string[],
+  limit: number
+): string {
+  const perLabel = Math.max(3, Math.floor(limit / Math.max(1, labels.length) / 120));
+  const count = new Map<string, number>();
+  const picked: string[] = [];
+  let size = 0;
+  for (const [i, line] of lines.entries()) {
+    const label = line.slice(0, line.indexOf(":"));
+    const n = count.get(label) ?? 0;
+    // 라벨별 앞부분 우선 + 중간중간(간격 샘플)도 집어 대화 전개를 보이게.
+    if (n >= perLabel && i % 3 !== 0) continue;
+    if (n >= perLabel * 2) continue;
+    const trimmed = line.length > 400 ? `${line.slice(0, 400)}…` : line;
+    if (size + trimmed.length > limit) break;
+    picked.push(trimmed);
+    size += trimmed.length + 1;
+    count.set(label, n + 1);
+  }
+  return picked.join("\n");
 }
 
 /**
@@ -134,12 +267,15 @@ export async function assignSpeakerRoles(
 
   // 구술 전사도 채팅 면접과 동일하게 마스킹 후 LLM 전달 (§4의3 노출 방지 + 도쿄 폴백 전제).
   // 저장·화면 표시는 원문 유지 — 마스킹은 프롬프트 경계에서만.
+  const lines = segments
+    .filter((s) => s.speakerLabel)
+    .map((s) => `${s.speakerLabel}: ${s.text}`);
+  const LIMIT = 55_000;
+  const full = lines.join("\n");
+  // 그냥 자르면 뒤쪽 라벨이 근거 없이 남아 통째로 unknown 이 된다(파트 분할로 라벨이 늘면서
+  // 현실적인 위험이 됐다). 한도를 넘으면 라벨별로 고르게 뽑아 모든 라벨의 근거를 남긴다.
   const labeled = maskText(
-    segments
-      .filter((s) => s.speakerLabel)
-      .map((s) => `${s.speakerLabel}: ${s.text}`)
-      .join("\n")
-      .slice(0, 60_000),
+    full.length <= LIMIT ? full : sampleLinesPerLabel(lines, labels, LIMIT),
     { level: "standard", known: maskKnown }
   );
 
@@ -516,13 +652,25 @@ ${transcript}
 { "suggestions": [] }`;
 }
 
+/**
+ * 라이브 추천질문에 넣는 전사 분량. 12,000자 → 2,500자로 줄였다(2026-07-31): 45초 폴링마다
+ * 새로 쌓이는 건 수백 자뿐인데 매번 12,000자를 되보내 입력 토큰의 대부분이 중복이었다.
+ * 추천 질문은 직전 답변을 파고드는 용도이고, 중복 회피는 existing(have) 이 따로 담당한다.
+ * 라우트도 최근 턴만 조회하므로(LIVE_SUGGEST_RECENT_TURNS) 여기선 상한 역할.
+ */
+export const LIVE_SUGGEST_CONTEXT_CHARS = 2_500;
+
 export async function suggestLiveQuestions(
   job: JobInfo,
   transcript: string,
   existing: string[] = []
 ): Promise<LiveSuggestion> {
   const raw = await generateJSON<Partial<LiveSuggestion>>(
-    buildLiveSuggestionPrompt(job, transcript.slice(-12_000), existing),
+    buildLiveSuggestionPrompt(
+      job,
+      transcript.slice(-LIVE_SUGGEST_CONTEXT_CHARS),
+      existing
+    ),
     { task: "interview", temperature: 0.3 }
   );
   return {

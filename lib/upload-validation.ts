@@ -5,9 +5,15 @@
 
 // 개별 첨부 1건 상한. 초과 시 그 파일만 제외 — 동영상 삽입된 PPT 등
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB
-// 대면 면접 녹음 오디오 1건 상한 — Gemini Vertex inline 데이터 한도 회피
-// (그 이상 장시간·고비트레이트는 준실시간 모드 권장). 상세: docs/LIVE_INTERVIEW_PLAN.md
+// 대면 면접 녹음 오디오 **1파트** 상한 — Gemini Vertex inline 데이터 한도 회피.
+// 라이브는 파트로 쪼개 올리므로(LIVE_AUDIO_PART_SECONDS) 파트당 수 MB 로 여유가 크다.
+// 업로드 모드는 파일 1개 = 1파트라 이 값이 곧 파일 상한.
 export const MAX_AUDIO_BYTES = 18 * 1024 * 1024;
+// 라이브 분할 녹음 파트 길이(초)와 개수 상한. 8분 × 최대 16파트 > 라이브 상한 1시간.
+// 왜 나누나: 40분 이상을 한 요청으로 전사시키면 모델이 발화를 뭉치고 뒷부분을 누락한다
+// (2026-07-30 운영 실측). 상세: lib/recorded-interview.ts AudioPart 주석.
+export const LIVE_AUDIO_PART_SECONDS = 480;
+export const MAX_AUDIO_PARTS = 16;
 
 // 대면 면접 최소 길이(초). 이보다 짧은 녹음은 오녹음/실수(버튼 오조작·테스트 등)로 보고
 // 전사·평가·과금을 전부 건너뛴다 — "결과가 어떻든 평가 완주 시 과금"되는 구조라, 무의미한

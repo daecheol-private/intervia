@@ -22,13 +22,18 @@
 import { and, asc, eq, gte, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
+  candidates,
   interviewTranscriptSegments,
+  jobInterviewers,
   jobPostings,
   recordedInterviews,
+  users,
 } from "./schema";
 import {
   buildTranscriptionDomainHint,
   finalizeRecordedInterview,
+  parseAudioParts,
+  serializeAudioParts,
   transcribeAudio,
 } from "./recorded-interview";
 import { deleteFile, readStoredFile } from "./storage";
@@ -141,7 +146,8 @@ export async function cleanupStuckRecorded(): Promise<number> {
   // 모니터링에 안 잡힌다 — 여기서 직접 Sentry 로 보고해 가시화한다.
   const overLimit = stuck.filter((r) => r.attempts >= MAX_RECORDED_ATTEMPTS);
   for (const r of overLimit) {
-    if (r.audioBlobKey) await deleteFile(r.audioBlobKey).catch(() => {});
+    for (const p of parseAudioParts(r.audioBlobKey))
+      await deleteFile(p.key).catch(() => {});
     captureError(
       new Error(
         `recorded_interview ${r.id} stuck 영구실패 (attempts=${r.attempts}) — worker 반복 강제종료(maxDuration/OOM 추정)`
@@ -202,63 +208,107 @@ export async function processRecordedInterview(riId: number): Promise<void> {
   // Web Speech 초안 세그먼트가 이미 있는 채로 오디오를 attach 하므로, 세그먼트 유무로 판단하면
   // 전사를 건너뛰고 저품질 초안으로 평가하게 된다. 오디오가 있으면 재전사해 초안을 교체한다.
   // (업로드 모드는 초안 세그먼트가 없어 삭제가 no-op — 동작 동일.)
-  if (ri.audioBlobKey) {
-    const buf = await readStoredFile(ri.audioBlobKey);
+  const audioParts = parseAudioParts(ri.audioBlobKey);
+  if (audioParts.length > 0) {
+    // 한 실행에 **한 파트만** 전사한다 — 파트마다 최대 240s 이므로 여러 개를 한 실행(300s)에
+    // 몰면 강제종료된다. 남은 파트를 다시 써 넣고 status='queued' 로 되돌리면 self-chain/cron 이
+    // 이어서 처리한다. 파트가 줄어드는 방향이라 진전이 보장되고, 중간에 죽어도 이미 끝난
+    // 파트는 다시 전사하지 않는다(전사분 세그먼트 + 남은 파트 목록이 곧 진행 상태).
+    const [part, ...rest] = audioParts;
+    const buf = await readStoredFile(part.key);
     if (!buf)
       throw new RecordedInterviewError(
         "저장된 오디오를 읽을 수 없습니다. 다시 업로드해 주세요.",
         true
       );
 
-    const [job] = await db
-      .select()
-      .from(jobPostings)
-      .where(eq(jobPostings.id, ri.jobId));
+    const [[job], [cand]] = await Promise.all([
+      db.select().from(jobPostings).where(eq(jobPostings.id, ri.jobId)),
+      db.select().from(candidates).where(eq(candidates.id, ri.candidateId)),
+    ]);
+    // 공고에 배정된 면접관 이름 — 음성만으로는 사람 이름이 거의 매번 틀려서 표기 힌트로 준다.
+    const interviewerNames = (
+      await db
+        .select({ name: users.name })
+        .from(jobInterviewers)
+        .innerJoin(users, eq(users.id, jobInterviewers.userId))
+        .where(eq(jobInterviewers.jobId, ri.jobId))
+    )
+      .map((r) => r.name)
+      .filter((n): n is string => !!n)
+      .slice(0, 6);
+
+    const multi = audioParts.length > 1 || part.index > 0;
     const segments = await transcribeAudio(
       buf.toString("base64"),
       ri.audioMime ?? "audio/webm",
       {
         timeoutMs: TRANSCRIBE_TIMEOUT_MS,
-        domainHint: job ? buildTranscriptionDomainHint(job) : undefined,
+        baseMs: part.offsetMs,
+        domainHint: job
+          ? buildTranscriptionDomainHint(job, {
+              candidateName: cand?.name,
+              interviewerNames,
+              // 마스킹본을 쓴다 — 회사·학교·기술 표기 힌트는 살리고 연락처 등은 뺀 채로.
+              resumeExcerpt: cand?.resumeMaskedText,
+            })
+          : undefined,
+        partHint: multi
+          ? `전체 면접을 여러 구간으로 나눈 것 중 ${Math.round(part.offsetMs / 60000)}분 지점부터의 구간이다.`
+          : undefined,
+        labelPrefix: multi ? `P${part.index + 1}` : undefined,
       }
     );
-    if (segments.length === 0)
+    // 첫 파트가 통째로 비면 녹음 자체가 잘못된 것 — 영구 실패. 뒤 파트의 무음(마무리 인사 후
+    // 정적 등)은 정상이므로 건너뛰고 다음 파트로 넘어간다.
+    if (segments.length === 0 && part.index === 0)
       throw new RecordedInterviewError(
         "음성에서 인식된 발화가 없습니다. 녹음 상태를 확인해 주세요.",
         true
       );
 
-    // 라이브 실측 길이가 있으면 유지, 없으면 전사 endMs 로 산출.
-    const durationSeconds =
-      ri.durationSeconds && ri.durationSeconds > 0
-        ? ri.durationSeconds
-        : Math.round((segments[segments.length - 1]?.endMs ?? 0) / 1000);
-    // 재전사는 기존 초안 세그먼트를 **교체**한다(라이브 초안 삭제 후 재삽입). transcribeAudio 가
-    // 성공한 뒤에만 삭제하므로, 전사가 throw 하면 초안이 보존돼 폴백(수동 재평가) 여지가 남는다.
-    await db
-      .delete(interviewTranscriptSegments)
-      .where(eq(interviewTranscriptSegments.recordedInterviewId, riId));
-    await db.insert(interviewTranscriptSegments).values(
-      segments.map((s, i) => ({
-        recordedInterviewId: riId,
-        seq: i + 1,
-        speakerLabel: s.speakerLabel,
-        startMs: s.startMs,
-        endMs: s.endMs,
-        text: s.text,
-        lowConfidence: s.lowConfidence,
-      }))
-    );
-    // 전사 끝 — 오디오 즉시 폐기(미보관 원칙) + status='queued' 로 되돌려 평가를 다음 실행에 맡긴다.
+    if (part.index === 0) {
+      // 첫 파트만 기존 초안 세그먼트를 **교체**한다(라이브 Web Speech 초안 삭제 후 재삽입).
+      // transcribeAudio 성공 뒤에만 지우므로, 전사가 throw 하면 초안이 보존돼 폴백 여지가 남는다.
+      await db
+        .delete(interviewTranscriptSegments)
+        .where(eq(interviewTranscriptSegments.recordedInterviewId, riId));
+    }
+    if (segments.length > 0) {
+      const [last] = await db
+        .select({ maxSeq: sql<number>`COALESCE(MAX(${interviewTranscriptSegments.seq}), 0)` })
+        .from(interviewTranscriptSegments)
+        .where(eq(interviewTranscriptSegments.recordedInterviewId, riId));
+      const base = Number(last?.maxSeq ?? 0);
+      await db.insert(interviewTranscriptSegments).values(
+        segments.map((s, i) => ({
+          recordedInterviewId: riId,
+          seq: base + i + 1,
+          speakerLabel: s.speakerLabel,
+          startMs: s.startMs,
+          endMs: s.endMs,
+          text: s.text,
+          lowConfidence: s.lowConfidence,
+        }))
+      );
+    }
+    // 전사한 파트는 즉시 폐기(미보관 원칙) + status='queued' 로 되돌려 다음 파트/평가를 다음 실행에.
     // startedAt=null 로 두면 cleanupStuck 의 stale 윈도우 계산에서도 깔끔하다(다음 claim 이 재설정).
     // attempts=0 리셋: 전사 성공은 '전진'이지 재시도가 아니다. 리셋 안 하면 전사에서 쓴 claim 이
     // 평가 예산까지 잠식해, 짧은 면접도 claim 몇 번에 상한을 넘겨 '실패'로 오판됐다(2026-07-07 사고).
-    await deleteFile(ri.audioBlobKey).catch(() => {});
+    await deleteFile(part.key).catch(() => {});
+    // 라이브 실측 길이가 있으면 유지. 없으면(업로드 모드) 마지막 파트까지 끝난 뒤 전사 endMs 로 산출.
+    const durationSeconds =
+      ri.durationSeconds && ri.durationSeconds > 0
+        ? ri.durationSeconds
+        : rest.length === 0
+          ? Math.round((segments[segments.length - 1]?.endMs ?? 0) / 1000)
+          : 0;
     await db
       .update(recordedInterviews)
       .set({
         durationSeconds,
-        audioBlobKey: null,
+        audioBlobKey: serializeAudioParts(rest),
         status: "queued",
         startedAt: null,
         attempts: 0,
@@ -298,7 +348,8 @@ export async function markRecordedFailedOrRetry(
       .select({ key: recordedInterviews.audioBlobKey })
       .from(recordedInterviews)
       .where(eq(recordedInterviews.id, riId));
-    if (ri?.key) await deleteFile(ri.key).catch(() => {});
+    for (const p of parseAudioParts(ri?.key))
+      await deleteFile(p.key).catch(() => {});
     // status 가드: 동시 실행된 다른 finalize(워커 자동평가 + 사용자 재평가)가 이미 성공시켰으면
     // 이번 실패로 덮어쓰지 않는다 — '성공인데 실패' 표시·이미 완료된 건의 재처리(재과금) 방지.
     await db

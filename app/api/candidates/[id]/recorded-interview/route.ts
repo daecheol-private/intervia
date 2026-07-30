@@ -11,16 +11,26 @@ import {
   insufficientTokensResponse,
   requireSpendableBalance,
 } from "@/lib/wallet-guard";
-import { finalizeRecordedInterview } from "@/lib/recorded-interview";
+import {
+  finalizeRecordedInterview,
+  parseAudioParts,
+  serializeAudioParts,
+} from "@/lib/recorded-interview";
 import { triggerRecordedWorker } from "@/lib/recorded-interview-queue";
 import { deleteFile, saveFile, isAllowedBlobUrl } from "@/lib/storage";
 import {
   MAX_AUDIO_BYTES,
+  MAX_AUDIO_PARTS,
   MIN_INTERVIEW_DURATION_SECONDS,
   TOO_SHORT_INTERVIEW_MESSAGE,
 } from "@/lib/upload-validation";
 import { logAudit } from "@/lib/audit";
 import { after } from "next/server";
+
+/** 오디오 폐기 — 분할 녹음이면 파트를 전부 지운다(고아 blob 방지). */
+async function discardAudio(key: string): Promise<void> {
+  for (const p of parseAudioParts(key)) await deleteFile(p.key).catch(() => {});
+}
 
 export const runtime = "nodejs";
 // PATCH 재평가는 status='processing' 표시 후 백그라운드(after)에서 finalize(역할배정+평가 LLM)를
@@ -75,6 +85,8 @@ export async function POST(
   if (isJsonManifest) {
     let m: {
       audioUrl?: string;
+      /** 라이브 분할 녹음 — 파트별 Blob URL(순서대로). audioUrl 대신 올 수 있다. */
+      audioParts?: Array<{ url?: string; offsetMs?: number; size?: number }>;
       audioMime?: string;
       size?: number;
       round?: string;
@@ -90,18 +102,36 @@ export async function POST(
     mime = m.audioMime || "audio/webm";
     if (!/^(audio|video)\//.test(mime))
       return new Response("오디오 파일만 업로드할 수 있습니다.", { status: 400 });
-    // audioUrl 은 클라이언트 제어값 — Blob 도메인만 허용(SSRF 방어). 저장만 하고 여기선 안 읽음.
-    if (!m.audioUrl || !isAllowedBlobUrl(m.audioUrl))
-      return new Response("오디오 파일 위치가 올바르지 않습니다.", { status: 400 });
-    if ((m.size ?? 0) === 0) return new Response("빈 파일입니다.", { status: 400 });
-    if ((m.size ?? 0) > MAX_AUDIO_BYTES)
-      return new Response(
-        `오디오가 너무 큽니다 (최대 ${Math.floor(MAX_AUDIO_BYTES / 1024 / 1024)}MB).`,
-        { status: 413 }
-      );
+    // URL 은 클라이언트 제어값 — Blob 도메인만 허용(SSRF 방어). 저장만 하고 여기선 안 읽음.
+    const rawParts =
+      Array.isArray(m.audioParts) && m.audioParts.length > 0
+        ? m.audioParts
+        : [{ url: m.audioUrl, offsetMs: 0, size: m.size }];
+    if (rawParts.length > MAX_AUDIO_PARTS)
+      return new Response("녹음 구간이 너무 많습니다.", { status: 400 });
+    for (const p of rawParts) {
+      if (!p.url || !isAllowedBlobUrl(p.url))
+        return new Response("오디오 파일 위치가 올바르지 않습니다.", { status: 400 });
+      // 파트 1건은 Gemini inline 한도(MAX_AUDIO_BYTES) 안이어야 전사할 수 있다.
+      if ((p.size ?? 0) > MAX_AUDIO_BYTES)
+        return new Response(
+          `오디오 구간이 너무 큽니다 (구간당 최대 ${Math.floor(MAX_AUDIO_BYTES / 1024 / 1024)}MB).`,
+          { status: 413 }
+        );
+    }
+    const totalSize = rawParts.reduce((a, p) => a + (p.size ?? 0), 0);
+    if (totalSize === 0) return new Response("빈 파일입니다.", { status: 400 });
     consentOk = m.consentConfirmed === true;
     round = m.round === "round2" ? "round2" : "round1";
-    audioBlobKey = m.audioUrl; // 이미 Blob 에 있음 — 재저장 안 함.
+    // 이미 Blob 에 있음 — 재저장 안 함. 파트가 여럿이면 배열 JSON 으로 직렬화해 한 컬럼에 담는다.
+    audioBlobKey =
+      serializeAudioParts(
+        rawParts.map((p, i) => ({
+          key: p.url!,
+          offsetMs: Math.max(0, Math.round(Number(p.offsetMs) || 0)),
+          index: i,
+        }))
+      ) ?? "";
     attachId = Number(m.recordedInterviewId);
     durValue = Number.isFinite(Number(m.durationSeconds))
       ? Number(m.durationSeconds)
@@ -113,14 +143,18 @@ export async function POST(
     } catch {
       return new Response("multipart/form-data 가 필요합니다.", { status: 400 });
     }
-    const audio = formData.get("audio");
-    if (!(audio instanceof File))
-      return new Response("audio 파일이 필요합니다.", { status: 400 });
+    // 라이브 분할 녹음은 audio 필드가 여러 개(파트 순서대로) — dev/FormData 폴백 경로.
+    const audios = formData.getAll("audio").filter((a): a is File => a instanceof File);
+    const audio = audios[0];
+    if (!audio) return new Response("audio 파일이 필요합니다.", { status: 400 });
+    if (audios.length > MAX_AUDIO_PARTS)
+      return new Response("녹음 구간이 너무 많습니다.", { status: 400 });
     mime = audio.type || "audio/webm";
     if (!/^(audio|video)\//.test(mime))
       return new Response("오디오 파일만 업로드할 수 있습니다.", { status: 400 });
-    if (audio.size === 0) return new Response("빈 파일입니다.", { status: 400 });
-    if (audio.size > MAX_AUDIO_BYTES)
+    if (audios.every((a) => a.size === 0))
+      return new Response("빈 파일입니다.", { status: 400 });
+    if (audios.some((a) => a.size > MAX_AUDIO_BYTES))
       return new Response(
         `오디오가 너무 큽니다 (최대 ${Math.floor(
           MAX_AUDIO_BYTES / 1024 / 1024
@@ -132,18 +166,36 @@ export async function POST(
       formData.get("consentConfirmed") === "1" ||
       formData.get("consentConfirmed") === "on";
     round = formData.get("round") === "round2" ? "round2" : "round1";
-    // 오디오 임시 저장(Blob/로컬) — 워커가 전사할 때까지만 보관, 전사 직후 폐기.
+    let offsets: number[] = [];
     try {
-      audioBlobKey = await saveFile(
-        audio.name || `interview.${mime.split("/")[1] ?? "webm"}`,
-        Buffer.from(await audio.arrayBuffer()),
-        mime
-      );
+      const raw = formData.get("offsets");
+      if (typeof raw === "string") offsets = JSON.parse(raw) as number[];
     } catch {
+      offsets = [];
+    }
+    // 오디오 임시 저장(Blob/로컬) — 워커가 전사할 때까지만 보관, 전사 직후 폐기.
+    const savedParts: { key: string; offsetMs: number; index: number }[] = [];
+    try {
+      for (const [i, a] of audios.entries()) {
+        if (a.size === 0) continue;
+        const key = await saveFile(
+          a.name || `interview-p${i}.${mime.split("/")[1] ?? "webm"}`,
+          Buffer.from(await a.arrayBuffer()),
+          mime
+        );
+        savedParts.push({
+          key,
+          offsetMs: Math.max(0, Math.round(Number(offsets[i]) || 0)),
+          index: savedParts.length,
+        });
+      }
+    } catch {
+      for (const p of savedParts) await deleteFile(p.key).catch(() => {});
       return new Response("오디오 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.", {
         status: 502,
       });
     }
+    audioBlobKey = serializeAudioParts(savedParts) ?? "";
     attachId = Number(formData.get("recordedInterviewId"));
     const durRaw = Number(formData.get("durationSeconds"));
     durValue = Number.isFinite(durRaw) ? durRaw : null;
@@ -151,7 +203,7 @@ export async function POST(
 
   // 녹취 동의 attestation — 지원자 동의(녹취·전사·AI 평가) 확인 필수 (PIPA).
   if (!consentOk) {
-    await deleteFile(audioBlobKey).catch(() => {}); // 이미 저장/업로드된 오디오 정리(고아 방지)
+    await discardAudio(audioBlobKey); // 이미 저장/업로드된 오디오 정리(고아 방지)
     return new Response(
       "지원자에게 녹취·전사·AI 평가 동의를 받았음을 먼저 확인해 주세요.",
       { status: 400 }
@@ -173,13 +225,13 @@ export async function POST(
         )
       );
     if (!existing) {
-      await deleteFile(audioBlobKey).catch(() => {});
+      await discardAudio(audioBlobKey);
       return new Response("Not found", { status: 404 });
     }
     // 아직 종료 처리 안 된 라이브 행(recording)이나 실패 행만 새 오디오를 받는다.
     // 이미 queued/processing/ready 면 복구가 중복 발사한 것 — 이번 오디오는 버리고 멱등 ack.
     if (existing.status !== "recording" && existing.status !== "failed") {
-      await deleteFile(audioBlobKey).catch(() => {});
+      await discardAudio(audioBlobKey);
       return Response.json(
         { id: attachId, status: existing.status },
         { status: 200 }
@@ -192,7 +244,7 @@ export async function POST(
       durValue > 0 &&
       durValue < MIN_INTERVIEW_DURATION_SECONDS
     ) {
-      await deleteFile(audioBlobKey).catch(() => {});
+      await discardAudio(audioBlobKey);
       await db
         .update(recordedInterviews)
         .set({
@@ -246,7 +298,7 @@ export async function POST(
     durValue > 0 &&
     durValue < MIN_INTERVIEW_DURATION_SECONDS
   ) {
-    await deleteFile(audioBlobKey).catch(() => {});
+    await discardAudio(audioBlobKey);
     return new Response(TOO_SHORT_INTERVIEW_MESSAGE, { status: 400 });
   }
 

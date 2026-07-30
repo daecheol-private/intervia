@@ -26,10 +26,17 @@ import {
 // 종료 시 오디오 업로드·평가·과금을 전부 건너뛴다(서버 finish 게이트가 too_short 실패로 마킹).
 const MIN_INTERVIEW_DURATION_SECONDS = 300;
 
-// Opus 24kbps mono — 1시간 ≈ 11MB(서버 18MB 한도 여유). 음성 전사엔 충분한 음질.
-const AUDIO_BITS_PER_SECOND = 24_000;
+// Opus 48kbps mono — 파트당 8분이라 파트 1건 ≈ 2.9MB(서버 18MB 한도에 여유). 24kbps 에서
+// 올린 이유: 저비트레이트가 목소리의 스펙트럼 특성을 깎아 화자 분리를 어렵게 한다.
+const AUDIO_BITS_PER_SECOND = 48_000;
 // 5초마다 청크 → IndexedDB 적재(새로고침을 견디게). 마지막 청크는 stop 시 flush.
 const CHUNK_TIMESLICE_MS = 5_000;
+// 8분마다 MediaRecorder 를 stop/start 해 **완결 파일 1개**(=파트)를 만든다. 파트별로 따로
+// 전사해야 긴 면접에서 발화 뭉침·뒷부분 누락이 안 생긴다(2026-07-30 운영 실측 — 42분 단일
+// 요청이 61턴으로 뭉치고, 30분은 뒤 22% 가 통째로 빠졌다). 서버 LIVE_AUDIO_PART_SECONDS 와
+// MAX_AUDIO_PARTS 의 클라이언트 복제(기존 MAX_AUDIO_BYTES 패턴 — 서버 유틸을 번들에 안 끌어옴).
+const AUDIO_PART_MS = 480_000;
+const MAX_AUDIO_PARTS = 16;
 
 // 브라우저가 지원하는 오디오 컨테이너 선택 (Chrome/Edge=webm/opus, Safari=mp4).
 function pickAudioMime(): string {
@@ -57,6 +64,10 @@ type CleanSeg = {
 };
 
 const MAX_SUGGESTIONS = 5; // 추천 질문은 최대 5개까지 누적
+// 추천질문 호출 게이트 — 직전 호출 이후 정리된 전사가 이만큼 늘어야 다시 물어본다.
+// 45초 타이머는 대화가 없어도 계속 돌기 때문에, 이 게이트가 없으면 같은 전사로 같은 질문을
+// 반복해서 뽑느라 LLM 비용만 나간다(침묵·짧은 응답 구간).
+const SUGGEST_MIN_NEW_CHARS = 200;
 
 // 연속 같은 화자 세그먼트를 한 묶음으로 — 문장 단위로 끊긴 전사를 화자별로 합쳐 보여준다.
 function groupByRole<T extends { role: unknown }>(
@@ -132,6 +143,9 @@ export function LiveRecorder({
   const elapsedTimerRef = useRef<number | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const suggestionsRef = useRef<string[]>([]); // 폴링(인터벌 클로저)에서 현재 질문 읽기용
+  // 추천질문 호출 게이트 — 정리된 전사 총 글자수와, 마지막으로 추천을 받아온 시점의 글자수.
+  const transcriptCharsRef = useRef(0);
+  const lastSuggestCharsRef = useRef(0);
 
   // A안 병행 오디오 녹음.
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -139,6 +153,10 @@ export function LiveRecorder({
   const audioOkRef = useRef(false); // 병행 녹음 성공 여부(실패 시 텍스트 폴백)
   const audioMimeRef = useRef("audio/webm");
   const appendChainRef = useRef<Promise<void>>(Promise.resolve()); // 청크 IndexedDB 적재 순차 체인
+  // 파트 분할(8분) — 현재 파트 번호 / 그 파트의 세션 시작 기준 오프셋 / 회전 타이머.
+  const partIndexRef = useRef(0);
+  const partOffsetRef = useRef(0);
+  const partTimerRef = useRef<number | null>(null);
   // 온라인 모드 전용: 화면 공유(상대 오디오) 스트림 + 마이크와 믹싱하는 AudioContext.
   const displayStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -236,14 +254,21 @@ export function LiveRecorder({
     suggestionsRef.current = suggestions;
   }, [suggestions]);
 
+  // 같은 목적의 ref 동기화 — 추천질문 호출 게이트가 "새 발화량"을 보고 판단한다.
+  useEffect(() => {
+    transcriptCharsRef.current = cleaned.reduce((a, c) => a + c.text.length, 0);
+  }, [cleaned]);
+
   const cleanup = () => {
     voice.stop();
     if (flushTimerRef.current) window.clearTimeout(flushTimerRef.current);
     if (suggestTimerRef.current) window.clearInterval(suggestTimerRef.current);
     if (elapsedTimerRef.current) window.clearInterval(elapsedTimerRef.current);
+    if (partTimerRef.current) window.clearTimeout(partTimerRef.current);
     flushTimerRef.current = null;
     suggestTimerRef.current = null;
     elapsedTimerRef.current = null;
+    partTimerRef.current = null;
     void wakeLockRef.current?.release().catch(() => {});
     wakeLockRef.current = null;
     // 마이크·레코더 해제 (언마운트 시). 진행 중이던 오디오는 IndexedDB 에 남는다.
@@ -280,12 +305,21 @@ export function LiveRecorder({
     if (!riId) return;
     // 이미 5개면 새로 받지 않는다 — 클릭해 비우면 그때 다시 채워진다(과도한 갱신 방지).
     if (suggestionsRef.current.length >= MAX_SUGGESTIONS) return;
+    // 직전 호출 이후 새 발화가 거의 없으면 건너뛴다. 45초 타이머는 대화가 없어도 계속 도는데,
+    // 같은 전사로 다시 물어봐야 같은 질문만 나온다(호출당 LLM 비용만 나감).
+    const chars = transcriptCharsRef.current;
+    if (chars - lastSuggestCharsRef.current < SUGGEST_MIN_NEW_CHARS) return;
+    const prevMark = lastSuggestCharsRef.current;
+    lastSuggestCharsRef.current = chars;
     try {
       const have = encodeURIComponent(suggestionsRef.current.join("\n"));
       const r = await fetch(
         `/api/candidates/${candidateId}/recorded-interview/live?riId=${riId}&have=${have}`
       );
-      if (!r.ok) return;
+      if (!r.ok) {
+        lastSuggestCharsRef.current = prevMark; // 실패는 소비로 치지 않는다 — 다음 주기에 재시도.
+        return;
+      }
       const body = (await r.json()) as { suggestions?: string[] };
       const incoming = Array.isArray(body.suggestions) ? body.suggestions : [];
       if (incoming.length === 0) return;
@@ -299,7 +333,63 @@ export function LiveRecorder({
         return next;
       });
     } catch {
-      /* 비치명적 */
+      lastSuggestCharsRef.current = prevMark;
+    }
+  };
+
+  // 파트 1개 녹음 시작. MediaRecorder 의 timeslice 조각은 첫 조각만 헤더가 있어 임의 지점부터
+  // 조립할 수 없다 — 그래서 파트 경계마다 stop/start 로 **완결 파일**을 새로 연다.
+  const startPartRecorder = (riId: number, stream: MediaStream): string => {
+    const chosen = pickAudioMime();
+    const mr = new MediaRecorder(
+      stream,
+      chosen
+        ? { mimeType: chosen, audioBitsPerSecond: AUDIO_BITS_PER_SECOND }
+        : { audioBitsPerSecond: AUDIO_BITS_PER_SECOND }
+    );
+    audioMimeRef.current = mr.mimeType || chosen || "audio/webm";
+    const part = partIndexRef.current;
+    const offsetMs = partOffsetRef.current;
+    mr.ondataavailable = (e: BlobEvent) => {
+      if (e.data && e.data.size > 0) {
+        // 순차 체인 — 마지막 청크까지 커밋 순서 보존(종료 시 이 체인을 await).
+        appendChainRef.current = appendChainRef.current
+          .then(() => idbAppendChunk(riId, e.data, part, offsetMs))
+          .catch(() => {});
+      }
+    };
+    mr.start(CHUNK_TIMESLICE_MS);
+    mediaRecorderRef.current = mr;
+    if (partIndexRef.current + 1 < MAX_AUDIO_PARTS) {
+      partTimerRef.current = window.setTimeout(
+        () => void rotatePart(riId, stream),
+        AUDIO_PART_MS
+      );
+    }
+    return audioMimeRef.current;
+  };
+
+  // 파트 회전 — 현재 레코더를 닫고(그 파일 완결) 다음 파트를 연다. 경계의 공백은 수십 ms 수준.
+  const rotatePart = async (riId: number, stream: MediaStream): Promise<void> => {
+    partTimerRef.current = null;
+    const mr = mediaRecorderRef.current;
+    if (!mr || mr.state === "inactive" || doneRef.current) return;
+    await new Promise<void>((resolve) => {
+      mr.onstop = () => resolve();
+      try {
+        mr.stop();
+      } catch {
+        resolve();
+      }
+    });
+    if (doneRef.current) return;
+    partIndexRef.current += 1;
+    partOffsetRef.current = Date.now() - sessionStartRef.current;
+    try {
+      startPartRecorder(riId, stream);
+    } catch {
+      // 새 파트를 못 열면 이후 오디오는 유실되지만, 이미 저장된 파트로 평가는 진행된다.
+      mediaRecorderRef.current = null;
     }
   };
 
@@ -314,8 +404,15 @@ export function LiveRecorder({
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia)
       return;
     try {
+      // 후처리(에코 제거·노이즈 억제·자동이득)를 끈다 — 대면 면접엔 스피커 출력이 없어 에코가
+      // 없고, 이 필터들이 목소리를 균질화해 화자 분리를 방해한다. 원음이 전사·분리 모두 유리.
       const micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+        audio: {
+          channelCount: 1,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
       });
       mediaStreamRef.current = micStream;
 
@@ -355,35 +452,20 @@ export function LiveRecorder({
         }
       }
 
-      const chosen = pickAudioMime();
-      const mr = new MediaRecorder(
-        recordStream,
-        chosen
-          ? { mimeType: chosen, audioBitsPerSecond: AUDIO_BITS_PER_SECOND }
-          : { audioBitsPerSecond: AUDIO_BITS_PER_SECOND }
-      );
-      audioMimeRef.current = mr.mimeType || chosen || "audio/webm";
       appendChainRef.current = Promise.resolve();
-      mr.ondataavailable = (e: BlobEvent) => {
-        if (e.data && e.data.size > 0) {
-          // 순차 체인 — 마지막 청크까지 커밋 순서 보존(종료 시 이 체인을 await).
-          appendChainRef.current = appendChainRef.current
-            .then(() => idbAppendChunk(riId, e.data))
-            .catch(() => {});
-        }
-      };
+      partIndexRef.current = 0;
+      partOffsetRef.current = 0;
+      const mime = startPartRecorder(riId, recordStream);
       const session: LiveRecSession = {
         riId,
         candidateId,
         round,
-        mime: audioMimeRef.current,
+        mime,
         state: "recording",
         durationSeconds: 0,
         createdAt: Date.now(),
       };
       await idbStartSession(session);
-      mr.start(CHUNK_TIMESLICE_MS);
-      mediaRecorderRef.current = mr;
       audioOkRef.current = true;
     } catch {
       audioOkRef.current = false;
@@ -401,6 +483,10 @@ export function LiveRecorder({
 
   // 녹음 중지 + 마지막 청크(dataavailable)까지 IndexedDB 커밋 완료 대기 + 마이크 해제.
   const stopAudioCapture = async (): Promise<void> => {
+    if (partTimerRef.current) {
+      window.clearTimeout(partTimerRef.current);
+      partTimerRef.current = null;
+    }
     const mr = mediaRecorderRef.current;
     mediaRecorderRef.current = null;
     if (mr && mr.state !== "inactive") {

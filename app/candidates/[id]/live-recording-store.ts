@@ -34,7 +34,16 @@ export type LiveRecSession = {
   createdAt: number;
 };
 
-type ChunkRow = { id?: number; riId: number; blob: Blob };
+// part/offsetMs: 긴 면접은 8분 단위 파트로 나눠 녹음한다(각 파트가 완결 파일 = 개별 전사 가능).
+// 한 요청으로 40분 이상을 전사시키면 모델이 발화를 뭉치고 뒷부분을 누락하기 때문(2026-07-30 실측).
+// 예전 세션(파트 개념 없음)은 part=0·offsetMs=0 으로 읽혀 그대로 단일 파트 업로드된다.
+type ChunkRow = {
+  id?: number;
+  riId: number;
+  blob: Blob;
+  part?: number;
+  offsetMs?: number;
+};
 
 function hasIdb(): boolean {
   return typeof indexedDB !== "undefined";
@@ -89,12 +98,22 @@ export async function idbStartSession(s: LiveRecSession): Promise<void> {
 }
 
 /** 오디오 청크 1개 적재 (매 timeslice). 순차 호출로 순서 보존. */
-export async function idbAppendChunk(riId: number, blob: Blob): Promise<void> {
+export async function idbAppendChunk(
+  riId: number,
+  blob: Blob,
+  part = 0,
+  offsetMs = 0
+): Promise<void> {
   if (!hasIdb() || !blob || blob.size === 0) return;
   const db = await openDb();
   try {
     const t = db.transaction(CHUNKS, "readwrite");
-    (t.objectStore(CHUNKS) as IDBObjectStore).add({ riId, blob } as ChunkRow);
+    (t.objectStore(CHUNKS) as IDBObjectStore).add({
+      riId,
+      blob,
+      part,
+      offsetMs,
+    } as ChunkRow);
     await txDone(t);
   } finally {
     db.close();
@@ -153,8 +172,14 @@ export async function idbListSessions(): Promise<LiveRecSession[]> {
   }
 }
 
-async function idbAssembleBlob(riId: number, mime: string): Promise<Blob | null> {
-  if (!hasIdb()) return null;
+type AssembledPart = { part: number; offsetMs: number; blob: Blob };
+
+/** 파트별로 조립 — 같은 part 의 timeslice 청크들을 이어 붙여 완결 파일 1개로 만든다. */
+async function idbAssembleParts(
+  riId: number,
+  mime: string
+): Promise<AssembledPart[]> {
+  if (!hasIdb()) return [];
   const db = await openDb();
   try {
     const t = db.transaction(CHUNKS, "readonly");
@@ -164,11 +189,22 @@ async function idbAssembleBlob(riId: number, mime: string): Promise<Blob | null>
     )) as ChunkRow[];
     // 삽입 순서(id) 보장 — 인덱스 getAll 이 뒤섞여도 안전하게 정렬.
     rows.sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
-    if (rows.length === 0) return null;
-    return new Blob(
-      rows.map((r) => r.blob),
-      { type: mime }
-    );
+    if (rows.length === 0) return [];
+    const groups = new Map<number, { offsetMs: number; blobs: Blob[] }>();
+    for (const r of rows) {
+      const p = r.part ?? 0;
+      const g = groups.get(p);
+      if (g) g.blobs.push(r.blob);
+      else groups.set(p, { offsetMs: r.offsetMs ?? 0, blobs: [r.blob] });
+    }
+    return [...groups.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([part, g]) => ({
+        part,
+        offsetMs: g.offsetMs,
+        blob: new Blob(g.blobs, { type: mime }),
+      }))
+      .filter((p) => p.blob.size > 0);
   } finally {
     db.close();
   }
@@ -186,18 +222,21 @@ export type UploadResult = "uploaded" | "empty" | "permanent" | "retry";
 export async function uploadLiveRecording(
   s: LiveRecSession
 ): Promise<UploadResult> {
-  const blob = await idbAssembleBlob(s.riId, s.mime);
-  if (!blob || blob.size === 0) {
+  const parts = await idbAssembleParts(s.riId, s.mime);
+  if (parts.length === 0) {
     await idbDeleteSession(s.riId);
     return "empty";
   }
-  // 크기 초과는 재시도해도 무의미 — 정리 + permanent(호출자가 '파일 다시 올려주세요' 통지).
-  if (blob.size > MAX_AUDIO_BYTES) {
+  // 파트 1건 크기 초과는 재시도해도 무의미 — 정리 + permanent(호출자가 '파일 다시 올려주세요' 통지).
+  if (parts.some((p) => p.blob.size > MAX_AUDIO_BYTES)) {
     await idbDeleteSession(s.riId);
     return "permanent";
   }
   const ext = s.mime.includes("mp4") ? "mp4" : s.mime.includes("ogg") ? "ogg" : "webm";
-  const file = new File([blob], `live-${s.riId}.${ext}`, { type: s.mime });
+  const files = parts.map((p) => ({
+    offsetMs: p.offsetMs,
+    file: new File([p.blob], `live-${s.riId}-p${p.part}.${ext}`, { type: s.mime }),
+  }));
   const durationSeconds = Math.max(0, Math.round(s.durationSeconds));
 
   // Vercel 함수 본문 한도(4.5MB) 회피 — Blob 직접 업로드 후 서버엔 URL manifest 만 전송.
@@ -206,22 +245,29 @@ export async function uploadLiveRecording(
   let r: Response;
   try {
     if (useBlobUpload) {
-      const uploaded = await blobUpload(file.name, file, {
-        access: "private",
-        handleUploadUrl: `/api/blob/upload`,
-        clientPayload: JSON.stringify({
-          candidateId: s.candidateId,
-          kind: "audio",
-        }),
-        multipart: file.size > 8 * 1024 * 1024,
-      });
+      const uploaded: Array<{ url: string; offsetMs: number; size: number }> = [];
+      for (const f of files) {
+        const up = await blobUpload(f.file.name, f.file, {
+          access: "private",
+          handleUploadUrl: `/api/blob/upload`,
+          clientPayload: JSON.stringify({
+            candidateId: s.candidateId,
+            kind: "audio",
+          }),
+          multipart: f.file.size > 8 * 1024 * 1024,
+        });
+        uploaded.push({
+          url: up.url,
+          offsetMs: f.offsetMs,
+          size: f.file.size,
+        });
+      }
       r = await fetch(`/api/candidates/${s.candidateId}/recorded-interview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          audioUrl: uploaded.url,
+          audioParts: uploaded,
           audioMime: s.mime,
-          size: file.size,
           round: s.round,
           consentConfirmed: true,
           recordedInterviewId: s.riId,
@@ -230,7 +276,9 @@ export async function uploadLiveRecording(
       });
     } else {
       const fd = new FormData();
-      fd.append("audio", file);
+      // 파트가 여럿이면 audio 필드를 여러 번 — 서버가 getAll 로 순서대로 받는다.
+      for (const f of files) fd.append("audio", f.file);
+      fd.append("offsets", JSON.stringify(files.map((f) => f.offsetMs)));
       fd.append("round", s.round);
       fd.append("consentConfirmed", "true");
       fd.append("recordedInterviewId", String(s.riId));

@@ -24,6 +24,9 @@ import {
   TOO_SHORT_INTERVIEW_MESSAGE,
 } from "@/lib/upload-validation";
 
+// 추천질문에 넘길 최근 발화 턴 수 — 이 안에서 다시 LIVE_SUGGEST_CONTEXT_CHARS 로 잘린다.
+const LIVE_SUGGEST_RECENT_TURNS = 40;
+
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
@@ -287,14 +290,20 @@ export async function GET(
   const ri = await loadLiveRi(cid, riId);
   if (!ri) return new Response("Not found", { status: 404 });
 
-  const segs = await db
-    .select({
-      speakerLabel: interviewTranscriptSegments.speakerLabel,
-      text: interviewTranscriptSegments.text,
-    })
-    .from(interviewTranscriptSegments)
-    .where(eq(interviewTranscriptSegments.recordedInterviewId, riId))
-    .orderBy(asc(interviewTranscriptSegments.seq));
+  // 추천 질문은 **최근 대화**를 파고드는 용도라 전사 전체가 필요 없다(중복 회피는 have 파라미터
+  // 담당). 예전엔 전체를 읽어 최근 12,000자를 보냈는데, 45초마다 새로 쌓이는 건 수백 자뿐이라
+  // 같은 내용을 수십 번 되보내는 셈이었다 — DB 왕복과 LLM 입력을 함께 줄인다.
+  const segs = (
+    await db
+      .select({
+        speakerLabel: interviewTranscriptSegments.speakerLabel,
+        text: interviewTranscriptSegments.text,
+      })
+      .from(interviewTranscriptSegments)
+      .where(eq(interviewTranscriptSegments.recordedInterviewId, riId))
+      .orderBy(desc(interviewTranscriptSegments.seq))
+      .limit(LIVE_SUGGEST_RECENT_TURNS)
+  ).reverse();
 
   const empty = { answer_summary: "", positives: [], to_confirm: [], suggestions: [] };
   if (segs.length === 0 || !job) return Response.json(empty);
