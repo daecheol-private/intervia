@@ -35,6 +35,7 @@ import {
 } from "@/lib/schedules";
 import { sendScheduleConfirmationEmails } from "@/lib/schedule-notify";
 import { normalizeShareRecipients } from "@/lib/schedule-share";
+import { ensureOrgAddress } from "@/lib/org-address";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
 import { rateLimit } from "@/lib/rate-limit";
@@ -130,6 +131,10 @@ export async function POST(
   const addressDetail = body.addressDetail?.trim() || null;
   if (!modeOnline && !address)
     return new Response("오프라인 면접은 주소가 필요합니다.", { status: 400 });
+
+  // 면접 장소 주소 자동 저장 — 일정 제시 경로와 동일하게 주소록에 남긴다(중복은 건너뜀).
+  if (address && !modeOnline)
+    await ensureOrgAddress(job.orgId, address, addressDetail);
 
   const now = new Date().toISOString();
 

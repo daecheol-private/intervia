@@ -129,7 +129,14 @@ export function ScheduleProposeModal({
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (Array.isArray(d?.shareRecipients) && d.shareRecipients.length > 0)
-          setShareRecipients(d.shareRecipients);
+          // 평가 리포트 공유는 기본 켬 — 직전 제안에서 꺼져 있었더라도 기본값을 적용하고,
+          // 원치 않으면 그 자리에서 끄게 한다(수신자 목록만 재사용).
+          setShareRecipients(
+            (d.shareRecipients as ShareRecipient[]).map((r) => ({
+              ...r,
+              report: true,
+            }))
+          );
       })
       .catch(() => {});
   }, [open, jobId, round]);

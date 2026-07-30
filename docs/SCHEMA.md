@@ -45,7 +45,7 @@
 
 인덱스: `idx_org_addresses_org (org_id)`.
 
-일정 제시(`POST /api/jobs/[id]/schedule-propose`)에서 오프라인 주소를 입력했을 때, **법인에 등록된 주소가 하나도 없을 때만** 여기에 자동 저장한다(`ensureOrgAddress`). 이미 주소가 있으면 입력값은 그 면접 한정 장소로 보고 주소록을 건드리지 않는다. 확정된 일정에는 주소 문자열이 `interview_schedules` 에 복사되므로, 여기서 주소를 지워도 과거 일정·발송된 메일에는 영향이 없다.
+일정 제시(`POST /api/jobs/[id]/schedule-propose`)·직접 확정(`POST /api/candidates/[id]/schedule-manual`)에서 오프라인 주소를 입력하면 **항상** 여기에 자동 저장한다(`ensureOrgAddress`) — 실제로 면접을 잡은 장소는 다음에도 쓸 가능성이 높기 때문. 이미 있는 주소면 건너뛰고(주소+상세가 모두 같을 때만 중복), 상한(20)을 넘으면 조용히 건너뛴다(일정 발송을 막지 않는다). 필요 없어진 주소는 법인 설정에서 삭제. 확정된 일정에는 주소 문자열이 `interview_schedules` 에 복사되므로, 여기서 주소를 지워도 과거 일정·발송된 메일에는 영향이 없다.
 
 ## users
 

@@ -87,6 +87,9 @@ export function ShareRecipientPicker({
   // 평가 리포트 공유는 수신자별 플래그지만 UI 는 전체 토글 하나 — 지금 화면에서
   // 사람마다 다르게 줄 이유가 없다. 나중에 갈라야 하면 데이터는 이미 수신자별이다.
   const reportOn = value.length > 0 && value.every((r) => r.report);
+  // 새로 추가되는 사람에게 적용할 값. 첫 수신자는 켠 채로 시작(기본값 = 공유)하고,
+  // 이미 사람이 있으면 현재 토글을 따라간다 — 꺼 둔 상태에서 추가해도 꺼진 채로 남는다.
+  const nextReport = value.length === 0 ? true : reportOn;
 
   const add = (r: ShareRecipient) => {
     if (has(r.email)) return;
@@ -95,10 +98,9 @@ export function ShareRecipientPicker({
       return;
     }
     setErr("");
-    // 이미 켜 둔 상태면 새로 추가되는 사람도 같은 조건으로 — every 판정이 흔들리지 않는다.
     onChange([
       ...value,
-      { ...r, email: r.email.trim().toLowerCase(), report: reportOn || undefined },
+      { ...r, email: r.email.trim().toLowerCase(), report: nextReport || undefined },
     ]);
   };
 
