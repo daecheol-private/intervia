@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { candidates, interviewSchedules } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { validateSlots } from "@/lib/schedules";
+import { isScheduleSuperseded } from "@/lib/stage-meta";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
 import { rateLimit } from "@/lib/rate-limit";
@@ -36,6 +37,23 @@ export async function POST(
     return new Response("이미 처리된 일정입니다.", { status: 409 });
   if (new Date(sched.expiresAt) < new Date())
     return new Response("만료된 링크입니다.", { status: 410 });
+
+  // 종결·전진한 후보의 역제시 차단 (select 라우트와 동일 판정 — 옛 링크 방어).
+  const [candState] = await db
+    .select({ stage: candidates.stage, outcome: candidates.outcome })
+    .from(candidates)
+    .where(eq(candidates.id, sched.candidateId));
+  if (
+    candState &&
+    isScheduleSuperseded({
+      stage: candState.stage,
+      outcome: candState.outcome,
+      round: sched.round,
+    })
+  )
+    return new Response("이 일정 제안은 더 이상 유효하지 않습니다.", {
+      status: 410,
+    });
 
   const check = validateSlots(body.slots);
   if (!check.ok) return new Response(check.error, { status: 400 });

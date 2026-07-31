@@ -5,7 +5,7 @@
 import { db } from "@/lib/db";
 import { interviewSessions, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { purgeOnDecision } from "@/lib/candidate-stage";
+import { cleanupOnClose, purgeOnDecision } from "@/lib/candidate-stage";
 import { notifyShareCancelOnCandidateClosed } from "@/lib/schedule-share";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -87,6 +87,10 @@ export async function POST(
 
   await purgeOnDecision(session.candidateId).catch((e) =>
     console.error("purgeOnDecision after AI-interview withdraw failed", e)
+  );
+  // 남아있던 일정 제안·평가큐 정리 (이 세션은 위에서 이미 expired 전이).
+  await cleanupOnClose(session.candidateId).catch((e) =>
+    console.error("cleanupOnClose after AI-interview withdraw failed", e)
   );
 
   // 예정된 확정 면접이 있으면 일정 공유 수신자에게 취소 통지 (대부분 no-op).

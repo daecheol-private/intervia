@@ -35,7 +35,12 @@ import { deleteFile } from "./storage";
 import { deleteCandidateFiles } from "./candidate-files";
 import { createNotification } from "./notifications";
 import { getBalance, getPricing, writeLedgerIdempotent } from "./tokens";
-import { buildDecisionEmail, purgeOnDecision, resolveCandidateEmailLang } from "./candidate-stage";
+import {
+  buildDecisionEmail,
+  cleanupOnClose,
+  purgeOnDecision,
+  resolveCandidateEmailLang,
+} from "./candidate-stage";
 import { sendMail, getOrgEmailBranding, brandingAttachments } from "./mailer";
 import { sentToday } from "./mail-usage";
 import { redactCandidateAuditPii } from "./audit";
@@ -364,6 +369,9 @@ export async function closeJob(args: {
   for (const t of targets) {
     await purgeOnDecision(t.id).catch((e) =>
       console.error(`closeJob: purgeOnDecision failed (cid=${t.id})`, e)
+    );
+    await cleanupOnClose(t.id).catch((e) =>
+      console.error(`closeJob: cleanupOnClose failed (cid=${t.id})`, e)
     );
   }
 

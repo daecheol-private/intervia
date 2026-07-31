@@ -5,7 +5,7 @@ import {
   candidates,
 } from "./schema";
 import { and, eq, lt, sql, isNull, inArray } from "drizzle-orm";
-import { purgeOnDecision } from "./candidate-stage";
+import { cleanupOnClose, purgeOnDecision } from "./candidate-stage";
 
 /**
  * 만료 시점이 지난 면접 세션 정리.
@@ -90,6 +90,9 @@ export async function expireInterviewSessions(): Promise<{
         await purgeOnDecision(c.id).catch((e) =>
           console.error("purgeOnDecision after ai expire failed", e)
         );
+        await cleanupOnClose(c.id).catch((e) =>
+          console.error("cleanupOnClose after ai expire failed", e)
+        );
         aiAutoRejected++;
       } catch (e) {
         console.error("ai expire auto-reject failed", { candidateId: c.id, e });
@@ -143,6 +146,9 @@ export async function expireInterviewSessions(): Promise<{
           .where(and(eq(candidates.id, c.id), isNull(candidates.outcome)));
         await purgeOnDecision(c.id).catch((e) =>
           console.error("purgeOnDecision after schedule expire failed", e)
+        );
+        await cleanupOnClose(c.id).catch((e) =>
+          console.error("cleanupOnClose after schedule expire failed", e)
         );
         scheduleAutoRejected++;
       } catch (e) {

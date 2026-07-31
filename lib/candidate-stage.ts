@@ -19,8 +19,14 @@
  * 평가 결과는 공고 종결 +14일 라이프사이클 cron 이 candidate row 통째 삭제.
  */
 import { db } from "./db";
-import { candidates, candidateAttachments, interviewSessions } from "./schema";
-import { desc, eq } from "drizzle-orm";
+import {
+  candidates,
+  candidateAttachments,
+  interviewSchedules,
+  interviewSessions,
+  screeningJobs,
+} from "./schema";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { deleteFile } from "./storage";
 import { wrapEmailCard, type OrgEmailBranding } from "./mailer";
 
@@ -226,6 +232,57 @@ export async function purgeOnDecision(candidateId: number): Promise<void> {
       photoFilePath: null,
     })
     .where(eq(candidates.id, candidateId));
+}
+
+/**
+ * 종결(hired/rejected/withdrawn) 시 남은 "진행 중" 부산물 정리.
+ * **모든 종결 경로에서 purgeOnDecision 과 함께 호출한다** (수동 결정 / 지원자 지원취소 2종 /
+ * 링크 만료 자동 불합격 / 공고 종결 일괄 불합격).
+ *
+ * 정리하지 않으면 종결 후에도 이런 것들이 남는다:
+ *   - 일정: 유효한 응답 링크로 지원자가 시간 선택·역제시 가능 + 대시보드 유령 알림
+ *           (2026-07-31 실제 발생 — 역제시 후 불합격 처리한 후보가 알림에만 남음)
+ *   - AI 세션: 토큰 라우트는 isAiInterviewSuperseded 가 막지만 row 는 응시 대기로 남음
+ *   - 서류평가 큐: 워커가 그대로 집어 LLM 호출 + 토큰 과금 (후차감이라 큐에서 빼면 미과금)
+ *
+ * 건드리지 않는 것: 이미 확정된 일정(selected)·완료 세션·processing 큐 job.
+ * 각각 "면접이 있었다"는 이력이거나 워커가 잡고 있어 상태를 뺏으면 안 된다.
+ * 멱등 — 대상 status 일 때만 전이하므로 중복 호출도 안전.
+ */
+export async function cleanupOnClose(candidateId: number): Promise<void> {
+  const now = new Date().toISOString();
+
+  await db
+    .update(interviewSchedules)
+    .set({ status: "cancelled", updatedAt: now })
+    .where(
+      and(
+        eq(interviewSchedules.candidateId, candidateId),
+        inArray(interviewSchedules.status, ["pending", "counter_proposed"])
+      )
+    );
+
+  await db
+    .update(interviewSessions)
+    .set({ status: "expired", completedAt: now })
+    .where(
+      and(
+        eq(interviewSessions.candidateId, candidateId),
+        inArray(interviewSessions.status, ["pending", "in_progress"])
+      )
+    );
+
+  // queued/paused 만 — done 으로 닫아 워커 재개(paused→queued reconcile)까지 차단.
+  // 사유는 lastError 에 남겨 "왜 평가가 안 됐나"를 나중에 추적할 수 있게 한다.
+  await db
+    .update(screeningJobs)
+    .set({ status: "done", lastError: "후보자 종결로 취소됨" })
+    .where(
+      and(
+        eq(screeningJobs.candidateId, candidateId),
+        inArray(screeningJobs.status, ["queued", "paused"])
+      )
+    );
 }
 
 /**

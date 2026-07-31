@@ -155,6 +155,8 @@ npm run test:critical        # 전체 (~2/4분, dev 서버 라우트 컴파일 �
 | CT-902 | (DB 시드 스케줄) 공개 `GET /api/schedule/[token]` | 200 슬롯 목록 |
 | CT-903 | 슬롯 선택 select | `{ok:true, selectedSlot}` — 메일 불가 환경에서도 확정은 성공 |
 | CT-904 | 같은 토큰 재선택 | 409 |
+| CT-905 | 후보자 불합격 처리(`PATCH /api/candidates/[id]/stage`) | 활성 일정 `cancelled` + AI 세션 `expired` (cleanupOnClose) + 일정 링크 410 |
+| CT-906 | 종결 후보의 옛 링크(정리 이전 `pending` row) GET/select/counter | 전부 410 — 후보자 상태(`isScheduleSuperseded`)로 차단 |
 
 ### CT-10. 토큰 지갑 정합성 (lib 단위 직접 호출) ⚙️
 

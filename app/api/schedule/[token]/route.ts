@@ -9,6 +9,7 @@ import {
   organizations,
 } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { isScheduleSuperseded } from "@/lib/stage-meta";
 
 export const runtime = "nodejs";
 
@@ -43,9 +44,30 @@ export async function GET(
     );
 
   const [cand] = await db
-    .select({ name: candidates.name })
+    .select({
+      name: candidates.name,
+      stage: candidates.stage,
+      outcome: candidates.outcome,
+    })
     .from(candidates)
     .where(eq(candidates.id, sched.candidateId));
+
+  // 종결·전진한 후보의 링크 차단. 정상 흐름에선 종결 시 cleanupOnClose 가 스케쥴을
+  // cancelled 로 닫지만, 그 이전에 만들어진 row 는 status 가 pending/counter_proposed 로
+  // 남아 링크가 살아 있다 — 후보자 상태로 한 번 더 판정한다.
+  if (
+    cand &&
+    isScheduleSuperseded({
+      stage: cand.stage,
+      outcome: cand.outcome,
+      round: sched.round,
+    })
+  )
+    return Response.json(
+      { code: "closed", message: "이 일정 제안은 더 이상 유효하지 않습니다." },
+      { status: 410 }
+    );
+
   const [job] = await db
     .select({
       title: jobPostings.title,

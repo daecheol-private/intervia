@@ -18,6 +18,7 @@ import {
   OUTCOME_REASONS_BY_OUTCOME,
   isOutcome,
   purgeOnDecision,
+  cleanupOnClose,
   buildDecisionEmail,
   resolveCandidateEmailLang,
 } from "@/lib/candidate-stage";
@@ -317,6 +318,11 @@ export async function PATCH(
   if (becameTerminal) {
     await notifyShareCancelOnCandidateClosed(cid, outcomeRequested).catch((e) =>
       console.error("notifyShareCancelOnCandidateClosed failed", e)
+    );
+    // 진행 중이던 일정·AI세션·평가큐 정리. 폐기(purge)와 달리 메일 실패와 무관하게
+    // 항상 실행 — outcome 은 이미 확정됐으므로 살아있는 링크·큐를 남기면 안 된다.
+    await cleanupOnClose(cid).catch((e) =>
+      console.error("cleanupOnClose failed", e)
     );
   }
 

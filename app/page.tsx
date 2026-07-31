@@ -305,20 +305,40 @@ async function Dashboard({ me }: { me: CurrentUser }) {
       .leftJoin(candidates, eq(candidates.jobId, jobPostings.id))
       .where(jobScopeFilter)
       .groupBy(jobPostings.id),
-    // 역제시 알림 — 스코프 내 공고에서 status='counter_proposed' 인 스케쥴
+    // 역제시 알림 — 지원자가 시간을 역제시해 HR 이 확정/재제시해야 하는 후보자.
+    // ⚠️ 판정은 후보자 기준(종결 제외 + 단계 + 라운드별 최신 활성 row)이어야 한다.
+    //   스케줄 row 만 세면 역제시 후 불합격 처리된 후보의 row 가 그대로 남아
+    //   목록엔 없는데 알림만 뜬다(2026-07-31 실제 발생). 판정 기준은
+    //   lib/candidate-state.ts r1_counter/r2_counter · funnel route 와 동일 — 바꿀 때 같이 갱신.
     db
       .select({
-        jobId: interviewSchedules.jobId,
+        jobId: candidates.jobId,
         title: jobPostings.title,
         passwordHash: jobPostings.passwordHash,
         n: count(),
       })
-      .from(interviewSchedules)
-      .innerJoin(jobPostings, eq(jobPostings.id, interviewSchedules.jobId))
+      .from(candidates)
+      .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
       .where(
-        and(jobScopeFilter, eq(interviewSchedules.status, "counter_proposed"))
+        and(
+          jobScopeFilter,
+          sql`${candidates.outcome} IS NULL`,
+          sql`(
+            (${candidates.stage} = 'round1_scheduling' AND (
+              SELECT s.status FROM interview_schedules s
+              WHERE s.candidate_id = candidates.id AND s.round = 'round1'
+                AND s.status IN ('pending','counter_proposed','selected')
+              ORDER BY s.id DESC LIMIT 1) = 'counter_proposed')
+            OR
+            (${candidates.stage} = 'round1_passed' AND (
+              SELECT s.status FROM interview_schedules s
+              WHERE s.candidate_id = candidates.id AND s.round = 'round2'
+                AND s.status IN ('pending','counter_proposed','selected')
+              ORDER BY s.id DESC LIMIT 1) = 'counter_proposed')
+          )`
+        )
       )
-      .groupBy(interviewSchedules.jobId, jobPostings.title),
+      .groupBy(candidates.jobId, jobPostings.title),
     // AI 면접 링크 만료(응시 중 중단) 알림 — 미응시 만료는 cron 이 자동 불합격 처리하지만,
     // 응시 중 만료는 HR 이 재발송 또는 결정해야 한다. 활성/완료 세션 없이 expired 만 남은 후보.
     db

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { interviewSchedules, candidates } from "@/lib/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { roundLabel, type Slot } from "@/lib/schedules";
+import { isScheduleSuperseded } from "@/lib/stage-meta";
 import { sendScheduleConfirmationEmails } from "@/lib/schedule-notify";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
@@ -38,6 +39,24 @@ export async function POST(
     return new Response("이미 처리된 일정입니다.", { status: 409 });
   if (new Date(sched.expiresAt) < new Date())
     return new Response("만료된 링크입니다.", { status: 410 });
+
+  // 종결·전진한 후보의 응답 차단 — 종결 시 cleanupOnClose 가 스케쥴을 cancelled 로 닫지만,
+  // 그 이전에 만들어진 row 는 pending/counter_proposed 로 남아 링크가 살아 있다.
+  const [candState] = await db
+    .select({ stage: candidates.stage, outcome: candidates.outcome })
+    .from(candidates)
+    .where(eq(candidates.id, sched.candidateId));
+  if (
+    candState &&
+    isScheduleSuperseded({
+      stage: candState.stage,
+      outcome: candState.outcome,
+      round: sched.round,
+    })
+  )
+    return new Response("이 일정 제안은 더 이상 유효하지 않습니다.", {
+      status: 410,
+    });
 
   const slots = sched.proposedSlots as Slot[];
   if (body.slotIndex < 0 || body.slotIndex >= slots.length)

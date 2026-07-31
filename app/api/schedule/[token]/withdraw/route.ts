@@ -5,7 +5,7 @@
 import { db } from "@/lib/db";
 import { interviewSchedules, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
-import { purgeOnDecision } from "@/lib/candidate-stage";
+import { cleanupOnClose, purgeOnDecision } from "@/lib/candidate-stage";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { sendScheduleShareEmails } from "@/lib/schedule-share";
 import { logAudit } from "@/lib/audit";
@@ -105,6 +105,10 @@ export async function POST(
   // 본문 폐기 (PIPA)
   await purgeOnDecision(sched.candidateId).catch((e) =>
     console.error("purgeOnDecision after withdraw failed", e)
+  );
+  // 다른 차수의 일정 제안·AI 세션·평가큐 정리 (이 스케쥴은 위에서 이미 withdrawn 전이).
+  await cleanupOnClose(sched.candidateId).catch((e) =>
+    console.error("cleanupOnClose after withdraw failed", e)
   );
 
   // 확정돼 있던 일정이면 공유 수신자(회의실·인사팀·임원)에게 취소를 알린다 —

@@ -68,6 +68,9 @@ const ctx = {
   cWd: 0,
   cSched: 0,
   schedToken: `ct-sched-${RUN_TAG}`,
+  cClose: 0, // CT-905 종결 정리 후보
+  closeToken: `ct-close-${RUN_TAG}`,
+  closeStaleToken: `ct-close-stale-${RUN_TAG}`,
   pdfA: Buffer.alloc(0) as Buffer,
   pdfB: Buffer.alloc(0) as Buffer,
   pdfC: Buffer.alloc(0) as Buffer,
@@ -901,6 +904,73 @@ describe("CT-9 대면 일정", () => {
   it("CT-904 재선택 409", async () => {
     const r = await anon.post(`/api/schedule/${ctx.schedToken}/select`, { slotIndex: 1 });
     assert.equal(r.status, 409, r.text);
+  });
+
+  it("CT-905 후보자 종결 → 활성 일정·AI세션 정리 + 링크 차단", async () => {
+    ctx.cClose = await insertCandidate({
+      orgId: ids.orgA,
+      jobId: ids.jobA,
+      name: "종결 정리 후보",
+      email: "cclose@example.com",
+      stage: "round1_scheduling",
+    });
+    await insertSchedule({
+      candidateId: ctx.cClose,
+      jobId: ids.jobA,
+      orgId: ids.orgA,
+      accessToken: ctx.closeToken,
+      slots: [{ start: futureIso(2 * DAY), end: futureIso(2 * DAY + HOUR) }],
+      expiresAt: futureIso(7 * DAY),
+    });
+    await insertSession({
+      candidateId: ctx.cClose,
+      accessToken: `ct-close-ai-${RUN_TAG}`,
+      expiresAt: futureIso(7 * DAY),
+    });
+    // 종결 전에는 링크가 살아 있다
+    assert.equal((await anon.get(`/api/schedule/${ctx.closeToken}`)).status, 200);
+
+    const dec = await adminA.patch(`/api/candidates/${ctx.cClose}/stage`, {
+      outcome: "rejected",
+      outcomeReason: "round1_unfit",
+    });
+    assert.equal(dec.status, 200, dec.text);
+
+    // 남아있던 활성 부산물이 전부 닫혀야 한다 (유령 알림·살아있는 링크 방지)
+    const sched = await row<{ status: string }>(
+      `SELECT status FROM interview_schedules WHERE access_token = ?`,
+      [ctx.closeToken]
+    );
+    assert.equal(sched?.status, "cancelled");
+    const sess = await row<{ status: string }>(
+      `SELECT status FROM interview_sessions WHERE candidate_id = ?`,
+      [ctx.cClose]
+    );
+    assert.equal(sess?.status, "expired");
+
+    const r = await anon.get(`/api/schedule/${ctx.closeToken}`);
+    assert.equal(r.status, 410, r.text);
+  });
+
+  it("CT-906 종결 후보의 옛 링크(정리 이전 row)도 응답 차단", async () => {
+    // cleanupOnClose 도입 전에 만들어져 pending 으로 남은 row 를 재현 — 후보자 상태로 막는다.
+    await insertSchedule({
+      candidateId: ctx.cClose,
+      jobId: ids.jobA,
+      orgId: ids.orgA,
+      accessToken: ctx.closeStaleToken,
+      slots: [{ start: futureIso(2 * DAY), end: futureIso(2 * DAY + HOUR) }],
+      expiresAt: futureIso(7 * DAY),
+    });
+    assert.equal((await anon.get(`/api/schedule/${ctx.closeStaleToken}`)).status, 410);
+    const sel = await anon.post(`/api/schedule/${ctx.closeStaleToken}/select`, {
+      slotIndex: 0,
+    });
+    assert.equal(sel.status, 410, sel.text);
+    const cnt = await anon.post(`/api/schedule/${ctx.closeStaleToken}/counter`, {
+      slots: [{ start: futureIso(4 * DAY), end: futureIso(4 * DAY + HOUR) }],
+    });
+    assert.equal(cnt.status, 410, cnt.text);
   });
 });
 

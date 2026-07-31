@@ -49,6 +49,10 @@ git worktree prune
 - 대시보드 알림(`app/page.tsx`)은 같은 판정의 SQL 재현 — 모듈 조건 바꾸면 **SQL 도 같이** 수정
 - 새 stage/스케줄 전이를 추가하면 `StateKey` 매트릭스에 빠지는 상태가 없는지 확인 (특히 "만료/시간경과" 류 — `ai_link_expired`, `r1_result_due` 가 과거에 빠져 있던 사각지대)
 
+**실제 사례 (2026-07-31)**: "오늘 할 일"의 역제시 알림이 `interview_schedules.status='counter_proposed'` 만 셌다. 역제시한 후보를 불합격 처리해도 스케줄 row 는 그대로라, **알림은 뜨는데 클릭하면 아무도 없는** 유령 알림이 됐다. 부산물 테이블(스케줄·세션·큐)만 세는 집계는 항상 후보자 기준(`outcome IS NULL` + stage + 라운드별 최신 활성 row)으로 감싸야 한다.
+
+**종결 시 부산물 정리는 `cleanupOnClose()` (lib/candidate-stage.ts)**: 종결(hired/rejected/withdrawn) 경로는 5곳(수동 결정 / 지원자 지원취소 2종 / 링크 만료 자동 불합격 / 공고 종결 일괄 불합격)이고, **전부 `purgeOnDecision` 옆에서 `cleanupOnClose` 를 부른다**. 안 부르면 활성 일정 링크가 살아남아 종결된 후보가 시간을 선택하고, 서류평가 큐가 남아 토큰이 과금된다. 새 종결 경로를 추가하면 이 호출도 같이 추가할 것. 링크 쪽은 이중 방어 — 스케줄 토큰 라우트(GET/select/counter)가 `isScheduleSuperseded` 로 후보자 상태를 한 번 더 본다(정리 도입 이전에 만들어진 옛 row 방어).
+
 ## 0. 멀티테넌트 — `org_id` 필터 누락이 가장 위험
 
 **증상**: 다른 법인 사용자가 우리 공고/후보자를 보게 됨.
