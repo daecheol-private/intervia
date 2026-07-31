@@ -223,6 +223,7 @@ export function StagePanel({
   rescreening,
   screeningPhase,
   screeningActive,
+  round2Confirmed = false,
 }: {
   candidate: Candidate;
   jobTitle: string;
@@ -235,6 +236,9 @@ export function StagePanel({
   rescreening: boolean;
   screeningPhase: "not_started" | "in_queue" | "done" | "failed" | "skipped";
   screeningActive: boolean;
+  /** 2차 일정이 이미 확정됐는지 — round2 는 확정돼도 stage 가 round1_passed 로 남아
+   *  stage 만으로는 "제시 필요"와 구분되지 않는다. 확정 후 변경은 2차 면접 탭에서. */
+  round2Confirmed?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [rescreenBusy, setRescreenBusy] = useState(false);
@@ -583,7 +587,7 @@ export function StagePanel({
                 1차 일정 제시
               </button>
             )}
-            {candidate.stage === "round1_passed" && (
+            {candidate.stage === "round1_passed" && !round2Confirmed && (
               <button
                 onClick={() => setOpen("schedule2")}
                 disabled={busy}

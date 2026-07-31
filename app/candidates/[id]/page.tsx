@@ -770,6 +770,7 @@ export default function CandidateDetailPage() {
             rescreening={!!data.rescreening}
             screeningPhase={data.screeningPhase}
             screeningActive={!!data.screeningActive}
+            round2Confirmed={round2Confirmed}
           />
         </div>
       </div>
