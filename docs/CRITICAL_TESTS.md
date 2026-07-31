@@ -157,6 +157,8 @@ npm run test:critical        # 전체 (~2/4분, dev 서버 라우트 컴파일 �
 | CT-904 | 같은 토큰 재선택 | 409 |
 | CT-905 | 후보자 불합격 처리(`PATCH /api/candidates/[id]/stage`) | 활성 일정 `cancelled` + AI 세션 `expired` (cleanupOnClose) + 일정 링크 410 |
 | CT-906 | 종결 후보의 옛 링크(정리 이전 `pending` row) GET/select/counter | 전부 410 — 후보자 상태(`isScheduleSuperseded`)로 차단 |
+| CT-907 | 역제시 → 종결 후 펀널 `hrActions.counterProposed` + 대시보드 HTML | 종결 전 1건·알림 노출 → 종결 후 0건·문구 사라짐 (유령 알림 회귀) |
+| CT-908 | `purgeOnDecision` 호출 파일에 `cleanupOnClose` 짝이 있는지 소스 정적 검사 | 위반 0 — 새 종결 경로에서 정리 누락 시 실패 |
 
 ### CT-10. 토큰 지갑 정합성 (lib 단위 직접 호출) ⚙️
 

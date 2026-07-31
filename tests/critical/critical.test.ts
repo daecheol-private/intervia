@@ -39,7 +39,7 @@ import { extractPII } from "../../lib/pii-extract";
 import { maskText } from "../../lib/mask";
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert";
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 // lib 직접 단위 검증 (CT-10) — lib/db 가 모듈 로드 시 DB 파일을 열므로,
 // .testdb 준비(before) 이후 동적 import 한다. env.ts 의 DATABASE_URL 이 적용된다.
@@ -85,6 +85,9 @@ function form(entries: Record<string, string | { buf: Buffer; name: string }>): 
   }
   return fd;
 }
+
+// 대시보드 "오늘 할 일" 역제시 알림 문구 (app/page.tsx). 바뀌면 CT-907 도 같이 갱신.
+const ALERT_COUNTER = "지원자 역제시 시간 확정";
 
 const futureIso = (ms: number) => new Date(Date.now() + ms).toISOString();
 const pastIso = (ms: number) => new Date(Date.now() - ms).toISOString();
@@ -971,6 +974,99 @@ describe("CT-9 대면 일정", () => {
       slots: [{ start: futureIso(4 * DAY), end: futureIso(4 * DAY + HOUR) }],
     });
     assert.equal(cnt.status, 410, cnt.text);
+  });
+
+  it("CT-907 역제시 후 종결 → HR 액션 집계에서 사라진다 (유령 알림 회귀)", async () => {
+    // 2026-07-31 실제 버그: 역제시 row 만 세어, 불합격 처리 후에도 "지원자 역제시
+    // 시간 확정" 알림이 남고 클릭하면 아무도 없었다. 집계는 후보자 기준이어야 한다.
+    const cid = await insertCandidate({
+      orgId: ids.orgA,
+      jobId: ids.jobA,
+      name: "역제시 후보",
+      email: "cctr@example.com",
+      stage: "round1_scheduling",
+    });
+    const token = `ct-ctr-${RUN_TAG}`;
+    await insertSchedule({
+      candidateId: cid,
+      jobId: ids.jobA,
+      orgId: ids.orgA,
+      accessToken: token,
+      slots: [{ start: futureIso(2 * DAY), end: futureIso(2 * DAY + HOUR) }],
+      expiresAt: futureIso(7 * DAY),
+    });
+    const ctr = await anon.post(`/api/schedule/${token}/counter`, {
+      slots: [{ start: futureIso(5 * DAY), end: futureIso(5 * DAY + HOUR) }],
+    });
+    assert.equal(ctr.status, 200, ctr.text);
+
+    const before = await adminA.get(`/api/jobs/${ids.jobA}/funnel`);
+    assert.equal(
+      field<{ counterProposed: number }>(before.body, "hrActions")?.counterProposed,
+      1,
+      before.text
+    );
+    // 종결 전엔 알림이 떠 있어야 한다 — 이 assert 가 없으면 아래 "사라졌다" 검증이
+    // 문구 오타만으로도 통과해 버린다.
+    const dashBefore = await adminA.get("/");
+    assert.ok(
+      dashBefore.text.includes(ALERT_COUNTER),
+      "역제시 상태인데 대시보드 알림이 없음"
+    );
+
+    const dec = await adminA.patch(`/api/candidates/${cid}/stage`, {
+      outcome: "rejected",
+      outcomeReason: "round1_unfit",
+    });
+    assert.equal(dec.status, 200, dec.text);
+
+    const after = await adminA.get(`/api/jobs/${ids.jobA}/funnel`);
+    assert.equal(
+      field<{ counterProposed: number }>(after.body, "hrActions")?.counterProposed,
+      0,
+      after.text
+    );
+
+    // 버그가 났던 지점 자체 — 대시보드 "오늘 할 일" 알림(app/page.tsx 집계).
+    // 종결 후에도 이 문구가 남으면 클릭해도 아무도 없는 유령 알림이다.
+    const dash = await adminA.get("/");
+    assert.ok(
+      !dash.text.includes(ALERT_COUNTER),
+      "종결 후에도 대시보드에 역제시 알림이 남아 있음"
+    );
+  });
+
+  it("CT-908 모든 종결 경로가 cleanupOnClose 를 호출한다", () => {
+    // 종결 경로를 새로 추가하면서 잔여 정리를 빠뜨리면 유령 알림·살아있는 링크가
+    // 되살아난다. purgeOnDecision 호출 = 종결 경로라는 신호이므로 짝을 강제한다.
+    const isCall = (line: string, fn: string) =>
+      line.includes(`${fn}(`) &&
+      !line.trimStart().startsWith("//") &&
+      !line.trimStart().startsWith("*") &&
+      !line.includes(`function ${fn}(`);
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          if (e.name !== "node_modules") walk(p);
+        } else if (e.name.endsWith(".ts") || e.name.endsWith(".tsx")) {
+          const lines = readFileSync(p, "utf8").split(/\r?\n/);
+          if (
+            lines.some((l) => isCall(l, "purgeOnDecision")) &&
+            !lines.some((l) => isCall(l, "cleanupOnClose"))
+          )
+            offenders.push(path.relative(ROOT, p));
+        }
+      }
+    };
+    walk(path.join(ROOT, "app"));
+    walk(path.join(ROOT, "lib"));
+    assert.deepEqual(
+      offenders,
+      [],
+      `종결 경로인데 cleanupOnClose 를 안 부름: ${offenders.join(", ")}`
+    );
   });
 });
 
