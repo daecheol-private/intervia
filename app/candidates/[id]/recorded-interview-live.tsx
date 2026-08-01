@@ -846,6 +846,15 @@ export function LiveRecorder({
             </div>
           </div>
 
+          {/* 지원자 1명 단위 — 집단면접에서 켜면 다른 지원자 발언이 이 지원자 평가에
+              조용히 섞인다(역할은 면접관/지원자 2종뿐이라 오류 없이 그렇게 된다). */}
+          <div className="rounded-lg border border-warning/30 bg-warning-soft/40 px-3 py-2.5 text-sm text-ink-soft leading-relaxed">
+            녹음은 <strong>지원자 1명 기준</strong>입니다(면접관은 여러 명이어도
+            괜찮습니다). 여러 지원자가 함께 답하는 <strong>집단면접</strong>을
+            녹음하면, 다른 지원자의 발언까지{" "}
+            <strong>이 지원자의 답변으로 섞여 평가</strong>됩니다.
+          </div>
+
           {mode === "inperson" ? (
             <p className="text-[15px] text-ink-soft leading-relaxed">
               노트북 마이크로 <strong>대면 면접</strong>을 기록합니다. 말하면{" "}

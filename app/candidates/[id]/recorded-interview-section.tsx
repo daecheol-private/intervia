@@ -485,8 +485,9 @@ export function RecordedInterviewPanel({
           </div>
           <p className="text-sm text-ink-soft leading-relaxed">
             사람이 진행한 <strong>대면 면접</strong>을 녹음 업로드하거나 라이브로
-            진행하면, 전사 → 화자 분리 → AI 역량 평가 리포트를 만들어 줍니다. 녹음
-            파일은 보관하지 않습니다.
+            진행하면, 전사 → 화자 분리 → AI 역량 평가 리포트를 만들어 줍니다.
+            평가는 <strong>지원자 1명 단위</strong>이며, 녹음 파일은 보관하지
+            않습니다.
           </p>
         </>
       )}
@@ -586,7 +587,11 @@ export function RecordedInterviewPanel({
           ) : (
             <p className="text-xs text-ink-muted">
               오디오/영상 파일 (최대 18MB). 라이브 녹음은 브라우저로 즉시 받아쓰며
-              최대 1시간까지 가능합니다.
+              최대 1시간까지 가능합니다.{" "}
+              <strong className="text-ink-soft">
+                지원자 1명 기준입니다 — 여러 지원자가 함께 답한 집단면접 녹음은
+                다른 지원자의 발언이 이 지원자 평가에 섞입니다.
+              </strong>
             </p>
           )}
         </div>
