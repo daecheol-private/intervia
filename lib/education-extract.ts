@@ -25,6 +25,10 @@ const RE_PLACEHOLDER = /YYYY|yyyy|NNNN|____|＿＿/;
 // 실제로 기입된 연월 — "2015.09" / "1998-02" / "1992년".
 const RE_REAL_PERIOD = /(?:19|20)\d{2}\s*[.\-/년]/;
 
+// 재학 "기간" 표기 — "2020.03 ~ 2024.02" / "‘20.03 ~ 26.02’"(따옴표 축약형).
+// 학력 행이 기간만 쓰고 "졸업" 을 생략하는 양식이 있다(실측 candidates/382).
+const RE_SCHOOL_PERIOD = /(?:(?:19|20)\d{2}|['’‘]\d{2})\s*[.\-/]\s*\d{1,2}\s*[~\-–—]/;
+
 type Rank = 1 | 2 | 3 | 4 | 5;
 const LEVEL_LABEL: Record<Rank, string> = {
   5: "박사",
@@ -139,7 +143,16 @@ function detectMajor(line: string): string | null {
     const c = cleanMajor(lbl[1]);
     if (c) return c;
   }
-  // 2) "경영/정보학 복수전공" — 복수/부/주전공은 전공명이 아니므로 그 앞의 실제 전공을 잡는다.
+  // 2) "(주) 수학과 (부) 응용소프트웨어학과" — 괄호 주/부전공 마커. 주전공을 택한다.
+  //    학과 접미사를 필수로 둔다 — "(주) 카카오" 같은 법인 표기를 전공으로 집지 않게.
+  //    아래 3번 토큰 규칙은 "수" + "학과"(앞 토큰 1글자 < 최소 2글자)로 매칭에 실패해
+  //    부전공인 "응용소프트웨어학과" 를 집는다. 주전공이 정답이라 여기서 먼저 가로챈다.
+  const primary = line.match(/\(\s*주\s*\)\s*([가-힣A-Za-z·]{1,15}(?:학과|학부|전공|과))/);
+  if (primary) {
+    const c = cleanMajor(primary[1]);
+    if (c) return c;
+  }
+  // 3) "경영/정보학 복수전공" — 복수/부/주전공은 전공명이 아니므로 그 앞의 실제 전공을 잡는다.
   //    (여러 전공이 나오면 cleanMajor 가 첫 번째만 남긴다 — 하나만 표기해도 무방)
   const multi = line.match(/([가-힣A-Za-z·/]{2,25}?)\s*(?:복수|부|주|심화)\s*전공/);
   if (multi) {
@@ -188,14 +201,18 @@ function detectStandaloneDept(line: string): string | null {
  * 같은 대학이라도 캠퍼스가 다르면 다른 학교로 취급되는 게 통례라 표기해 준다.
  * 학교명 뒤 괄호에는 캠퍼스 말고도 학제·학위·부서가 오므로(실측 93건에서 "(4년제)" "(2·3년제)"
  * "(석사과정)" "(편입)" "(학술정보팀)" 등) 아래를 캠퍼스가 **아닌** 것으로 걸러낸다.
+ *
+ * ⚠️ 캠퍼스명은 **최소 2글자**다(세종·안성·글로벌·ERICA…). 1글자를 허용했더니 주/부전공
+ * 표기 "광운대학교 (주) 수학과 (부) 응용소프트웨어학과" 의 "(주)" 가 캠퍼스로 붙어
+ * "광운대학교(주)" 가 됐다.
  */
 const CAMPUS_NOT =
-  /\d|학위|과정|편입|입학|졸업|재학|수료|년제|학사|석사|박사|[팀실소과부처원]$/;
+  /\d|학위|과정|편입|입학|졸업|재학|수료|년제|학사|석사|박사|전공|복수|[팀실소과부처원]$/;
 function withCampus(text: string, school: string | null): string | null {
   if (!school) return school;
   const esc = school.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const m = text.match(
-    new RegExp(`${esc}\\s*\\(\\s*([가-힣A-Za-z][가-힣A-Za-z ]{0,9})\\s*\\)`)
+    new RegExp(`${esc}\\s*\\(\\s*([가-힣A-Za-z][가-힣A-Za-z ]{1,9})\\s*\\)`)
   );
   const campus = m?.[1].trim();
   if (!campus || CAMPUS_NOT.test(campus)) return school;
@@ -294,7 +311,9 @@ export function extractEducation(rawText: string): Education {
       rank == null &&
       (uniByLine.has(idx) || detectSchoolGeneric(line)) &&
       !/전문\s*대|대학원/.test(line) &&
-      /(졸업|재\s*학|수료|입학|학번)/.test(line)
+      // 재학 기간도 근거로 인정 — "‘20.03 ~ 26.02’ 광운대학교 / (주) 수학과" 처럼
+      // 기간을 적고 "졸업" 을 안 쓰는 양식은 학력 자체를 통째로 놓쳤다(실측 #382).
+      (/(졸업|재\s*학|수료|입학|학번)/.test(line) || RE_SCHOOL_PERIOD.test(line))
     ) {
       rank = 3;
     }
