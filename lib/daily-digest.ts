@@ -9,8 +9,9 @@
  * 받는 사람: job_interviewers 에 배정된 active 사용자 전원(역할 무관). 각자 본인 배정 공고만.
  * 4블록:
  *   ① 오늘(KST) 진행할 확정 면접 — interview_schedules.status='selected' + 오늘 슬롯
- *   ② 결정 대기            — round1_passed / round2_passed (outcome 미정, 면접 후 합/불 결정).
- *      round1_waiting(1차 확정·미실시)은 제외 — D-1 리마인더 + 당일 블록①이 커버.
+ *   ② 결정·조치 대기       — 면접 단계(round1_waiting/round1_passed/round2_passed, outcome 미정)
+ *      중 deriveCandidateState 로 판정한 대기주체가 hr 인 후보만. 확정된 면접(대기주체
+ *      interviewer)·지원자 일정 응답 대기(candidate)는 제외 — D-1 리마인더 + 당일 블록①이 커버.
  *   ③ 신규 지원·검토 대기  — applied / screened / ai_evaluated (outcome 미정)
  *   ④ 자동 종결            — 링크 만료 자동 불합격(outcomeReason 기반), 신규 창 내 발생분.
  *      expire cron(24시간 가동)의 개별 알림 메일을 대체한다 — 야간·주말 메일 소스 제거.
@@ -48,14 +49,26 @@ import {
 import { formatSlotKst } from "./schedules";
 import { roundLabel } from "./schedules";
 import { STAGE_WAITER, isScheduleSuperseded, type Stage } from "./stage-meta";
+import { deriveCandidateState, type ScheduleStatus } from "./candidate-state";
 
 /**
- * "결정 대기"로 묶는 stage — 면접을 이미 치러 합/불·다음 단계를 정해야 하는 단계.
- * round1_waiting(1차 면접 확정·미실시)은 제외: 아직 면접 전이라 '결정'할 게 없고,
- * 면접일까지 매일 반복 발송되는 소음이다. 확정 면접은 D-1 리마인더 + 당일 블록①(오늘
- * 진행할 면접)이 적시에 커버하므로 digest 결정 블록에 넣지 않는다.
+ * 블록② 후보군 stage — 여기서 다시 파생 판정(deriveCandidateState)으로 걸러진다.
+ *
+ * ⚠️ stage 만으로는 판정할 수 없다: 2차는 확정돼도 stage 가 round1_passed 로 유지되고
+ * round2 스케줄 row 로만 진행된다(B-1 설계). stage 만 보면 8/5 면접이 확정된 후보도
+ * "2차 진행 결정 대기"로 매일 나간다 — 실제 발생한 오발송. 확정·응답대기 스케줄이
+ * 있으면 결정은 이미 내려진 것이므로, 대시보드·퍼널과 같은 파생 규칙으로 대기주체가
+ * hr 인 후보만 남긴다.
+ *
+ * round1_waiting 을 포함하는 이유: 면접 전(r1_scheduled)은 waiter=interviewer 라
+ * 자동 제외되고, 면접 시각이 지났는데 결과 미입력(r1_result_due)만 hr 로 걸린다.
+ * 면접 전 반복 발송(소음)은 막으면서 결과 입력 누락은 잡는다.
  */
-const DECISION_STAGES: Stage[] = ["round1_passed", "round2_passed"];
+const DECISION_STAGES: Stage[] = [
+  "round1_waiting",
+  "round1_passed",
+  "round2_passed",
+];
 /** "신규 지원·검토 대기"로 묶는 stage — 면접 전 단계에서 검토·진행 결정이 필요한 단계. */
 const REVIEW_STAGES: Stage[] = ["applied", "screened", "ai_evaluated"];
 
@@ -186,10 +199,12 @@ export async function sendDailyDigests(): Promise<{
       continue;
     }
 
-    // 블록① — 오늘(KST) 확정 면접. status='selected' 전체를 가져와 JS 에서 오늘·미종결 필터.
+    // 활성 스케줄 전체(제시·역제시·확정) — 블록①(오늘 면접)과 블록②(파생 판정) 공용.
     const schedRows = await db
       .select({
+        id: interviewSchedules.id,
         candidateId: interviewSchedules.candidateId,
+        status: interviewSchedules.status,
         selectedSlot: interviewSchedules.selectedSlot,
         modeOnline: interviewSchedules.modeOnline,
         round: interviewSchedules.round,
@@ -204,13 +219,35 @@ export async function sendDailyDigests(): Promise<{
       .where(
         and(
           inArray(interviewSchedules.jobId, jobIds),
-          eq(interviewSchedules.status, "selected")
+          inArray(interviewSchedules.status, [
+            "pending",
+            "counter_proposed",
+            "selected",
+          ])
         )
       );
 
+    // 후보·차수별 최신 활성 스케줄 — 재제시는 새 row 를 추가하므로 id 가 큰 쪽이 최신.
+    const latestSched = new Map<
+      string,
+      { id: number; status: ScheduleStatus; end: string | null }
+    >();
+    for (const r of schedRows) {
+      const key = `${r.candidateId}:${r.round}`;
+      const prev = latestSched.get(key);
+      if (prev && prev.id >= r.id) continue;
+      latestSched.set(key, {
+        id: r.id,
+        status: r.status as ScheduleStatus,
+        end: r.selectedSlot?.end ?? null,
+      });
+    }
+
+    // 블록① — 오늘(KST) 확정 면접.
     const todayInterviews: DigestItem[] = [];
     const todayCandidateIds = new Set<number>();
     for (const r of schedRows) {
+      if (r.status !== "selected") continue;
       const start = r.selectedSlot?.start;
       if (!start || kstDateStr(new Date(start)) !== todayKst) continue;
       if (
@@ -248,13 +285,30 @@ export async function sendDailyDigests(): Promise<{
           isNull(candidates.outcome)
         )
       );
-    const decisionPending: DigestItem[] = decisionRows
-      .filter((r) => !todayCandidateIds.has(r.id))
-      .map((r) => ({
+    const decisionPending: DigestItem[] = [];
+    for (const r of decisionRows) {
+      if (todayCandidateIds.has(r.id)) continue;
+      const r1 = latestSched.get(`${r.id}:round1`);
+      const r2 = latestSched.get(`${r.id}:round2`);
+      // 대기주체가 hr 일 때만 — 면접 확정(interviewer)·지원자 응답 대기(candidate)는 제외.
+      const state = deriveCandidateState(
+        {
+          stage: r.stage,
+          outcome: null, // 쿼리에서 outcome IS NULL 로 이미 걸렀다
+          round1ScheduleStatus: r1?.status ?? null,
+          round1SelectedEnd: r1?.end ?? null,
+          round2ScheduleStatus: r2?.status ?? null,
+          round2SelectedEnd: r2?.end ?? null,
+        },
+        now
+      );
+      if (state.waiter !== "hr") continue;
+      decisionPending.push({
         primary: `${r.name} · ${r.jobTitle}`,
-        secondary: STAGE_WAITER[r.stage].label,
+        secondary: state.label,
         isNew: parseDbTimeMs(r.updatedAt) >= newSinceMs,
-      }));
+      });
+    }
     sortNewFirst(decisionPending);
 
     // 블록③ — 신규 지원·검토 대기.
@@ -411,7 +465,7 @@ export function buildDailyDigestEmail(opts: {
     : "";
   const text = `${name}님, 오늘 처리하실 항목을 안내드립니다.
 ${textSection("오늘 진행할 면접", todayInterviews)}${textSection(
-    "결정 대기",
+    "결정·조치 대기",
     decisionPending
   )}${textSection("신규 지원·검토 대기", reviewPending)}${textSection(
     "자동 종결 (링크 만료)",
@@ -468,7 +522,7 @@ Intervia 에서 보기: ${dashboardUrl}
         회원님이 면접관으로 배정된 공고에서 처리가 필요한 항목을 모았습니다.
       </p>
       ${htmlSection("오늘 진행할 면접", EMAIL_BRAND.primary, todayInterviews)}
-      ${htmlSection("합격/불합격 결정 대기", "#b45309", decisionPending)}
+      ${htmlSection("결정·조치 대기", "#b45309", decisionPending)}
       ${htmlSection("신규 지원·검토 대기", "#0f766e", reviewPending)}
       ${htmlSection("자동 종결 (링크 만료)", "#64748b", autoClosed)}
       ${
