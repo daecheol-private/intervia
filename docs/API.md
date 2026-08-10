@@ -152,8 +152,8 @@
 | POST | `/api/candidates/bulk-screen` | 🔒 🏢 | `{ids:number[]}` — 평가/재평가 일괄 (과금은 성공 시 후차감). 완료/미평가→enqueue, `queued`(재시도 대기)→백오프 해제(즉시 재시도), `processing`/`paused`→skip. 응답 `{enqueued, kicked, skipped, details}` |
 | PATCH | `/api/candidates/[id]/stage` | 🔒 🏢 | `{stage, outcome?, outcomeReason?, note?, sendNotification?, customMessage?}` — 단계 변경. 단말(hired/rejected/withdrawn) 도달 시 자동 폐기 + (옵션) 통보 메일. **outcome=rejected 는 `outcomeReason`(목록값) 필수** — 없으면 `400 {code:"reason_required"}` (PIPA §37의2 인적검토 근거 기록). 응답 `{stage, terminal, purged, mail}` |
 | POST | `/api/candidates/[id]/decision-mail` | 🔒 🏢 | `{customMessage?}` — 결정 통보 메일 (재)발송. outcome hired/rejected + 이메일 + SMTP + 잔액 필요. 10회 한도 초과 시 429. 응답 `{ok, sent, max}` |
-| PATCH | `/api/candidates/[id]/decision-mail` | 🔒 🏢 | **보냄 처리** — 메일을 보내지 않고 "전화·문자로 이미 통보함"을 표시. `decision_notified_externally_at` 기록 + 드레인 큐 해제 → 미발송 배너·일괄 발송·저녁 드레인에서 제외(이중 통보 방지). 과금·발송 한도 무관, 이메일 없는 후보도 가능, 멱등. 감사 `candidate.decision_notify_external` |
-| DELETE | `/api/candidates/[id]/decision-mail` | 🔒 🏢 | 보냄 처리 해제 → 미통보 상태로 복귀(드레인 큐는 되살리지 않음). 감사 `candidate.decision_notify_external_undo` |
+| PATCH | `/api/candidates/[id]/decision-mail` | 🔒 🏢 | **'이미 통보함' 표시** — 메일을 보내지 않고 전화·문자 등으로 이미 통보했음을 기록. `decision_notified_externally_at` 기록 + 드레인 큐 해제 → 미발송 배너·일괄 발송·저녁 드레인에서 제외(이중 통보 방지). 과금·발송 한도 무관, 이메일 없는 후보도 가능, 멱등. 감사 `candidate.decision_notify_external` |
+| DELETE | `/api/candidates/[id]/decision-mail` | 🔒 🏢 | '이미 통보함' 표시 해제 → 미통보 상태로 복귀(드레인 큐는 되살리지 않음). 감사 `candidate.decision_notify_external_undo` |
 | GET | `/api/candidates/[id]/notes` | 🔒 🏢 | 면접관 메모 목록 (같은 법인 누구나 조회). **UI는 2026-06-21 토론 채팅(아래 `/comments`)으로 대체 — 라우트·데이터 보존** |
 | POST | `/api/candidates/[id]/notes` | 🔒 🏢 | `{scores?, note?, interviewSessionId?}` 메모/스코어카드 작성. 본인 row 생성 |
 | PATCH | `/api/candidates/[id]/notes/[noteId]` | 🔒 🏢 | 본인 작성 메모 수정 |

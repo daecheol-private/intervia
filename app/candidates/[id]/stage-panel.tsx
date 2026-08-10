@@ -471,13 +471,13 @@ export function StagePanel({
     onChanged();
   };
 
-  // 보냄 처리 — 전화·문자로 이미 알린 후보를 메일 없이 통보 완료로 표시.
+  // 이미 통보함 표시 — 전화·문자로 이미 알린 후보를 메일 없이 통보 완료로 기록.
   // 표시된 후보는 공고 화면의 '일괄 통보 발송'·저녁 드레인에서 빠져 두 번 통보되지 않는다.
   const markNotifiedExternally = async () => {
     if (
       !(await confirmDialog(
         "메일을 보내지 않고 '통보 완료'로 표시합니다.\n전화·문자 등으로 이미 결과를 알린 경우에 사용하세요.\n\n이후 일괄 통보 발송 대상에서 제외됩니다.",
-        { title: "보냄 처리", confirmText: "보냄 처리" }
+        { title: "이미 통보함으로 표시", confirmText: "표시" }
       ))
     )
       return;
@@ -491,7 +491,7 @@ export function StagePanel({
       setMsg({ kind: "err", text: await r.text() });
       return;
     }
-    setMsg({ kind: "ok", text: "메일 없이 통보 완료로 표시했습니다." });
+    setMsg({ kind: "ok", text: "'이미 통보함' 으로 표시했습니다. (메일 미발송)" });
     setOpen(null);
     onChanged();
   };
@@ -499,8 +499,8 @@ export function StagePanel({
   const undoNotifiedExternally = async () => {
     if (
       !(await confirmDialog(
-        "'통보 완료' 표시를 해제합니다.\n다시 미통보 상태가 되어 통보 메일을 보낼 수 있습니다.",
-        { title: "보냄 처리 해제", confirmText: "해제" }
+        "'이미 통보함' 표시를 해제합니다.\n다시 미통보 상태가 되어 통보 메일을 보낼 수 있습니다.",
+        { title: "표시 해제", confirmText: "해제" }
       ))
     )
       return;
@@ -514,7 +514,7 @@ export function StagePanel({
       setMsg({ kind: "err", text: await r.text() });
       return;
     }
-    setMsg({ kind: "ok", text: "보냄 처리를 해제했습니다." });
+    setMsg({ kind: "ok", text: "'이미 통보함' 표시를 해제했습니다." });
     onChanged();
   };
 
@@ -689,10 +689,10 @@ export function StagePanel({
             candidate.decisionNotifiedExternallyAt && (
               <span
                 className="text-xs px-2.5 py-1.5 rounded-md border border-border-default bg-surface-alt text-ink-soft inline-flex items-center gap-1.5"
-                title="전화·문자 등으로 직접 통보한 것으로 표시됨 (메일 미발송)"
+                title="전화·문자 등으로 이미 통보한 것으로 표시됨 (메일 미발송)"
               >
                 <PhoneCall className="w-3.5 h-3.5 shrink-0" />
-                직접 통보함 · {formatKstDateTime(candidate.decisionNotifiedExternallyAt)}
+                이미 통보함 · {formatKstDateTime(candidate.decisionNotifiedExternallyAt)}
                 <button
                   onClick={() => void undoNotifiedExternally()}
                   disabled={busy}
@@ -985,7 +985,7 @@ export function StagePanel({
                 className="w-full px-4 py-2 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
               >
                 <PhoneCall className="w-3.5 h-3.5" />
-                메일 없이 보냄 처리
+                이미 통보함으로 표시
               </button>
               <p className="mt-1.5 text-[11px] text-ink-muted leading-relaxed">
                 전화·문자 등으로 이미 결과를 알렸다면 이 후보를 통보 완료로 표시합니다.

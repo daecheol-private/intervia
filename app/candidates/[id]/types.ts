@@ -80,7 +80,7 @@ export type Candidate = {
   interviewEmailCount?: number;
   lastInterviewEmailSentAt?: string | null;
   decisionEmailCount?: number;
-  /** 전화·문자 등으로 직접 통보해 '보냄 처리'한 시각 — 미발송 집계·일괄 발송에서 제외. */
+  /** 전화·문자 등으로 통보해 '이미 통보함' 표시한 시각 — 미발송 집계·일괄 발송에서 제외. */
   decisionNotifiedExternallyAt?: string | null;
   favorited?: boolean;
 };

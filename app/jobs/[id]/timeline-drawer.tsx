@@ -214,15 +214,15 @@ function describe(e: TimelineEvent): {
       const d = String(m.decision ?? "");
       return {
         icon: Mail,
-        title: "결과 통보 보냄 처리 (메일 미발송)",
-        detail: d ? `${stageLabel(d)} · 전화·문자 등으로 직접 통보` : "전화·문자 등으로 직접 통보",
+        title: "결과 통보 '이미 통보함' 표시 (메일 미발송)",
+        detail: d ? `${stageLabel(d)} · 전화·문자 등으로 통보` : "전화·문자 등으로 통보",
         tone: "neutral",
       };
     }
     case "candidate.decision_notify_external_undo":
       return {
         icon: Mail,
-        title: "결과 통보 보냄 처리 해제",
+        title: "결과 통보 '이미 통보함' 표시 해제",
         detail: null,
         tone: "neutral",
       };

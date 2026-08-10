@@ -4,7 +4,7 @@
  * outcome 이 hired/rejected 인 후보만 대상. withdrawn 은 후보자가 직접 취소했으므로 통보 불필요.
  * stage 변경 API 의 sendNotification 으로 못 보낸/실패한 케이스를 사후에 보내기 위한 별도 엔드포인트.
  *
- * PATCH/DELETE 는 메일을 보내지 않고 "전화·문자로 이미 통보함"을 표시/해제한다 (보냄 처리).
+ * PATCH/DELETE 는 메일을 보내지 않고 "이미 통보함"(전화·문자 등)을 표시/해제한다.
  * 표시된 후보는 미발송 배너·일괄 발송·저녁 드레인 대상에서 빠져 이중 통보를 막는다.
  */
 import { db } from "@/lib/db";
@@ -170,7 +170,7 @@ export async function POST(
 }
 
 /**
- * 보냄 처리 — 메일 발송 없이 "이미 통보함"으로 표시.
+ * '이미 통보함' 표시 — 메일 발송 없이 통보 완료로 기록.
  *
  * 전화·문자로 먼저 알린 후보가 일괄 통보에 다시 걸려 두 번 통보되는 것을 막는다.
  * 메일이 나가지 않으므로 과금·발송 한도와 무관하고, 저녁 드레인 큐도 함께 해제한다.
@@ -192,7 +192,7 @@ export async function PATCH(
   const { candidate } = g;
 
   if (candidate.outcome !== "hired" && candidate.outcome !== "rejected") {
-    return new Response("보냄 처리는 최종합격/불합격 후보에게만 가능합니다.", {
+    return new Response("'이미 통보함' 표시는 최종합격/불합격 후보에게만 가능합니다.", {
       status: 400,
     });
   }
@@ -222,7 +222,7 @@ export async function PATCH(
   return Response.json({ ok: true, notifiedExternallyAt: notifiedAt });
 }
 
-/** 보냄 처리 해제 — 실수로 표시한 경우 되돌린다. 통보 미발송 상태로 복귀. */
+/** '이미 통보함' 표시 해제 — 실수로 표시한 경우 되돌린다. 통보 미발송 상태로 복귀. */
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }

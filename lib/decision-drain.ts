@@ -36,8 +36,8 @@ export async function drainQueuedDecisions(now = new Date()): Promise<{
     eq(candidates.decisionNotifyQueued, true),
     eq(candidates.outcome, "rejected"),
     isNotNull(candidates.email),
-    // 전화·문자로 이미 통보해 "보냄 처리"된 후보는 제외 (이중 통보 방지).
-    // 보냄 처리 시 큐 플래그도 내리지만, 순서가 엇갈려도 안 나가도록 조건으로 한 번 더 막는다.
+    // 전화·문자로 이미 통보해 '이미 통보함' 표시된 후보는 제외 (이중 통보 방지).
+    // 표시 시 큐 플래그도 내리지만, 순서가 엇갈려도 안 나가도록 조건으로 한 번 더 막는다.
     isNull(candidates.decisionNotifiedExternallyAt),
     sql`${candidates.decisionEmailCount} < ${MAX_DECISION_EMAILS_PER_CANDIDATE}`
   );

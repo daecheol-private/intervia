@@ -196,7 +196,7 @@
 | last_interview_email_sent_at | TEXT NULL | 가장 최근 면접 링크 메일 발송 시각. UI 경과일 배지에 사용 |
 | decision_email_count | INTEGER NOT NULL DEFAULT 0 | 결정 통보 메일 발송 누적. 후보자당 10회 한도 |
 | decision_notify_queued | INTEGER NOT NULL DEFAULT 0 (boolean) | 대량 종결(`closeJob`)이 일일 발송 예산을 넘겨 즉시 못 보낸 불합격 통보 대기 표시. 저녁 드레인 cron 이 발송 후 0 으로 되돌림 |
-| decision_notified_externally_at | TEXT NULL | 메일 대신 전화·문자로 알린 뒤 "보냄 처리"한 시각. 미발송 배너·일괄 발송·저녁 드레인 대상에서 제외(이중 통보 방지). `decision_email_count` 와 별개 — 실제 발송 건수는 오염시키지 않는다 |
+| decision_notified_externally_at | TEXT NULL | 메일 대신 전화·문자로 알린 뒤 '이미 통보함' 표시한 시각. 미발송 배너·일괄 발송·저녁 드레인 대상에서 제외(이중 통보 방지). `decision_email_count` 와 별개 — 실제 발송 건수는 오염시키지 않는다 |
 | pii_purged_at | TEXT NULL | ⚠️ **현재 미사용 컬럼** — 종결 +14일 폐기는 `purgePiiAfterClose` 가 candidates **행 자체를 삭제**(anonymize-in-place 아님)하므로 이 값을 set 하는 코드 경로가 없음. 향후 "행 보존 + 익명화" 전략으로 바꿀 때 사용 예정. (감사 로그 metadata 의 후보자 PII 는 삭제 시 `redactCandidateAuditPii` 로 [redacted] 처리) |
 | applicant_consent_confirmed_at | TEXT NULL | 채용기업이 "지원자가 AI 평가 적용에 동의했음"을 확인한 시각. PIPA §15·§26·§28의8·§37의2 책임을 고객사로 전가. 업로드/평가 라우트가 NOT NULL 검증 (2026-05-22 이전 row 는 legacy 면제) |
 | applicant_consent_confirmed_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 동의 확인을 클릭한 채용기업 사용자 |
