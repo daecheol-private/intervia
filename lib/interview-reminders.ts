@@ -3,10 +3,11 @@
  * 스케줄은 KST 09~20시 매시간(vercel.json: UTC 0-11) — 야간 알림톡 방지.
  *
  * 두 종류:
- *  1) sendScheduleReminders  — 확정 대면 면접(round1/round2) D-1(24h 전):
- *       · 면접관 전원에게 1회 발송 후 `interviewerReminderSentAt` 기록.
- *         단 주말(isQuietHoursKst)엔 발송 없이 기록만 — 월요일 면접은 당일 digest 가 커버.
- *       · 후보자에게 1회 발송 후 `candidateReminderSentAt` 기록 (독립 추적, 주말에도 발송)
+ *  1) sendScheduleReminders  — 확정 대면 면접(round1/round2) D-1(24h 전) **후보자에게만**
+ *       1회 발송 후 `candidateReminderSentAt` 기록.
+ *       면접관 D-1 개별 메일은 폐지했다 (2026-08-10): 면접자가 여러 명이면 스케줄 수만큼
+ *       메일이 쌓인다는 피드백 — 아침 09:00 digest 의 '내일 면접' 블록이 대체한다
+ *       (lib/daily-digest.ts). 후보자는 1인 1건이라 소음이 없어 그대로 둔다.
  *  2) sendAiInterviewReminders — AI 면접 미응답(pending/in_progress) 후보자에게
  *       링크 발급 후 48h 경과 시 1회만 넛지. 완료/만료 세션은 제외.
  *
@@ -21,7 +22,7 @@ import {
   jobPostings,
   organizations,
 } from "./schema";
-import { and, eq, isNull, or, inArray } from "drizzle-orm";
+import { and, eq, isNull, inArray } from "drizzle-orm";
 import {
   sendMail,
   isSmtpAvailable,
@@ -32,7 +33,6 @@ import {
   getOrgEmailBranding,
   brandingAttachments,
 } from "./mailer";
-import { getJobInterviewerEmails, isQuietHoursKst } from "./notifications";
 import { sendCandidateAlimtalk } from "./alimtalk";
 import { formatKstDateTime } from "./utils";
 import { isAiInterviewSuperseded, isScheduleSuperseded } from "./stage-meta";
@@ -82,13 +82,12 @@ function fmtSlotKst(slot: { start: string; end: string }): string {
 }
 
 /**
- * 확정 대면 면접 D-1 리마인더 — 면접관 + 후보자.
- * 대상: status='selected' + selectedSlot 이 지금~24h 이내(미래) + 각 리마인더 미발송.
- * 면접관/후보자 플래그를 독립 추적하므로 한 쪽만 보낸 뒤에도 나머지를 다음에 보낼 수 있다.
+ * 확정 대면 면접 D-1 리마인더 — 후보자 전용.
+ * 대상: status='selected' + selectedSlot 이 지금~24h 이내(미래) + 리마인더 미발송.
+ * 면접관 몫은 아침 digest 의 '내일 면접' 블록이 담당한다 (개별 메일 폐지).
  */
 export async function sendScheduleReminders(): Promise<{
   scanned: number;
-  interviewerRemindersSent: number;
   candidateRemindersSent: number;
   schedulesProcessed: number;
 }> {
@@ -106,7 +105,6 @@ export async function sendScheduleReminders(): Promise<{
       address: interviewSchedules.address,
       addressDetail: interviewSchedules.addressDetail,
       onlineMeetingUrl: interviewSchedules.onlineMeetingUrl,
-      interviewerSentAt: interviewSchedules.interviewerReminderSentAt,
       candidateSentAt: interviewSchedules.candidateReminderSentAt,
       candidateName: candidates.name,
       candidateEmail: candidates.email,
@@ -123,10 +121,7 @@ export async function sendScheduleReminders(): Promise<{
     .where(
       and(
         eq(interviewSchedules.status, "selected"),
-        or(
-          isNull(interviewSchedules.interviewerReminderSentAt),
-          isNull(interviewSchedules.candidateReminderSentAt)
-        )
+        isNull(interviewSchedules.candidateReminderSentAt)
       )
     );
 
@@ -146,7 +141,6 @@ export async function sendScheduleReminders(): Promise<{
     return Number.isFinite(start) && start > now && start <= windowEnd;
   });
 
-  let interviewerRemindersSent = 0;
   let candidateRemindersSent = 0;
   let schedulesProcessed = 0;
 
@@ -167,58 +161,11 @@ export async function sendScheduleReminders(): Promise<{
             : ""
         }`;
 
-    const update: {
-      interviewerReminderSentAt?: string;
-      candidateReminderSentAt?: string;
-    } = {};
+    const update: { candidateReminderSentAt?: string } = {};
     const nowIso = new Date(now).toISOString();
 
-    // 1) 면접관 리마인더 (미발송일 때만).
-    // 조용시간(주말 — cron 이 09~20시라 야간엔 원래 안 돎)엔 보내지 않고 처리 완료로
-    // 기록: 월요일 면접은 당일 09:00 digest '오늘 면접' 블록이 커버한다(사용자 결정).
-    // 후보자 리마인더(아래 2)는 시간 민감이라 주말에도 그대로 발송.
-    if (!r.interviewerSentAt && isQuietHoursKst()) {
-      update.interviewerReminderSentAt = nowIso;
-    } else if (!r.interviewerSentAt) {
-      const interviewers = await getJobInterviewerEmails(r.jobId);
-      for (const iv of interviewers) {
-        const html = wrapEmailCard({
-          innerHtml: `
-            <h1 style="font-size:18px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(iv.name)}님, 면접 일정 안내드립니다.</h1>
-            <p style="color:#475569;line-height:1.6;margin:0 0 16px;">
-              담당 공고 <strong style="color:#0f172a;">${escapeHtml(r.jobTitle)}</strong> 의 ${roundLabel} 면접이
-              <strong style="color:#0f172a;">약 24시간 후</strong> 진행될 예정입니다.
-            </p>
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:14px;color:#0f172a;line-height:1.8;margin:0 0 20px;">
-              <strong>후보자</strong> ${escapeHtml(r.candidateName)}<br>
-              <strong>일시</strong> ${slotLabel}<br>
-              ${locationRow}
-            </div>
-            <p style="font-size:12px;color:#64748b;margin:0;">일정에 맞춰 면접 준비를 부탁드립니다.</p>
-          `,
-          footer: "본 메일은 Intervia 시스템에서 자동 발송되었습니다.",
-        });
-        try {
-          await sendMail({
-            to: iv.email,
-            subject: `[Intervia] 내일 ${roundLabel} 면접 안내 — ${r.candidateName} (${r.jobTitle})`,
-            html,
-            orgId: r.orgId,
-            audience: "org",
-          });
-          interviewerRemindersSent++;
-        } catch (e) {
-          console.error(
-            `[interview-reminders] interviewer mail failed (schedule=${r.scheduleId}, to=${iv.email}):`,
-            e instanceof Error ? e.message : e
-          );
-        }
-      }
-      // 면접관이 없어도 처리 완료로 기록 — 다음 주기 재스캔 방지.
-      update.interviewerReminderSentAt = nowIso;
-    }
-
-    // 2) 후보자 D-1 리마인더 (미발송일 때만) — 이메일 + 알림톡 병행.
+    // 후보자 D-1 리마인더 (미발송일 때만) — 이메일 + 알림톡 병행.
+    // 시간 민감이라 주말에도 그대로 발송한다.
     if (!r.candidateSentAt) {
       if (r.candidateEmail) {
         const branding = await getOrgEmailBranding(r.orgId);
@@ -281,7 +228,7 @@ export async function sendScheduleReminders(): Promise<{
     }
   }
 
-  return { scanned: rows.length, interviewerRemindersSent, candidateRemindersSent, schedulesProcessed };
+  return { scanned: rows.length, candidateRemindersSent, schedulesProcessed };
 }
 
 /**

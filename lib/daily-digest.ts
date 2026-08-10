@@ -7,13 +7,16 @@
  * 놓친다. 매일 아침 "본인이 면접관으로 배정된 공고"에 한해 오늘 할 일을 메일로 push 한다.
  *
  * 받는 사람: job_interviewers 에 배정된 active 사용자 전원(역할 무관). 각자 본인 배정 공고만.
- * 4블록:
+ * 5블록:
  *   ① 오늘(KST) 진행할 확정 면접 — interview_schedules.status='selected' + 오늘 슬롯
- *   ② 결정·조치 대기       — 면접 단계(round1_waiting/round1_passed/round2_passed, outcome 미정)
+ *   ② 내일(KST) 면접        — 면접관 D-1 리마인더를 대체한다 (2026-08-10).
+ *      예전엔 스케줄 1건마다 개별 메일이 나가 면접자가 여러 명이면 하루에 몇 통씩 쌓였다.
+ *      이제 이 블록으로 묶어 면접관이 받는 메일은 하루 1통이다. (후보자 D-1 메일은 그대로 유지)
+ *   ③ 결정·조치 대기       — 면접 단계(round1_waiting/round1_passed/round2_passed, outcome 미정)
  *      중 deriveCandidateState 로 판정한 대기주체가 hr 인 후보만. 확정된 면접(대기주체
- *      interviewer)·지원자 일정 응답 대기(candidate)는 제외 — D-1 리마인더 + 당일 블록①이 커버.
- *   ③ 신규 지원·검토 대기  — applied / screened / ai_evaluated (outcome 미정)
- *   ④ 자동 종결            — 링크 만료 자동 불합격(outcomeReason 기반), 신규 창 내 발생분.
+ *      interviewer)·지원자 일정 응답 대기(candidate)는 제외 — 블록①②가 커버.
+ *   ④ 신규 지원·검토 대기  — applied / screened / ai_evaluated (outcome 미정)
+ *   ⑤ 자동 종결            — 링크 만료 자동 불합격(outcomeReason 기반), 신규 창 내 발생분.
  *      expire cron(24시간 가동)의 개별 알림 메일을 대체한다 — 야간·주말 메일 소스 제거.
  * 합계 0건이면 그 면접관에겐 보내지 않는다(빈 메일 방지).
  *
@@ -22,9 +25,10 @@
  * 목록이 매일 반복되는 소음을 막는다 — 단 월요일(KST)은 변동이 없어도 전체 목록을
  * 발송(장기 미처리 항목이 묻히지 않게 하는 주간 앵커).
  *
- * 주말(토·일 KST)은 그날 진행할 확정 면접이 있는 면접관에게만 발송 — 그 외 주말 변동은
+ * 주말(토·일 KST)은 그날 또는 다음 날 면접이 있는 면접관에게만 발송 — 그 외 주말 변동은
  * 월요일 앵커가 흡수한다(월요일의 '신규' 창을 72h 로 넓혀 금요일 digest 이후 변동이
- * 전부 NEW 로 표시됨). 판정 규칙은 shouldSendDigest 참조.
+ * 전부 NEW 로 표시됨). 주말에 '내일 면접'까지 보는 이유: 이 메일이 D-1 리마인더를
+ * 대체하므로, 일요일·월요일 면접의 사전 안내가 사라지면 안 된다. 판정은 shouldSendDigest 참조.
  *
  * 멱등: (userId, digestDate) 를 daily_digest_logs 에 기록 — 같은 날 중복 실행 시 skip.
  * 운영 메일이라 토큰 차감 없음. SMTP 미설정이면 발송 skip(기록도 남기지 않아 다음 실행 재시도).
@@ -105,21 +109,25 @@ type DigestItem = { primary: string; secondary: string; isNew?: boolean };
 
 /**
  * digest 발송 판정 (순수 — 테스트 용이).
- * 주말: 그날 진행할 확정 면접이 있는 사람에게만 — 그 외 변동은 월요일 앵커로 이월.
+ * 주말: 그날 또는 다음 날 면접이 있는 사람에게만 — 그 외 변동은 월요일 앵커로 이월.
  * 월요일: 할 일이 있으면 무조건(주간 전체 앵커).
- * 평일: 오늘 면접 또는 신규 변동이 있을 때만(동일 목록 반복 방지).
+ * 평일: 오늘·내일 면접 또는 신규 변동이 있을 때만(동일 목록 반복 방지).
+ *
+ * tomorrowCount 가 발송 사유인 이유 — 이 메일이 면접관 D-1 리마인더를 대체하므로,
+ * 다른 할 일이 없어도 내일 면접이 있으면 반드시 나가야 한다.
  */
 export function shouldSendDigest(p: {
   isWeekend: boolean;
   isMonday: boolean;
   todayCount: number;
+  tomorrowCount: number;
   newCount: number;
   total: number;
 }): boolean {
   if (p.total === 0) return false;
-  if (p.isWeekend) return p.todayCount > 0;
+  if (p.isWeekend) return p.todayCount > 0 || p.tomorrowCount > 0;
   if (p.isMonday) return true;
-  return p.todayCount > 0 || p.newCount > 0;
+  return p.todayCount > 0 || p.tomorrowCount > 0 || p.newCount > 0;
 }
 
 /** 신규 항목을 앞으로 (sort 는 stable — 그 외 기존 순서 유지). */
@@ -138,6 +146,8 @@ export async function sendDailyDigests(): Promise<{
 }> {
   const now = Date.now();
   const todayKst = kstDateStr(new Date(now));
+  // 내일(KST) — 블록②(D-1 대체)용. UTC 로 +24h 한 뒤 KST 날짜로 환산하므로 DST 무관.
+  const tomorrowKst = kstDateStr(new Date(now + 24 * 60 * 60 * 1000));
   const weekdayKst = new Date(now).toLocaleDateString("en-US", {
     timeZone: "Asia/Seoul",
     weekday: "short",
@@ -243,13 +253,16 @@ export async function sendDailyDigests(): Promise<{
       });
     }
 
-    // 블록① — 오늘(KST) 확정 면접.
+    // 블록①② — 오늘/내일(KST) 확정 면접. 내일치가 면접관 D-1 리마인더를 대체한다.
     const todayInterviews: DigestItem[] = [];
-    const todayCandidateIds = new Set<number>();
+    const tomorrowInterviews: DigestItem[] = [];
+    const scheduledCandidateIds = new Set<number>();
     for (const r of schedRows) {
       if (r.status !== "selected") continue;
       const start = r.selectedSlot?.start;
-      if (!start || kstDateStr(new Date(start)) !== todayKst) continue;
+      if (!start) continue;
+      const day = kstDateStr(new Date(start));
+      if (day !== todayKst && day !== tomorrowKst) continue;
       if (
         isScheduleSuperseded({
           stage: r.candidateStage,
@@ -258,16 +271,17 @@ export async function sendDailyDigests(): Promise<{
         })
       )
         continue;
-      todayCandidateIds.add(r.candidateId);
-      todayInterviews.push({
+      scheduledCandidateIds.add(r.candidateId);
+      const item: DigestItem = {
         primary: `${r.candidateName} · ${r.jobTitle}`,
         secondary: `${roundLabel(r.round)} 면접 · ${formatSlotKst(
           r.selectedSlot!
         )} · ${r.modeOnline ? "온라인" : "오프라인"}`,
-      });
+      };
+      (day === todayKst ? todayInterviews : tomorrowInterviews).push(item);
     }
 
-    // 블록② — 결정 대기. 블록①(오늘 면접)에 든 후보는 제외(중복 방지).
+    // 블록③ — 결정 대기. 오늘·내일 면접에 든 후보는 제외(중복 방지).
     const decisionRows = await db
       .select({
         id: candidates.id,
@@ -287,7 +301,7 @@ export async function sendDailyDigests(): Promise<{
       );
     const decisionPending: DigestItem[] = [];
     for (const r of decisionRows) {
-      if (todayCandidateIds.has(r.id)) continue;
+      if (scheduledCandidateIds.has(r.id)) continue;
       const r1 = latestSched.get(`${r.id}:round1`);
       const r2 = latestSched.get(`${r.id}:round2`);
       // 대기주체가 hr 일 때만 — 면접 확정(interviewer)·지원자 응답 대기(candidate)는 제외.
@@ -311,7 +325,7 @@ export async function sendDailyDigests(): Promise<{
     }
     sortNewFirst(decisionPending);
 
-    // 블록③ — 신규 지원·검토 대기.
+    // 블록④ — 신규 지원·검토 대기.
     const reviewRows = await db
       .select({
         name: candidates.name,
@@ -335,7 +349,7 @@ export async function sendDailyDigests(): Promise<{
     }));
     sortNewFirst(reviewPending);
 
-    // 블록④ — 자동 종결(링크 만료). 신규 창 내 발생분만 — 창 밖은 이미 이전 digest 가 안내함.
+    // 블록⑤ — 자동 종결(링크 만료). 신규 창 내 발생분만 — 창 밖은 이미 이전 digest 가 안내함.
     const autoClosedRows = await db
       .select({
         name: candidates.name,
@@ -361,6 +375,7 @@ export async function sendDailyDigests(): Promise<{
 
     const total =
       todayInterviews.length +
+      tomorrowInterviews.length +
       decisionPending.length +
       reviewPending.length +
       autoClosed.length;
@@ -372,6 +387,7 @@ export async function sendDailyDigests(): Promise<{
         isWeekend: isWeekendKst,
         isMonday: isMondayKst,
         todayCount: todayInterviews.length,
+        tomorrowCount: tomorrowInterviews.length,
         // 자동 종결은 창 내 새 이벤트 — 다른 변동이 없어도 발송 사유가 된다.
         newCount: newCount + autoClosed.length,
         total,
@@ -391,6 +407,7 @@ export async function sendDailyDigests(): Promise<{
       name: g.name,
       dashboardUrl: `${base}/jobs`,
       todayInterviews,
+      tomorrowInterviews,
       decisionPending,
       reviewPending,
       autoClosed,
@@ -426,21 +443,26 @@ export async function sendDailyDigests(): Promise<{
   return { sent, skipped, recipients: byUser.size };
 }
 
-/** 일일 할 일 요약 메일 빌더 — 4블록 카드. 비어 있는 블록은 생략한다. */
+/** 일일 할 일 요약 메일 빌더 — 5블록 카드. 비어 있는 블록은 생략한다. */
 export function buildDailyDigestEmail(opts: {
   name: string;
   dashboardUrl: string;
   todayInterviews: DigestItem[];
+  /** 내일 면접 — 면접관 D-1 리마인더를 대체하는 블록. */
+  tomorrowInterviews?: DigestItem[];
   decisionPending: DigestItem[];
   reviewPending: DigestItem[];
   autoClosed?: DigestItem[];
 }): { subject: string; html: string; text: string } {
   const { name, dashboardUrl, todayInterviews, decisionPending, reviewPending } =
     opts;
+  const tomorrowInterviews = opts.tomorrowInterviews ?? [];
   const autoClosed = opts.autoClosed ?? [];
 
   const parts: string[] = [];
-  if (todayInterviews.length) parts.push(`면접 ${todayInterviews.length}건`);
+  if (todayInterviews.length) parts.push(`오늘 면접 ${todayInterviews.length}건`);
+  if (tomorrowInterviews.length)
+    parts.push(`내일 면접 ${tomorrowInterviews.length}건`);
   if (decisionPending.length) parts.push(`결정 대기 ${decisionPending.length}건`);
   if (reviewPending.length) parts.push(`검토 대기 ${reviewPending.length}건`);
   if (autoClosed.length) parts.push(`자동 종결 ${autoClosed.length}건`);
@@ -465,9 +487,12 @@ export function buildDailyDigestEmail(opts: {
     : "";
   const text = `${name}님, 오늘 처리하실 항목을 안내드립니다.
 ${textSection("오늘 진행할 면접", todayInterviews)}${textSection(
-    "결정·조치 대기",
-    decisionPending
-  )}${textSection("신규 지원·검토 대기", reviewPending)}${textSection(
+    "내일 면접",
+    tomorrowInterviews
+  )}${textSection("결정·조치 대기", decisionPending)}${textSection(
+    "신규 지원·검토 대기",
+    reviewPending
+  )}${textSection(
     "자동 종결 (링크 만료)",
     autoClosed
   )}${autoClosedTextNote}
@@ -522,6 +547,7 @@ Intervia 에서 보기: ${dashboardUrl}
         회원님이 면접관으로 배정된 공고에서 처리가 필요한 항목을 모았습니다.
       </p>
       ${htmlSection("오늘 진행할 면접", EMAIL_BRAND.primary, todayInterviews)}
+      ${htmlSection("내일 면접", EMAIL_BRAND.primary, tomorrowInterviews)}
       ${htmlSection("결정·조치 대기", "#b45309", decisionPending)}
       ${htmlSection("신규 지원·검토 대기", "#0f766e", reviewPending)}
       ${htmlSection("자동 종결 (링크 만료)", "#64748b", autoClosed)}

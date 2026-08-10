@@ -301,8 +301,8 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 | online_meeting_note | TEXT NULL | 접속 안내 메모 |
 | meeting_link_sent_at | TEXT NULL | 미팅 링크 메일 발송 시각 |
 | meeting_link_sent_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | |
-| interviewer_reminder_sent_at | TEXT NULL | 면접관 리마인더 발송 시각 — 확정 면접 24시간 전 cron 이 1회 발송 후 기록 (중복 방지) |
-| candidate_reminder_sent_at | TEXT NULL | 후보자 D-1 리마인더 발송 시각 — 면접관 리마인더와 독립 추적. 같은 cron 스캔에서 후보자에게 1회 발송 후 기록 (round1/round2 모두) |
+| interviewer_reminder_sent_at | TEXT NULL | ⚠️ **현재 미사용 컬럼** — 면접관 D-1 개별 메일은 2026-08-10 폐지(면접자 수만큼 메일이 쌓인다는 피드백). 아침 09:00 digest 의 '내일 면접' 블록이 대체하므로 이 값을 쓰는 코드 경로가 없다. 과거 발송 이력이라 컬럼만 유지 |
+| candidate_reminder_sent_at | TEXT NULL | 후보자 D-1 리마인더 발송 시각 — cron(KST 09~20시)이 확정 면접 24h 전 후보자에게 1회 발송 후 기록 (round1/round2 모두). 주말에도 발송(시간 민감) |
 | selected_slot | JSON NULL | 지원자가 선택한 슬롯 `{start, end}` |
 | counter_slots | JSON NULL | 지원자가 역제시한 슬롯 후보 |
 | candidate_note | TEXT NULL | 지원자 코멘트 (역제시·취소 사유 등) |
@@ -763,7 +763,7 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 
 ## daily_digest_logs
 
-면접관 일일 할 일 요약 메일(daily digest) 발송 기록 — 멱등용. 매일 KST 09:00 cron(`/api/cron/daily-digest`)이 면접관(`job_interviewers` 배정 active 계정)별로 본인 배정 공고의 '오늘 할 일'을 요약해 1통 발송한 뒤 `(user_id, digest_date)` 를 기록한다. 같은 날 중복 실행(수동 재호출·동시 실행)은 기록된 면접관을 건너뛴다. 순수 추가(additive) 테이블.
+면접관 일일 할 일 요약 메일(daily digest) 발송 기록 — 멱등용. 매일 KST 09:00 cron(`/api/cron/daily-digest`)이 면접관(`job_interviewers` 배정 active 계정)별로 본인 배정 공고의 '오늘 할 일'을 요약해 1통 발송한 뒤 `(user_id, digest_date)` 를 기록한다. 2026-08-10 부터 **'내일 면접' 블록이 면접관 D-1 개별 메일을 대체**한다 — 면접관이 받는 일정 메일은 이 하루 1통이 전부다(후보자 D-1 메일은 별도 유지). 같은 날 중복 실행(수동 재호출·동시 실행)은 기록된 면접관을 건너뛴다. 순수 추가(additive) 테이블.
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|

@@ -203,6 +203,12 @@ async function main() {
             secondary: "1차 면접 · 2026. 07. 30. (목) 10:30 ~ 11:30 · 오프라인",
           },
         ],
+        tomorrowInterviews: [
+          {
+            primary: "한도윤 · 부설연구소 개발",
+            secondary: "2차 면접 · 2026. 07. 31. (금) 14:00 ~ 15:00 · 온라인",
+          },
+        ],
         decisionPending: [
           { primary: "김지원 · 부설연구소 개발", secondary: "1차 결과 대기", isNew: true },
         ],
