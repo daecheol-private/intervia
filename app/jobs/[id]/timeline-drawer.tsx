@@ -210,6 +210,23 @@ function describe(e: TimelineEvent): {
       return { icon: Mail, title: "AI 면접 안내 메일 발송", detail: null, tone: "neutral" };
     }
 
+    case "candidate.decision_notify_external": {
+      const d = String(m.decision ?? "");
+      return {
+        icon: Mail,
+        title: "결과 통보 보냄 처리 (메일 미발송)",
+        detail: d ? `${stageLabel(d)} · 전화·문자 등으로 직접 통보` : "전화·문자 등으로 직접 통보",
+        tone: "neutral",
+      };
+    }
+    case "candidate.decision_notify_external_undo":
+      return {
+        icon: Mail,
+        title: "결과 통보 보냄 처리 해제",
+        detail: null,
+        tone: "neutral",
+      };
+
     case "interview.start":
       return { icon: Play, title: "지원자가 AI 면접을 시작했습니다", detail: null, tone: "info" };
     case "interview.complete":

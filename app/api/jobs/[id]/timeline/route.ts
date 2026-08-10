@@ -35,6 +35,8 @@ const TIMELINE_ACTIONS = [
   "user.status_change",
   "interview.create",
   "interview.send_email",
+  "candidate.decision_notify_external",
+  "candidate.decision_notify_external_undo",
   "interview.start",
   "interview.complete",
   "interview.reevaluate",

@@ -115,9 +115,20 @@ function CandidateCardImpl({
               )}
               {c.outcome === "rejected" &&
                 c.decisionEmailCount === 0 &&
+                !c.decisionNotifiedExternallyAt &&
                 c.email && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning-soft text-warning border border-warning/30 font-medium">
                     📭 통보 미발송
+                  </span>
+                )}
+              {c.outcome != null &&
+                c.decisionEmailCount === 0 &&
+                c.decisionNotifiedExternallyAt && (
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-surface-alt text-ink-muted border border-border-default font-medium"
+                    title="전화·문자 등으로 직접 통보한 것으로 표시됨 (메일 미발송)"
+                  >
+                    직접 통보함
                   </span>
                 )}
               {c.screeningReport && (

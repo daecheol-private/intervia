@@ -3,6 +3,9 @@
  *
  * outcome 이 hired/rejected 인 후보만 대상. withdrawn 은 후보자가 직접 취소했으므로 통보 불필요.
  * stage 변경 API 의 sendNotification 으로 못 보낸/실패한 케이스를 사후에 보내기 위한 별도 엔드포인트.
+ *
+ * PATCH/DELETE 는 메일을 보내지 않고 "전화·문자로 이미 통보함"을 표시/해제한다 (보냄 처리).
+ * 표시된 후보는 미발송 배너·일괄 발송·저녁 드레인 대상에서 빠져 이중 통보를 막는다.
  */
 import { db } from "@/lib/db";
 import { candidates, jobPostings, organizations } from "@/lib/schema";
@@ -164,4 +167,93 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+/**
+ * 보냄 처리 — 메일 발송 없이 "이미 통보함"으로 표시.
+ *
+ * 전화·문자로 먼저 알린 후보가 일괄 통보에 다시 걸려 두 번 통보되는 것을 막는다.
+ * 메일이 나가지 않으므로 과금·발송 한도와 무관하고, 저녁 드레인 큐도 함께 해제한다.
+ * 이메일 없는 후보도 대상 (유선으로만 통보한 경우).
+ */
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const me = await getCurrentUser();
+  const guard = requireUser(me);
+  if (guard) return guard;
+
+  const { id } = await params;
+  const cid = Number(id);
+
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate } = g;
+
+  if (candidate.outcome !== "hired" && candidate.outcome !== "rejected") {
+    return new Response("보냄 처리는 최종합격/불합격 후보에게만 가능합니다.", {
+      status: 400,
+    });
+  }
+
+  // 멱등 — 이미 표시돼 있으면 최초 시각을 유지한다.
+  const notifiedAt = candidate.decisionNotifiedExternallyAt ?? new Date().toISOString();
+  if (!candidate.decisionNotifiedExternallyAt) {
+    await db
+      .update(candidates)
+      .set({
+        decisionNotifiedExternallyAt: notifiedAt,
+        // 저녁 드레인이 대기분을 뒤늦게 발송하지 않도록 큐 해제.
+        decisionNotifyQueued: false,
+      })
+      .where(eq(candidates.id, cid));
+    logAudit(req, {
+      actor: me!,
+      action: "candidate.decision_notify_external",
+      resourceType: "candidate",
+      resourceId: cid,
+      orgId: candidate.orgId,
+      jobId: candidate.jobId,
+      metadata: { decision: candidate.outcome },
+    });
+  }
+
+  return Response.json({ ok: true, notifiedExternallyAt: notifiedAt });
+}
+
+/** 보냄 처리 해제 — 실수로 표시한 경우 되돌린다. 통보 미발송 상태로 복귀. */
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const me = await getCurrentUser();
+  const guard = requireUser(me);
+  if (guard) return guard;
+
+  const { id } = await params;
+  const cid = Number(id);
+
+  const g = await guardCandidate(me!, cid);
+  if (!g.ok) return g.res;
+  const { candidate } = g;
+
+  if (candidate.decisionNotifiedExternallyAt) {
+    await db
+      .update(candidates)
+      // 드레인 큐는 되살리지 않는다 — 해제는 "다시 판단하겠다"이지 자동 발송 예약이 아니다.
+      .set({ decisionNotifiedExternallyAt: null })
+      .where(eq(candidates.id, cid));
+    logAudit(req, {
+      actor: me!,
+      action: "candidate.decision_notify_external_undo",
+      resourceType: "candidate",
+      resourceId: cid,
+      orgId: candidate.orgId,
+      jobId: candidate.jobId,
+      metadata: { decision: candidate.outcome },
+    });
+  }
+
+  return Response.json({ ok: true });
 }

@@ -83,6 +83,9 @@ export type AuditAction =
   | "account.self_delete"
   // 스캔 PDF OCR — 마스킹 전 원본 이력서가 AI 수탁자(Vertex)로 전송됨. PII 외부전송이라 critical.
   | "candidate.scan_ocr"
+  // 결정 통보를 메일 대신 전화·문자 등으로 했다고 표시(해제)한 기록 — 통보 여부 분쟁 시 근거.
+  | "candidate.decision_notify_external"
+  | "candidate.decision_notify_external_undo"
   // 평가 리포트 외부 공유 링크 — Intervia 계정 없는 제3자에게 평가 결과 노출. 발급/열람/폐기 추적.
   | "shared_report.create"
   | "shared_report.view"

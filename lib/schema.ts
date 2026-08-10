@@ -504,6 +504,10 @@ export const candidates = sqliteTable("candidates", {
   decisionNotifyQueued: integer("decision_notify_queued", { mode: "boolean" })
     .notNull()
     .default(false),
+  // 메일이 아니라 전화·문자 등으로 이미 결과를 알린 경우의 "보냄 처리" 시각.
+  // 통보 미발송 배너·일괄 발송·저녁 드레인의 대상에서 제외하는 기준
+  // (decisionEmailCount 는 실제 발송 건수라 여기에 섞지 않는다).
+  decisionNotifiedExternallyAt: text("decision_notified_externally_at"),
   // 가장 최근 면접 링크 메일 발송 시각 (경과일 배지 표시용)
   lastInterviewEmailSentAt: text("last_interview_email_sent_at"),
   // 종결 +14일 PII 폐기 시각 (anonymized 마커)

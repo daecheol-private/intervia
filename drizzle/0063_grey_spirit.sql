@@ -1,0 +1,1 @@
+ALTER TABLE `candidates` ADD `decision_notified_externally_at` text;

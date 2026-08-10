@@ -1968,7 +1968,12 @@ export default function JobDetailPage() {
           닫으면 같은 미발송 명단에 대해선 다시 뜨지 않고, 새 불합격 미발송이 생기면 다시 표시된다. */}
       {(() => {
         const unnotified = candidatesList.filter(
-          (c) => c.outcome === "rejected" && c.decisionEmailCount === 0 && !!c.email
+          (c) =>
+            c.outcome === "rejected" &&
+            c.decisionEmailCount === 0 &&
+            // 전화·문자로 이미 알린 후보는 통보 완료로 본다 (이중 통보 방지).
+            !c.decisionNotifiedExternallyAt &&
+            !!c.email
         );
         if (unnotified.length === 0) return null;
         // 현재 미발송 명단 시그니처 — 닫힘 비교 기준. 명단이 바뀌면 다시 노출.

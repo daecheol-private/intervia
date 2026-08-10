@@ -60,6 +60,8 @@ export type Candidate = {
   outcome: "hired" | "rejected" | "withdrawn" | null;
   outcomeReason: string | null;
   decisionEmailCount: number;
+  /** 전화·문자 등으로 직접 통보해 '보냄 처리'한 시각 — 미발송 집계·일괄 발송에서 제외. */
+  decisionNotifiedExternallyAt: string | null;
   createdAt: string;
   latestInterviewStatus: "pending" | "in_progress" | "completed" | "expired" | null;
   latestInterviewScore: number | null;
