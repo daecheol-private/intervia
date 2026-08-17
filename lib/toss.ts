@@ -204,14 +204,27 @@ export async function cancelTossPayment(args: {
 // 토스 orderId 는 6~64자 유니크 문자열이어야 한다. payment_orders.id(autoincrement PK)가
 // 곧 전역 유니크 주문번호이므로 별도 컬럼/마이그레이션 없이 PK 를 박는다.
 // 매 "결제하기"가 새 pending 주문(새 id)을 만들어 orderId 재사용 충돌도 없다.
-
-export function makeTossOrderId(paymentOrderId: number): string {
-  return `IV-${String(paymentOrderId).padStart(8, "0")}`;
+//
+// ⚠️ 단, 토스 orderId 유니크는 **상점 단위**다. 로컬 DB 와 운영 DB 는 각자 1번부터 PK 를 매기는데
+// 둘이 같은 테스트 상점을 쓰면 IV-00000001 이 정면 충돌한다 (2026-08-18 실제 발생 — 로컬 검증분
+// 1~8번이 이미 승인/취소돼 있어 운영 첫 결제가 "이미 승인 및 취소가 진행된 중복 주문번호"로 거부).
+// 그래서 접두어로 네임스페이스를 가른다 — 운영 IVP / 프리뷰 IVPRE / 로컬 IVL. 접두어는 실행
+// 환경에서 결정되는 고정값이라, payment-reconcile 이 DB 의 id 만으로 orderId 를 재구성하는
+// 경로도 그대로 유효하다. TOSS_ORDER_PREFIX 로 덮어쓸 수 있다(상점을 새로 파는 경우 등).
+function orderPrefix(): string {
+  const p = process.env.TOSS_ORDER_PREFIX?.trim().toUpperCase();
+  if (p && /^[A-Z]{2,8}$/.test(p)) return p;
+  if (process.env.VERCEL_ENV === "production") return "IVP";
+  return process.env.VERCEL ? "IVPRE" : "IVL";
 }
 
-/** orderId → payment_orders.id. 형식이 틀리면 null. */
+export function makeTossOrderId(paymentOrderId: number): string {
+  return `${orderPrefix()}-${String(paymentOrderId).padStart(8, "0")}`;
+}
+
+/** orderId → payment_orders.id. 형식이 틀리면 null. 구 형식(IV-)도 그대로 파싱된다. */
 export function parseTossOrderId(orderId: string): number | null {
-  const m = /^IV-(\d{1,12})$/.exec(orderId);
+  const m = /^[A-Z]{2,8}-(\d{1,12})$/.exec(orderId);
   if (!m) return null;
   const id = Number(m[1]);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
