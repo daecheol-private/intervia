@@ -211,7 +211,7 @@ export default async function PricingPage() {
               className="mt-2 w-1 h-1 rounded-full bg-primary shrink-0"
               aria-hidden
             />
-            <span>유상 충전 토큰의 유효기간은 충전일로부터 5년입니다.</span>
+            <span>유상 충전 토큰의 유효기간은 충전일로부터 1년입니다.</span>
           </li>
           <li className="flex items-start gap-2">
             <span
