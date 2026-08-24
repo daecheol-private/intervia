@@ -199,26 +199,45 @@ const MAX_SEND_RETRIES = 3;
 
 // ── 발송 실패 Slack 경보 ──────────────────────────────────────────────────────
 // 메일 장애(발신 서버 다운·인증 실패·발송률 초과 등)는 메일로 알릴 수 없으므로 Slack 이
-// 유일한 경보 채널. 폭주 방지: 10분 창당 1회만 통지. 인스턴스별 상태라 서버리스 다중
-// 인스턴스에서 몇 건 중복될 수 있음 — 유실보단 낫다. 수신 주소(PII)는 마스킹.
+// 유일한 경보 채널. 인스턴스별 상태라 서버리스 다중 인스턴스에서 몇 건 중복될 수 있음
+// — 유실보단 낫다.
+//
+// 억제는 "주소별" 10분 창 — 같은 주소가 계속 실패해도 창당 1회지만, 다른 주소가 실패하면
+// 별건으로 통지한다(주소 단위로 원인이 다르므로). 전면 장애 때 Slack 폭주를 막으려고
+// 창당 통지 주소 수에 상한을 둔다. 수신 주소는 마스킹하지 않는다 — 어느 주소가 막혔는지
+// 모르면 조치가 불가능하고, sendMail 은 수신자가 1명이라 곁가지 노출도 없다.
 const MAIL_FAIL_WINDOW_MS = 10 * 60_000;
-let mailFailWindowStart = 0;
+const MAIL_FAIL_MAX_ADDRS_PER_WINDOW = 5;
+/** 최근 통지한 수신 주소 → 통지 시각. 창이 지난 항목은 호출 때마다 정리. */
+const mailFailNotifiedAt = new Map<string, number>();
 
-function reportMailFailure(e: unknown): void {
+function reportMailFailure(
+  e: unknown,
+  ctx: { to: string; audience: MailAudience; kind?: string; orgId?: number | null }
+): void {
   const now = Date.now();
-  if (now - mailFailWindowStart < MAIL_FAIL_WINDOW_MS) return;
-  mailFailWindowStart = now;
-  const msg = (e instanceof Error ? e.message : String(e)).replace(
-    /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
-    "[email]"
-  );
+  const key = ctx.to.trim().toLowerCase();
+  for (const [addr, at] of mailFailNotifiedAt) {
+    if (now - at >= MAIL_FAIL_WINDOW_MS) mailFailNotifiedAt.delete(addr);
+  }
+  if (mailFailNotifiedAt.has(key)) return;
+  if (mailFailNotifiedAt.size >= MAIL_FAIL_MAX_ADDRS_PER_WINDOW) return;
+  mailFailNotifiedAt.set(key, now);
+
+  const msg = e instanceof Error ? e.message : String(e);
   const quotaSuspect = /\b429\b|quota|too many|rate ?limit|daily|limit exceeded/i.test(msg);
+  const tags = [
+    ctx.audience === "candidate" ? "지원자" : "법인",
+    ctx.kind,
+    ctx.orgId != null ? `org ${ctx.orgId}` : null,
+  ].filter(Boolean);
   void notifyOps(
     `📪 메일 발송 실패 감지${
       quotaSuspect
         ? " — 발신 서버 발송량/전송률 한도 초과 의심 (일·월 한도, 초당 발송률 확인)"
         : ""
-    }\n원인: ${msg.slice(0, 300)}\n(반복 실패는 10분당 1회만 통지 — Vercel 로그에서 전체 확인)`
+    }\n수신: ${ctx.to} (${tags.join(" · ")})\n원인: ${msg.slice(0, 300)}` +
+      `\n(같은 주소는 10분당 1회, 10분 창당 최대 ${MAIL_FAIL_MAX_ADDRS_PER_WINDOW}개 주소까지만 통지 — 전체는 Vercel 로그)`
   ).catch(() => {});
 }
 
@@ -272,7 +291,8 @@ export async function sendMail({
       return;
     } catch (e) {
       if (attempt >= MAX_SEND_RETRIES || !isTransientMailError(e)) {
-        reportMailFailure(e); // 재시도 소진/영구 실패만 경보 — 일시 오류 재시도 성공은 조용히
+        // 재시도 소진/영구 실패만 경보 — 일시 오류 재시도 성공은 조용히.
+        reportMailFailure(e, { to: finalTo, audience, kind, orgId });
         throw e;
       }
       const backoff = 1000 * 2 ** attempt + Math.random() * 300;
