@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CreditCard, Loader2, Sparkles } from "lucide-react";
 import {
   CHARGE_PACKAGES,
@@ -186,10 +187,20 @@ export default function ChargePanel() {
       )}
 
       {clientKey ? (
-        <p className="mt-3 flex items-center gap-1.5 text-[11px] text-ink-muted">
-          <CreditCard className="w-3.5 h-3.5" strokeWidth={2.25} />
-          신용·체크카드로 즉시 충전됩니다. 표시 금액에 VAT 10%가 더해진 금액이 결제됩니다.
-        </p>
+        <>
+          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-ink-muted">
+            <CreditCard className="w-3.5 h-3.5" strokeWidth={2.25} />
+            신용·체크카드로 즉시 충전됩니다. 표시 금액에 VAT 10%가 더해진 금액이 결제됩니다.
+          </p>
+          {/* 결제 전 거래조건 고지 — 유효기간·환불 기한(약관 §7·§7-2)을 결제 화면에서 바로 확인. */}
+          <p className="mt-1 text-[11px] text-ink-muted">
+            충전 토큰의 유효기간은 충전일로부터 1년이며, 미사용 잔액의 환불은
+            결제일로부터 1년 이내에 청구할 수 있습니다.{" "}
+            <Link href="/terms" className="text-primary hover:underline">
+              환불 정책 보기
+            </Link>
+          </p>
+        </>
       ) : (
         <p className="mt-3 text-xs text-ink-soft bg-surface-alt border border-border-default rounded-lg px-3 py-2">
           결제 연동 준비 중입니다 (관리자 키 미설정). 잠시만 기다려 주세요.
