@@ -641,6 +641,7 @@
     - **베타 종료 = 2단계**: ① `/admin/pricing` 에서 AI 면접·대면 면접 평가를 **30** 으로 저장(가격·취소선 복귀) ② `lib/beta.ts` `BETA.active=false` 재배포(배지 제거).
     - (1단계 토글로 끝내고 싶으면 운영 `token_pricing` 의 interview·offline override 행을 삭제 → 이후 가격이 `lib/beta.ts` 단일 제어.)
   - 검증: `npx tsc --noEmit` 통과. 운영 배포(`e6fd5b1`) 후 intervia.kr 에서 "오픈베타"·정가 취소선(`>3,000<`)·베타가(`>1,000<`/`>10<`) 렌더 확인. 코드 DB 변경 없음(운영 단가는 관리자 UI 로 조정).
+  - **기간 연장 이력**: 표시 종료일(`BETA.endsAtLabel`)만 수정 — 2026-07-31 → 2026-08-31 → **2026-09-30**(2026-09-04 변경). 가격·보너스는 날짜와 무관하게 `BETA.active` 로만 제어되므로 라벨 변경이 과금에 영향 없음. 랜딩(`/`)·`/pricing`·`/org/tokens`·`/admin/pricing` 4곳 모두 이 상수를 참조한다(하드코딩 없음).
 - 2026-06-22 — **토큰 충전 결제 연동 (토스페이먼츠, 카드 단건결제)** — 사업자등록 완료 후 자가결제 도입. 그동안 system_admin 수동 충전(`grant-tokens`)만 가능하던 것을 org_admin 자가결제로 확장. **DB 스키마 변경 없음** — 기존 `payment_orders` 테이블 + `applyChargePayment()`(멱등) 재사용. 토스 `orderId = IV-{payment_orders.id}`(PK 가 곧 전역 유니크 주문번호, 마이그레이션 회피), paymentKey 는 기존 `provider_ref` 컬럼에 저장.
   - **플로우**: `/org/tokens` 카드 클릭 → `POST /checkout`(pending 주문) → 토스 v2 결제창(CDN `js.tosspayments.com/v2/standard`, npm 의존 없음) → successUrl `/org/tokens/success` → `POST /confirm`(토스 승인 + 토큰지급) / failUrl `/org/tokens/fail`.
   - **보안 2중**: ① checkout 은 허용 금액(`CHARGE_PACKAGES` = 5만~100만원)만 주문 생성 ② confirm 은 클라이언트 금액 불신, **DB `amount_krw`** 로 토스 승인(토스가 실제 결제액 대조). 지급은 `applyChargePayment(paymentOrderId)` 멱등이라 새로고침·재호출·동시요청 이중지급 0.
