@@ -14,7 +14,7 @@ import {
   type TraitProfile,
 } from "@/lib/personality";
 import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
-import { sourceUrlLabel } from "@/lib/job-source";
+import { normalizeSourceUrl, sourceUrlLabel } from "@/lib/job-source";
 import {
   careerInputsFrom,
   careerInputsToText,
@@ -94,6 +94,9 @@ export default function NewJobPage() {
   const [importInfo, setImportInfo] = useState<string | null>(null);
   // 마지막으로 성공한 자동 채우기 출처 URL — 저장 시 공고에 기록해 나중에 원본 확인·재임포트에 쓴다.
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  // 저장 시 공고에 남길 원본 주소. "가져오기"를 누르지 않고 URL 만 적어둔 경우(붙여넣기로 채웠거나
+  // 임포트가 거절된 사이트)에도 링크는 남긴다 — 주소를 적어두고 저장하면 사라지던 문제.
+  const pendingSourceUrl = sourceUrl ?? normalizeSourceUrl(importUrl);
 
   // 붙여넣기(텍스트/이미지) 임포트 상태 — URL 가져오기가 거절될 때의 우회 경로.
   const [pasteText, setPasteText] = useState("");
@@ -328,7 +331,9 @@ export default function NewJobPage() {
         ...form,
         level: careerInputsToText(career),
         applyToken,
-        sourceUrl,
+        sourceUrl: pendingSourceUrl,
+        // 시각은 실제로 불러왔을 때만 남긴다 (아래 서버에서 판단).
+        sourceImported: !!sourceUrl,
       }),
     });
     if (!res.ok) {
@@ -356,7 +361,9 @@ export default function NewJobPage() {
         ...form,
         level: careerInputsToText(career),
         applyToken,
-        sourceUrl,
+        sourceUrl: pendingSourceUrl,
+        // 시각은 실제로 불러왔을 때만 남긴다 (아래 서버에서 판단).
+        sourceImported: !!sourceUrl,
       }),
     });
     if (!res.ok) {
@@ -482,10 +489,10 @@ export default function NewJobPage() {
             {importInfo}
           </div>
         )}
-        {sourceUrl && (
+        {pendingSourceUrl && (
           <p className="mt-2 text-[11px] text-ink-muted">
-            저장하면 원본 주소({sourceUrlLabel(sourceUrl)})가 이 공고에 함께 기록됩니다 — 나중에
-            공고 수정 화면에서 다시 불러올 수 있어요.
+            저장하면 원본 주소({sourceUrlLabel(pendingSourceUrl)})가 이 공고에 함께 기록됩니다 —
+            가져오기를 누르지 않아도 주소만 적어두면 남습니다.
           </p>
         )}
       </div>

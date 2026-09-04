@@ -63,6 +63,9 @@ export async function POST(req: Request) {
   const now = new Date();
   // 임시공고도 URL 자동 채우기 출처를 남긴다 — 정식 전환 때 "다시 불러오기"로 이어진다.
   const sourceUrl = normalizeSourceUrl(body.sourceUrl);
+  // "가져오기"로 본문까지 실제로 불러왔을 때만 true. URL 만 적어 저장한 경우 링크만 남기고
+  // 불러온 시각은 비운다(불러온 적 없는데 시각이 찍히는 것을 막는다).
+  const sourceImported = body.sourceImported === true;
 
   const [row] = await db
     .insert(jobPostings)
@@ -86,7 +89,7 @@ export async function POST(req: Request) {
       passwordHash,
       recruitingContactEmail: str(body.recruitingContactEmail, 200).trim() || me!.email,
       sourceUrl,
-      sourceImportedAt: sourceUrl ? now.toISOString() : null,
+      sourceImportedAt: sourceUrl && sourceImported ? now.toISOString() : null,
       publishedAt: now.toISOString(),
       closesAt: defaultClosesAt(now),
       createdByUserId: me!.id,

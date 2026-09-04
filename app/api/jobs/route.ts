@@ -146,8 +146,11 @@ export async function POST(req: Request) {
   // 문항을 생성해 저장하고 mcqEnabled=true 로 켠다(HR 검토 없이 바로 적용, 불일치는 버튼색 경고).
   const wantMcq = body.mcqAutoGenerate === true;
 
-  // 자동 채우기로 가져온 원본 공고 URL (임포트 성공 시에만 클라이언트가 보낸다).
+  // 원본 공고 URL — 자동 채우기로 가져왔거나, 입력칸에 주소만 적어 저장한 경우 둘 다 기록.
   const sourceUrl = normalizeSourceUrl(body.sourceUrl);
+  // "가져오기"로 본문까지 실제로 불러왔을 때만 true. URL 만 적어 저장한 경우 링크만 남기고
+  // 불러온 시각은 비운다(불러온 적 없는데 시각이 찍히는 것을 막는다).
+  const sourceImported = body.sourceImported === true;
 
   const now = new Date();
   const [row] = await db
@@ -175,7 +178,7 @@ export async function POST(req: Request) {
       passwordHash,
       recruitingContactEmail: contact.email,
       sourceUrl,
-      sourceImportedAt: sourceUrl ? now.toISOString() : null,
+      sourceImportedAt: sourceUrl && sourceImported ? now.toISOString() : null,
       publishedAt: now.toISOString(),
       closesAt: defaultClosesAt(now),
       createdByUserId: me!.id,

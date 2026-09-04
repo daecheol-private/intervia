@@ -79,9 +79,9 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/api/jobs` | 자기 법인 공고 + 통계. system_admin은 전체 |
-| POST | `/api/jobs` | 공고 생성. **`job_post` 토큰 차감**. body `traitProfile?`(Big Five 선호 특성 — high 최대 3개, 초과 400), `sourceUrl?`(URL 자동 채우기 출처 — 저장 시 `source_imported_at` 도 함께 기록) |
+| POST | `/api/jobs` | 공고 생성. **`job_post` 토큰 차감**. body `traitProfile?`(Big Five 선호 특성 — high 최대 3개, 초과 400), `sourceUrl?`(원본 공고 주소 — 「가져오기」로 채웠거나 입력칸에 주소만 적어둔 경우 둘 다 기록), `sourceImported?`(true 일 때만 `source_imported_at` 기록. 주소만 적은 경우는 링크만 남고 시각은 null) |
 | GET | `/api/jobs/[id]` | 🔑 |
-| PUT | `/api/jobs/[id]` | 🔑. `traitProfile` 키가 있을 때만 갱신 (high 최대 3개). `sourceUrl` 도 **키가 있을 때만** 갱신(+`sourceImportedAt`=now) — 클라이언트는 이번 편집에서 URL 임포트를 새로 했을 때만 보낸다 |
+| PUT | `/api/jobs/[id]` | 🔑. `traitProfile` 키가 있을 때만 갱신 (high 최대 3개). `sourceUrl` 도 **키가 있을 때만** 갱신 — 클라이언트는 이번 편집에서 임포트를 새로 했거나, 입력칸 주소가 기록된 값과 다를 때 보낸다. `sourceImported=true` 면 `sourceImportedAt`=now, 아니면 null(주소만 기록) |
 | DELETE | `/api/jobs/[id]` | 🔑 + cascade. **생성 5분 내 삭제 시 자동 환불** |
 | POST | `/api/jobs/[id]/unlock` | PIN 잠금 해제 쿠키 세팅 |
 

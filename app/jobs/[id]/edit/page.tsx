@@ -14,7 +14,7 @@ import {
   type TraitProfile,
 } from "@/lib/personality";
 import { getEmailDomain, isValidEmail } from "@/lib/email-domain";
-import { sourceUrlLabel } from "@/lib/job-source";
+import { normalizeSourceUrl, sourceUrlLabel } from "@/lib/job-source";
 import { formatKstDateTime } from "@/lib/utils";
 import {
   careerInputsFrom,
@@ -63,6 +63,8 @@ export default function EditJobPage() {
   const [source, setSource] = useState<{ url: string; importedAt: string | null } | null>(null);
   // 이번 편집에서 임포트를 새로 했을 때만 저장 시 전송(출처·시각 갱신). null 이면 기존 값 유지.
   const [reimportedUrl, setReimportedUrl] = useState<string | null>(null);
+  // 입력칸에 적힌 유효한 주소 — "가져오기"를 누르지 않아도 저장 시 원본 링크로 기록한다.
+  const pendingSourceUrl = normalizeSourceUrl(importUrl);
   // 채용 담당자 이메일 기본값/도메인 검증용 — 로그인 사용자 이메일.
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const myDomain = myEmail ? getEmailDomain(myEmail) : null;
@@ -217,8 +219,15 @@ export default function EditJobPage() {
       ...form,
       level: careerInputsToText(career),
     };
-    // 이번 편집에서 URL 자동 채우기를 했을 때만 출처를 갱신(키가 없으면 서버가 기존 값 유지).
-    if (reimportedUrl) payload.sourceUrl = reimportedUrl;
+    // 출처 URL — 다시 불러왔으면 그 주소(+불러온 시각 갱신), 아니면 입력칸 주소가 기록된 값과
+    // 다를 때만 링크를 갱신한다. 둘 다 아니면 키를 빼서 서버가 기존 값을 유지한다.
+    if (reimportedUrl) {
+      payload.sourceUrl = reimportedUrl;
+      payload.sourceImported = true;
+    } else if (pendingSourceUrl && pendingSourceUrl !== source?.url) {
+      payload.sourceUrl = pendingSourceUrl;
+      payload.sourceImported = false;
+    }
     if (form.clearPassword) payload.password = "";
     else if (!form.password) delete payload.password;
     delete payload.hasPassword;
@@ -276,6 +285,7 @@ export default function EditJobPage() {
         </div>
         <p className="text-xs text-ink-soft mb-3">
           사람인·잡코리아·원티드 등 채용 사이트 URL을 붙여넣으면 본문(이미지 포함)을 분석해 아래 필드를 채워줍니다. (기존 내용은 덮어쓰여요.)
+          가져오기 없이 주소만 남겨두고 저장하면 본문은 그대로 두고 원본 링크만 기록합니다.
         </p>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -310,6 +320,12 @@ export default function EditJobPage() {
           <div className="mt-2 text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
             {importInfo}
           </div>
+        )}
+        {!reimportedUrl && pendingSourceUrl && pendingSourceUrl !== source?.url && (
+          <p className="mt-2 text-[11px] text-ink-muted">
+            저장하면 이 주소({sourceUrlLabel(pendingSourceUrl)})가 이 공고의 원본으로 기록됩니다 —
+            가져오기를 누르지 않아도 되고, 본문은 그대로 둡니다.
+          </p>
         )}
         {source && (
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-muted">

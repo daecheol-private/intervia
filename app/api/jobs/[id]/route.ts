@@ -149,7 +149,10 @@ export async function PUT(
   const sourceUrl = "sourceUrl" in body ? normalizeSourceUrl(body.sourceUrl) : null;
   if (sourceUrl) {
     update.sourceUrl = sourceUrl;
-    update.sourceImportedAt = new Date().toISOString();
+    // "가져오기"로 실제 불러온 경우에만 시각을 남긴다. 입력칸에 주소만 적어 저장한 경우는
+    // 링크만 기록하고 시각은 비운다(본문은 그대로 두므로 "불러온" 것이 아니다).
+    update.sourceImportedAt =
+      body.sourceImported === true ? new Date().toISOString() : null;
   }
 
   // 키가 없으면 기존 값 유지 (부분 업데이트 클라이언트 호환)
