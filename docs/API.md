@@ -8,7 +8,7 @@
 
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
-| GET | `/api/auth/status` | 🌐 | 현재 user + setupRequired |
+| GET | `/api/auth/status` | 🌐 | 현재 user + setupRequired + `staffAlimtalkEnabled`(면접 일정 알림톡 스위치 — 가입 폼 휴대폰 번호 칸 표시 여부) |
 | POST | `/api/auth/setup` | 🌐 | (레거시) 첫 사용자 생성 |
 | POST | `/api/auth/signup` | 🌐 | **410 Gone** — `/api/orgs` 또는 `/api/orgs/join-requests` 사용 |
 | POST | `/api/auth/check-email` | 🌐 | `{email}` → `{available, matchedOrg?, isPublicDomain, suggestion}` |
@@ -49,11 +49,11 @@
 | POST | `/api/orgs/join-requests` | 🌐 | 비로그인 가입 + 합류 요청. user.status=pending |
 | GET | `/api/orgs/join-requests?orgId=&status=` | 🛡️ | 자기 법인 합류 요청 목록 |
 | PATCH | `/api/orgs/join-requests/[id]` | 🛡️ | `{action: 'approve'|'reject'}` |
-| GET | `/api/orgs/members?orgId?` | 🛡️ | 자기 법인 멤버 (system_admin은 orgId 지정 가능). 각 멤버에 `notifyPhone: {phoneMasked, status} \| null` |
-| PUT | `/api/orgs/members/[id]/notify-phone` | 🛡️ | 멤버의 면접 일정 알림톡 번호 대신 등록 `{phone}` → pending + 그 번호로 확인 알림톡. 알림은 번호 주인이 확인해야 켜짐. 비활성 멤버 409, 타 법인 404. rate-limit 20회/10분 |
+| GET | `/api/orgs/members?orgId?` | 🛡️ | 자기 법인 멤버 (system_admin은 orgId 지정 가능). 각 멤버에 `notifyPhone: {phoneMasked, status} \| null`, 최상위 `notifyPhoneEnabled`(면접 일정 알림톡 스위치 — false 면 화면이 번호 버튼·배지를 숨김) |
+| PUT | `/api/orgs/members/[id]/notify-phone` | 🛡️ | 멤버의 면접 일정 알림톡 번호 대신 등록 `{phone}` → pending + 그 번호로 확인 알림톡. 알림은 번호 주인이 확인해야 켜짐. 비활성 멤버 409, 타 법인 404, 스위치 꺼짐(템플릿 코드 미설정) 409. rate-limit 20회/10분 |
 | DELETE | `/api/orgs/members/[id]/notify-phone` | 🛡️ | 멤버 알림톡 번호 삭제 |
-| GET | `/api/account/notify-phone` | 🔒 | 내 알림톡 번호 `{notifyPhone: {phoneMasked, status, verifySentAt} \| null}` |
-| PUT | `/api/account/notify-phone` | 🔒 | `{phone}` 등록·변경 또는 `{resend:true}` 확인 알림톡 재발송 → `{sent, reason, notifyPhone}`. 형식 오류 400. rate-limit 5회/10분 |
+| GET | `/api/account/notify-phone` | 🔒 | 내 알림톡 번호 `{enabled, notifyPhone: {phoneMasked, status, verifySentAt} \| null}` — `enabled` false(템플릿 코드 미설정)면 계정 설정 패널을 숨김 |
+| PUT | `/api/account/notify-phone` | 🔒 | `{phone}` 등록·변경 또는 `{resend:true}` 확인 알림톡 재발송 → `{sent, reason, notifyPhone}`. 형식 오류 400, 스위치 꺼짐 409. rate-limit 5회/10분 |
 | DELETE | `/api/account/notify-phone` | 🔒 | 내 알림톡 번호 삭제 (즉시 파기) |
 | POST | `/api/verify-phone/[token]` | 🌐 | 번호 확인 페이지(`/verify/phone/[token]`) 버튼 — `{action:"confirm"}` → verified(시각·IP·UA 기록, 재호출 `alreadyVerified`) / `{action:"decline"}` → 번호 삭제. 없음 404 `not_found`, 기한 경과 410 `expired`. rate-limit IP 10회/분 |
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
@@ -100,7 +100,7 @@
 | GET | `/api/jobs/[id]/candidates` | 🔑 후보자 목록 + 최근 면접 세션 머지 + `round1ScheduleStatus`/`round2ScheduleStatus`(라운드별 최신 활성 스케줄 상태 — 응답 대기 vs 역제시 구분, 1차/2차 대기 그룹 분리용) + `commentCount`/`unreadCommentCount`(면접관 토론 — 카드의 토론 배지용. `unreadCommentCount`=현재 사용자가 안 읽은 남의 코멘트 수, 서버 읽음선 `candidate_comment_reads` LEFT JOIN 으로 계산 — 기기 무관). 목록 페이지는 `?stage=counter_proposed` pseudo 필터로 역제시 건만 표시 가능 (대시보드 역제시 알림 딥링크) |
 | GET | `/api/jobs/[id]/round1-schedule` | 🔑 확정 면접 일정(1·2차 통합) — `status=selected` + `outcome IS NULL` + (round1·`stage=round1_waiting` OR round2·`stage=round1_passed`) 조인 → 후보자별 `round`·선택 슬롯·온오프라인·주소, 시간 빠른 순. "면접 일정" 팝업용 (라우트 경로는 호환 위해 유지) |
 | POST | `/api/jobs/[id]/schedule-propose` | 🔑 후보자 다수에게 면접 슬롯 제시 + 메일. `round`(round1/round2, 기본 round1) — **round2 는 `round1_passed` 후보만** 가드, stage 변경 없음(round1 은 round1_scheduling 으로 전환). 같은 시간대 다수 후보 확정 허용 — 더블부킹 검사 없음 (2026-06-12). body `shareRecipients?: [{email, name?, userId?, report?}]` (최대 10) — 일정 공유 수신자, 새 스케쥴 row 에 저장. `report:true` 인 수신자는 확정·변경 안내에 **평가 리포트 공유 링크**(`/shared/[token]`) 동봉 — 취소 안내엔 미포함. 확정돼 있던 일정을 무르는 재제안이면 **옛 수신자에게 취소 안내** 발송. 오프라인 주소는 법인 주소록(`org_addresses`)에 자동 추가(중복 건너뜀). body `notifyUserIds?: number[]` — 확정·취소 메일·알림톡을 받을 공고 면접관(공고 면접관이 아닌 id 는 버림, 필드가 없으면 전원). 공유 수신자의 `phone`(비회원만)은 스냅샷에 저장하지 않고 `notify_phones` 에 pending 등록 + 확인 알림톡(새·바뀐 번호만) — 응답 `phoneRequests`. 재제안으로 옛 확정을 무르면 옛 알림 대상에게 취소 알림톡도 발송 |
-| GET | `/api/jobs/[id]/schedule-propose` | 🔑 `?round=` 의 직전 제안 공유 수신자·알림 받을 면접관 → `{shareRecipients, notifyUserIds, phoneByUserId, phoneByEmail}` (`report` 플래그 포함, 번호는 `{phoneMasked, status}` 만). 일정 모달 프리필용 |
+| GET | `/api/jobs/[id]/schedule-propose` | 🔑 `?round=` 의 직전 제안 공유 수신자·알림 받을 면접관 → `{shareRecipients, alimtalkEnabled, notifyUserIds, phoneByUserId, phoneByEmail}` (`report` 플래그 포함, 번호는 `{phoneMasked, status}` 만). 일정 모달 프리필용 — `alimtalkEnabled` false(템플릿 코드 미설정)면 카톡 상태·번호 칸을 숨김 |
 | POST | `/api/jobs/[id]/reopen` | 🔑 종결된 공고를 `active` 로 되돌림 (`closedAt=null`). **토큰 재과금 없음**. `closesAt` 이 아직 남았을 때만 — 이미 지났으면 409 `expired`(연장으로 유도). 종결 시 일괄 불합격된 후보자는 복구하지 않음. 감사 로그 `job.reopen`. **자동 종결은 2026-07-27 전면 제거** — 전원 불합격돼도 공고는 열려 있고, 종결은 `POST /api/jobs/[id]/close` 로만 |
 | POST | `/api/candidates/[id]/schedule-manual` | 🔑 전화 등으로 협의된 1·2차 면접 시간을 제시 절차 없이 **즉시 확정 등록**(`status=selected`). body `{round?, slot, modeOnline?, address?, notifyCandidate?, shareRecipients?}` (수신자별 `report:true` 면 평가 리포트 링크 동봉). round2 는 `round1_passed` 후보만, round1 은 stage→round1_waiting. `notifyCandidate` 시 후보자 확정 메일(줌 연동 시 자동 생성), 면접관 인앱 알림 fanout. **공유 수신자는 `notifyCandidate` 와 무관하게 확정 안내 수신**. body `notifyUserIds?`·공유 수신자 `phone?` 은 schedule-propose 와 같은 규칙 — 알림 받을 면접관·공유받을 사람 중 번호 확인자에게 확정 알림톡(등록자 본인 제외), 재확정이면 옛 일정 취소 알림톡 먼저. 응답 `phoneRequests`. 오프라인 주소는 법인 주소록(`org_addresses`)에 자동 추가(중복 건너뜀). 🪙 잔액 0 이하 402 |
 | POST | `/api/jobs/[id]/candidates` | 🔑 multipart 또는 JSON manifest 업로드. **`applicantConsentConfirmed=true` 필수** — 미체크 시 400 + `{code:"applicant_consent_required"}`. 채용기업이 지원자 동의 취득 책임 확인. 업로드 후 자동 큐 enqueue (과금은 평가 성공 시 후차감). 감사 로그 `candidate.upload_with_consent` |

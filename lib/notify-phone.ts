@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 import { and, eq, inArray, lt } from "drizzle-orm";
 import { db } from "./db";
 import { notifyPhones, organizations, type NotifyPhone } from "./schema";
-import { normalizeMobile, sendStaffAlimtalk } from "./alimtalk";
+import { isStaffAlimtalkEnabled, normalizeMobile, sendStaffAlimtalk } from "./alimtalk";
 import { resolveMailBaseUrl } from "./notifications";
 import { isUniqueViolation } from "./db-errors";
 import { addDays } from "./utils";
@@ -20,6 +20,9 @@ import { addDays } from "./utils";
 export const PHONE_VERIFY_TTL_DAYS = 7;
 /** 확인 기한이 지나고도 이 기간(일)이 더 지난 미확인 번호는 삭제한다. */
 const STALE_PENDING_DAYS = 30;
+
+/** 템플릿 코드가 들어오기 전(isStaffAlimtalkEnabled false) 등록 요청에 돌려주는 안내. */
+export const STAFF_ALIMTALK_NOT_READY = "면접 일정 카카오톡 알림은 아직 준비 중입니다.";
 
 /** 가입자는 userId, 비회원(일정 공유받을 사람)은 법인 + 이메일로 식별한다. */
 export type PhoneOwner = { userId: number } | { orgId: number; email: string };
@@ -144,6 +147,8 @@ export async function requestPhoneVerification(opts: {
   /** 확인 대기 중인 같은 번호에도 확인 알림톡을 다시 보낸다 (본인이 누른 "다시 보내기"). */
   force?: boolean;
 }): Promise<RequestVerifyResult> {
+  // 템플릿 코드 전에는 받지 않는다 — 확인 카톡을 못 보낸 번호가 "확인 대기"로 남는 걸 막는다.
+  if (!isStaffAlimtalkEnabled()) return { ok: false, error: STAFF_ALIMTALK_NOT_READY };
   const phone = normalizeMobile(opts.phone);
   if (!phone)
     return {
@@ -321,7 +326,8 @@ export type SharePhoneInput = { email: string; name: string | null; phone: strin
 export function parseSharePhoneInputs(
   input: unknown
 ): { ok: true; list: SharePhoneInput[] } | { ok: false; error: string } {
-  if (!Array.isArray(input)) return { ok: true, list: [] };
+  // 기능이 꺼져 있으면 번호 칸이 숨겨진다 — 들어온 번호는 검증도 등록도 하지 않는다.
+  if (!Array.isArray(input) || !isStaffAlimtalkEnabled()) return { ok: true, list: [] };
   const out: SharePhoneInput[] = [];
   for (const raw of input) {
     if (!raw || typeof raw !== "object") continue;

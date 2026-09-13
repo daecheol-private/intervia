@@ -1,5 +1,6 @@
 import { hasAnyUser, getCurrentUser } from "@/lib/auth";
 import { ensureSystemAdmin } from "@/lib/bootstrap-admin";
+import { isStaffAlimtalkEnabled } from "@/lib/alimtalk";
 
 export const runtime = "nodejs";
 
@@ -8,5 +9,10 @@ export async function GET() {
   await ensureSystemAdmin();
   const user = await getCurrentUser();
   const setupRequired = !(await hasAnyUser());
-  return Response.json({ user, setupRequired });
+  // 가입 폼의 면접 일정 알림톡 번호 칸 표시 여부 — 템플릿 코드가 들어오기 전엔 숨긴다.
+  return Response.json({
+    user,
+    setupRequired,
+    staffAlimtalkEnabled: isStaffAlimtalkEnabled(),
+  });
 }

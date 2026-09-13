@@ -43,7 +43,7 @@ import {
   getOrgEmailBranding,
   brandingAttachments,
 } from "@/lib/mailer";
-import { sendCandidateAlimtalk } from "@/lib/alimtalk";
+import { isStaffAlimtalkEnabled, sendCandidateAlimtalk } from "@/lib/alimtalk";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { isJobExpired } from "@/lib/job-lifecycle";
@@ -491,6 +491,8 @@ export async function GET(
 
   return Response.json({
     shareRecipients,
+    // 면접 일정 알림톡 스위치(템플릿 코드 설정) — 꺼져 있으면 모달이 카톡 상태·번호 칸을 숨긴다.
+    alimtalkEnabled: isStaffAlimtalkEnabled(),
     notifyUserIds: lastNotify?.notifyUserIds ?? null,
     phoneByUserId: Object.fromEntries(phoneByUser),
     phoneByEmail: Object.fromEntries(phoneByEmail),

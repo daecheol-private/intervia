@@ -37,6 +37,8 @@ export default function OrgMembersPage() {
   const [rows, setRows] = useState<Member[]>([]);
   const [domainShared, setDomainShared] = useState(false);
   const [domainOrgs, setDomainOrgs] = useState<DomainOrg[]>([]);
+  // 면접 일정 알림톡이 켜졌는지(템플릿 코드 설정) — 꺼져 있으면 번호 버튼·배지를 숨긴다.
+  const [phoneEnabled, setPhoneEnabled] = useState(false);
   const [reviewBusyId, setReviewBusyId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -55,6 +57,7 @@ export default function OrgMembersPage() {
       members: Member[];
       domainShared: boolean;
       domainOrgs?: DomainOrg[];
+      notifyPhoneEnabled?: boolean;
     };
     const members = data.members ?? [];
     // 승인대기(합류 요청) 행을 맨 위로. 그 외는 API 정렬(createdAt desc) 유지 — JS sort 는 stable.
@@ -64,6 +67,7 @@ export default function OrgMembersPage() {
     setRows(members);
     setDomainShared(!!data.domainShared);
     setDomainOrgs(data.domainOrgs ?? []);
+    setPhoneEnabled(data.notifyPhoneEnabled === true);
   }, []);
 
   useEffect(() => {
@@ -314,7 +318,7 @@ export default function OrgMembersPage() {
                   <div className="text-xs text-ink-muted break-all mt-0.5">
                     {m.email}
                   </div>
-                  <PhoneBadge phone={m.notifyPhone} />
+                  {phoneEnabled && <PhoneBadge phone={m.notifyPhone} />}
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <RoleBadge role={m.role} />
@@ -348,7 +352,7 @@ export default function OrgMembersPage() {
                     m={m}
                     busyId={busyId}
                     update={update}
-                    editPhone={editPhone}
+                    editPhone={phoneEnabled ? editPhone : undefined}
                   />
                 )}
               </div>
@@ -399,7 +403,7 @@ export default function OrgMembersPage() {
                   </td>
                   <td className="px-4 py-3 text-ink-soft">
                     {m.email}
-                    <PhoneBadge phone={m.notifyPhone} />
+                    {phoneEnabled && <PhoneBadge phone={m.notifyPhone} />}
                   </td>
                   <td className="px-4 py-3">
                     <RoleBadge role={m.role} />
@@ -437,7 +441,7 @@ export default function OrgMembersPage() {
                           m={m}
                           busyId={busyId}
                           update={update}
-                          editPhone={editPhone}
+                          editPhone={phoneEnabled ? editPhone : undefined}
                         />
                       </div>
                     )}
@@ -469,7 +473,8 @@ function MemberActions({
       emailVerified?: boolean;
     }
   ) => void;
-  editPhone: (m: Member) => void;
+  /** 면접 일정 알림톡이 꺼져 있으면(템플릿 코드 전) undefined — 번호 버튼을 숨긴다. */
+  editPhone?: (m: Member) => void;
 }) {
   return (
     <>
@@ -510,7 +515,7 @@ function MemberActions({
           일반으로
         </button>
       )}
-      {m.status === "active" && (
+      {m.status === "active" && editPhone && (
         <button
           onClick={() => editPhone(m)}
           disabled={busyId === m.id}

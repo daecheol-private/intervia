@@ -76,6 +76,8 @@ export function ScheduleProposeModal({
   const [notifyUserIds, setNotifyUserIds] = useState<number[] | null>(null);
   const [phoneByUserId, setPhoneByUserId] = useState<Record<string, PhoneStatus>>({});
   const [phoneByEmail, setPhoneByEmail] = useState<Record<string, PhoneStatus>>({});
+  // 면접 일정 알림톡이 켜졌는지(템플릿 코드 설정) — 꺼져 있으면 카톡 상태·번호 칸을 숨긴다.
+  const [alimtalkEnabled, setAlimtalkEnabled] = useState(false);
   const [results, setResults] = useState<{ results: ProposeResult[] } | null>(
     null
   );
@@ -156,6 +158,7 @@ export function ScheduleProposeModal({
           );
         setPhoneByUserId(d?.phoneByUserId ?? {});
         setPhoneByEmail(d?.phoneByEmail ?? {});
+        setAlimtalkEnabled(d?.alimtalkEnabled === true);
         const list: Interviewer[] = Array.isArray(iv?.interviewers) ? iv.interviewers : [];
         setInterviewers(list);
         const ids = list.map((x) => x.userId);
@@ -490,6 +493,7 @@ export function ScheduleProposeModal({
                   value={notifyUserIds}
                   onChange={setNotifyUserIds}
                   phoneByUserId={phoneByUserId}
+                  showKakao={alimtalkEnabled}
                 />
               )}
 
@@ -498,6 +502,7 @@ export function ScheduleProposeModal({
                 value={shareRecipients}
                 onChange={setShareRecipients}
                 phoneByEmail={phoneByEmail}
+                phoneEnabled={alimtalkEnabled}
               />
 
               {mode === "direct" && (
@@ -603,11 +608,14 @@ function NotifyInterviewerPicker({
   value,
   onChange,
   phoneByUserId,
+  showKakao,
 }: {
   interviewers: Interviewer[];
   value: number[];
   onChange: (next: number[]) => void;
   phoneByUserId: Record<string, PhoneStatus>;
+  /** 면접 일정 알림톡이 켜졌을 때(템플릿 코드 설정)만 카톡 등록 상태를 보여준다. */
+  showKakao: boolean;
 }) {
   const toggle = (uid: number) =>
     onChange(value.includes(uid) ? value.filter((v) => v !== uid) : [...value, uid]);
@@ -618,7 +626,9 @@ function NotifyInterviewerPicker({
         <span className="flex items-center gap-1.5 text-xs font-medium text-ink-soft">
           <BellRing className="w-4 h-4" strokeWidth={2.25} />
           알림 받을 면접관
-          <span className="text-ink-muted font-normal">확정·취소 메일·카톡</span>
+          <span className="text-ink-muted font-normal">
+            {showKakao ? "확정·취소 메일·카톡" : "확정·취소 메일"}
+          </span>
         </span>
         <span className="text-[11px] text-ink-muted tabular-nums">
           {value.length}/{interviewers.length}명
@@ -637,19 +647,21 @@ function NotifyInterviewerPicker({
                 />
                 <span className="font-medium text-ink shrink-0">{iv.name}</span>
                 <span className="min-w-0 truncate text-ink-muted">{iv.email}</span>
-                <span
-                  className={`ml-auto shrink-0 text-[10px] ${
-                    phone?.status === "verified"
-                      ? "text-primary-deep font-medium"
-                      : "text-ink-muted"
-                  }`}
-                >
-                  {phone?.status === "verified"
-                    ? "카톡 받는 중"
-                    : phone
-                      ? "카톡 확인 대기"
-                      : "카톡 미등록"}
-                </span>
+                {showKakao && (
+                  <span
+                    className={`ml-auto shrink-0 text-[10px] ${
+                      phone?.status === "verified"
+                        ? "text-primary-deep font-medium"
+                        : "text-ink-muted"
+                    }`}
+                  >
+                    {phone?.status === "verified"
+                      ? "카톡 받는 중"
+                      : phone
+                        ? "카톡 확인 대기"
+                        : "카톡 미등록"}
+                  </span>
+                )}
               </label>
             </li>
           );

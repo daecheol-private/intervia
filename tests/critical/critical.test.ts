@@ -1692,4 +1692,51 @@ describe("CT-12 면접 일정 알림톡", () => {
       fill(block("**③ 알림 받을 번호 확인**"))
     );
   });
+
+  it("CT-1207 기능 스위치 — 템플릿 코드 전에는 번호 등록을 받지 않고, 켜지면 화면 플래그 4곳이 true", async () => {
+    // 배포를 템플릿 승인보다 먼저 한다 — 그 사이 받은 번호는 확인 카톡이 안 나간 채 "확인 대기"로
+    // 남고 코드를 넣어도 다시 보내지지 않으므로, 스위치가 꺼져 있으면 등록부에 쓰지 않아야 한다.
+    const notifyPhone = await import("../../lib/notify-phone");
+    const { isStaffAlimtalkEnabled } = await import("../../lib/alimtalk");
+    assert.equal(isStaffAlimtalkEnabled(), true, "테스트 env 에 스태프 템플릿 코드가 없음");
+
+    const saved = process.env.ALIGO_TPL_STAFF_PHONE_VERIFY;
+    delete process.env.ALIGO_TPL_STAFF_PHONE_VERIFY;
+    try {
+      assert.equal(isStaffAlimtalkEnabled(), false);
+      const r = await notifyPhone.requestPhoneVerification({
+        owner: { orgId: ids.orgA, email: "gate@outside.test" },
+        orgId: ids.orgA,
+        name: "스위치 확인",
+        phone: "010-4444-5555",
+        requestedByUserId: null,
+      });
+      assert.equal(r.ok, false);
+      assert.equal(
+        await row(`SELECT id FROM notify_phones WHERE org_id = ? AND email = ?`, [
+          ids.orgA,
+          "gate@outside.test",
+        ]),
+        undefined,
+        "스위치가 꺼졌는데 번호가 저장됨"
+      );
+      // 일정 제안의 번호 칸 — 꺼져 있으면 형식 오류로 제안을 막지도, 등록하지도 않는다
+      assert.deepEqual(
+        notifyPhone.parseSharePhoneInputs([{ email: "gate@outside.test", phone: "123" }]),
+        { ok: true, list: [] }
+      );
+    } finally {
+      process.env.ALIGO_TPL_STAFF_PHONE_VERIFY = saved;
+    }
+
+    // 켜진 서버는 번호 등록 화면 4곳에 플래그를 내려준다
+    const mine = await memberA.get("/api/account/notify-phone");
+    assert.equal(field(mine.body, "enabled"), true, mine.text);
+    const members = await adminA.get("/api/orgs/members");
+    assert.equal(field(members.body, "notifyPhoneEnabled"), true, members.text.slice(0, 200));
+    const prefill = await adminA.get(`/api/jobs/${ids.jobA}/schedule-propose?round=round1`);
+    assert.equal(field(prefill.body, "alimtalkEnabled"), true, prefill.text.slice(0, 200));
+    const status = await anon.get("/api/auth/status");
+    assert.equal(field(status.body, "staffAlimtalkEnabled"), true, status.text.slice(0, 200));
+  });
 });

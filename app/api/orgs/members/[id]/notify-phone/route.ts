@@ -3,6 +3,7 @@
  *
  * 면접관은 서비스에 잘 들어오지 않아 본인 등록을 기다리기 어렵다 — 관리자가 대신 입력하되,
  * 알림은 그 번호의 주인이 카카오톡에서 "번호 확인"을 눌러야 켜진다(동의 기록 + 오타 방지).
+ * 템플릿 코드가 들어오기 전(isStaffAlimtalkEnabled false)에는 등록을 받지 않는다.
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -11,7 +12,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { isStaffAlimtalkEnabled } from "@/lib/alimtalk";
 import {
+  STAFF_ALIMTALK_NOT_READY,
   getPhoneStatus,
   removePhone,
   requestPhoneVerification,
@@ -44,6 +47,8 @@ export async function PUT(
   const { id } = await params;
   const t = await loadTarget(id);
   if ("error" in t) return t.error;
+  if (!isStaffAlimtalkEnabled())
+    return new Response(STAFF_ALIMTALK_NOT_READY, { status: 409 });
 
   const limited = await rateLimit(
     req,

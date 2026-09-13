@@ -9,6 +9,7 @@ import { eq, and, desc, ne } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { getPhoneStatusesForUsers } from "@/lib/notify-phone";
+import { isStaffAlimtalkEnabled } from "@/lib/alimtalk";
 
 export const runtime = "nodejs";
 
@@ -112,5 +113,11 @@ export async function GET(req: Request) {
     domainShared = coTenants.length > 0;
   }
 
-  return Response.json({ members, domainShared, domainOrgs });
+  return Response.json({
+    members,
+    domainShared,
+    domainOrgs,
+    // 면접 일정 알림톡 스위치(템플릿 코드 설정) — 꺼져 있으면 화면이 번호 버튼·배지를 숨긴다.
+    notifyPhoneEnabled: isStaffAlimtalkEnabled(),
+  });
 }

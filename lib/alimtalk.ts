@@ -387,6 +387,19 @@ const STAFF_TEMPLATE_ENV: Record<StaffAlimtalkType, string> = {
   staff_phone_verify: "ALIGO_TPL_STAFF_PHONE_VERIFY",
 };
 
+/**
+ * 면접 일정 알림톡 기능 스위치 — 번호 확인·일정 확정 템플릿 코드가 둘 다 있어야 켜진다.
+ * 꺼져 있으면 번호 등록 화면을 숨기고 등록도 받지 않는다: 템플릿 승인 전에 받은 번호는 확인 카톡이
+ * 안 나간 채 "확인 대기"로 남고, 코드를 넣은 뒤에도 저절로 다시 보내지지 않기 때문.
+ * 취소 템플릿은 코드가 들어온 뒤부터 그 종류만 발송된다.
+ */
+export function isStaffAlimtalkEnabled(): boolean {
+  return !!(
+    process.env[STAFF_TEMPLATE_ENV.staff_phone_verify]?.trim() &&
+    process.env[STAFF_TEMPLATE_ENV.staff_schedule_confirmed]?.trim()
+  );
+}
+
 export type StaffAlimtalkVars = {
   orgName: string | null;
   recipientName: string;

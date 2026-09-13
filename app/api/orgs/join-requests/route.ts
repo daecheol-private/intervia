@@ -17,7 +17,7 @@ import { notifyOrgAdmins, notifySystemAdmins } from "@/lib/notifications";
 import { sendVerificationMail } from "@/lib/email-verify";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { syncMarketingRecipient } from "@/lib/marketing-consent";
-import { normalizeMobile } from "@/lib/alimtalk";
+import { isStaffAlimtalkEnabled, normalizeMobile } from "@/lib/alimtalk";
 import { requestPhoneVerification } from "@/lib/notify-phone";
 
 export const runtime = "nodejs";
@@ -43,8 +43,11 @@ export async function POST(req: Request) {
   const email = body.email?.trim();
   const password = body.password ?? "";
   const name = body.name?.trim();
+  // 알림톡 스위치가 꺼져 있으면(템플릿 코드 전) 칸이 숨겨지므로 들어온 번호는 무시 — 가입을 막지 않는다.
   const notifyPhone =
-    typeof body.notifyPhone === "string" ? body.notifyPhone.trim() : "";
+    isStaffAlimtalkEnabled() && typeof body.notifyPhone === "string"
+      ? body.notifyPhone.trim()
+      : "";
 
   if (!orgId || !email || !password || !name)
     return new Response("법인/이름/이메일/비밀번호 필수", { status: 400 });

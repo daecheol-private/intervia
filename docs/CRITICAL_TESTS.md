@@ -225,7 +225,7 @@ CT-1107·1108 도 같은 구조다. 2자리 연도는 **생년월일 라벨 뒤 
 
 ### CT-12. 면접 일정 알림톡 — 면접관·일정 공유받을 사람 🧑‍💼⚙️
 
-2026-09-14 신설. 알림톡 env 는 무력화돼 실발송은 없고, 번호 등록부·번호 확인·수신자 선택·서명 링크·본문 정합을 검증한다. 서명 링크를 테스트가 직접 발급하도록 `tests/critical/env.ts` 가 `MASTER_ENCRYPTION_KEY` 를 고정값으로 주입한다(서버도 같은 키). 설계: [ALIMTALK.md](ALIMTALK.md) "면접 일정 알림" 절.
+2026-09-14 신설. 알림톡 env 는 무력화돼 실발송은 없고, 번호 등록부·번호 확인·수신자 선택·서명 링크·본문 정합을 검증한다. 서명 링크를 테스트가 직접 발급하도록 `tests/critical/env.ts` 가 `MASTER_ENCRYPTION_KEY` 를 고정값으로 주입한다(서버도 같은 키). 기능 스위치(`isStaffAlimtalkEnabled`)를 켜려고 스태프 템플릿 코드 3개도 가짜 값으로 넣는다 — 알리고 키가 비어 있어 발송은 여전히 `not_configured` 로 skip. 설계: [ALIMTALK.md](ALIMTALK.md) "면접 일정 알림" 절.
 
 | ID | 시나리오 | 예상 결과 |
 |---|---|---|
@@ -235,6 +235,7 @@ CT-1107·1108 도 같은 구조다. 2자리 연도는 **생년월일 라벨 뒤 
 | CT-1204 | 수동 확정 `schedule-manual` 에 `notifyUserIds:[멤버, 없는 id]` + 비회원 공유 수신자 `phone` (형식 오류 먼저) | 400 → 200. `notify_user_ids=[멤버]`(공고 면접관만), 공유 스냅샷에 번호 없음, `notify_phones` 에 비회원 pending, 프리필 GET round1 `notifyUserIds`·`phoneByEmail` / round2 `null` |
 | CT-1205 | `/shared/view/[token]` — 가입자 / 리포트 공유 비회원 / 공유 안 한 비회원 / 위조 서명 / 만료 | `/candidates/[id]` 리다이렉트 / `/shared/sr_…` 리다이렉트 / 200 일정 정보만(실명 없음) / "링크를 찾을 수 없습니다" / "만료된 링크입니다" |
 | CT-1206 | `buildStaffMessage` 3종 vs ALIMTALK.md 승인 신청 코드블록(샘플 변수 치환) | 글자까지 일치 — 한쪽만 고치면 실패(카카오는 불일치 본문 발송을 거부) |
+| CT-1207 | 기능 스위치 — 테스트 프로세스에서 번호 확인 템플릿 env 를 지운 채 `requestPhoneVerification`·`parseSharePhoneInputs` 호출 → 켜진 서버의 화면 플래그 4곳 조회 | `ok:false`·등록부에 행 없음·번호 칸 입력 무시(`list:[]`, 형식 오류도 400 안 냄) → `enabled`(계정 설정)·`notifyPhoneEnabled`(멤버 목록)·`alimtalkEnabled`(일정 프리필)·`staffAlimtalkEnabled`(`/api/auth/status`) 모두 true |
 
 ## 범위 외 (이 스위트가 다루지 않는 것)
 

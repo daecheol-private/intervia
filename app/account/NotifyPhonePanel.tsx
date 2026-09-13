@@ -12,9 +12,11 @@ type PhoneStatus = {
 /**
  * 면접 일정 카카오톡 알림 번호 — 면접관으로 배정된 공고의 대면 면접이 확정·취소되면 알림톡.
  * 번호를 저장하면 그 번호로 확인 카톡이 가고, 카톡에서 확인해야 알림이 켜진다.
+ * 템플릿 코드가 들어오기 전에는 서버가 enabled:false 를 줘서 패널 자체를 숨긴다.
  */
 export function NotifyPhonePanel() {
   const [loaded, setLoaded] = useState(false);
+  const [enabled, setEnabled] = useState(false);
   const [phone, setPhone] = useState<PhoneStatus | null>(null);
   const [input, setInput] = useState("");
   const [editing, setEditing] = useState(false);
@@ -25,6 +27,7 @@ export function NotifyPhonePanel() {
     void fetch("/api/account/notify-phone")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
+        setEnabled(d?.enabled === true);
         setPhone(d?.notifyPhone ?? null);
         setLoaded(true);
       })
@@ -77,7 +80,7 @@ export function NotifyPhonePanel() {
     setMsg({ type: "success", text: "번호를 삭제했습니다." });
   };
 
-  if (!loaded) return null;
+  if (!loaded || !enabled) return null;
 
   return (
     <section className="mt-8 bg-card border border-border-default rounded-2xl p-6 shadow-sm">

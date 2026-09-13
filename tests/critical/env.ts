@@ -37,6 +37,11 @@ process.env.BLOB_READ_WRITE_TOKEN = "";
 // 고정 키를 쓴다. 아래 SERVER_ENV 가 process.env 를 펼치므로 서버도 같은 키로 뜬다.
 process.env.MASTER_ENCRYPTION_KEY =
   "0f1e2d3c4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff0";
+// 면접 일정 알림톡 기능 스위치(lib/alimtalk isStaffAlimtalkEnabled)는 템플릿 코드로 켜진다 — 켠 상태로
+// 번호 등록부를 검증한다. 알리고 키는 아래 SERVER_ENV 에서 비우므로 실발송은 여전히 0(not_configured).
+process.env.ALIGO_TPL_STAFF_PHONE_VERIFY = "CT_TPL_STAFF_PHONE_VERIFY";
+process.env.ALIGO_TPL_STAFF_SCHEDULE_CONFIRMED = "CT_TPL_STAFF_SCHEDULE_CONFIRMED";
+process.env.ALIGO_TPL_STAFF_SCHEDULE_CANCELLED = "CT_TPL_STAFF_SCHEDULE_CANCELLED";
 
 export function assertIsolated() {
   const url = process.env.DATABASE_URL ?? "";

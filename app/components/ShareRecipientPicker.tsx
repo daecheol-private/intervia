@@ -39,12 +39,15 @@ export function ShareRecipientPicker({
   value,
   onChange,
   phoneByEmail,
+  phoneEnabled = false,
 }: {
   jobId: number;
   value: ShareRecipient[];
   onChange: (next: ShareRecipient[]) => void;
   /** 이미 등록된 비회원 번호의 확인 상태 (직전 제안 프리필과 함께 온다). */
   phoneByEmail?: Record<string, PhoneStatus>;
+  /** 면접 일정 알림톡이 켜졌는지(템플릿 코드 설정) — 꺼져 있으면 번호 칸을 숨긴다. */
+  phoneEnabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -174,9 +177,9 @@ export function ShareRecipientPicker({
         <div className="px-3 pb-3 space-y-3 border-t border-border-default pt-3">
           <p className="text-[11px] text-ink-muted leading-relaxed">
             면접관이 아니어도 일정이 확정·변경·취소되면 안내를 받습니다. 회의실
-            담당자나 Intervia 계정이 없는 임원에게 유용합니다. 휴대폰 번호를 함께
-            적으면 그 번호로 확인 카톡이 가고, 받는 사람이 확인하면 확정·취소를
-            카톡으로도 받습니다.
+            담당자나 Intervia 계정이 없는 임원에게 유용합니다.
+            {phoneEnabled &&
+              " 휴대폰 번호를 함께 적으면 그 번호로 확인 카톡이 가고, 받는 사람이 확인하면 확정·취소를 카톡으로도 받습니다."}
           </p>
 
           {canPickMembers && members.length > 0 && (
@@ -303,7 +306,7 @@ export function ShareRecipientPicker({
                         <X className="w-3 h-3" strokeWidth={2.5} />
                       </button>
                     </div>
-                    {r.userId == null && (
+                    {r.userId == null && phoneEnabled && (
                       <div className="mt-1.5 flex items-center gap-2">
                         <Input
                           value={r.phone ?? ""}

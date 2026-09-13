@@ -1,12 +1,15 @@
 /**
  * 내 면접 일정 알림톡 번호 — 조회·등록(변경)·확인 카톡 재발송·삭제.
  * 등록하면 그 번호로 "번호 확인" 알림톡이 가고, 본인이 확인해야 알림이 켜진다(lib/notify-phone).
+ * 템플릿 코드가 들어오기 전(isStaffAlimtalkEnabled false)에는 등록을 받지 않고 화면도 숨긴다.
  */
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { isStaffAlimtalkEnabled } from "@/lib/alimtalk";
 import {
+  STAFF_ALIMTALK_NOT_READY,
   getPhoneStatus,
   removePhone,
   requestPhoneVerification,
@@ -19,7 +22,10 @@ export async function GET() {
   const me = await getCurrentUser();
   const g = requireUser(me);
   if (g) return g;
-  return Response.json({ notifyPhone: await getPhoneStatus({ userId: me!.id }) });
+  return Response.json({
+    enabled: isStaffAlimtalkEnabled(),
+    notifyPhone: await getPhoneStatus({ userId: me!.id }),
+  });
 }
 
 /** body: { phone } 등록·변경 / { resend: true } 등록된 번호로 확인 카톡 재발송 */
@@ -29,6 +35,8 @@ export async function PUT(req: Request) {
   if (g) return g;
   if (!me!.orgId)
     return new Response("법인에 소속된 계정만 등록할 수 있습니다.", { status: 400 });
+  if (!isStaffAlimtalkEnabled())
+    return new Response(STAFF_ALIMTALK_NOT_READY, { status: 409 });
 
   // 확인 알림톡은 건당 과금 + 잘못 적은 남의 번호로 반복 발송될 수 있어 사용자당 10분 5회.
   const limited = await rateLimit(

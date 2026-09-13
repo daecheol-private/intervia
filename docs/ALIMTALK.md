@@ -121,6 +121,8 @@ env 미설정이면 조용히 skip(이메일만 발송), 전화번호 없으면 
 
 ### 코드 지도
 - env: `ALIGO_TPL_STAFF_SCHEDULE_CONFIRMED` / `ALIGO_TPL_STAFF_SCHEDULE_CANCELLED` / `ALIGO_TPL_STAFF_PHONE_VERIFY` — 비면 그 종류만 조용히 skip(메일은 그대로).
+- **기능 스위치** `isStaffAlimtalkEnabled()`(lib/alimtalk.ts) = 번호 확인 + 확정 템플릿 코드가 **둘 다** 있을 때만 켜짐. 꺼져 있으면 번호 등록 화면(계정 설정 패널·멤버 관리 버튼/배지·가입 폼 칸·일정 모달의 카톡 상태/번호 칸)을 숨기고 `requestPhoneVerification` 도 거부한다(계정·멤버 PUT 409, 가입·일정 제안은 번호를 무시). 코드를 템플릿 승인보다 먼저 배포하므로, 확인 카톡 없이 "확인 대기"로 남아 코드를 넣어도 다시 안 보내지는 번호가 생기지 않게 하려는 것. 알림 받을 면접관 선택(메일)은 스위치와 무관하게 동작.
+- **켜는 순서**: 카카오 승인 → Vercel env 에 템플릿 코드 3개 입력 → **재배포**(env 는 새 배포부터 반영 — Vercel Redeploy 또는 main 커밋 push) → 계정 설정·멤버 관리에 "카톡 알림 번호"가 보이면 켜진 것.
 - 번호 등록부: `notify_phones` + `lib/notify-phone.ts`. 등록 경로 — 계정 설정(`/api/account/notify-phone`), 법인 멤버 관리(`/api/orgs/members/[id]/notify-phone`), 가입 폼(`/api/orgs`·`/api/orgs/join-requests` 의 `notifyPhone`), 일정 제안의 공유받을 사람 `phone`(비회원만, 일정 스냅샷엔 저장 안 함).
 - 번호 확인: `/verify/phone/[token]` 페이지의 버튼 → `POST /api/verify-phone/[token]` (`confirm` / `decline`=삭제). 링크를 열기만 해서는 확인되지 않는다(메신저 링크 미리 열기 대비). 미확인 번호는 기한(7일) + 30일 뒤 purge-original cron 이 삭제.
 - 발송: `lib/staff-alimtalk.ts`. 확정 = `lib/schedule-notify.ts`(확정 4경로 공통, 메일 서버 설정과 무관하게 먼저). 취소 = `notifyScheduleCancelOnCandidateClosed`(합불 결정·공고 종결·AI면접 철회) + 일정 링크 지원 취소·재제안·수동 재확정 라우트. 수신자 여러 명은 알리고 1회 요청(receiver_1~500)으로 묶는다.
