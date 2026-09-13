@@ -44,7 +44,7 @@ import {
 import { sendMail, getOrgEmailBranding, brandingAttachments } from "./mailer";
 import { sentToday } from "./mail-usage";
 import { redactCandidateAuditPii } from "./audit";
-import { notifyShareCancelOnCandidateClosed } from "./schedule-share";
+import { notifyScheduleCancelOnCandidateClosed } from "./schedule-share";
 import { after } from "next/server";
 
 export const DEFAULT_JOB_DURATION_DAYS = 30;
@@ -379,7 +379,7 @@ export async function closeJob(args: {
   // 대부분의 후보자는 공유 수신자가 없어 no-op — 실제 발송량은 지정된 건에 한정된다.
   after(async () => {
     for (const t of targets) {
-      await notifyShareCancelOnCandidateClosed(t.id, "rejected").catch((e) =>
+      await notifyScheduleCancelOnCandidateClosed(t.id, "rejected").catch((e) =>
         console.error(`closeJob: share cancel notify failed (cid=${t.id})`, e)
       );
     }

@@ -8,6 +8,7 @@ import {
 import { eq, and, desc, ne } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { getPhoneStatusesForUsers } from "@/lib/notify-phone";
 
 export const runtime = "nodejs";
 
@@ -57,6 +58,13 @@ export async function GET(req: Request) {
     .where(eq(users.orgId, targetOrgId))
     .orderBy(desc(users.createdAt));
 
+  // 면접 일정 알림톡 번호 — 가린 번호 + 확인 상태만 (원번호는 내려주지 않는다).
+  const phoneByUser = await getPhoneStatusesForUsers(rows.map((r) => r.id));
+  const members = rows.map((r) => ({
+    ...r,
+    notifyPhone: phoneByUser.get(r.id) ?? null,
+  }));
+
   // 같은 이메일 도메인을 여러 법인이 공유하는지 — 공유 도메인이면 합류 승인 화면에 경고(H2).
   // 메일 소유가 확인돼도 우리 회사 소속이라는 보장이 안 되므로 관리자가 직접 확인하도록 유도.
   let domainShared = false;
@@ -104,5 +112,5 @@ export async function GET(req: Request) {
     domainShared = coTenants.length > 0;
   }
 
-  return Response.json({ members: rows, domainShared, domainOrgs });
+  return Response.json({ members, domainShared, domainOrgs });
 }

@@ -95,6 +95,8 @@ export async function POST(
       slot: selected,
       meetingUrl: url,
       meetingNote: note,
+      // 확정 알림톡은 일정이 확정될 때 이미 나갔다 — 링크만 붙는 시점엔 메일(ICS)로 충분.
+      staffAlimtalk: false,
     });
   } catch (e) {
     console.error("[meeting-link] confirmation emails failed", e);

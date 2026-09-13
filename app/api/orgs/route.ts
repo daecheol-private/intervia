@@ -17,6 +17,8 @@ import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/site-info";
 import { extractIp } from "@/lib/auth-attempts";
 import { syncMarketingRecipient } from "@/lib/marketing-consent";
 import { defaultCultureFitProfile } from "@/lib/culture-fit-defaults";
+import { normalizeMobile } from "@/lib/alimtalk";
+import { requestPhoneVerification } from "@/lib/notify-phone";
 
 export const runtime = "nodejs";
 
@@ -35,12 +37,16 @@ export async function POST(req: Request) {
     acceptPrivacy?: boolean;
     ageOver14?: boolean;
     marketingOptIn?: boolean;
+    /** 면접 일정 알림톡 번호(선택) — 가입 후 이 번호로 확인 카톡이 간다. */
+    notifyPhone?: string;
   };
 
   const orgName = body.orgName?.trim();
   const email = body.email?.trim();
   const password = body.password ?? "";
   const userName = body.name?.trim();
+  const notifyPhone =
+    typeof body.notifyPhone === "string" ? body.notifyPhone.trim() : "";
 
   if (!orgName || !email || !password || !userName)
     return new Response("법인명/이름/이메일/비밀번호 필수", { status: 400 });
@@ -56,6 +62,11 @@ export async function POST(req: Request) {
     );
   if (!isValidEmail(email))
     return new Response("올바른 이메일 형식이 아닙니다.", { status: 400 });
+  if (notifyPhone && !normalizeMobile(notifyPhone))
+    return new Response(
+      "휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)",
+      { status: 400 }
+    );
   const pwdCheck = await validatePassword(password);
   if (!pwdCheck.ok)
     return new Response(pwdCheck.errors.join("\n"), { status: 400 });
@@ -286,6 +297,23 @@ export async function POST(req: Request) {
         );
       }
     });
+  }
+
+  // 면접 일정 알림톡 번호(선택) — 확인 카톡은 응답 뒤에 보낸다(가입 응답 지연 방지).
+  if (notifyPhone) {
+    after(() =>
+      requestPhoneVerification({
+        owner: { userId: user.id },
+        orgId: org.id,
+        name: user.name,
+        phone: notifyPhone,
+        requestedByUserId: user.id,
+      })
+        .then((r) => {
+          if (!r.ok) console.error("[orgs] 알림톡 번호 등록 실패:", r.error);
+        })
+        .catch((e) => console.error("[orgs] 알림톡 번호 등록 실패:", e))
+    );
   }
 
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;

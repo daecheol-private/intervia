@@ -9,8 +9,15 @@
  *   - 온라인 + 링크 없음  → 후보자에겐 "링크 추후 안내" 확정 메일, 제시자에겐 "링크 등록 요청"
  *                           메일만(나머지 면접관은 인앱 알림으로 충분 — 링크 등록 후 전원 발송)
  *
+ * "면접관 전원" = 일정 제안 때 고른 알림 받을 면접관(interview_schedules.notifyUserIds).
+ * null 이면(선택 기능 도입 전 row) 공고 면접관 전원 — 2차 면접에 들어가지 않는 실무진에게
+ * 확정 메일이 쌓이지 않게 하려는 선택이다.
+ *
  * 공유 수신자(면접관 아닌 회의실·인사팀 담당자, 미가입 임원)에게도 같은 확정 사실을
  * 알린다 — 케이스 무관 전원(online_pending 포함, 시간·장소는 이미 정해졌으므로).
+ *
+ * 알림톡(알림 받을 면접관 + 공유받을 사람 중 번호 확인자, lib/staff-alimtalk)도 여기서 보낸다 —
+ * 확정 경로가 전부 이 헬퍼를 지나므로 한 곳에만 둔다. 메일 서버 설정과 무관하게 먼저 나간다.
  *
  * 인앱 알림은 호출부가 notifyJobInterviewers(skipEmail:true) 로 별도 처리한다.
  * 개별 sendMail 실패는 격리 — 한 수신자 실패가 나머지 발송을 막지 않는다.
@@ -42,6 +49,7 @@ import {
 } from "./mailer";
 import { resolveMailBaseUrl } from "./notifications";
 import { sendScheduleShareEmails } from "./schedule-share";
+import { sendStaffScheduleConfirmed } from "./staff-alimtalk";
 
 /** 헬퍼가 참조하는 스케쥴 필드만 추린 최소 타입 — 라우트가 확정 직후 값으로 넘긴다. */
 type SchedForEmail = Pick<
@@ -56,6 +64,7 @@ type SchedForEmail = Pick<
   | "addressDetail"
   | "proposedByUserId"
   | "shareRecipients"
+  | "notifyUserIds"
 >;
 
 export async function sendScheduleConfirmationEmails(opts: {
@@ -69,10 +78,30 @@ export async function sendScheduleConfirmationEmails(opts: {
   notifyInterviewers?: boolean;
   /** false 면 후보자에게 보내지 않는다 — 수동 확정에서 "후보자 통보" 미체크 시. */
   notifyCandidate?: boolean;
+  /**
+   * 알림톡(면접관·공유받을 사람). false 면 생략 — 미팅 링크만 나중에 붙이는 호출처럼 확정 사실은
+   * 이미 알린 경우. excludeUserIds 는 이미 아는 사람(수동 확정을 직접 등록한 면접관).
+   */
+  staffAlimtalk?: false | { excludeUserIds?: number[] };
 }): Promise<{ candidateEmailSent: boolean }> {
   const { sched, slot, isReschedule } = opts;
   const notifyInterviewers = opts.notifyInterviewers !== false;
   const notifyCandidate = opts.notifyCandidate !== false;
+
+  // 알림톡은 메일 서버 설정과 무관하게 먼저 — 메일을 못 보고 지나치는 면접관에게 닿게 하려는 채널이다.
+  if (opts.staffAlimtalk !== false) {
+    try {
+      await sendStaffScheduleConfirmed({
+        sched,
+        slot,
+        meetingUrl: opts.meetingUrl,
+        excludeUserIds: opts.staffAlimtalk?.excludeUserIds,
+      });
+    } catch (e) {
+      console.error("[schedule-notify] 면접관 알림톡 실패", e);
+    }
+  }
+
   if (!(await isSmtpAvailable(sched.orgId))) return { candidateEmailSent: false };
 
   const modeOnline = sched.modeOnline;
@@ -236,9 +265,10 @@ export async function sendScheduleConfirmationEmails(opts: {
     return { candidateEmailSent };
   }
 
-  // offline / online_zoom — 면접관 전원(제시자 포함)에게 상세 메일.
+  // offline / online_zoom — 알림 받을 면접관(제시자 포함)에게 상세 메일.
+  const selected = sched.notifyUserIds ? new Set(sched.notifyUserIds) : null;
   const interviewers = await db
-    .select({ email: users.email })
+    .select({ userId: users.id, email: users.email })
     .from(jobInterviewers)
     .innerJoin(users, eq(users.id, jobInterviewers.userId))
     .where(
@@ -246,6 +276,7 @@ export async function sendScheduleConfirmationEmails(opts: {
     );
   const seen = new Set<string>();
   for (const iv of interviewers) {
+    if (selected && !selected.has(iv.userId)) continue;
     if (!iv.email || seen.has(iv.email)) continue;
     seen.add(iv.email);
     try {

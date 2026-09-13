@@ -15,6 +15,8 @@ type Member = {
   emailVerifiedAt: string | null;
   // 대기 중인 합류 요청 id (있으면 이 행에서 바로 승인/거절). null 이면 일반 멤버.
   joinRequestId: number | null;
+  // 면접 일정 카톡 알림 번호 — 가린 번호 + 확인 상태만. null = 미등록.
+  notifyPhone: { phoneMasked: string; status: "pending" | "verified" } | null;
 };
 
 // 같은 이메일 도메인을 쓰는 다른 법인 — "같은 도메인 새 법인 등록" 알림의 확인 대상.
@@ -108,6 +110,39 @@ export default function OrgMembersPage() {
     void load();
   };
 
+  // 면접 일정 카톡 알림 번호 대신 등록 — 면접관은 서비스에 잘 들어오지 않아 관리자가 넣어 준다.
+  // 알림은 번호 주인이 카톡에서 "번호 확인"을 눌러야 켜진다(서버가 확인 카톡 발송).
+  const editPhone = async (m: Member) => {
+    const current = m.notifyPhone
+      ? `현재: ${m.notifyPhone.phoneMasked} (${m.notifyPhone.status === "verified" ? "알림 받는 중" : "확인 대기"})\n\n`
+      : "";
+    const input = prompt(
+      `${m.name || m.email} 님의 면접 일정 카톡 알림 번호\n\n${current}번호를 입력하면 그 번호로 확인 카톡이 가고, 본인이 확인해야 알림이 켜집니다.${m.notifyPhone ? "\n비워 두고 확인을 누르면 등록된 번호를 삭제합니다." : ""}`,
+      ""
+    );
+    if (input === null) return;
+    const phone = input.trim();
+    if (!phone && !m.notifyPhone) return;
+    setBusyId(m.id);
+    setErr("");
+    const res = await fetch(
+      `/api/orgs/members/${m.id}/notify-phone`,
+      phone
+        ? {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone }),
+          }
+        : { method: "DELETE" }
+    );
+    setBusyId(null);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    void load();
+  };
+
   // 합류 요청 승인/거절 — join_requests 엔티티에 작용(승인 시 본인확인·orgId 확정·공유 공고
   // 면접관 자동등록·알림 읽음 처리 포함). 멤버 권한 변경(/api/users)과는 다른 엔드포인트.
   const decide = async (m: Member, action: "approve" | "reject") => {
@@ -163,7 +198,8 @@ export default function OrgMembersPage() {
           <h1 className="text-2xl font-bold text-ink">법인 멤버 관리</h1>
         </div>
         <p className="text-sm text-ink-soft mt-1">
-          멤버 권한을 부여·비활성화하거나, 법인 합류 요청을 승인할 수 있습니다.
+          멤버 권한을 부여·비활성화하거나, 법인 합류 요청을 승인할 수 있습니다. 면접
+          일정 카톡 알림 번호도 대신 등록할 수 있습니다.
         </p>
       </div>
 
@@ -278,6 +314,7 @@ export default function OrgMembersPage() {
                   <div className="text-xs text-ink-muted break-all mt-0.5">
                     {m.email}
                   </div>
+                  <PhoneBadge phone={m.notifyPhone} />
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <RoleBadge role={m.role} />
@@ -307,7 +344,12 @@ export default function OrgMembersPage() {
                     </button>
                   </>
                 ) : (
-                  <MemberActions m={m} busyId={busyId} update={update} />
+                  <MemberActions
+                    m={m}
+                    busyId={busyId}
+                    update={update}
+                    editPhone={editPhone}
+                  />
                 )}
               </div>
             </div>
@@ -355,7 +397,10 @@ export default function OrgMembersPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-ink-soft">{m.email}</td>
+                  <td className="px-4 py-3 text-ink-soft">
+                    {m.email}
+                    <PhoneBadge phone={m.notifyPhone} />
+                  </td>
                   <td className="px-4 py-3">
                     <RoleBadge role={m.role} />
                   </td>
@@ -388,7 +433,12 @@ export default function OrgMembersPage() {
                       </div>
                     ) : (
                       <div className="flex gap-1.5 justify-end flex-wrap">
-                        <MemberActions m={m} busyId={busyId} update={update} />
+                        <MemberActions
+                          m={m}
+                          busyId={busyId}
+                          update={update}
+                          editPhone={editPhone}
+                        />
                       </div>
                     )}
                   </td>
@@ -407,6 +457,7 @@ function MemberActions({
   m,
   busyId,
   update,
+  editPhone,
 }: {
   m: Member;
   busyId: number | null;
@@ -418,6 +469,7 @@ function MemberActions({
       emailVerified?: boolean;
     }
   ) => void;
+  editPhone: (m: Member) => void;
 }) {
   return (
     <>
@@ -458,6 +510,15 @@ function MemberActions({
           일반으로
         </button>
       )}
+      {m.status === "active" && (
+        <button
+          onClick={() => editPhone(m)}
+          disabled={busyId === m.id}
+          className={btnSecondary}
+        >
+          카톡 알림 번호
+        </button>
+      )}
       {m.status === "active" && m.role !== "system_admin" && (
         <button
           onClick={() => {
@@ -480,6 +541,20 @@ function MemberActions({
         </button>
       )}
     </>
+  );
+}
+
+// 면접 일정 카톡 알림 번호 상태 — 확인 전이면 알림이 나가지 않는다는 걸 관리자가 알 수 있게.
+function PhoneBadge({ phone }: { phone: Member["notifyPhone"] }) {
+  if (!phone) return null;
+  return (
+    <div
+      className={`mt-0.5 text-[11px] ${
+        phone.status === "verified" ? "text-primary-deep" : "text-warning"
+      }`}
+    >
+      카톡 {phone.phoneMasked} · {phone.status === "verified" ? "알림 받는 중" : "확인 대기"}
+    </div>
   );
 }
 

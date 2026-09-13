@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { cleanupOnClose, purgeOnDecision } from "@/lib/candidate-stage";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { sendScheduleShareEmails } from "@/lib/schedule-share";
+import { sendStaffScheduleCancelled, STAFF_CANCEL_REASON } from "@/lib/staff-alimtalk";
 import { logAudit } from "@/lib/audit";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -125,6 +126,15 @@ export async function POST(
     } catch (e) {
       console.error("schedule withdraw share notify failed", e);
     }
+    try {
+      await sendStaffScheduleCancelled({
+        sched,
+        slot: sched.selectedSlot,
+        reason: STAFF_CANCEL_REASON.withdrawn,
+      });
+    } catch (e) {
+      console.error("schedule withdraw staff alimtalk failed", e);
+    }
   }
 
   const [cand] = await db
@@ -136,12 +146,17 @@ export async function POST(
   try {
     // 취소도 조용시간(주말·야간) 메일 스킵 — 아침 digest '오늘 면접' 블록이 당일 일정의
     // 정본이고 취소 후보는 거기서 빠지므로(superseded 필터) 잘못 출석할 경로가 없다.
-    await notifyJobInterviewers(sched.jobId, {
-      type: "schedule_withdrawn",
-      title,
-      href,
-      payload: { scheduleId: sched.id },
-    });
+    await notifyJobInterviewers(
+      sched.jobId,
+      {
+        type: "schedule_withdrawn",
+        title,
+        href,
+        payload: { scheduleId: sched.id },
+      },
+      // 메일은 이 일정의 알림 받을 면접관에게만 (인앱은 전원).
+      { emailUserIds: sched.notifyUserIds }
+    );
   } catch (e) {
     console.error("schedule withdraw notify interviewers failed", e);
   }

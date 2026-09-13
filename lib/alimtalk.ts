@@ -176,7 +176,7 @@ export function isAlimtalkConfigured(): boolean {
 }
 
 /** "010-1234-5678" / "+82 10..." 등 → "01012345678". 유효 휴대폰 아니면 null. */
-function normalizeMobile(raw: string | null | undefined): string | null {
+export function normalizeMobile(raw: string | null | undefined): string | null {
   if (!raw) return null;
   let d = raw.replace(/\D/g, "");
   if (d.startsWith("82")) d = "0" + d.slice(2); // 국가코드 → 로컬
@@ -210,6 +210,11 @@ export function computeNightlyDeferSenddate(
   now: Date
 ): string | undefined {
   if (!NIGHTLY_DEFER_TYPES.has(type)) return undefined;
+  return nightDeferSenddateKst(now);
+}
+
+/** 종류 판정 없이 시각만 본다 — KST 00:00~07:00 직전이면 당일 07:00 senddate, 아니면 undefined. */
+export function nightDeferSenddateKst(now: Date): string | undefined {
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   if (kst.getUTCHours() >= NIGHT_DEFER_UNTIL_HOUR_KST) return undefined; // 07:00 이후 → 즉시
   const y = kst.getUTCFullYear();
@@ -362,4 +367,155 @@ export async function sendCandidateAlimtalk(
     console.error(`[alimtalk] 발송 오류 (type=${type}):`, e instanceof Error ? e.message : e);
     return { ok: false, skipped: false, reason: "request_failed" };
   }
+}
+
+// ─── 면접관·일정 공유받을 사람 대상 (면접 일정 확정·취소 + 번호 확인) ─────────────────
+//
+// 지원자용(sendCandidateAlimtalk)과 달리 수신자가 여러 명이다 — 알리고 발송 API 가 한 요청에
+// receiver_1~500 을 받으므로 한 이벤트를 1회 요청으로 묶는다(Fixie 월 요청 한도 절약).
+// 일정 알림 번호는 호출부(lib/staff-alimtalk)가 notify_phones 에서 확인(verified)된 것만 넘긴다.
+
+export type StaffAlimtalkType =
+  | "staff_schedule_confirmed" // 면접 일정 확정 — 버튼 "지원자 정보 보기"
+  | "staff_schedule_cancelled" // 면접 일정 취소 — 버튼 없음
+  | "staff_phone_verify"; // 알림 받을 번호 확인 — 버튼 "번호 확인하기"
+
+/** 종류별 승인 템플릿 코드 env. 승인 후 사용자가 채운다(비면 그 종류만 skip). */
+const STAFF_TEMPLATE_ENV: Record<StaffAlimtalkType, string> = {
+  staff_schedule_confirmed: "ALIGO_TPL_STAFF_SCHEDULE_CONFIRMED",
+  staff_schedule_cancelled: "ALIGO_TPL_STAFF_SCHEDULE_CANCELLED",
+  staff_phone_verify: "ALIGO_TPL_STAFF_PHONE_VERIFY",
+};
+
+export type StaffAlimtalkVars = {
+  orgName: string | null;
+  recipientName: string;
+  jobTitle?: string;
+  roundLabel?: string; // "1차" / "2차"
+  candidateName?: string; // 이미 가린 이름 (maskPersonName)
+  slotLabel?: string;
+  place?: string;
+  reason?: string;
+  url?: string; // 확정: 지원자 정보 보기 링크 / 번호 확인: 확인 페이지 링크
+};
+
+/**
+ * 스태프 알림톡 본문. ⚠️ docs/ALIMTALK.md 의 승인 신청 본문과 글자까지 일치해야 발송된다.
+ */
+export function buildStaffMessage(type: StaffAlimtalkType, v: StaffAlimtalkVars): string {
+  const org = v.orgName?.trim() || "Intervia";
+  switch (type) {
+    case "staff_schedule_confirmed":
+      return `[${org}] 면접 일정 확정 안내\n\n${v.recipientName}님, 아래 면접 일정이 확정되었습니다.\n\n공고: ${v.jobTitle ?? "-"}\n차수: ${v.roundLabel ?? "1차"} 면접\n지원자: ${v.candidateName ?? "-"}\n일시: ${v.slotLabel ?? "-"}\n장소: ${v.place ?? "-"}\n\n지원자 정보는 아래 버튼에서 확인하실 수 있습니다.\n일정이 바뀌거나 취소되면 다시 안내드립니다.`;
+    case "staff_schedule_cancelled":
+      return `[${org}] 면접 일정 취소 안내\n\n${v.recipientName}님, 아래 면접 일정이 취소되었습니다.\n\n공고: ${v.jobTitle ?? "-"}\n차수: ${v.roundLabel ?? "1차"} 면접\n지원자: ${v.candidateName ?? "-"}\n기존 일시: ${v.slotLabel ?? "-"}\n사유: ${v.reason ?? "-"}`;
+    case "staff_phone_verify":
+      return `[${org}] 면접 일정 알림 번호 확인\n\n${v.recipientName}님, ${org}의 면접 일정 확정·취소 안내를 받을 번호로 이 번호가 등록되었습니다.\n\n본인 번호가 맞으면 아래 버튼을 눌러 확인해 주세요. 확인 후부터 카카오톡으로 안내드립니다.\n본인 번호가 아니거나 안내를 원하지 않으시면 버튼을 누르지 않으셔도 됩니다.\n\n※ 비밀번호·인증번호·금융정보는 요구하지 않습니다.`;
+  }
+}
+
+function buildStaffButton(type: StaffAlimtalkType, v: StaffAlimtalkVars): string | undefined {
+  const label =
+    type === "staff_schedule_confirmed"
+      ? "지원자 정보 보기"
+      : type === "staff_phone_verify"
+        ? "번호 확인하기"
+        : null;
+  if (!label || !v.url) return undefined;
+  return JSON.stringify({
+    button: [
+      { name: label, linkType: "WL", linkTypeName: "웹링크", linkMo: v.url, linkPc: v.url },
+    ],
+  });
+}
+
+/** 알리고 1회 요청의 수신자 상한. */
+const ALIGO_MAX_RECEIVERS = 500;
+
+export type StaffAlimtalkResult =
+  | { ok: true; sent: number }
+  | { ok: false; skipped: true; reason: string }
+  | { ok: false; skipped: false; reason: string };
+
+/**
+ * 면접관·공유받을 사람에게 알림톡 발송 (베스트에포트, throw 안 함).
+ * @param opts.deferAtNight KST 00~07시 트리거면 당일 07:00 예약 — 본인이 방금 요청한 번호 확인은 즉시.
+ */
+export async function sendStaffAlimtalk(
+  type: StaffAlimtalkType,
+  items: Array<{ phone: string; vars: StaffAlimtalkVars }>,
+  opts: { deferAtNight?: boolean } = {}
+): Promise<StaffAlimtalkResult> {
+  if (!isAlimtalkConfigured()) return { ok: false, skipped: true, reason: "not_configured" };
+  if (process.env.NODE_ENV !== "production" && !isAlimtalkLocalEnabled())
+    return { ok: false, skipped: true, reason: "local_disabled" };
+  const tplCode = process.env[STAFF_TEMPLATE_ENV[type]];
+  if (!tplCode) return { ok: false, skipped: true, reason: "template_not_set" };
+
+  let receivers = items.flatMap((it) => {
+    const mobile = normalizeMobile(it.phone);
+    return mobile ? [{ mobile, vars: it.vars }] : [];
+  });
+  if (receivers.length === 0) return { ok: false, skipped: true, reason: "no_phone" };
+
+  // 로컬/비운영: 실제 번호 대신 본인 번호로 — 여러 명이면 같은 폰에 쌓이므로 첫 건만 보낸다.
+  const override = resolveAlimtalkOverride();
+  if (override) {
+    console.warn(
+      `[alimtalk] 로컬 리다이렉트: ${receivers.length}명 → ${override} 1건 (type=${type})`
+    );
+    receivers = [{ mobile: override, vars: receivers[0].vars }];
+  }
+
+  const token = await getToken();
+  if (!token) return { ok: false, skipped: false, reason: "token_failed" };
+
+  const senddate = opts.deferAtNight ? nightDeferSenddateKst(new Date()) : undefined;
+  let sent = 0;
+  for (let i = 0; i < receivers.length; i += ALIGO_MAX_RECEIVERS) {
+    const chunk = receivers.slice(i, i + ALIGO_MAX_RECEIVERS);
+    const body = new URLSearchParams({
+      apikey: process.env.ALIGO_API_KEY!,
+      userid: process.env.ALIGO_USER_ID!,
+      token,
+      senderkey: process.env.ALIGO_SENDER_KEY!,
+      tpl_code: tplCode,
+      sender: process.env.ALIGO_SENDER!,
+      testMode: process.env.ALIGO_TEST_MODE === "1" ? "Y" : "N",
+    });
+    chunk.forEach((r, idx) => {
+      const n = idx + 1;
+      body.set(`receiver_${n}`, r.mobile);
+      body.set(`subject_${n}`, "Intervia 면접 일정 안내");
+      body.set(`message_${n}`, buildStaffMessage(type, r.vars));
+      const button = buildStaffButton(type, r.vars);
+      if (button) body.set(`button_${n}`, button);
+    });
+    if (senddate) {
+      body.set("senddate", senddate);
+      console.log(`[alimtalk] 야간 예약: type=${type} → senddate=${senddate}(KST)`);
+    }
+    try {
+      const res = await fetch(
+        SEND_URL,
+        withProxy({
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+        })
+      );
+      const json = (await res.json()) as { code?: number; message?: string };
+      if (Number(json.code) !== 0) {
+        console.error(`[alimtalk] 발송 실패 (type=${type}):`, json.message ?? json.code);
+        return sent > 0
+          ? { ok: true, sent }
+          : { ok: false, skipped: false, reason: String(json.message ?? json.code) };
+      }
+      sent += chunk.length;
+    } catch (e) {
+      console.error(`[alimtalk] 발송 오류 (type=${type}):`, e instanceof Error ? e.message : e);
+      return sent > 0 ? { ok: true, sent } : { ok: false, skipped: false, reason: "request_failed" };
+    }
+  }
+  return { ok: true, sent };
 }

@@ -10,6 +10,7 @@ import {
 import LogoutButton from "@/app/logout-button";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { formatLocalDateTime } from "@/lib/utils";
+import { NotifyPhonePanel } from "./NotifyPhonePanel";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -190,6 +191,7 @@ export default function AccountPage() {
 
       <TwoFactorPanel />
       <SessionsPanel />
+      <NotifyPhonePanel />
       <DigestEmailPanel />
       <MarketingEmailPanel />
 

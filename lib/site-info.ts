@@ -98,6 +98,23 @@ export const PROCESSORS: readonly Processor[] = [
     contact: "https://haveibeenpwned.com/Privacy",
   },
   {
+    name: "알리고 (Aligo)",
+    purpose:
+      "카카오 알림톡 발송 중계 (지원자 면접 안내·일정 선택·합격 통보, 면접관·일정 공유 수신자의 면접 일정 확정·취소 안내 및 번호 확인)",
+    items: "후보자·면접관·일정 공유 수신자의 휴대폰 번호 및 알림톡 본문",
+    country: "대한민국",
+    retention: "발송 처리 후 알리고 정책에 따른 발송 이력 보관",
+    contact: "https://smartsms.aligo.in",
+  },
+  {
+    name: "(주)카카오",
+    purpose: "카카오톡 알림톡 전송",
+    items: "휴대폰 번호 및 알림톡 본문",
+    country: "대한민국",
+    retention: "전송 처리 후 카카오 정책에 따름",
+    contact: "https://www.kakao.com/policy/privacy",
+  },
+  {
     name: "(주) 엑스퍼넷",
     purpose:
       "메일 발송 서버 운영 (면접 안내·결과 통보·계정 인증 메일 발송) — 기본 발송 경로",

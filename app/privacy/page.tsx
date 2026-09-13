@@ -50,6 +50,10 @@ export default function PrivacyPage() {
           </li>
           <li>법인 관리자 계정 인증 및 사용자 관리</li>
           <li>후보자 면접 결과 통지 및 안내 메일 발송</li>
+          <li>
+            면접 일정 확정·취소 안내(카카오 알림톡) 발송 — 휴대폰 번호를 등록하고
+            본인이 번호를 확인한 면접관·일정 공유 수신자에 한함
+          </li>
           <li>서비스 부정 이용 방지 및 보안 (Rate limit, 로그인 시도 기록)</li>
         </ul>
       </Section>
@@ -65,7 +69,17 @@ export default function PrivacyPage() {
           <tbody>
             <tr>
               <td>법인 관리자 / 멤버</td>
-              <td>이메일, 이름, 비밀번호(해시), 로그인 IP, User-Agent</td>
+              <td>
+                이메일, 이름, 비밀번호(해시), 로그인 IP, User-Agent, 휴대폰
+                번호(선택 — 면접 일정 알림톡을 신청한 경우)
+              </td>
+            </tr>
+            <tr>
+              <td>일정 공유 수신자 (회원이 아닌 면접 참석자·담당자)</td>
+              <td>
+                이름, 이메일, 휴대폰 번호(선택 — 채용 담당자가 알림톡 수신 번호로
+                입력한 경우)
+              </td>
             </tr>
             <tr>
               <td>후보자</td>
@@ -77,7 +91,10 @@ export default function PrivacyPage() {
             </tr>
             <tr>
               <td>자동 수집</td>
-              <td>접속 IP, User-Agent, 면접 동의 시각·버전</td>
+              <td>
+                접속 IP, User-Agent, 면접 동의 시각·버전, 알림톡 번호 확인
+                시각
+              </td>
             </tr>
           </tbody>
         </Table>
@@ -115,6 +132,13 @@ export default function PrivacyPage() {
             <tr>
               <td>로그인 세션 기록(접속 IP·User-Agent)</td>
               <td>세션 만료(마지막 활동 후 6시간) 시 파기</td>
+            </tr>
+            <tr>
+              <td>면접 일정 알림톡 휴대폰 번호·번호 확인 기록</td>
+              <td>
+                수신 거부(&ldquo;받지 않기&rdquo;)·번호 삭제·회원 탈퇴 시 즉시 파기.
+                확인되지 않은 번호는 확인 기한(7일)이 지난 뒤 30일 이내 파기
+              </td>
             </tr>
             <tr>
               <td>동의 기록</td>

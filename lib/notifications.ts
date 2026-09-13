@@ -107,11 +107,18 @@ export function isQuietHoursKst(d: Date = new Date()): boolean {
  *   호출자가 별도의 풍부한 메일을 보내는 경우 중복 차단용.
  * @param options.urgent true 면 조용시간(주말·야간)에도 이메일 즉시 발송.
  *   시간 민감 이벤트(지원 취소 등)만 지정 — 기본은 FYI 로 간주해 조용시간엔 스킵.
+ * @param options.emailUserIds 지정하면 이 userId 들에게만 이메일 (인앱 알림은 전원).
+ *   알림 받을 면접관을 따로 고른 일정(interview_schedules.notifyUserIds)의 메일용.
  */
 export async function notifyJobInterviewers(
   jobId: number,
   input: Omit<CreateNotificationInput, "userId">,
-  options?: { skipEmail?: boolean; excludeEmailUserIds?: number[]; urgent?: boolean }
+  options?: {
+    skipEmail?: boolean;
+    excludeEmailUserIds?: number[];
+    urgent?: boolean;
+    emailUserIds?: number[] | null;
+  }
 ): Promise<void> {
   const recipients = await db
     .select({
@@ -148,9 +155,11 @@ export async function notifyJobInterviewers(
     : `${base}${input.href}`;
   const subject = `[Intervia] ${input.title}`;
   const excludeSet = new Set(options?.excludeEmailUserIds ?? []);
+  const emailOnly = options?.emailUserIds ? new Set(options.emailUserIds) : null;
   for (const r of recipients) {
     if (!r.email) continue;
     if (excludeSet.has(r.userId)) continue;
+    if (emailOnly && !emailOnly.has(r.userId)) continue;
     const html = wrapEmailCard({
       innerHtml: `
         <h1 style="font-size:18px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(r.name)}님, 안녕하세요.</h1>

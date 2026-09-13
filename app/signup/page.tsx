@@ -113,6 +113,8 @@ export default function SignupPage() {
   const [ageOver14, setAgeOver14] = useState(false);
   // 마케팅(광고성) 메일 수신 — 선택 동의. 가입 필수 아님.
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  // 면접 일정 카카오톡 알림 번호 — 선택. 가입 후 이 번호로 확인 카톡이 가고, 확인해야 켜진다.
+  const [notifyPhone, setNotifyPhone] = useState("");
 
   useEffect(() => {
     void fetch("/api/auth/status")
@@ -212,6 +214,7 @@ export default function SignupPage() {
         acceptPrivacy,
         ageOver14,
         marketingOptIn,
+        notifyPhone: notifyPhone.trim() || undefined,
       }),
     });
     setBusy(false);
@@ -371,6 +374,7 @@ export default function SignupPage() {
         acceptPrivacy,
         ageOver14,
         marketingOptIn,
+        notifyPhone: notifyPhone.trim() || undefined,
       }),
     });
     setBusy(false);
@@ -588,6 +592,21 @@ export default function SignupPage() {
                   onChange={setPassword}
                 />
                 <PasswordStrength password={password} />
+              </Field>
+              <Field label="휴대폰 번호 (선택)">
+                <input
+                  className={inputCls}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="010-1234-5678"
+                  value={notifyPhone}
+                  onChange={(e) => setNotifyPhone(e.target.value)}
+                />
+                <p className="mt-1 text-[11px] text-ink-muted leading-relaxed">
+                  면접관으로 배정된 면접 일정이 확정·취소되면 카카오톡으로도
+                  알려드립니다. 입력하면 이 번호로 확인 카톡이 가고, 확인해야 알림이
+                  켜집니다. 가입 후 계정 설정에서도 등록할 수 있습니다.
+                </p>
               </Field>
               <ConsentBox
                 acceptTerms={acceptTerms}
@@ -883,6 +902,21 @@ export default function SignupPage() {
               <p className="text-xs text-ink-muted">
                 새 법인 등록 시 본인이 법인 관리자가 됩니다.
               </p>
+              <Field label="휴대폰 번호 (선택)">
+                <input
+                  className={inputCls}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="010-1234-5678"
+                  value={notifyPhone}
+                  onChange={(e) => setNotifyPhone(e.target.value)}
+                />
+                <p className="mt-1 text-[11px] text-ink-muted leading-relaxed">
+                  면접관으로 배정된 면접 일정이 확정·취소되면 카카오톡으로도
+                  알려드립니다. 입력하면 이 번호로 확인 카톡이 가고, 확인해야 알림이
+                  켜집니다. 가입 후 계정 설정에서도 등록할 수 있습니다.
+                </p>
+              </Field>
               <ConsentBox
                 acceptTerms={acceptTerms}
                 acceptPrivacy={acceptPrivacy}

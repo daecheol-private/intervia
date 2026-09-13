@@ -10,7 +10,15 @@ export type ShareRecipient = {
   userId?: number;
   /** 확정 안내 메일에 평가 리포트 공유 링크를 함께 보낼지 (서버가 링크 발급). */
   report?: boolean;
+  /**
+   * 비회원 휴대폰 번호(선택) — 서버가 알림톡 번호로 등록하고 그 번호로 확인 카톡을 보낸다.
+   * 일정 스냅샷에는 저장되지 않는다. 가입자는 본인이 등록한 번호를 쓴다.
+   */
+  phone?: string;
 };
+
+/** 번호 확인 상태 — 화면에는 가린 번호만 온다. */
+export type PhoneStatus = { phoneMasked: string; status: "pending" | "verified" };
 
 /** 서버(lib/schedule-share.ts)와 동일한 상한 — 초과 시 API 가 400 을 준다. */
 const MAX_RECIPIENTS = 10;
@@ -23,16 +31,20 @@ type Member = { id: number; name: string; email: string };
  * 두 입력 경로:
  *  1) 법인 멤버 체크 — 이미 면접관인 사람은 확정 메일을 이미 받으므로 목록에서 제외.
  *     멤버 목록 조회는 org_admin 이상만 가능(403) → 일반 멤버에겐 이 섹션을 숨긴다.
- *  2) 이메일 직접 입력 — Intervia 계정이 없는 임원·외부 담당자용.
+ *  2) 이메일 직접 입력 — Intervia 계정이 없는 임원·외부 담당자용. 휴대폰 번호를 함께 적으면
+ *     확인 카톡을 거쳐 확정·취소를 카톡으로도 받는다.
  */
 export function ShareRecipientPicker({
   jobId,
   value,
   onChange,
+  phoneByEmail,
 }: {
   jobId: number;
   value: ShareRecipient[];
   onChange: (next: ShareRecipient[]) => void;
+  /** 이미 등록된 비회원 번호의 확인 상태 (직전 제안 프리필과 함께 온다). */
+  phoneByEmail?: Record<string, PhoneStatus>;
 }) {
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -109,6 +121,15 @@ export function ShareRecipientPicker({
     onChange(value.filter((r) => r.email.toLowerCase() !== email.toLowerCase()));
   };
 
+  const setPhone = (email: string, phone: string) =>
+    onChange(
+      value.map((r) =>
+        r.email.toLowerCase() === email.toLowerCase()
+          ? { ...r, phone: phone || undefined }
+          : r
+      )
+    );
+
   const addTyped = () => {
     const email = emailInput.trim().toLowerCase();
     if (!email) return;
@@ -153,7 +174,9 @@ export function ShareRecipientPicker({
         <div className="px-3 pb-3 space-y-3 border-t border-border-default pt-3">
           <p className="text-[11px] text-ink-muted leading-relaxed">
             면접관이 아니어도 일정이 확정·변경·취소되면 안내를 받습니다. 회의실
-            담당자나 Intervia 계정이 없는 임원에게 유용합니다.
+            담당자나 Intervia 계정이 없는 임원에게 유용합니다. 휴대폰 번호를 함께
+            적으면 그 번호로 확인 카톡이 가고, 받는 사람이 확인하면 확정·취소를
+            카톡으로도 받습니다.
           </p>
 
           {canPickMembers && members.length > 0 && (
@@ -258,24 +281,58 @@ export function ShareRecipientPicker({
           )}
 
           {value.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {value.map((r) => (
-                <span
-                  key={r.email}
-                  className="inline-flex items-center gap-1 rounded-full bg-surface-alt border border-border-default px-2.5 py-1 text-[11px] text-ink"
-                >
-                  {r.name ? `${r.name} · ${r.email}` : r.email}
-                  <button
-                    type="button"
-                    onClick={() => remove(r.email)}
-                    className="text-ink-muted hover:text-danger leading-none"
-                    title="제외"
+            <ul className="space-y-1.5">
+              {value.map((r) => {
+                const registered =
+                  r.userId == null ? phoneByEmail?.[r.email.toLowerCase()] : undefined;
+                return (
+                  <li
+                    key={r.email}
+                    className="rounded-lg border border-border-default bg-surface-alt px-2.5 py-2"
                   >
-                    <X className="w-3 h-3" strokeWidth={2.5} />
-                  </button>
-                </span>
-              ))}
-            </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-[11px] text-ink">
+                        {r.name ? `${r.name} · ${r.email}` : r.email}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => remove(r.email)}
+                        className="shrink-0 text-ink-muted hover:text-danger leading-none"
+                        title="제외"
+                      >
+                        <X className="w-3 h-3" strokeWidth={2.5} />
+                      </button>
+                    </div>
+                    {r.userId == null && (
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <Input
+                          value={r.phone ?? ""}
+                          onChange={(e) => setPhone(r.email, e.target.value)}
+                          inputMode="tel"
+                          placeholder={
+                            registered
+                              ? `${registered.phoneMasked} 등록됨 — 바꿀 때만 입력`
+                              : "휴대폰 번호 (선택 · 카톡 알림)"
+                          }
+                          className="py-1 text-[11px]"
+                        />
+                        {registered && !r.phone && (
+                          <span
+                            className={`shrink-0 text-[10px] font-medium ${
+                              registered.status === "verified"
+                                ? "text-primary-deep"
+                                : "text-warning"
+                            }`}
+                          >
+                            {registered.status === "verified" ? "카톡 받는 중" : "확인 대기"}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           )}
 
           {err && <p className="text-[11px] text-danger">{err}</p>}

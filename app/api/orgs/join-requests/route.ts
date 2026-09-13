@@ -17,6 +17,8 @@ import { notifyOrgAdmins, notifySystemAdmins } from "@/lib/notifications";
 import { sendVerificationMail } from "@/lib/email-verify";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { syncMarketingRecipient } from "@/lib/marketing-consent";
+import { normalizeMobile } from "@/lib/alimtalk";
+import { requestPhoneVerification } from "@/lib/notify-phone";
 
 export const runtime = "nodejs";
 
@@ -34,11 +36,15 @@ export async function POST(req: Request) {
     acceptPrivacy?: boolean;
     ageOver14?: boolean;
     marketingOptIn?: boolean;
+    /** 면접 일정 알림톡 번호(선택) — 가입 후 이 번호로 확인 카톡이 간다. */
+    notifyPhone?: string;
   };
   const orgId = Number(body.orgId);
   const email = body.email?.trim();
   const password = body.password ?? "";
   const name = body.name?.trim();
+  const notifyPhone =
+    typeof body.notifyPhone === "string" ? body.notifyPhone.trim() : "";
 
   if (!orgId || !email || !password || !name)
     return new Response("법인/이름/이메일/비밀번호 필수", { status: 400 });
@@ -54,6 +60,11 @@ export async function POST(req: Request) {
     );
   if (!isValidEmail(email))
     return new Response("올바른 이메일 형식이 아닙니다.", { status: 400 });
+  if (notifyPhone && !normalizeMobile(notifyPhone))
+    return new Response(
+      "휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)",
+      { status: 400 }
+    );
   const pwdCheck = await validatePassword(password);
   if (!pwdCheck.ok)
     return new Response(pwdCheck.errors.join("\n"), { status: 400 });
@@ -174,6 +185,24 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error("join-request verification mail failed", e);
     mailSent = false;
+  }
+
+  // 면접 일정 알림톡 번호(선택) — 확인 카톡은 응답 뒤에 보낸다. 승인 전이어도 번호 확인은
+  // 가능하고, 알림은 면접관으로 배정된 뒤부터 나간다.
+  if (notifyPhone) {
+    after(() =>
+      requestPhoneVerification({
+        owner: { userId: user.id },
+        orgId,
+        name: user.name,
+        phone: notifyPhone,
+        requestedByUserId: user.id,
+      })
+        .then((r) => {
+          if (!r.ok) console.error("[join-request] 알림톡 번호 등록 실패:", r.error);
+        })
+        .catch((e) => console.error("[join-request] 알림톡 번호 등록 실패:", e))
+    );
   }
 
   // after() — 응답 반환 후 실행 보장. void fire-and-forget 은 서버리스 suspend 로 유실됨

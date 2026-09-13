@@ -223,6 +223,19 @@ CT-1107·1108 도 같은 구조다. 2자리 연도는 **생년월일 라벨 뒤 
 폴백하므로, 라벨 없이 `1983-01-24` 만 적힌 이력서도 계속 동작한다. 라벨 세트는 `lib/mask.ts`
 의 dob 라벨과 정렬돼 있다 — 한쪽만 고치면 마스킹과 어긋난다(GOTCHAS §0-7 사고 패턴).
 
+### CT-12. 면접 일정 알림톡 — 면접관·일정 공유받을 사람 🧑‍💼⚙️
+
+2026-09-14 신설. 알림톡 env 는 무력화돼 실발송은 없고, 번호 등록부·번호 확인·수신자 선택·서명 링크·본문 정합을 검증한다. 서명 링크를 테스트가 직접 발급하도록 `tests/critical/env.ts` 가 `MASTER_ENCRYPTION_KEY` 를 고정값으로 주입한다(서버도 같은 키). 설계: [ALIMTALK.md](ALIMTALK.md) "면접 일정 알림" 절.
+
+| ID | 시나리오 | 예상 결과 |
+|---|---|---|
+| CT-1201 | 멤버 `PUT /api/account/notify-phone` — 형식 오류 / 정상 | 400 / 200 `sent:false`(env 무력화)·`status:pending`·`phoneMasked:"010-****-5678"`. 응답에 원번호 없음, DB 에는 숫자만 저장 |
+| CT-1202 | `GET /verify/phone/[token]` → `POST /api/verify-phone/[token] {confirm}` 2회 → 같은 번호 재저장 → 없는 토큰 | GET 은 상태 불변(pending, 링크 미리 열기 대비) → verified·`verified_at` 기록 → `alreadyVerified` → verified 유지 → 404 |
+| CT-1203 | 관리자 대신 등록 `PUT /api/orgs/members/[id]/notify-phone` — 일반 멤버 / 타 법인 관리자 / 같은 법인 관리자 → `decline` | 403 / 404 / 200 번호가 바뀌면 다시 pending, 멤버 목록에 가린 번호 → decline 시 행 삭제 |
+| CT-1204 | 수동 확정 `schedule-manual` 에 `notifyUserIds:[멤버, 없는 id]` + 비회원 공유 수신자 `phone` (형식 오류 먼저) | 400 → 200. `notify_user_ids=[멤버]`(공고 면접관만), 공유 스냅샷에 번호 없음, `notify_phones` 에 비회원 pending, 프리필 GET round1 `notifyUserIds`·`phoneByEmail` / round2 `null` |
+| CT-1205 | `/shared/view/[token]` — 가입자 / 리포트 공유 비회원 / 공유 안 한 비회원 / 위조 서명 / 만료 | `/candidates/[id]` 리다이렉트 / `/shared/sr_…` 리다이렉트 / 200 일정 정보만(실명 없음) / "링크를 찾을 수 없습니다" / "만료된 링크입니다" |
+| CT-1206 | `buildStaffMessage` 3종 vs ALIMTALK.md 승인 신청 코드블록(샘플 변수 치환) | 글자까지 일치 — 한쪽만 고치면 실패(카카오는 불일치 본문 발송을 거부) |
+
 ## 범위 외 (이 스위트가 다루지 않는 것)
 
 - **LLM 응답 품질/성공 경로** — 비결정적 + 비용. 경계(과금·상태 오염 방지)만 검증. 실 LLM 스모크가 필요하면 수동으로 1건 업로드→평가 확인.

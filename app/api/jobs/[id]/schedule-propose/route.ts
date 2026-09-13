@@ -6,8 +6,10 @@
  *  - slots: [{start, end}]   (1~10개, 미래 시각)
  *  - modeOnline: boolean
  *  - address?, addressDetail?  (modeOnline=false 시 필수)
- *  - shareRecipients?: [{email, name?, userId?, report?}]  일정 확정·변경·취소를 함께 받을 사람(선택).
+ *  - shareRecipients?: [{email, name?, userId?, report?, phone?}]  일정 확정·변경·취소를 함께 받을 사람(선택).
  *    report=true 면 확정·변경 안내에 평가 리포트 공유 링크가 함께 나간다(취소 안내엔 미포함).
+ *    phone 은 비회원만 — 일정 스냅샷엔 저장하지 않고 notify_phones 로 등록돼 그 번호로 확인 카톡이 간다.
+ *  - notifyUserIds?: number[]  확정·취소 메일·알림톡을 받을 공고 면접관. 필드가 없으면 전원.
  *
  * 동작:
  *  - 각 후보자별로 기존 active 스케쥴(pending/counter_proposed) 을 'cancelled' 로 마킹
@@ -16,7 +18,7 @@
  *  - 후보자에게 메일 발송 (/schedule/[token])
  *  - 오프라인 면접 주소가 입력되면 org_addresses 에 저장(중복은 건너뜀)
  *
- * GET: 이 공고·차수의 직전 제안에 쓰인 공유 수신자 반환 — 모달이 프리필한다.
+ * GET: 이 공고·차수의 직전 제안에 쓰인 공유 수신자·알림 받을 면접관 + 번호 확인 상태 — 모달이 프리필한다.
  */
 import { db } from "@/lib/db";
 import {
@@ -54,6 +56,18 @@ import {
   normalizeShareRecipients,
   sendScheduleShareEmails,
 } from "@/lib/schedule-share";
+import {
+  getJobInterviewerIds,
+  normalizeNotifyUserIds,
+  sendStaffScheduleCancelled,
+  STAFF_CANCEL_REASON,
+} from "@/lib/staff-alimtalk";
+import {
+  getPhoneStatusesForEmails,
+  getPhoneStatusesForUsers,
+  parseSharePhoneInputs,
+  requestSharePhoneVerifications,
+} from "@/lib/notify-phone";
 
 export const runtime = "nodejs";
 // 동기 발송 최대 50명 × MAIL_RATE_PER_SEC(기본 2/s) 페이싱 ≈ 25s + 재시도 여유.
@@ -86,11 +100,14 @@ export async function POST(
     addressDetail?: string;
     round?: string;
     shareRecipients?: unknown;
+    notifyUserIds?: unknown;
   } | null;
   if (!body) return new Response("바디 필요", { status: 400 });
 
   const share = normalizeShareRecipients(body.shareRecipients);
   if (!share.ok) return new Response(share.error, { status: 400 });
+  const sharePhones = parseSharePhoneInputs(body.shareRecipients);
+  if (!sharePhones.ok) return new Response(sharePhones.error, { status: 400 });
 
   // 면접 차수 — round2 는 "1차 합격(round1_passed)" 후보에게만 제시 가능.
   // round2 는 별도 세부 단계를 만들지 않으므로 stage 는 round1_passed 로 유지된다(2차 합격 결정 시 수동 전환).
@@ -205,6 +222,17 @@ export async function POST(
     );
   }
 
+  // 알림 받을 면접관 — 공고 면접관만 남긴다(필드가 없으면 null = 전원).
+  const notifyUserIds = normalizeNotifyUserIds(
+    body.notifyUserIds,
+    await getJobInterviewerIds(jobId)
+  );
+  // 공유받을 사람 번호 — 제안 1회에 한 번만. 새 번호·바뀐 번호에만 확인 카톡이 간다.
+  const phoneRequests =
+    sharePhones.list.length > 0
+      ? await requestSharePhoneVerifications(job.orgId, sharePhones.list, me!.id)
+      : [];
+
   const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
   // 법인 브랜딩(로고+컬러) — 일괄 발송이라 루프 밖에서 1회 조회.
   const branding = await getOrgEmailBranding(job.orgId);
@@ -267,8 +295,8 @@ export async function POST(
         )
       );
 
-    // 확정돼 있던 일정을 무르는 경우 — 회의실을 잡아둔 공유 수신자에게 취소를 알린다.
-    // 새 시간은 아직 미정이라 확정 안내는 지원자가 시간을 고른 뒤 별도로 나간다.
+    // 확정돼 있던 일정을 무르는 경우 — 회의실을 잡아둔 공유 수신자와 면접을 준비하던 면접관에게
+    // 취소를 알린다. 새 시간은 아직 미정이라 확정 안내는 지원자가 시간을 고른 뒤 별도로 나간다.
     if (priorSelected?.selectedSlot) {
       try {
         await sendScheduleShareEmails({
@@ -280,6 +308,15 @@ export async function POST(
         });
       } catch (e) {
         console.error("[schedule-propose] 기존 일정 취소 공유 실패", e);
+      }
+      try {
+        await sendStaffScheduleCancelled({
+          sched: priorSelected,
+          slot: priorSelected.selectedSlot,
+          reason: STAFF_CANCEL_REASON.rescheduled,
+        });
+      } catch (e) {
+        console.error("[schedule-propose] 기존 일정 취소 알림톡 실패", e);
       }
     }
 
@@ -300,6 +337,7 @@ export async function POST(
         status: "pending",
         proposedByUserId: me!.id,
         shareRecipients: share.list.length > 0 ? share.list : null,
+        notifyUserIds,
         expiresAt,
       })
       .returning();
@@ -377,17 +415,19 @@ export async function POST(
       shareRecipients: share.list.map((r) => r.email),
       // 평가 결론까지 나가는 지정이면 별도 표시 — 일정 정보보다 민감하다.
       shareReport: share.list.some((r) => r.report),
+      notifyUserIds,
+      sharePhoneRequests: phoneRequests.length,
     },
   });
 
   void isNull;
   void sql;
-  return Response.json({ ok: true, results });
+  return Response.json({ ok: true, results, phoneRequests });
 }
 
 /**
- * 이 공고·차수에서 마지막으로 지정된 공유 수신자 — 일정 모달이 프리필한다.
- * 공유 수신자는 제안 건별 스냅샷이라 재제안 때 다시 입력해야 하는 것을 덜어준다.
+ * 이 공고·차수에서 마지막으로 지정된 공유 수신자·알림 받을 면접관 — 일정 모달이 프리필한다.
+ * 둘 다 제안 건별 스냅샷이라 재제안 때 다시 고르는 수고를 덜어준다. 번호 확인 상태는 가린 번호만.
  */
 export async function GET(
   req: Request,
@@ -409,7 +449,7 @@ export async function GET(
 
   const url = new URL(req.url);
   const round = url.searchParams.get("round") === "round2" ? "round2" : "round1";
-  const [last] = await db
+  const [lastShare] = await db
     .select({ shareRecipients: interviewSchedules.shareRecipients })
     .from(interviewSchedules)
     .where(
@@ -421,6 +461,38 @@ export async function GET(
     )
     .orderBy(desc(interviewSchedules.id))
     .limit(1);
+  const [lastNotify] = await db
+    .select({ notifyUserIds: interviewSchedules.notifyUserIds })
+    .from(interviewSchedules)
+    .where(
+      and(
+        eq(interviewSchedules.jobId, jobId),
+        eq(interviewSchedules.round, round),
+        isNotNull(interviewSchedules.notifyUserIds)
+      )
+    )
+    .orderBy(desc(interviewSchedules.id))
+    .limit(1);
 
-  return Response.json({ shareRecipients: last?.shareRecipients ?? [] });
+  const shareRecipients = lastShare?.shareRecipients ?? [];
+  const userIds = [
+    ...new Set([
+      ...(await getJobInterviewerIds(jobId)),
+      ...shareRecipients.flatMap((r) => (r.userId != null ? [r.userId] : [])),
+    ]),
+  ];
+  const phoneByUser = await getPhoneStatusesForUsers(userIds);
+  const phoneByEmail = job.orgId
+    ? await getPhoneStatusesForEmails(
+        job.orgId,
+        shareRecipients.filter((r) => r.userId == null).map((r) => r.email)
+      )
+    : new Map();
+
+  return Response.json({
+    shareRecipients,
+    notifyUserIds: lastNotify?.notifyUserIds ?? null,
+    phoneByUserId: Object.fromEntries(phoneByUser),
+    phoneByEmail: Object.fromEntries(phoneByEmail),
+  });
 }

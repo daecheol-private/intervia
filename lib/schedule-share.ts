@@ -24,11 +24,12 @@ import {
   interviewSchedules,
   type InterviewSchedule,
 } from "./schema";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { sendMail, isSmtpAvailable } from "./mailer";
 import { buildScheduleShareEmail, buildIcsInvite, roundLabel, type Slot } from "./schedules";
 import { resolveMailBaseUrl } from "./notifications";
 import { ensureActiveShareLink, SHARE_LINK_DEFAULT_DAYS } from "./shared-report";
+import { sendStaffScheduleCancelled, STAFF_CANCEL_REASON } from "./staff-alimtalk";
 import { addDays } from "./utils";
 import { logAudit } from "./audit";
 
@@ -303,13 +304,14 @@ const CANCEL_REASON_BY_OUTCOME: Record<string, string> = {
 };
 
 /**
- * 후보자가 종결(합격·불합격·지원취소)될 때, 아직 치르지 않은 확정 면접의 공유 수신자에게
- * 취소를 알린다. 회의실을 잡아둔 담당자가 취소를 모르면 빈 예약이 남는다.
+ * 후보자가 종결(합격·불합격·지원취소)될 때, 아직 치르지 않은 확정 면접의 취소를 알린다 —
+ * 일정 공유받을 사람에게는 메일, 알림 받을 면접관·공유받을 사람 중 번호를 확인한 사람에게는 알림톡.
+ * 회의실을 잡아둔 담당자나 면접을 준비하던 면접관이 취소를 모르면 빈 예약·헛걸음이 남는다.
  *
- * 이미 지난 면접은 건드리지 않는다 — 취소할 것이 없다.
- * 공유 수신자가 지정되지 않은 스케쥴은 쿼리 단계에서 빠지므로 대부분의 후보자에게 no-op.
+ * 이미 지난 면접은 건드리지 않는다 — 취소할 것이 없다. cleanupOnClose 는 selected 를
+ * 건드리지 않으므로 호출 순서와 무관하게 대상이 남아 있다.
  */
-export async function notifyShareCancelOnCandidateClosed(
+export async function notifyScheduleCancelOnCandidateClosed(
   candidateId: number,
   outcome: string | null | undefined
 ): Promise<{ notified: number }> {
@@ -319,30 +321,41 @@ export async function notifyShareCancelOnCandidateClosed(
     .where(
       and(
         eq(interviewSchedules.candidateId, candidateId),
-        eq(interviewSchedules.status, "selected"),
-        isNotNull(interviewSchedules.shareRecipients)
+        eq(interviewSchedules.status, "selected")
       )
     );
   if (rows.length === 0) return { notified: 0 };
 
   const reason =
     CANCEL_REASON_BY_OUTCOME[outcome ?? ""] ?? "면접이 취소되었습니다.";
+  const staffReason =
+    outcome === "withdrawn" ? STAFF_CANCEL_REASON.withdrawn : STAFF_CANCEL_REASON.closed;
   const now = Date.now();
   let notified = 0;
   for (const sched of rows) {
-    const start = sched.selectedSlot?.start;
-    if (!start || new Date(start).getTime() <= now) continue; // 이미 치른 면접
+    const slot = sched.selectedSlot;
+    if (!slot?.start || new Date(slot.start).getTime() <= now) continue; // 이미 치른 면접
+    if (sched.shareRecipients?.length) {
+      try {
+        const r = await sendScheduleShareEmails({
+          sched,
+          slot,
+          kind: "cancelled",
+          cancelReason: reason,
+        });
+        notified += r.sent;
+      } catch (e) {
+        console.error(
+          "[schedule-share] 종결 취소 통지 실패",
+          e instanceof Error ? e.message : e
+        );
+      }
+    }
     try {
-      const r = await sendScheduleShareEmails({
-        sched,
-        slot: sched.selectedSlot!,
-        kind: "cancelled",
-        cancelReason: reason,
-      });
-      notified += r.sent;
+      notified += await sendStaffScheduleCancelled({ sched, slot, reason: staffReason });
     } catch (e) {
       console.error(
-        "[schedule-share] 종결 취소 통지 실패",
+        "[schedule-share] 종결 취소 알림톡 실패",
         e instanceof Error ? e.message : e
       );
     }

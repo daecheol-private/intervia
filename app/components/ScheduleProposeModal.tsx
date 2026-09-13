@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarClock, Pencil, Monitor, Building2 } from "lucide-react";
+import { BellRing, CalendarClock, Pencil, Monitor, Building2 } from "lucide-react";
 import { SlotCalendarPicker } from "@/app/components/SlotCalendarPicker";
 import { AddressSearchButton } from "@/app/components/AddressSearch";
 import {
   ShareRecipientPicker,
+  type PhoneStatus,
   type ShareRecipient,
 } from "@/app/components/ShareRecipientPicker";
 
 type OrgAddress = { id: number; address: string; addressDetail: string | null };
+
+type Interviewer = { userId: number; name: string; email: string };
 
 export type ProposeResult = {
   candidateId: number;
@@ -25,6 +28,9 @@ export type ProposeResult = {
  * 2) 직접 확정: 전화 등으로 협의된 시간 1개 →
  *    후보자별 `POST /api/candidates/[id]/schedule-manual` → 즉시 확정(selected) 등록.
  *    후보자 메일은 선택(기본 미발송), 면접관 인앱 알림은 서버가 발송.
+ *
+ * 두 방식 모두 "알림 받을 면접관"(확정·취소 메일·카톡 대상)을 고른다 — 2차 면접처럼 공고
+ * 면접관 중 일부만 참석하는 경우를 위해서다. 차수별 직전 선택이 프리필된다.
  *
  * 공고 목록(다수 일괄)과 후보자 상세(단건) 양쪽에서 재사용. 단순 stage PATCH 가
  * 아니라 "일정 제안/확정" 이라는 실제 행위를 수행해야 하므로 이 모달이 정식 진입점이다.
@@ -64,6 +70,12 @@ export function ScheduleProposeModal({
   const [err, setErr] = useState("");
   // 확정·변경·취소 안내를 함께 받을 사람(면접관 외). 직전 제안 값으로 프리필한다.
   const [shareRecipients, setShareRecipients] = useState<ShareRecipient[]>([]);
+  // 확정·취소 메일·카톡을 받을 공고 면접관. null = 아직 불러오기 전 → 제출 시 필드를 생략해
+  // 서버가 전원으로 처리한다(불러오기 실패해도 알림이 끊기지 않게).
+  const [interviewers, setInterviewers] = useState<Interviewer[]>([]);
+  const [notifyUserIds, setNotifyUserIds] = useState<number[] | null>(null);
+  const [phoneByUserId, setPhoneByUserId] = useState<Record<string, PhoneStatus>>({});
+  const [phoneByEmail, setPhoneByEmail] = useState<Record<string, PhoneStatus>>({});
   const [results, setResults] = useState<{ results: ProposeResult[] } | null>(
     null
   );
@@ -122,12 +134,17 @@ export function ScheduleProposeModal({
     setAddressDetail("");
   };
 
-  // 직전 제안에서 쓴 공유 수신자 프리필 — 회의실·인사팀 담당자는 보통 매번 같다.
+  // 직전 제안 프리필 — 공유 수신자(회의실·인사팀 담당자는 보통 매번 같다)와 알림 받을 면접관
+  // (2차는 실무진이 빠지는 경우가 많다)을 차수별로 기억한다. 처음이면 면접관 전원 체크.
   useEffect(() => {
     if (!open) return;
-    void fetch(`/api/jobs/${jobId}/schedule-propose?round=${round}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
+    void Promise.all([
+      fetch(`/api/jobs/${jobId}/schedule-propose?round=${round}`).then((r) =>
+        r.ok ? r.json() : null
+      ),
+      fetch(`/api/jobs/${jobId}/interviewers`).then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([d, iv]) => {
         if (Array.isArray(d?.shareRecipients) && d.shareRecipients.length > 0)
           // 평가 리포트 공유는 기본 켬 — 직전 제안에서 꺼져 있었더라도 기본값을 적용하고,
           // 원치 않으면 그 자리에서 끄게 한다(수신자 목록만 재사용).
@@ -137,6 +154,15 @@ export function ScheduleProposeModal({
               report: true,
             }))
           );
+        setPhoneByUserId(d?.phoneByUserId ?? {});
+        setPhoneByEmail(d?.phoneByEmail ?? {});
+        const list: Interviewer[] = Array.isArray(iv?.interviewers) ? iv.interviewers : [];
+        setInterviewers(list);
+        const ids = list.map((x) => x.userId);
+        const prev: number[] | null = Array.isArray(d?.notifyUserIds)
+          ? d.notifyUserIds
+          : null;
+        setNotifyUserIds(prev ? prev.filter((uid) => ids.includes(uid)) : ids);
       })
       .catch(() => {});
   }, [open, jobId, round]);
@@ -178,6 +204,7 @@ export function ScheduleProposeModal({
               addressDetail: modeOnline ? null : addressDetail.trim(),
               notifyCandidate: notify,
               shareRecipients,
+              notifyUserIds: notifyUserIds ?? undefined,
             }),
           });
           if (r.ok) {
@@ -222,6 +249,7 @@ export function ScheduleProposeModal({
         addressDetail: modeOnline ? null : addressDetail.trim(),
         round,
         shareRecipients,
+        notifyUserIds: notifyUserIds ?? undefined,
       }),
     });
     setBusy(false);
@@ -248,6 +276,8 @@ export function ScheduleProposeModal({
     setNotify(false);
     setDurationMin(60);
     setShareRecipients([]); // 다음 열림에 직전 제안 값으로 다시 프리필된다.
+    setNotifyUserIds(null);
+    setInterviewers([]);
     onClose();
   };
 
@@ -454,10 +484,20 @@ export function ScheduleProposeModal({
                 </div>
               )}
 
+              {interviewers.length > 0 && notifyUserIds && (
+                <NotifyInterviewerPicker
+                  interviewers={interviewers}
+                  value={notifyUserIds}
+                  onChange={setNotifyUserIds}
+                  phoneByUserId={phoneByUserId}
+                />
+              )}
+
               <ShareRecipientPicker
                 jobId={jobId}
                 value={shareRecipients}
                 onChange={setShareRecipients}
+                phoneByEmail={phoneByEmail}
               />
 
               {mode === "direct" && (
@@ -471,8 +511,9 @@ export function ScheduleProposeModal({
                   <span className="text-xs text-ink-soft leading-relaxed">
                     후보자에게 확정 안내 메일 발송
                     <span className="block text-[11px] text-ink-muted">
-                      미체크 시 메일 없이 등록만 합니다 (면접관 공유용). 공고
-                      면접관에게는 인앱 알림이 전달됩니다.
+                      미체크 시 후보자에게 메일 없이 등록만 합니다 (면접관 공유용).
+                      공고 면접관에게는 인앱 알림이, 알림 받을 면접관에게는 확정
+                      안내가 전달됩니다.
                     </span>
                   </span>
                 </label>
@@ -549,6 +590,80 @@ export function ScheduleProposeModal({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 알림 받을 면접관 — 확정·취소 메일과 카톡의 대상. 공고 면접관 중 이번 차수에 참석하는
+ * 사람만 남긴다(2차 임원 면접 등). 카톡은 본인이 번호를 확인한 사람에게만 간다.
+ */
+function NotifyInterviewerPicker({
+  interviewers,
+  value,
+  onChange,
+  phoneByUserId,
+}: {
+  interviewers: Interviewer[];
+  value: number[];
+  onChange: (next: number[]) => void;
+  phoneByUserId: Record<string, PhoneStatus>;
+}) {
+  const toggle = (uid: number) =>
+    onChange(value.includes(uid) ? value.filter((v) => v !== uid) : [...value, uid]);
+
+  return (
+    <div className="rounded-lg border border-border-default px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-ink-soft">
+          <BellRing className="w-4 h-4" strokeWidth={2.25} />
+          알림 받을 면접관
+          <span className="text-ink-muted font-normal">확정·취소 메일·카톡</span>
+        </span>
+        <span className="text-[11px] text-ink-muted tabular-nums">
+          {value.length}/{interviewers.length}명
+        </span>
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {interviewers.map((iv) => {
+          const phone = phoneByUserId[String(iv.userId)];
+          return (
+            <li key={iv.userId}>
+              <label className="flex items-center gap-2 cursor-pointer text-xs">
+                <input
+                  type="checkbox"
+                  checked={value.includes(iv.userId)}
+                  onChange={() => toggle(iv.userId)}
+                />
+                <span className="font-medium text-ink shrink-0">{iv.name}</span>
+                <span className="min-w-0 truncate text-ink-muted">{iv.email}</span>
+                <span
+                  className={`ml-auto shrink-0 text-[10px] ${
+                    phone?.status === "verified"
+                      ? "text-primary-deep font-medium"
+                      : "text-ink-muted"
+                  }`}
+                >
+                  {phone?.status === "verified"
+                    ? "카톡 받는 중"
+                    : phone
+                      ? "카톡 확인 대기"
+                      : "카톡 미등록"}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      {value.length === 0 && (
+        <p className="mt-1.5 text-[11px] text-warning">
+          아무도 선택하지 않으면 확정·취소 안내가 면접관에게 가지 않습니다.
+        </p>
+      )}
+      <p className="mt-1.5 text-[11px] text-ink-muted leading-relaxed">
+        2차 면접처럼 일부만 참석하면 참석자만 남기세요. 다음 제안 때 차수별로 이 선택이
+        채워집니다.
+      </p>
     </div>
   );
 }

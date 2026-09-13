@@ -129,7 +129,9 @@ export function proxy(req: NextRequest) {
     pathname === "/api/orgs" ||
     pathname.startsWith("/api/orgs/") ||
     pathname.startsWith("/api/invites/") ||
-    pathname.startsWith("/api/schedule/")
+    pathname.startsWith("/api/schedule/") ||
+    // 면접 일정 알림톡 번호 확인 — 계정 없는 수신자도 누른다(토큰 자체가 인증).
+    pathname.startsWith("/api/verify-phone/")
   )
     return NextResponse.next();
 

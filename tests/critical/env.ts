@@ -33,6 +33,10 @@ process.env.TURSO_DATABASE_URL = "";
 process.env.TURSO_AUTH_TOKEN = "";
 process.env.DATABASE_URL = TEST_DB_URL;
 process.env.BLOB_READ_WRITE_TOKEN = "";
+// 서명 토큰(면접 일정 알림톡 "지원자 정보 보기" 링크 등)을 테스트가 직접 발급·검증할 수 있게
+// 고정 키를 쓴다. 아래 SERVER_ENV 가 process.env 를 펼치므로 서버도 같은 키로 뜬다.
+process.env.MASTER_ENCRYPTION_KEY =
+  "0f1e2d3c4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff0";
 
 export function assertIsolated() {
   const url = process.env.DATABASE_URL ?? "";

@@ -177,6 +177,55 @@ export const emailVerifications = sqliteTable("email_verifications", {
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
 
+/**
+ * 면접 일정 알림톡 수신 번호 — 가입 면접관(userId) 또는 일정 공유받을 사람(비회원, orgId+email).
+ *
+ * 누가 입력하든(본인 계정 설정·가입 폼·법인 관리자·일정 제안자) 저장 시 status='pending' 이고,
+ * 그 번호로 "번호 확인" 알림톡을 보내 본인이 /verify/phone/[token] 에서 확인해야 'verified' 가 된다.
+ * 오타 번호로 지원자 일정 정보가 새는 것을 막고, 확인 시각·IP·UA 가 수신 동의 기록이 된다.
+ * 발송(lib/staff-alimtalk.ts)은 verified 만 대상으로 한다.
+ */
+export const notifyPhones = sqliteTable(
+  "notify_phones",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    orgId: integer("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    // 가입 면접관이면 userId, 비회원이면 email(소문자)로 식별 — 둘 중 하나만 채운다.
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    email: text("email"),
+    name: text("name"),
+    // 숫자만 정규화한 휴대폰 번호 (예: 01012345678).
+    phone: text("phone").notNull(),
+    status: text("status", { enum: ["pending", "verified"] })
+      .notNull()
+      .default("pending"),
+    verifyToken: text("verify_token").notNull().unique(),
+    verifyExpiresAt: text("verify_expires_at").notNull(),
+    verifySentAt: text("verify_sent_at"),
+    requestedByUserId: integer("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    verifiedAt: text("verified_at"),
+    verifiedIp: text("verified_ip"),
+    verifiedUa: text("verified_ua"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`)
+      .$onUpdate(nowTimestamp),
+  },
+  (t) => ({
+    userUq: uniqueIndex("uq_notify_phones_user").on(t.userId),
+    orgEmailUq: uniqueIndex("uq_notify_phones_org_email").on(t.orgId, t.email),
+  })
+);
+
+export type NotifyPhone = typeof notifyPhones.$inferSelect;
+
 export const sessions = sqliteTable("sessions", {
   token: text("token").primaryKey(),
   userId: integer("user_id")
@@ -1105,6 +1154,9 @@ export const interviewSchedules = sqliteTable("interview_schedules", {
       userId?: number;
       report?: boolean;
     }> | null>(),
+  // 확정·취소 안내(메일·알림톡)를 받을 가입 면접관 — 제안 시점 선택(차수별 직전 값 프리필).
+  // null = 공고 면접관 전원(선택 기능 도입 전 row). 아침 digest·인앱 알림은 이 값과 무관하게 전원.
+  notifyUserIds: text("notify_user_ids", { mode: "json" }).$type<number[] | null>(),
   status: text("status", {
     enum: ["pending", "selected", "counter_proposed", "withdrawn", "cancelled"],
   })

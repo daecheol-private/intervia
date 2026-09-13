@@ -5,6 +5,7 @@ import { runLifecycleSweep } from "@/lib/job-lifecycle";
 import { expireInterviewSessions } from "@/lib/expire-sessions";
 import { cleanupExpiredSessions, getCurrentUser } from "@/lib/auth";
 import { pruneMailEvents } from "@/lib/mail-usage";
+import { cleanupStalePhoneRequests } from "@/lib/notify-phone";
 import { secretEquals } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
@@ -37,6 +38,8 @@ export async function GET(req: Request) {
   const expiry = await expireInterviewSessions();
   // 메일 발송 집계 로그(mail_send_events) 무한 누적 방지 — 쿼터 창(월)보다 넉넉한 45일 보관.
   const prunedMailEvents = await pruneMailEvents();
+  // 면접 일정 알림톡 번호 중 확인하지 않은 채 기한이 한참 지난 것 삭제 (최소 보유).
+  const purgedPhoneRequests = await cleanupStalePhoneRequests();
   return Response.json({
     ok: true,
     ...result,
@@ -46,6 +49,7 @@ export async function GET(req: Request) {
     lifecycle,
     expiry,
     prunedMailEvents,
+    purgedPhoneRequests,
   });
 }
 

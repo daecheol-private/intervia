@@ -9,8 +9,10 @@
  *     modeOnline?: boolean,                 // 기본 true
  *     address?, addressDetail?,             // modeOnline=false 시 address 필수
  *     notifyCandidate?: boolean,            // true 면 후보자에게 확정 메일 발송 (기본 false)
- *     shareRecipients?: [{email, name?, userId?, report?}]  // 일정 공유 대상(선택).
+ *     shareRecipients?: [{email, name?, userId?, report?, phone?}]  // 일정 공유 대상(선택).
  *                                                          // report=true 면 평가 리포트 링크 동봉
+ *                                                          // phone 은 비회원 알림톡 번호(확인 카톡 발송)
+ *     notifyUserIds?: number[],             // 확정·취소 메일·알림톡을 받을 공고 면접관. 없으면 전원.
  *   }
  *
  * 동작:
@@ -19,6 +21,7 @@
  *   - round1 이면 candidate.stage → round1_waiting (확정 흐름과 동일)
  *   - notifyCandidate 시 줌 자동 생성 시도 → 폴백 확정 메일
  *   - 공유 수신자에겐 후보자 통보 여부와 무관하게 확정 안내 발송
+ *   - 알림 받을 면접관·공유받을 사람에게 알림톡(등록자 본인 제외)
  *   - 공고 면접관 전원 인앱 알림 (면접관 공유 목적)
  */
 import { db } from "@/lib/db";
@@ -35,6 +38,16 @@ import {
 } from "@/lib/schedules";
 import { sendScheduleConfirmationEmails } from "@/lib/schedule-notify";
 import { normalizeShareRecipients } from "@/lib/schedule-share";
+import {
+  getJobInterviewerIds,
+  normalizeNotifyUserIds,
+  sendStaffScheduleCancelled,
+  STAFF_CANCEL_REASON,
+} from "@/lib/staff-alimtalk";
+import {
+  parseSharePhoneInputs,
+  requestSharePhoneVerifications,
+} from "@/lib/notify-phone";
 import { ensureOrgAddress } from "@/lib/org-address";
 import { notifyJobInterviewers } from "@/lib/notifications";
 import { tryAutoCreateZoomMeeting } from "@/lib/schedule-zoom";
@@ -78,11 +91,14 @@ export async function POST(
     addressDetail?: string;
     notifyCandidate?: boolean;
     shareRecipients?: unknown;
+    notifyUserIds?: unknown;
   } | null;
   if (!body?.slot) return new Response("slot { start, end } 필요", { status: 400 });
 
   const share = normalizeShareRecipients(body.shareRecipients);
   if (!share.ok) return new Response(share.error, { status: 400 });
+  const sharePhones = parseSharePhoneInputs(body.shareRecipients);
+  if (!sharePhones.ok) return new Response(sharePhones.error, { status: 400 });
 
   const round: "round1" | "round2" =
     body.round === "round2" ? "round2" : "round1";
@@ -136,11 +152,24 @@ export async function POST(
   if (address && !modeOnline)
     await ensureOrgAddress(job.orgId, address, addressDetail);
 
+  // 알림 받을 면접관 — 공고 면접관만 남긴다(필드가 없으면 null = 전원).
+  const notifyUserIds = normalizeNotifyUserIds(
+    body.notifyUserIds,
+    await getJobInterviewerIds(job.id)
+  );
+  // 공유받을 사람 번호 — 새 번호·바뀐 번호에만 확인 카톡. 일괄 확정은 후보자별로 호출되지만
+  // 같은 번호가 이미 확인 대기면 다시 보내지 않으므로 반복 발송되지 않는다.
+  const phoneRequests =
+    sharePhones.list.length > 0
+      ? await requestSharePhoneVerifications(job.orgId, sharePhones.list, me!.id)
+      : [];
+
   const now = new Date().toISOString();
 
   // 기존 확정(selected) 일정이 있으면 이번 등록은 "재조정(변경)" — 메일을 변경형 문구로.
+  // 옛 확정의 알림 대상에게 취소 알림톡을 보내야 해서 row 전체를 확보한다.
   const priorSelected = await db
-    .select({ id: interviewSchedules.id })
+    .select()
     .from(interviewSchedules)
     .where(
       and(
@@ -169,6 +198,20 @@ export async function POST(
       )
     );
 
+  // 카카오 템플릿에 "변경" 안내가 없어 옛 일정 취소 → 새 일정 확정 두 통으로 알린다.
+  for (const prior of priorSelected) {
+    if (!prior.selectedSlot) continue;
+    try {
+      await sendStaffScheduleCancelled({
+        sched: prior,
+        slot: prior.selectedSlot,
+        reason: STAFF_CANCEL_REASON.rescheduled,
+      });
+    } catch (e) {
+      console.error("[schedule-manual] 기존 일정 취소 알림톡 실패", e);
+    }
+  }
+
   const [sched] = await db
     .insert(interviewSchedules)
     .values({
@@ -185,6 +228,7 @@ export async function POST(
       selectedSlot: slot,
       proposedByUserId: me!.id,
       shareRecipients: share.list.length > 0 ? share.list : null,
+      notifyUserIds,
       expiresAt: scheduleExpiresAt(),
       respondedAt: now,
     })
@@ -200,28 +244,28 @@ export async function POST(
 
   // 후보자 통보 (선택) — 줌 자동 생성 시도 후 헬퍼로 후보자에게만 확정 메일 발송.
   // 면접관은 아래 인앱 알림으로 공유(전화 합의 후 등록이라 전원 메일은 과함).
-  // 공유 수신자가 지정돼 있으면 후보자 통보를 끄더라도 헬퍼를 태운다 — 회의실·임원 안내는
-  // 후보자 통보 여부와 별개다. 줌 자동 생성은 기존대로 후보자 통보 시에만.
+  // 헬퍼는 항상 태운다 — 회의실·임원 안내(공유 수신자)와 면접관 알림톡은 후보자 통보 여부와
+  // 별개다. 등록자 본인은 이미 아는 일정이라 알림톡에서 뺀다. 줌 자동 생성은 후보자 통보 시에만.
   const wantCandidateMail = !!body.notifyCandidate && !!candidate.email;
   let candidateMail: { sent: boolean; error?: string } | null = null;
-  if (wantCandidateMail || share.list.length > 0) {
-    const zoom = wantCandidateMail ? await tryAutoCreateZoomMeeting(sched) : null;
-    const r = await sendScheduleConfirmationEmails({
-      sched,
-      slot,
-      meetingUrl: zoom?.handled ? zoom.meetingUrl : null,
-      meetingNote: zoom?.handled ? zoom.meetingNote : null,
-      isReschedule,
-      notifyInterviewers: false,
-      notifyCandidate: wantCandidateMail,
-    });
-    if (wantCandidateMail)
-      candidateMail = r.candidateEmailSent
-        ? { sent: true }
-        : { sent: false, error: "메일 서버 미설정 또는 발송 실패" };
-  }
+  const zoom = wantCandidateMail ? await tryAutoCreateZoomMeeting(sched) : null;
+  const r = await sendScheduleConfirmationEmails({
+    sched,
+    slot,
+    meetingUrl: zoom?.handled ? zoom.meetingUrl : null,
+    meetingNote: zoom?.handled ? zoom.meetingNote : null,
+    isReschedule,
+    notifyInterviewers: false,
+    notifyCandidate: wantCandidateMail,
+    staffAlimtalk: { excludeUserIds: [me!.id] },
+  });
+  if (wantCandidateMail)
+    candidateMail = r.candidateEmailSent
+      ? { sent: true }
+      : { sent: false, error: "메일 서버 미설정 또는 발송 실패" };
 
-  // 인앱 알림 — 공고 면접관 전원 fanout (면접관 공유 목적. 등록자 본인은 메일 제외)
+  // 인앱 알림 — 공고 면접관 전원 fanout (면접관 공유 목적). 메일은 알림 받을 면접관에게만,
+  // 등록자 본인은 제외.
   try {
     await notifyJobInterviewers(
       job.id,
@@ -231,7 +275,7 @@ export async function POST(
         href: `/candidates/${cid}`,
         payload: { scheduleId: sched.id, slot },
       },
-      { excludeEmailUserIds: [me!.id] }
+      { excludeEmailUserIds: [me!.id], emailUserIds: notifyUserIds }
     );
   } catch (e) {
     console.error("[schedule-manual] notify interviewers failed", e);
@@ -251,6 +295,8 @@ export async function POST(
       notified: !!candidateMail?.sent,
       shareRecipients: share.list.map((r) => r.email),
       shareReport: share.list.some((r) => r.report),
+      notifyUserIds,
+      sharePhoneRequests: phoneRequests.length,
     },
   });
 
@@ -259,5 +305,6 @@ export async function POST(
     scheduleId: sched.id,
     selectedSlot: slot,
     candidateMail,
+    phoneRequests,
   });
 }

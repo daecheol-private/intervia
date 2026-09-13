@@ -307,6 +307,7 @@ PK 없음 — `(user_id, job_id)` UNIQUE.
 | counter_slots | JSON NULL | 지원자가 역제시한 슬롯 후보 |
 | candidate_note | TEXT NULL | 지원자 코멘트 (역제시·취소 사유 등) |
 | share_recipients | JSON NULL | 일정 공유 수신자 `[{email, name?, userId?, report?}]` — 면접관이 아닌 회의실·인사팀 담당자, 미가입 임원. 제안 시점 입력(최대 10명), 건별 스냅샷. `userId` 는 법인 멤버 선택분이며 발송 시점에 최신 이메일을 재조회(비활성 계정 skip). 확정·변경·취소 시 `lib/schedule-share.ts` 가 발송. `report:true` 면 확정·변경 안내에 평가 리포트 공유 링크(`shared_reports` 활성 토큰 재사용, 없으면 자동 발급 — 만료 하한 면접일+14일)를 동봉. 취소 안내엔 넣지 않음 |
+| notify_user_ids | JSON NULL | 확정·취소 메일·알림톡을 받을 공고 면접관 `[userId, ...]` (2026-09-14, 0064). 제안·수동 확정 시점 선택, 차수별 직전 값 프리필. NULL = 공고 면접관 전원(도입 전 row). 아침 digest·인앱 알림은 이 값과 무관하게 전원 |
 | status | TEXT NOT NULL DEFAULT 'pending' | 라이프사이클 아래 참조 |
 | proposed_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 슬롯을 제시한 면접관 |
 | expires_at | TEXT NOT NULL | 응답 기한 |
@@ -773,6 +774,28 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 | sent_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
 인덱스: `(user_id, digest_date)` UNIQUE — 하루 1통 보장 + 동시 실행 race 의 최종 방어선.
+
+## notify_phones
+
+면접 일정 알림톡 수신 번호 등록부 (2026-09-14, 마이그레이션 0064 — 순수 추가). 가입 면접관(`user_id`) 또는 일정 공유받을 사람(비회원, `org_id`+`email`)의 휴대폰 번호. 누가 입력하든(계정 설정·가입 폼·법인 관리자·일정 제안자) `pending` 으로 저장되고 그 번호로 "번호 확인" 알림톡이 간다. 본인이 `/verify/phone/[token]` 에서 확인해야 `verified` — 발송(`lib/staff-alimtalk.ts`)은 verified 만 대상. "받지 않기"·삭제는 행 자체를 지운다. 코드: `lib/notify-phone.ts`, 설계: [ALIMTALK.md](ALIMTALK.md) "면접 일정 알림" 절.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| id | INTEGER PK auto | |
+| org_id | INTEGER NOT NULL FK organizations(id) ON DELETE CASCADE | 비회원 식별·테넌트 경계 |
+| user_id | INTEGER NULL FK users(id) ON DELETE CASCADE | 가입자면 채움 (탈퇴 시 번호도 삭제) |
+| email | TEXT NULL | 비회원이면 소문자 이메일 |
+| name | TEXT NULL | 알림톡 인사말 이름 |
+| phone | TEXT NOT NULL | 숫자만 (`01012345678`) — API 는 가린 번호만 내려준다 |
+| status | TEXT NOT NULL DEFAULT 'pending' | `pending` / `verified` |
+| verify_token | TEXT UNIQUE NOT NULL | `np_` + 192bit. 번호가 바뀌거나 재발송하면 새로 발급 |
+| verify_expires_at | TEXT NOT NULL | ISO. 발급 +7일. 기한 +30일 지난 pending 은 purge-original cron 이 삭제 |
+| verify_sent_at | TEXT NULL | 확인 알림톡 발송 성공 시각 |
+| requested_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 번호를 입력한 사람 (본인 / 관리자 / 일정 제안자) |
+| verified_at / verified_ip / verified_ua | TEXT NULL | 수신 동의 기록 |
+| created_at / updated_at | TEXT NOT NULL | |
+
+인덱스: `verify_token` UNIQUE, `(user_id)` UNIQUE, `(org_id, email)` UNIQUE — NULL 은 서로 달라 가입자·비회원 행이 공존한다.
 
 ## TypeScript 타입
 

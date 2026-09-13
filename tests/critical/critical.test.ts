@@ -1420,3 +1420,276 @@ describe("CT-11 이력서 추출 판정", () => {
     assert.equal(await extractPhotoFromBuffer(docx, "resume.docx"), null);
   });
 });
+
+// ─── CT-12. 면접 일정 알림톡 (면접관·일정 공유받을 사람) ──────────────────────────
+// 알림톡 env 는 무력화돼 실발송은 없다. 번호 등록부·확인·수신자 선택·서명 링크·본문 정합을 본다.
+
+describe("CT-12 면접 일정 알림톡", () => {
+  const MEMBER_EMAIL = "member@company-a.test";
+  const userId = async (email: string) =>
+    Number((await row<{ id: number }>(`SELECT id FROM users WHERE email = ?`, [email]))?.id);
+  const ct12 = { cid: 0, scheduleId: 0 };
+
+  it("CT-1201 내 알림톡 번호 — 형식 검증·등록(확인 대기)·가린 번호만 응답", async () => {
+    const bad = await memberA.put("/api/account/notify-phone", { phone: "12345" });
+    assert.equal(bad.status, 400, bad.text);
+
+    const r = await memberA.put("/api/account/notify-phone", { phone: "010-1234-5678" });
+    assert.equal(r.status, 200, r.text);
+    // 알림톡 env 무력화 환경 — 번호는 저장되지만 확인 카톡은 나가지 않는다.
+    assert.equal(field(r.body, "sent"), false);
+    const np = field<{ phoneMasked: string; status: string }>(r.body, "notifyPhone");
+    assert.equal(np?.status, "pending");
+    assert.equal(np?.phoneMasked, "010-****-5678");
+    assert.ok(!r.text.includes("01012345678"), "원번호가 응답에 노출됨");
+
+    const stored = await row<{ phone: string; status: string }>(
+      `SELECT phone, status FROM notify_phones WHERE user_id = ?`,
+      [await userId(MEMBER_EMAIL)]
+    );
+    assert.equal(stored?.phone, "01012345678");
+    assert.equal(stored?.status, "pending");
+  });
+
+  it("CT-1202 번호 확인 — 페이지 열람만으론 미확인, 확인 버튼(confirm)으로 verified", async () => {
+    const t = await row<{ verify_token: string }>(
+      `SELECT verify_token FROM notify_phones WHERE user_id = ?`,
+      [await userId(MEMBER_EMAIL)]
+    );
+    assert.ok(t?.verify_token);
+    const token = t!.verify_token;
+
+    // 메신저·보안 필터가 링크를 미리 열어도 확인되면 안 된다 — GET 은 상태를 바꾸지 않는다.
+    const page = await anon.get(`/verify/phone/${token}`);
+    assert.equal(page.status, 200, page.text.slice(0, 300));
+    assert.ok(page.text.includes("010-****-5678"), "확인 페이지에 가린 번호가 없음");
+    assert.equal(
+      (
+        await row<{ status: string }>(
+          `SELECT status FROM notify_phones WHERE verify_token = ?`,
+          [token]
+        )
+      )?.status,
+      "pending"
+    );
+
+    const c = await anon.post(`/api/verify-phone/${token}`, { action: "confirm" });
+    assert.equal(c.status, 200, c.text);
+    const v = await row<{ status: string; verified_at: string | null }>(
+      `SELECT status, verified_at FROM notify_phones WHERE verify_token = ?`,
+      [token]
+    );
+    assert.equal(v?.status, "verified");
+    assert.ok(v?.verified_at, "확인 시각(수신 동의 기록) 누락");
+
+    const again = await anon.post(`/api/verify-phone/${token}`, { action: "confirm" });
+    assert.equal(field(again.body, "alreadyVerified"), true);
+    // 같은 번호를 다시 저장해도 확인 상태가 풀리지 않는다
+    const same = await memberA.put("/api/account/notify-phone", { phone: "01012345678" });
+    assert.equal(field<{ status: string }>(same.body, "notifyPhone")?.status, "verified");
+
+    const bogus = await anon.post(`/api/verify-phone/np_does_not_exist`, { action: "confirm" });
+    assert.equal(bogus.status, 404, bogus.text);
+  });
+
+  it("CT-1203 관리자 대신 등록 — 권한·테넌시, 번호 변경은 재확인, 받지 않기는 삭제", async () => {
+    const memberId = await userId(MEMBER_EMAIL);
+    const adminAId = await userId("admin@company-a.test");
+
+    const forbidden = await memberA.put(`/api/orgs/members/${adminAId}/notify-phone`, {
+      phone: "010-2222-3333",
+    });
+    assert.equal(forbidden.status, 403, forbidden.text);
+    const otherOrg = await adminB.put(`/api/orgs/members/${memberId}/notify-phone`, {
+      phone: "010-2222-3333",
+    });
+    assert.equal(otherOrg.status, 404, otherOrg.text);
+
+    // 확인된 번호를 관리자가 바꾸면 다시 확인 대기 — 새 번호 주인이 확인해야 알림이 켜진다.
+    const changed = await adminA.put(`/api/orgs/members/${memberId}/notify-phone`, {
+      phone: "010-2222-3333",
+    });
+    assert.equal(changed.status, 200, changed.text);
+    assert.equal(field<{ status: string }>(changed.body, "notifyPhone")?.status, "pending");
+
+    const list = await adminA.get("/api/orgs/members");
+    const members =
+      field<Array<{ id: number; notifyPhone: { phoneMasked: string } | null }>>(
+        list.body,
+        "members"
+      ) ?? [];
+    assert.equal(
+      members.find((m) => m.id === memberId)?.notifyPhone?.phoneMasked,
+      "010-****-3333"
+    );
+
+    const t = await row<{ verify_token: string }>(
+      `SELECT verify_token FROM notify_phones WHERE user_id = ?`,
+      [memberId]
+    );
+    const declined = await anon.post(`/api/verify-phone/${t!.verify_token}`, {
+      action: "decline",
+    });
+    assert.equal(declined.status, 200, declined.text);
+    assert.equal(await row(`SELECT id FROM notify_phones WHERE user_id = ?`, [memberId]), undefined);
+  });
+
+  it("CT-1204 알림 받을 면접관 선택 — 공고 면접관만 저장·차수별 프리필, 비회원 번호는 등록부로만", async () => {
+    const memberId = await userId(MEMBER_EMAIL);
+    const adminAId = await userId("admin@company-a.test");
+    for (const uid of [adminAId, memberId])
+      await exec(`INSERT OR IGNORE INTO job_interviewers(job_id, user_id) VALUES (?, ?)`, [
+        ids.jobA,
+        uid,
+      ]);
+
+    ct12.cid = await insertCandidate({
+      orgId: ids.orgA,
+      jobId: ids.jobA,
+      name: "알림 후보",
+      email: "cnotify@example.com",
+      stage: "round1_candidate",
+    });
+    const body = (overrides: Record<string, unknown>) => ({
+      round: "round1",
+      slot: { start: futureIso(3 * DAY), end: futureIso(3 * DAY + HOUR) },
+      modeOnline: false,
+      address: "서울 강남구 테스트로 1",
+      notifyUserIds: [memberId, 999999],
+      shareRecipients: [
+        { email: "exec@outside.test", name: "외부 임원", phone: "010-7777-8888", report: true },
+      ],
+      ...overrides,
+    });
+
+    const badPhone = await adminA.post(
+      `/api/candidates/${ct12.cid}/schedule-manual`,
+      body({ shareRecipients: [{ email: "exec@outside.test", phone: "123" }] })
+    );
+    assert.equal(badPhone.status, 400, badPhone.text);
+
+    const r = await adminA.post(`/api/candidates/${ct12.cid}/schedule-manual`, body({}));
+    assert.equal(r.status, 200, r.text);
+    ct12.scheduleId = Number(field(r.body, "scheduleId"));
+
+    const s = await row<{ notify_user_ids: string; share_recipients: string }>(
+      `SELECT notify_user_ids, share_recipients FROM interview_schedules WHERE id = ?`,
+      [ct12.scheduleId]
+    );
+    // 공고 면접관이 아닌 id 는 버린다
+    assert.deepEqual(JSON.parse(s!.notify_user_ids), [memberId]);
+    // 번호는 일정 스냅샷에 남기지 않는다 — 등록부(notify_phones)로만
+    assert.ok(!s!.share_recipients.includes("7777"), "공유 수신자 스냅샷에 번호가 저장됨");
+    const ext = await row<{ phone: string; status: string }>(
+      `SELECT phone, status FROM notify_phones WHERE org_id = ? AND email = ?`,
+      [ids.orgA, "exec@outside.test"]
+    );
+    assert.equal(ext?.phone, "01077778888");
+    assert.equal(ext?.status, "pending");
+
+    const prefill = await adminA.get(`/api/jobs/${ids.jobA}/schedule-propose?round=round1`);
+    assert.equal(prefill.status, 200, prefill.text);
+    assert.deepEqual(field(prefill.body, "notifyUserIds"), [memberId]);
+    const byEmail = field<Record<string, { phoneMasked: string }>>(prefill.body, "phoneByEmail");
+    assert.equal(byEmail?.["exec@outside.test"]?.phoneMasked, "010-****-8888");
+    // 2차는 따로 기억한다 (2차에 실무진이 빠지는 경우)
+    const prefill2 = await adminA.get(`/api/jobs/${ids.jobA}/schedule-propose?round=round2`);
+    assert.equal(field(prefill2.body, "notifyUserIds"), null);
+  });
+
+  it("CT-1205 '지원자 정보 보기' 서명 링크 — 가입자·리포트 공유 비회원·미공유 비회원·위조·만료", async () => {
+    const staff = await import("../../lib/staff-alimtalk");
+    const memberId = await userId(MEMBER_EMAIL);
+    const exp = new Date(Date.now() + 10 * DAY);
+    const isRedirect = (s: number) => [303, 307, 308].includes(s);
+
+    const memberToken = staff.issueStaffViewToken(
+      ct12.scheduleId,
+      { kind: "user", userId: memberId, name: "" },
+      exp
+    );
+    assert.ok(memberToken, "서명 키 미설정");
+    const toCandidate = await anon.get(`/shared/view/${memberToken}`);
+    assert.ok(isRedirect(toCandidate.status), `가입자 리다이렉트 아님: ${toCandidate.status}`);
+    assert.ok(
+      (toCandidate.headers.get("location") ?? "").endsWith(`/candidates/${ct12.cid}`),
+      toCandidate.headers.get("location") ?? "(location 없음)"
+    );
+
+    const ext = { kind: "external" as const, email: "exec@outside.test", name: null, report: true };
+    const toReport = await anon.get(
+      `/shared/view/${staff.issueStaffViewToken(ct12.scheduleId, ext, exp)}`
+    );
+    assert.ok(isRedirect(toReport.status), `리포트 리다이렉트 아님: ${toReport.status}`);
+    assert.match(toReport.headers.get("location") ?? "", /\/shared\/sr_/);
+
+    // 평가 공유를 끈 수신자 — 일정 정보만, 지원자 실명 없음
+    await exec(`UPDATE interview_schedules SET share_recipients = ? WHERE id = ?`, [
+      JSON.stringify([{ email: "exec@outside.test", name: "외부 임원" }]),
+      ct12.scheduleId,
+    ]);
+    const infoOnly = await anon.get(
+      `/shared/view/${staff.issueStaffViewToken(ct12.scheduleId, ext, exp)}`
+    );
+    assert.equal(infoOnly.status, 200, infoOnly.text.slice(0, 300));
+    assert.ok(infoOnly.text.includes("평가 리포트는 채용 담당자가 공유를 허용한 경우에만"));
+    assert.ok(!infoOnly.text.includes("알림 후보"), "비회원 화면에 지원자 실명 노출");
+
+    const forged = await anon.get(`/shared/view/${ct12.scheduleId}.u${memberId}.9999999999.forged`);
+    assert.ok(forged.text.includes("링크를 찾을 수 없습니다"), "위조 서명이 통과함");
+    const expiredToken = staff.issueStaffViewToken(
+      ct12.scheduleId,
+      { kind: "user", userId: memberId, name: "" },
+      new Date(Date.now() - DAY)
+    );
+    const expired = await anon.get(`/shared/view/${expiredToken}`);
+    assert.ok(expired.text.includes("만료된 링크입니다"), "만료 링크가 통과함");
+  });
+
+  it("CT-1206 스태프 알림톡 본문 = docs/ALIMTALK.md 승인 신청본 (글자 일치)", async () => {
+    // 카카오는 승인 템플릿과 본문이 한 글자라도 다르면 발송을 거부한다 — 한쪽만 고치면 여기서 잡는다.
+    const { buildStaffMessage } = await import("../../lib/alimtalk");
+    const doc = readFileSync(path.join(ROOT, "docs", "ALIMTALK.md"), "utf8").replace(/\r\n/g, "\n");
+    const block = (heading: string) => {
+      const at = doc.indexOf(heading);
+      assert.ok(at >= 0, `docs 에 "${heading}" 없음`);
+      const m = doc.slice(at).match(/```\n([\s\S]*?)\n```/);
+      assert.ok(m, `"${heading}" 코드블록 없음`);
+      return m[1];
+    };
+    const sample: Record<string, string> = {
+      회사: "엑스퍼넷",
+      이름: "김민수",
+      공고: "백엔드 개발자",
+      차수: "1차",
+      지원자: "홍*동",
+      일시: "2026. 09. 24. (목) 14:00 ~ 15:00",
+      장소: "서울 강남구 테헤란로 123 5층 회의실",
+      사유: "지원자가 지원을 취소했습니다",
+    };
+    const fill = (t: string) => t.replace(/#\{(.+?)\}/g, (_, k: string) => sample[k] ?? `#{${k}}`);
+    const vars = {
+      orgName: sample.회사,
+      recipientName: sample.이름,
+      jobTitle: sample.공고,
+      roundLabel: sample.차수,
+      candidateName: sample.지원자,
+      slotLabel: sample.일시,
+      place: sample.장소,
+      reason: sample.사유,
+      url: "https://intervia.kr/x",
+    };
+    assert.equal(
+      buildStaffMessage("staff_schedule_confirmed", vars),
+      fill(block("**① 면접 일정 확정**"))
+    );
+    assert.equal(
+      buildStaffMessage("staff_schedule_cancelled", vars),
+      fill(block("**② 면접 일정 취소**"))
+    );
+    assert.equal(
+      buildStaffMessage("staff_phone_verify", vars),
+      fill(block("**③ 알림 받을 번호 확인**"))
+    );
+  });
+});
