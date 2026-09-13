@@ -202,8 +202,8 @@ export default function OrgMembersPage() {
           <h1 className="text-2xl font-bold text-ink">법인 멤버 관리</h1>
         </div>
         <p className="text-sm text-ink-soft mt-1">
-          멤버 권한을 부여·비활성화하거나, 법인 합류 요청을 승인할 수 있습니다. 면접
-          일정 카톡 알림 번호도 대신 등록할 수 있습니다.
+          멤버 권한을 부여·비활성화하거나, 법인 합류 요청을 승인할 수 있습니다.
+          {phoneEnabled && " 면접 일정 카톡 알림 번호도 대신 등록할 수 있습니다."}
         </p>
       </div>
 
