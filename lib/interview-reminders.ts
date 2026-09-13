@@ -26,13 +26,11 @@ import { and, eq, isNull, inArray } from "drizzle-orm";
 import {
   sendMail,
   isSmtpAvailable,
-  wrapEmailCard,
-  escapeHtml,
   buildInterviewReminderEmail,
-  EMAIL_BRAND,
   getOrgEmailBranding,
   brandingAttachments,
 } from "./mailer";
+import { buildScheduleReminderEmail } from "./schedules";
 import { sendCandidateAlimtalk } from "./alimtalk";
 import { formatKstDateTime } from "./utils";
 import { isAiInterviewSuperseded, isScheduleSuperseded } from "./stage-meta";
@@ -112,6 +110,7 @@ export async function sendScheduleReminders(): Promise<{
       candidateStage: candidates.stage,
       candidateOutcome: candidates.outcome,
       jobTitle: jobPostings.title,
+      contactEmail: jobPostings.recruitingContactEmail,
       orgName: organizations.name,
     })
     .from(interviewSchedules)
@@ -148,18 +147,6 @@ export async function sendScheduleReminders(): Promise<{
     if (!(await isSmtpAvailable(r.orgId))) continue; // 설정 후 다음 주기에 재시도
 
     const slotLabel = fmtSlotKst(r.selectedSlot!);
-    const roundLabel = r.round === "round2" ? "2차" : "1차";
-    const locationRow = r.modeOnline
-      ? `<strong>방식</strong> 온라인${
-          r.onlineMeetingUrl
-            ? ` · <a href="${escapeHtml(r.onlineMeetingUrl)}" style="color:${EMAIL_BRAND.primary};word-break:break-all;">미팅 링크</a>`
-            : ""
-        }`
-      : `<strong>방식</strong> 오프라인${
-          r.address
-            ? ` · ${escapeHtml(r.address)}${r.addressDetail ? ` ${escapeHtml(r.addressDetail)}` : ""}`
-            : ""
-        }`;
 
     const update: { candidateReminderSentAt?: string } = {};
     const nowIso = new Date(now).toISOString();
@@ -169,29 +156,22 @@ export async function sendScheduleReminders(): Promise<{
     if (!r.candidateSentAt) {
       if (r.candidateEmail) {
         const branding = await getOrgEmailBranding(r.orgId);
-        const html = wrapEmailCard({
+        const mail = buildScheduleReminderEmail({
+          candidateName: r.candidateName,
+          jobTitle: r.jobTitle,
+          slotLabel,
+          modeOnline: r.modeOnline,
+          address: r.address,
+          addressDetail: r.addressDetail,
+          meetingUrl: r.onlineMeetingUrl,
+          round: r.round,
+          contactEmail: r.contactEmail ?? null,
           branding,
-          innerHtml: `
-            <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(r.candidateName)}님, 내일 면접 안내드립니다.</h1>
-            <p style="color:#475569;line-height:1.6;margin:0 0 16px;">
-              <strong style="color:#0f172a;">${escapeHtml(r.jobTitle)}</strong> ${roundLabel} 면접이
-              <strong style="color:#0f172a;">약 24시간 후</strong> 진행될 예정입니다. 일정 확인 부탁드립니다.
-            </p>
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:14px;color:#0f172a;line-height:1.8;margin:0 0 20px;">
-              <strong>일시</strong> ${slotLabel}<br>
-              ${locationRow}
-            </div>
-            <p style="font-size:12px;color:#64748b;margin:0;">
-              부득이하게 참석이 어려우시면 채용 담당자에게 미리 연락 부탁드립니다.
-            </p>
-          `,
-          footer: "본 메일은 채용 절차 안내를 위해 Intervia 시스템에서 자동 발송되었습니다.",
         });
         try {
           await sendMail({
             to: r.candidateEmail,
-            subject: `[면접 안내] 내일 ${roundLabel} 면접이 예정되어 있습니다 — ${r.jobTitle}`,
-            html,
+            ...mail,
             orgId: r.orgId,
             audience: "candidate",
             attachments: brandingAttachments(branding),

@@ -6,6 +6,7 @@ import {
   EMAIL_BRAND,
   wrapEmailCard,
   emailCtaColors,
+  escapeHtml,
   type OrgEmailBranding,
 } from "./mailer";
 import { formatLocalDate } from "./utils";
@@ -595,6 +596,61 @@ Intervia 채용팀`;
       </p>
     `,
     footer: "본 메일은 Intervia 채용 플랫폼에서 발송되었습니다.",
+  });
+  return { subject, html, text };
+}
+
+/** 확정 면접 D-1 리마인더 (후보자 대상) — cron sendScheduleReminders 가 발송. slotLabel 은 알림톡과 같은 문자열. */
+export function buildScheduleReminderEmail(opts: {
+  candidateName: string;
+  jobTitle: string;
+  slotLabel: string;
+  modeOnline: boolean;
+  address?: string | null;
+  addressDetail?: string | null;
+  meetingUrl?: string | null;
+  round?: ScheduleRound;
+  // 지원자용 메일에 표시할 채용 담당자 문의처.
+  contactEmail?: string | null;
+  branding?: OrgEmailBranding | null;
+}): { subject: string; html: string; text: string } {
+  const { candidateName, jobTitle, slotLabel, modeOnline, meetingUrl } = opts;
+  const rl = roundLabel(opts.round);
+  const fullAddress = fullAddressLine(opts.address, opts.addressDetail);
+  const contactEmail = opts.contactEmail?.trim() || null;
+  const subject = `[면접 안내] 내일 ${rl} 면접이 예정되어 있습니다 — ${jobTitle}`;
+  const text = `${candidateName}님, 내일 면접 안내드립니다.
+
+${jobTitle} ${rl} 면접이 약 24시간 후 진행될 예정입니다. 일정 확인 부탁드립니다.
+
+· 일시: ${slotLabel}
+· 방식: ${modeOnline ? `온라인${meetingUrl ? ` (${meetingUrl})` : ""}` : `오프라인${fullAddress ? ` (${fullAddress})` : ""}`}
+
+부득이하게 참석이 어려우시면 채용 담당자에게 미리 연락 부탁드립니다.${contactEmail ? `\n채용 담당자: ${contactEmail}` : ""}`;
+  const locationRow = modeOnline
+    ? `<strong>방식</strong> 온라인${
+        meetingUrl
+          ? ` · <a href="${escapeHtml(meetingUrl)}" style="color:${EMAIL_BRAND.primary};word-break:break-all;">미팅 링크</a>`
+          : ""
+      }`
+    : `<strong>방식</strong> 오프라인${fullAddress ? ` · ${escapeHtml(fullAddress)}` : ""}`;
+  const html = wrapEmailCard({
+    branding: opts.branding,
+    contactEmail,
+    innerHtml: `
+      <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${escapeHtml(candidateName)}님, 내일 면접 안내드립니다.</h1>
+      <p style="color:#475569;line-height:1.6;margin:0 0 16px;">
+        <strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> ${rl} 면접이
+        <strong style="color:#0f172a;">약 24시간 후</strong> 진행될 예정입니다. 일정 확인 부탁드립니다.
+      </p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:14px;color:#0f172a;line-height:1.8;margin:0 0 20px;">
+        <strong>일시</strong> ${escapeHtml(slotLabel)}<br>
+        ${locationRow}
+      </div>
+      <p style="font-size:12px;color:#64748b;margin:0;">
+        부득이하게 참석이 어려우시면 채용 담당자에게 미리 연락 부탁드립니다.
+      </p>
+    `,
   });
   return { subject, html, text };
 }

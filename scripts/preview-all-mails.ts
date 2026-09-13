@@ -23,6 +23,7 @@ async function main() {
     buildScheduleConfirmedEmail,
     buildMeetingLinkEmail,
     buildMeetingLinkRequestEmail,
+    buildScheduleReminderEmail,
   } = await import("../lib/schedules");
   const { buildInterviewEmail, buildInterviewReminderEmail, buildAppealResponseEmail } =
     await import("../lib/mailer");
@@ -154,6 +155,19 @@ async function main() {
       }),
     },
     {
+      tag: "지원자·대면면접D-1",
+      audience: "candidate",
+      mail: buildScheduleReminderEmail({
+        candidateName,
+        jobTitle,
+        slotLabel: "2026. 07. 30. (목) 10:30 ~ 11:30",
+        modeOnline: false,
+        address,
+        round,
+        contactEmail,
+      }),
+    },
+    {
       tag: "지원자·이의제기결과",
       audience: "candidate",
       mail: buildAppealResponseEmail({
@@ -162,6 +176,7 @@ async function main() {
         status: "resolved",
         response: "제출해 주신 의견을 반영해 평가를 재검토하였습니다.",
         orgName,
+        contactEmail,
       }),
     },
     // ── 면접관·제안자 메일 (담당자 박스 X) ──

@@ -520,6 +520,8 @@ export function wrapEmailCard(opts: {
   // 지원자 대상 메일에 표시할 채용 담당자 문의 연락처(recruitingContactEmail).
   // 있으면 본문 하단에 안내 박스로 렌더. 면접관/시스템 메일에는 넘기지 않는다.
   contactEmail?: string | null;
+  // 안내 박스 문구 — 기본은 "채용 담당자에게 연락". 영문 메일·운영팀 회신 메일만 교체.
+  contactLabel?: string;
 }): string {
   // 하단 Intervia 브랜드 서명(로고+서비스명) — 우측 정렬. 안내 문구(opts.footer)는
   // 로고와 겹쳐 보이는 데다 불필요한 보일러플레이트라 표시하지 않는다
@@ -528,7 +530,7 @@ export function wrapEmailCard(opts: {
   // 채용 담당자 문의 안내 — 지원자 메일에만(contactEmail 이 있을 때). 본문 하단, 버튼 아래.
   const contactBox = opts.contactEmail
     ? `<div style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;">
-        <div style="font-size:12px;color:#64748b;line-height:1.6;margin-bottom:3px;">문의 사항이 있으시면 채용 담당자에게 연락해 주세요.</div>
+        <div style="font-size:12px;color:#64748b;line-height:1.6;margin-bottom:3px;">${escapeHtml(opts.contactLabel ?? "문의 사항이 있으시면 채용 담당자에게 연락해 주세요.")}</div>
         <a href="mailto:${escapeHtml(opts.contactEmail)}" style="font-size:14px;font-weight:600;color:${EMAIL_BRAND.primary};text-decoration:none;word-break:break-all;">${escapeHtml(opts.contactEmail)}</a>
       </div>`
     : "";
@@ -561,10 +563,14 @@ export function buildAppealResponseEmail(opts: {
   orgName?: string | null;
   /** 후보자 면접 언어. 후보자 대면 통지라 분기. 법조 근거(§37의2)는 한국어 정본 유지. 기본 'ko'. */
   lang?: "ko" | "en";
+  // 공고 채용 담당자 이메일 — 이의제기 문의처(§37의2 안내문과 동일). 구버전 공고(null)는 운영 문의처.
+  contactEmail?: string | null;
   branding?: OrgEmailBranding | null;
 }): { subject: string; html: string; text: string } {
   const { candidateName, jobTitle, status, response, orgName } = opts;
   const en = opts.lang === "en";
+  const recruiterContact = opts.contactEmail?.trim() || null;
+  const inquiryContact = recruiterContact ?? APPEAL_CONTACT.email;
   const sender = orgName?.trim() || null;
   const brand = sender ?? "Intervia";
   const resultLabel = en
@@ -595,7 +601,7 @@ Review result: ${resultLabel}
 ${answer}
 
 This is a notice of the result of measures under Article 37-2 of the Personal Information Protection Act (PIPA) of Korea. The Korean-language notice is the official version.
-Contact: ${APPEAL_CONTACT.email}
+Contact: ${inquiryContact}
 
 Thank you.`
     : `안녕하세요 ${candidateName}님,
@@ -608,7 +614,7 @@ AI 평가 결과에 대해 제출해 주신 이의제기의 검토가 완료되�
 ${answer}
 
 본 메일은 개인정보 보호법 제37조의2에 따른 조치 결과 통지입니다.
-추가 문의: ${APPEAL_CONTACT.email}
+추가 문의: ${inquiryContact}
 
 감사합니다.`;
 
@@ -617,6 +623,12 @@ ${answer}
     : `${jobTitle ? `<strong style="color:#0f172a;">${escapeHtml(jobTitle)}</strong> 포지션의 ` : ""}AI 평가 결과에 대해 제출해 주신 이의제기의 검토가 완료되어 결과를 안내드립니다.`;
   const html = wrapEmailCard({
     branding: opts.branding,
+    contactEmail: inquiryContact,
+    contactLabel: en
+      ? "For further inquiries, please contact:"
+      : recruiterContact
+        ? undefined
+        : "추가 문의는 아래 이메일로 연락해 주세요.",
     innerHtml: `
       <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${en ? `Hello ${escapeHtml(candidateName)},` : `${escapeHtml(candidateName)}님, 안녕하세요.`}</h1>
       <p style="color:#475569;line-height:1.6;margin:0 0 20px;">

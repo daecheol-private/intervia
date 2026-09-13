@@ -6,7 +6,7 @@
  */
 import { after } from "next/server";
 import { db } from "@/lib/db";
-import { inquiries } from "@/lib/schema";
+import { inquiries, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
@@ -17,8 +17,27 @@ import {
   type InquiryStatus,
 } from "@/lib/inquiry";
 import { notifyInquiryReply } from "@/lib/inquiry-notify";
+import { getJobContactEmail } from "@/lib/job-contact";
 
 export const runtime = "nodejs";
+
+/** 후보자/지원자 문의가 걸린 공고의 채용 담당자 이메일 — 법인 고객 문의는 null. */
+async function inquiryJobContactEmail(row: {
+  source: string;
+  jobId: number | null;
+  candidateId: number | null;
+}): Promise<string | null> {
+  if (row.source === "org_user") return null;
+  let jobId = row.jobId;
+  if (!jobId && row.candidateId) {
+    const [c] = await db
+      .select({ jobId: candidates.jobId })
+      .from(candidates)
+      .where(eq(candidates.id, row.candidateId));
+    jobId = c?.jobId ?? null;
+  }
+  return jobId ? getJobContactEmail(jobId) : null;
+}
 
 export async function PATCH(
   req: Request,
@@ -44,6 +63,8 @@ export async function PATCH(
       adminNote: inquiries.adminNote,
       contactEmail: inquiries.contactEmail,
       userId: inquiries.userId,
+      candidateId: inquiries.candidateId,
+      jobId: inquiries.jobId,
     })
     .from(inquiries)
     .where(eq(inquiries.id, iid));
@@ -101,15 +122,21 @@ export async function PATCH(
   if (shouldReply) {
     // after() — 응답 반환 후 실행 보장. void fire-and-forget 은 서버리스 suspend 로 유실됨.
     after(() =>
-      notifyInquiryReply({
-        source: row.source,
-        category: row.category,
-        status: next.status ?? row.status,
-        // 이번 PATCH 에 답변이 없으면 기존 답변을 그대로 사용.
-        adminNote: nextNote ?? row.adminNote,
-        contactEmail: row.contactEmail,
-        userId: row.userId,
-      }).catch((e) => console.error("[inquiry] 회신 통지 실패:", e))
+      inquiryJobContactEmail(row)
+        .catch(() => null) // 연락처 조회 실패로 회신 자체가 누락되면 안 됨
+        .then((recruitingContactEmail) =>
+          notifyInquiryReply({
+            source: row.source,
+            category: row.category,
+            status: next.status ?? row.status,
+            // 이번 PATCH 에 답변이 없으면 기존 답변을 그대로 사용.
+            adminNote: nextNote ?? row.adminNote,
+            contactEmail: row.contactEmail,
+            recruitingContactEmail,
+            userId: row.userId,
+          })
+        )
+        .catch((e) => console.error("[inquiry] 회신 통지 실패:", e))
     );
   }
 

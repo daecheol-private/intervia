@@ -139,6 +139,8 @@ export async function notifyInquiryReply(opts: {
   status: InquiryStatus;
   adminNote: string | null;
   contactEmail: string;
+  /** 문의가 걸린 공고의 채용 담당자 이메일 — 후보자/지원자 회신 하단에 안내. */
+  recruitingContactEmail?: string | null;
   /** 문의자 userId (org_user 문의만 존재). 있으면 인앱 알림 발송. */
   userId?: number | null;
 }): Promise<void> {
@@ -202,6 +204,10 @@ export async function notifyInquiryReply(opts: {
   `;
   const html = wrapEmailCard({
     innerHtml,
+    // 운영팀 회신이라 "본 메일에 회신" 과 구분 — 일정·결과 등 채용 절차는 채용 담당자 몫.
+    contactEmail:
+      opts.source === "org_user" ? null : (opts.recruitingContactEmail ?? null),
+    contactLabel: "채용 절차(일정·결과) 관련 문의는 채용 담당자에게 연락해 주세요.",
     footer: `본 메일은 ${SITE_INFO.serviceName} 고객센터 문의 처리 결과로 자동 발송되었습니다.`,
   });
   const text = `${headline}

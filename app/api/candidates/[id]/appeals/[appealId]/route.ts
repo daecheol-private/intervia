@@ -96,7 +96,10 @@ export async function PATCH(
       : null;
   if (finalStatus && prev.status !== finalStatus) {
     const [job] = await db
-      .select({ title: jobPostings.title })
+      .select({
+        title: jobPostings.title,
+        contactEmail: jobPostings.recruitingContactEmail,
+      })
       .from(jobPostings)
       .where(eq(jobPostings.id, candidate.jobId));
     const [org] = candidate.orgId
@@ -118,6 +121,7 @@ export async function PATCH(
       response: next.response ?? prev.response,
       orgName: org?.name ?? null,
       lang: sess?.language === "en" ? "en" : "ko",
+      contactEmail: job?.contactEmail ?? null,
       branding,
     });
     try {
