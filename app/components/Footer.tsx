@@ -37,6 +37,7 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   const legalLinks = [
     { label: "개인정보 처리방침", href: "/privacy" },
     { label: "이용약관", href: "/terms" },
+    { label: "환불정책", href: "/terms#refund-policy" },
     { label: "AI 평가 사전공개", href: "/legal/ai-evaluation-disclosure" },
     { label: "보안·데이터 보호", href: "/security" },
     { label: "지원자 동의 템플릿", href: "/legal/applicant-consent-template" },

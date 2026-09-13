@@ -29,6 +29,31 @@ function secretKey(): string {
   return k;
 }
 
+/** 테스트 키(test_sk_)로 동작 중인지 — 가맹 심사 기간 운영 캡처용. */
+export function isTossTestMode(): boolean {
+  return (process.env.TOSS_SECRET_KEY?.trim() ?? "").startsWith("test_");
+}
+
+/**
+ * 이 법인이 카드 충전을 쓸 수 있는지 — 결제 UI·checkout·confirm 공통 게이트.
+ * 테스트 키가 Vercel(운영·프리뷰)에 들어가면 가짜 결제로 토큰이 무상 지급되므로
+ * TOSS_TEST_ORG_IDS(쉼표 구분 법인 id = 심사용 법인)만 허용한다. 로컬은 전 법인 허용,
+ * 라이브 키로 교체하면 제한이 자동으로 풀린다.
+ */
+export function canChargeByCard(orgId: number | null | undefined): boolean {
+  if (
+    !process.env.TOSS_SECRET_KEY?.trim() ||
+    !process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY?.trim()
+  )
+    return false;
+  if (!isTossTestMode() || !process.env.VERCEL) return true;
+  if (!orgId) return false;
+  return (process.env.TOSS_TEST_ORG_IDS ?? "")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .includes(orgId);
+}
+
 export type TossPaymentResult = {
   paymentKey: string;
   orderId: string;

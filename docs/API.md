@@ -51,7 +51,7 @@
 | PATCH | `/api/orgs/join-requests/[id]` | 🛡️ | `{action: 'approve'|'reject'}` |
 | GET | `/api/orgs/members?orgId?` | 🛡️ | 자기 법인 멤버 (system_admin은 orgId 지정 가능) |
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |
-| POST | `/api/orgs/tokens/checkout` | 🏢 (admin) | 토스 결제 시작 — `{amountKrw}`(허용 패키지만, `CHARGE_PACKAGES`). pending `payment_orders` 생성 후 `{orderId(=IV-{id}), amount, orderName, customerEmail, customerName}` 반환. 토큰 지급은 confirm 에서 |
+| POST | `/api/orgs/tokens/checkout` | 🏢 (admin) | 토스 결제 시작 — `{amountKrw}`(카드 패키지만 — 결제액 VAT 포함 10만원 이하, `isCardChargeAmount`. 10만원 이상은 계좌이체라 400. 카드 충전 게이트 `canChargeByCard` 미통과 403). pending `payment_orders` 생성 후 `{orderId(=IV-{id}), amount, orderName, customerEmail, customerName}` 반환. 토큰 지급은 confirm 에서 |
 | POST | `/api/orgs/tokens/confirm` | 🏢 (admin) | 결제 성공 리다이렉트 후 승인 — `{paymentKey, orderId, amount}`. 금액은 **DB값(권위)** 으로 토스 승인 → `applyChargePayment`(멱등) 로 토큰 지급. 금액 위변조 400 / 미존재·타법인 404 / 승인실패 402(주문 failed) / 이미 paid 면 멱등 성공 |
 | POST | `/api/orgs/coupons/redeem` | 🏢 (admin) | 쿠폰 등록 — `{code}`(16자리, 대시 무관). `redeemCoupon`(원자적·멱등) 으로 토큰 지급. 성공 `{granted, balance, groupName}`. 실패 400 `{error, code}` (`invalid`/`expired`/`group_redeemed`). **법인당 한 그룹 1개**(DB 유니크 강제). 멤버 불가(org_admin only). rate-limit 10회/10분 |
 | GET | `/api/orgs/me/member-guides` | 🔒 | 끈(다시 보지 않기) 페이지 가이드 키 `{seen: string[]}` — **법인담당자·면접관 공통**. 공고/후보 페이지 첫 진입 시 자동 가이드, 끄기 전엔 매번. system_admin 은 가이드 미마운트라 사실상 빈 배열 |

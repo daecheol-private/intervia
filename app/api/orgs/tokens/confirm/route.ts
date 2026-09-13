@@ -5,7 +5,13 @@ import { db } from "@/lib/db";
 import { paymentOrders, organizations } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 import { applyChargePayment } from "@/lib/tokens";
-import { confirmTossPayment, parseTossOrderId, TossError } from "@/lib/toss";
+import {
+  canChargeByCard,
+  confirmTossPayment,
+  isTossTestMode,
+  parseTossOrderId,
+  TossError,
+} from "@/lib/toss";
 import { withVat } from "@/lib/beta";
 import { notifyOps } from "@/lib/error-reporter";
 
@@ -63,6 +69,10 @@ export async function POST(req: Request) {
       "이미 실패한 주문입니다. 충전 페이지에서 다시 결제해 주세요.",
       { status: 400 }
     );
+
+  // pending 승인은 카드 충전 게이트 통과 법인만 — 심사용 테스트 키에서 비허용 법인의 가짜 결제 승인 차단.
+  if (!canChargeByCard(order.orgId))
+    return new Response("카드 결제 준비 중입니다.", { status: 403 });
 
   // pending — 클라이언트가 보낸 금액이 주문 결제액(공급가+VAT)과 다르면 위변조 의심, 즉시 차단.
   if (Number(body.amount) !== withVat(order.amountKrw))
@@ -158,7 +168,7 @@ async function applyAndRespond(
           .from(organizations)
           .where(eq(organizations.id, orgId));
         await notifyOps(
-          `💰 토큰 충전 완료 — ${org?.name ?? `법인#${orgId}`}\n결제 ${withVat(amountKrw).toLocaleString()}원 (공급가 ${amountKrw.toLocaleString()}원) · ${tokens.toLocaleString()} 토큰`
+          `${isTossTestMode() ? "[테스트 결제] " : ""}💰 토큰 충전 완료 — ${org?.name ?? `법인#${orgId}`}\n결제 ${withVat(amountKrw).toLocaleString()}원 (공급가 ${amountKrw.toLocaleString()}원) · ${tokens.toLocaleString()} 토큰`
         );
       } catch {
         /* 매출 알림 실패는 무시 — 충전 자체는 이미 완료·응답됨 */

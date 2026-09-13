@@ -87,12 +87,23 @@ const LIST_CHARGE_BONUS: ReadonlyArray<{
   bonusPct: number;
   popular?: boolean;
 }> = [
+  { krw: 10_000, bonusPct: 0 },
+  { krw: 30_000, bonusPct: 0 },
   { krw: 50_000, bonusPct: 0 },
   { krw: 100_000, bonusPct: 5 },
   { krw: 300_000, bonusPct: 10, popular: true },
   { krw: 500_000, bonusPct: 15 },
   { krw: 1_000_000, bonusPct: 20 },
 ];
+
+/**
+ * 카드 1회 결제 한도(VAT 포함) — 토스페이먼츠 충전업종 심사 요건(2026-09-13).
+ * 결제액이 이를 넘는 패키지는 카드로 팔지 않고 계좌이체(세금계산서)로 받는다.
+ * VAT 별도라 공급가 10만원도 결제 11만원 → 계좌이체.
+ */
+export const CARD_MAX_PAYMENT_KRW = 100_000;
+
+export type ChargeMethod = "card" | "transfer";
 
 /** 실제 충전 패키지 — 베타 활성 시 보너스 배수를 적용한 값. */
 export const CHARGE_PACKAGES: ReadonlyArray<{
@@ -102,11 +113,13 @@ export const CHARGE_PACKAGES: ReadonlyArray<{
   /** 정가 보너스 % (UI 취소선·비교용). */
   listBonusPct: number;
   popular?: boolean;
+  method: ChargeMethod;
 }> = LIST_CHARGE_BONUS.map((p) => ({
   krw: p.krw,
   listBonusPct: p.bonusPct,
   bonusPct: BETA.active ? p.bonusPct * BETA_BONUS_MULTIPLIER : p.bonusPct,
   popular: p.popular,
+  method: withVat(p.krw) <= CARD_MAX_PAYMENT_KRW ? "card" : "transfer",
 }));
 
 /** 충전 보너스가 배수 적용(부스트) 중인지 — UI '2배 혜택' 배너 판단용. */
@@ -129,7 +142,7 @@ export const CHARGE_BONUS_TIERS: ReadonlyArray<{
   { minKrw: 0, bonusPct: 0 },
 ];
 
-/** checkout 허용 금액인지 — 임의 금액 주문 차단용. */
-export function isAllowedChargeAmount(krw: number): boolean {
-  return CHARGE_PACKAGES.some((p) => p.krw === krw);
+/** 카드(토스) checkout 허용 금액인지 — 임의 금액·카드 한도 초과 주문 차단용. */
+export function isCardChargeAmount(krw: number): boolean {
+  return CHARGE_PACKAGES.some((p) => p.krw === krw && p.method === "card");
 }

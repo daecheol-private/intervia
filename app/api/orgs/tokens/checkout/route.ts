@@ -2,9 +2,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { db } from "@/lib/db";
 import { paymentOrders } from "@/lib/schema";
-import { isAllowedChargeAmount, withVat } from "@/lib/beta";
+import { isCardChargeAmount, withVat } from "@/lib/beta";
 import { calcTokensForKrw } from "@/lib/tokens";
-import { makeTossOrderId } from "@/lib/toss";
+import { canChargeByCard, makeTossOrderId } from "@/lib/toss";
 
 export const runtime = "nodejs";
 
@@ -26,6 +26,8 @@ export async function POST(req: Request) {
     return new Response("법인 관리자만 결제할 수 있습니다.", { status: 403 });
   if (!me!.orgId)
     return new Response("소속 법인이 없습니다.", { status: 400 });
+  if (!canChargeByCard(me!.orgId))
+    return new Response("카드 결제 준비 중입니다.", { status: 403 });
 
   let body: { amountKrw?: unknown };
   try {
@@ -34,8 +36,11 @@ export async function POST(req: Request) {
     return new Response("잘못된 요청입니다.", { status: 400 });
   }
   const amountKrw = Number(body.amountKrw);
-  if (!Number.isSafeInteger(amountKrw) || !isAllowedChargeAmount(amountKrw))
-    return new Response("허용되지 않은 충전 금액입니다.", { status: 400 });
+  if (!Number.isSafeInteger(amountKrw) || !isCardChargeAmount(amountKrw))
+    return new Response(
+      "카드로 충전할 수 없는 금액입니다. 10만원 이상은 계좌이체로 신청해 주세요.",
+      { status: 400 }
+    );
 
   const tokens = calcTokensForKrw(amountKrw).total;
 

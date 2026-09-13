@@ -10,6 +10,7 @@ import {
   CHARGE_PACKAGES,
   CHARGE_BONUS_BOOSTED,
   TOKEN_KRW,
+  withVat,
 } from "@/lib/beta";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -138,20 +139,40 @@ export default async function PricingPage() {
       {/* 충전 보너스 */}
       <section className="mt-10">
         <div className="flex items-center justify-between gap-2 border-b border-border-default pb-2">
-          <h2 className="text-base font-semibold text-ink">충전 보너스</h2>
+          <h2 className="text-base font-semibold text-ink">충전 금액</h2>
           {CHARGE_BONUS_BOOSTED && (
             <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-bold text-accent-deep">
               <Sparkles className="w-3 h-3" strokeWidth={2.5} aria-hidden />
-              오픈베타 2배
+              오픈베타 보너스 2배
             </span>
           )}
         </div>
         <p className="text-xs text-ink-soft mt-2">
-          많이 충전할수록 보너스 토큰을 더 드립니다. 결제는 부가가치세(10%)가
-          별도 부과됩니다.
+          결제는 부가가치세(10%)가 별도 부과됩니다. 카드는 1회 결제 10만원(VAT
+          포함) 이하 금액만 충전할 수 있어, 10만원 이상은 계좌이체로 충전하고
+          세금계산서를 발행합니다. 많이 충전할수록 보너스 토큰을 더 드립니다.
         </p>
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {CHARGE_PACKAGES.map((p) => (
+        <h3 className="mt-4 text-xs font-semibold text-ink-soft">카드 결제</h3>
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:max-w-md">
+          {CHARGE_PACKAGES.filter((p) => p.method === "card").map((p) => (
+            <div
+              key={p.krw}
+              className="rounded-xl border border-border-default bg-card p-3 text-center"
+            >
+              <div className="text-sm font-semibold text-ink">
+                {(p.krw / 10000).toLocaleString()}만원
+              </div>
+              <div className="mt-0.5 text-xs text-ink-muted tabular-nums">
+                결제 {withVat(p.krw).toLocaleString()}원
+              </div>
+            </div>
+          ))}
+        </div>
+        <h3 className="mt-4 text-xs font-semibold text-ink-soft">
+          계좌이체 · 세금계산서 발행
+        </h3>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {CHARGE_PACKAGES.filter((p) => p.method === "transfer").map((p) => (
             <div
               key={p.krw}
               className={`relative rounded-xl border p-3 text-center ${
@@ -212,8 +233,13 @@ export default async function PricingPage() {
               aria-hidden
             />
             <span>
-              유상 충전 토큰의 유효기간은 충전일로부터 1년이며, 미사용 잔액의
-              환불은 결제일로부터 1년 이내에 청구할 수 있습니다.
+              유상 충전 토큰의 이용기간과 환불가능기간은 결제시점으로부터 1년
+              이내입니다. 사용하지 않은 충전분은 결제한 수단으로 환불되며,
+              일부라도 사용했다면 이용계약 해지·서비스 종료 시에만 미사용 잔액이
+              환불됩니다.{" "}
+              <Link href="/terms#refund-policy" className="text-primary hover:underline">
+                환불정책
+              </Link>
             </span>
           </li>
           <li className="flex items-start gap-2">
@@ -221,7 +247,7 @@ export default async function PricingPage() {
               className="mt-2 w-1 h-1 rounded-full bg-primary shrink-0"
               aria-hidden
             />
-            <span>토큰은 양도·환금할 수 없습니다.</span>
+            <span>토큰은 다른 법인에 양도하거나 현금으로 교환할 수 없습니다.</span>
           </li>
         </ul>
         {BETA.active && (

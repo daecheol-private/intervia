@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { getBalance, listLedger, getAllPricing } from "@/lib/tokens";
+import { canChargeByCard } from "@/lib/toss";
 
 export const runtime = "nodejs";
 
@@ -38,5 +39,6 @@ export async function GET(req: Request) {
     lowBalance: balance <= 0,
     pricing,
     ledger,
+    cardChargeEnabled: canChargeByCard(targetOrgId),
   });
 }

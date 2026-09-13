@@ -44,6 +44,7 @@ type Data = {
   lowBalance: boolean;
   pricing: Pricing;
   ledger: LedgerRow[];
+  cardChargeEnabled: boolean;
 };
 
 export default function TokensPage() {
@@ -226,7 +227,7 @@ export default function TokensPage() {
       </section>
 
       {/* 충전 — 토스페이먼츠 카드 결제 */}
-      <ChargePanel />
+      <ChargePanel enabled={data.cardChargeEnabled} />
 
       {/* 쿠폰 등록 */}
       <RedeemCoupon onRedeemed={load} />
