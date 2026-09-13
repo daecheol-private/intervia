@@ -8,7 +8,6 @@ import {
 } from "@/lib/schema";
 import { desc, eq, count, sql, and } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
-import { getEmailDomain } from "@/lib/email-domain";
 import { validateRecruitingContactEmail } from "@/lib/job-contact";
 import { jobOrgFilter, requireUser } from "@/lib/tenant";
 import { isValidPin } from "@/lib/job-lock";
@@ -121,12 +120,9 @@ export async function POST(req: Request) {
       : me!.orgId;
 
   // 채용 담당자 이메일 — §37의2 안내문에 공개될 연락처(지원자의 거부·이의제기 채널).
-  // 미입력 시 작성자 이메일로 폴백(빈칸 방지). 회사 도메인 외 이메일은 거부.
-  const expectedDomain =
-    me!.role === "system_admin" ? null : getEmailDomain(me!.email);
+  // 미입력 시 작성자 이메일로 폴백(빈칸 방지). 도메인은 제한하지 않음.
   const contact = validateRecruitingContactEmail(
-    body.recruitingContactEmail || me!.email,
-    expectedDomain
+    body.recruitingContactEmail || me!.email
   );
   if (!contact.ok) return new Response(contact.message, { status: 400 });
 

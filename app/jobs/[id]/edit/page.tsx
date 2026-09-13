@@ -68,6 +68,8 @@ export default function EditJobPage() {
   // 채용 담당자 이메일 기본값/도메인 검증용 — 로그인 사용자 이메일.
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const myDomain = myEmail ? getEmailDomain(myEmail) : null;
+  // 불러온 시점의 저장값 — 이미 다른 도메인으로 저장된 공고를 수정할 때 확인창을 반복하지 않기 위함.
+  const [savedContactEmail, setSavedContactEmail] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -82,6 +84,7 @@ export default function EditJobPage() {
       }
       const j = await fetch(`/api/jobs/${id}`).then((r) => r.json());
       setIsDraft(!!j.isDraft);
+      setSavedContactEmail(j.recruitingContactEmail?.toLowerCase() ?? null);
       setCareer(careerInputsFrom(j.level));
       if (j.sourceUrl) {
         setSource({ url: j.sourceUrl, importedAt: j.sourceImportedAt ?? null });
@@ -209,8 +212,15 @@ export default function EditJobPage() {
       alert("채용 담당자 이메일 형식이 올바르지 않습니다.");
       return;
     }
-    if (myDomain && getEmailDomain(contactEmail) !== myDomain) {
-      alert(`채용 담당자 이메일은 회사 도메인(@${myDomain})만 사용할 수 있습니다.`);
+    // 이미 저장된 주소를 그대로 두는 경우엔 매번 묻지 않는다.
+    if (
+      myDomain &&
+      getEmailDomain(contactEmail) !== myDomain &&
+      contactEmail.toLowerCase() !== savedContactEmail &&
+      !confirm(
+        `채용 담당자 이메일이 회사 도메인(@${myDomain})이 아닙니다.\n이 주소는 지원자에게 공개됩니다. 이대로 저장할까요?`
+      )
+    ) {
       return;
     }
     setSaving(true);
@@ -490,7 +500,8 @@ export default function EditJobPage() {
             {myDomain && (
               <>
                 {" "}
-                회사 도메인 <span className="font-mono">@{myDomain}</span> 만
+                부득이한 경우 회사 도메인(
+                <span className="font-mono">@{myDomain}</span>)이 아닌 주소도
                 사용할 수 있어요.
               </>
             )}

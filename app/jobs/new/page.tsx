@@ -71,7 +71,7 @@ export default function NewJobPage() {
   });
 
   // 채용 담당자 이메일 기본값 = 로그인 사용자 이메일(공고에 공개될 §37의2 연락처).
-  // 같은 회사 도메인으로만 변경 가능 — 도메인은 안내·검증에 사용.
+  // 다른 도메인으로도 변경 가능 — 회사 도메인과 다르면 등록 시 확인만 받는다.
   const [myDomain, setMyDomain] = useState<string | null>(null);
   useEffect(() => {
     void fetch("/api/auth/status")
@@ -315,8 +315,13 @@ export default function NewJobPage() {
       alert("채용 담당자 이메일 형식이 올바르지 않습니다.");
       return;
     }
-    if (myDomain && getEmailDomain(contactEmail) !== myDomain) {
-      alert(`채용 담당자 이메일은 회사 도메인(@${myDomain})만 사용할 수 있습니다.`);
+    if (
+      myDomain &&
+      getEmailDomain(contactEmail) !== myDomain &&
+      !confirm(
+        `채용 담당자 이메일이 회사 도메인(@${myDomain})이 아닙니다.\n이 주소는 지원자에게 공개됩니다. 이대로 등록할까요?`
+      )
+    ) {
       return;
     }
     if (form.password && !/^\d{4}$/.test(form.password)) {
@@ -739,7 +744,7 @@ export default function NewJobPage() {
         <Field
           label="채용 담당자 이메일"
           required
-          hint="지원자가 AI 평가 거부·이의제기 시 연락할 곳입니다. 공고 안내문에 표시되어 지원자에게 공개됩니다. 회사 이메일 도메인만 사용할 수 있어요."
+          hint="지원자가 AI 평가 거부·이의제기 시 연락할 곳입니다. 공고 안내문에 표시되어 지원자에게 공개됩니다."
         >
           <Input
             placeholder="예: recruiting@회사도메인.com"
@@ -748,8 +753,9 @@ export default function NewJobPage() {
           />
           {myDomain && (
             <p className="text-[11px] text-ink-muted mt-1">
-              회사 도메인 <span className="font-mono">@{myDomain}</span> · 기본값은
-              본인 이메일이며 같은 도메인으로 변경할 수 있습니다.
+              기본값은 본인 이메일입니다. 부득이한 경우 회사 도메인(
+              <span className="font-mono">@{myDomain}</span>)이 아닌 주소로도 변경할 수
+              있습니다.
             </p>
           )}
         </Field>

@@ -3,7 +3,6 @@ import { after } from "next/server";
 import { jobPostings, candidates, organizations, tokenLedger } from "@/lib/schema";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
-import { getEmailDomain } from "@/lib/email-domain";
 import { validateRecruitingContactEmail } from "@/lib/job-contact";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
@@ -134,12 +133,9 @@ export async function PUT(
   };
 
   // 채용 담당자 이메일 — 미입력 시 기존 값 또는 작성자 이메일로 폴백(빈칸 방지).
-  // 회사 도메인 외 이메일은 거부. 구버전(null) 공고도 이 경로로 첫 저장 시 채워진다.
-  const expectedDomain =
-    me!.role === "system_admin" ? null : getEmailDomain(me!.email);
+  // 도메인은 제한하지 않음. 구버전(null) 공고도 이 경로로 첫 저장 시 채워진다.
   const contact = validateRecruitingContactEmail(
-    body.recruitingContactEmail || existing.recruitingContactEmail || me!.email,
-    expectedDomain
+    body.recruitingContactEmail || existing.recruitingContactEmail || me!.email
   );
   if (!contact.ok) return new Response(contact.message, { status: 400 });
   update.recruitingContactEmail = contact.email;
