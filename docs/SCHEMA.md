@@ -777,7 +777,7 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 
 ## notify_phones
 
-면접 일정 알림톡 수신 번호 등록부 (2026-09-14, 마이그레이션 0064 — 순수 추가). 가입 면접관(`user_id`) 또는 일정 공유받을 사람(비회원, `org_id`+`email`)의 휴대폰 번호. 누가 입력하든(계정 설정·가입 폼·법인 관리자·일정 제안자) `pending` 으로 저장되고 그 번호로 "번호 확인" 알림톡이 간다. 본인이 `/verify/phone/[token]` 에서 확인해야 `verified` — 발송(`lib/staff-alimtalk.ts`)은 verified 만 대상. "받지 않기"·삭제는 행 자체를 지운다. 코드: `lib/notify-phone.ts`, 설계: [ALIMTALK.md](ALIMTALK.md) "면접 일정 알림" 절.
+면접 일정 알림톡 수신 번호 등록부 (2026-09-14, 마이그레이션 0064 — 순수 추가). 가입 면접관(`user_id`) 또는 일정 공유받을 사람(비회원, `org_id`+`email`)의 휴대폰 번호. 누가 입력하든(계정 설정·가입 폼·법인 관리자·일정 제안자) `pending` 으로 저장되고 그 번호로 "번호 확인" 알림톡이 간다. 본인이 `/verify/phone/[token]` 에서 확인해야 `verified` — 발송(`lib/staff-alimtalk.ts`)은 verified 만 대상. "받지 않기"·삭제는 행 자체를 지운다. 본인이 알림을 끄면 `paused_at` 만 기록(번호 유지, 발송 제외). 코드: `lib/notify-phone.ts`, 설계: [ALIMTALK.md](ALIMTALK.md) "면접 일정 알림" 절.
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
@@ -793,6 +793,7 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 | verify_sent_at | TEXT NULL | 확인 알림톡 발송 성공 시각 |
 | requested_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 번호를 입력한 사람 (본인 / 관리자 / 일정 제안자) |
 | verified_at / verified_ip / verified_ua | TEXT NULL | 수신 동의 기록 |
+| paused_at | TEXT NULL | 본인이 계정 설정에서 알림을 끈 시각 (2026-09-14, 0065 — 순수 추가). NULL = 받는 중. 발송은 verified + NULL 만. 번호가 바뀌면 NULL 로 초기화 |
 | created_at / updated_at | TEXT NOT NULL | |
 
 인덱스: `verify_token` UNIQUE, `(user_id)` UNIQUE, `(org_id, email)` UNIQUE — NULL 은 서로 달라 가입자·비회원 행이 공존한다.

@@ -49,11 +49,11 @@
 | POST | `/api/orgs/join-requests` | 🌐 | 비로그인 가입 + 합류 요청. user.status=pending |
 | GET | `/api/orgs/join-requests?orgId=&status=` | 🛡️ | 자기 법인 합류 요청 목록 |
 | PATCH | `/api/orgs/join-requests/[id]` | 🛡️ | `{action: 'approve'|'reject'}` |
-| GET | `/api/orgs/members?orgId?` | 🛡️ | 자기 법인 멤버 (system_admin은 orgId 지정 가능). 각 멤버에 `notifyPhone: {phoneMasked, status} \| null`, 최상위 `notifyPhoneEnabled`(면접 일정 알림톡 스위치 — false 면 화면이 번호 버튼·배지를 숨김) |
+| GET | `/api/orgs/members?orgId?` | 🛡️ | 자기 법인 멤버 (system_admin은 orgId 지정 가능). 각 멤버에 `notifyPhone: {phoneMasked, status, paused} \| null`, 최상위 `notifyPhoneEnabled`(면접 일정 알림톡 스위치 — false 면 화면이 번호 버튼·배지를 숨김) |
 | PUT | `/api/orgs/members/[id]/notify-phone` | 🛡️ | 멤버의 면접 일정 알림톡 번호 대신 등록 `{phone}` → pending + 그 번호로 확인 알림톡. 알림은 번호 주인이 확인해야 켜짐. 비활성 멤버 409, 타 법인 404, 스위치 꺼짐(템플릿 코드 미설정) 409. rate-limit 20회/10분 |
 | DELETE | `/api/orgs/members/[id]/notify-phone` | 🛡️ | 멤버 알림톡 번호 삭제 |
-| GET | `/api/account/notify-phone` | 🔒 | 내 알림톡 번호 `{enabled, notifyPhone: {phoneMasked, status, verifySentAt} \| null}` — `enabled` false(템플릿 코드 미설정)면 계정 설정 패널을 숨김 |
-| PUT | `/api/account/notify-phone` | 🔒 | `{phone}` 등록·변경 또는 `{resend:true}` 확인 알림톡 재발송 → `{sent, reason, notifyPhone}`. 형식 오류 400, 스위치 꺼짐 409. rate-limit 5회/10분 |
+| GET | `/api/account/notify-phone` | 🔒 | 내 알림톡 번호 `{enabled, notifyPhone: {phoneMasked, status, paused, verifySentAt} \| null}` — `enabled` false(템플릿 코드 미설정)면 계정 설정 "내 정보"의 휴대폰 행을 숨김 |
+| PUT | `/api/account/notify-phone` | 🔒 | `{phone}` 등록·변경 또는 `{resend:true}` 확인 알림톡 재발송 → `{sent, reason, notifyPhone}`. 형식 오류 400, 스위치 꺼짐 409. rate-limit 5회/10분. `{paused:boolean}` 확인된 번호의 알림 끄기·켜기 — 번호 유지·카톡 발송 없음·rate-limit 미적용, 확인 전 번호면 400 |
 | DELETE | `/api/account/notify-phone` | 🔒 | 내 알림톡 번호 삭제 (즉시 파기) |
 | POST | `/api/verify-phone/[token]` | 🌐 | 번호 확인 페이지(`/verify/phone/[token]`) 버튼 — `{action:"confirm"}` → verified(시각·IP·UA 기록, 재호출 `alreadyVerified`) / `{action:"decline"}` → 번호 삭제. 없음 404 `not_found`, 기한 경과 410 `expired`. rate-limit IP 10회/분 |
 | GET | `/api/orgs/tokens?orgId?` | 🔒 | 자기 법인 잔액 + ledger + 현재 단가 |

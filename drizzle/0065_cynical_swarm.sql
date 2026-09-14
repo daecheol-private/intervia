@@ -1,0 +1,1 @@
+ALTER TABLE `notify_phones` ADD `paused_at` text;

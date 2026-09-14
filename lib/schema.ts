@@ -210,6 +210,8 @@ export const notifyPhones = sqliteTable(
     verifiedAt: text("verified_at"),
     verifiedIp: text("verified_ip"),
     verifiedUa: text("verified_ua"),
+    // 본인이 알림을 끈 시각 — 번호·확인 기록은 두고 발송 대상에서만 뺀다. NULL = 받는 중.
+    pausedAt: text("paused_at"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(CURRENT_TIMESTAMP)`),

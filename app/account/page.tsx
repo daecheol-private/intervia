@@ -10,7 +10,7 @@ import {
 import LogoutButton from "@/app/logout-button";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { formatLocalDateTime } from "@/lib/utils";
-import { NotifyPhonePanel } from "./NotifyPhonePanel";
+import { NotifyPhoneRow } from "./NotifyPhoneRow";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -99,6 +99,7 @@ export default function AccountPage() {
         <div className="space-y-2 text-sm">
           <Row label="이름" value={user.name} />
           <Row label="이메일" value={user.email} />
+          <NotifyPhoneRow />
           {org?.name && <Row label="법인명" value={org.name} />}
           {org?.emailDomain && (
             <Row label="이메일 도메인" value={org.emailDomain} />
@@ -191,7 +192,6 @@ export default function AccountPage() {
 
       <TwoFactorPanel />
       <SessionsPanel />
-      <NotifyPhonePanel />
       <DigestEmailPanel />
       <MarketingEmailPanel />
 

@@ -229,8 +229,8 @@ CT-1107·1108 도 같은 구조다. 2자리 연도는 **생년월일 라벨 뒤 
 
 | ID | 시나리오 | 예상 결과 |
 |---|---|---|
-| CT-1201 | 멤버 `PUT /api/account/notify-phone` — 형식 오류 / 정상 | 400 / 200 `sent:false`(env 무력화)·`status:pending`·`phoneMasked:"010-****-5678"`. 응답에 원번호 없음, DB 에는 숫자만 저장 |
-| CT-1202 | `GET /verify/phone/[token]` → `POST /api/verify-phone/[token] {confirm}` 2회 → 같은 번호 재저장 → 없는 토큰 | GET 은 상태 불변(pending, 링크 미리 열기 대비) → verified·`verified_at` 기록 → `alreadyVerified` → verified 유지 → 404 |
+| CT-1201 | 멤버 `PUT /api/account/notify-phone` — 형식 오류 / 정상 / 확인 전 `{paused:true}` | 400 / 200 `sent:false`(env 무력화)·`status:pending`·`phoneMasked:"010-****-5678"`. 응답에 원번호 없음, DB 에는 숫자만 저장 / 400 |
+| CT-1202 | `GET /verify/phone/[token]` → `POST /api/verify-phone/[token] {confirm}` 2회 → 같은 번호 재저장 → `{paused:true}` → `{paused:false}` → 없는 토큰 | GET 은 상태 불변(pending, 링크 미리 열기 대비) → verified·`verified_at` 기록 → `alreadyVerified` → verified 유지 → `paused:true`·verified 유지·`findVerifiedPhones` 발송 대상에서 제외 → `paused:false`·다시 포함 → 404 |
 | CT-1203 | 관리자 대신 등록 `PUT /api/orgs/members/[id]/notify-phone` — 일반 멤버 / 타 법인 관리자 / 같은 법인 관리자 → `decline` | 403 / 404 / 200 번호가 바뀌면 다시 pending, 멤버 목록에 가린 번호 → decline 시 행 삭제 |
 | CT-1204 | 수동 확정 `schedule-manual` 에 `notifyUserIds:[멤버, 없는 id]` + 비회원 공유 수신자 `phone` (형식 오류 먼저) | 400 → 200. `notify_user_ids=[멤버]`(공고 면접관만), 공유 스냅샷에 번호 없음, `notify_phones` 에 비회원 pending, 프리필 GET round1 `notifyUserIds`·`phoneByEmail` / round2 `null` |
 | CT-1205 | `/shared/view/[token]` — 가입자 / 리포트 공유 비회원 / 공유 안 한 비회원 / 위조 서명 / 만료 | `/candidates/[id]` 리다이렉트 / `/shared/sr_…` 리다이렉트 / 200 일정 정보만(실명 없음) / "링크를 찾을 수 없습니다" / "만료된 링크입니다" |

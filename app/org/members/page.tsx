@@ -16,7 +16,7 @@ type Member = {
   // 대기 중인 합류 요청 id (있으면 이 행에서 바로 승인/거절). null 이면 일반 멤버.
   joinRequestId: number | null;
   // 면접 일정 카톡 알림 번호 — 가린 번호 + 확인 상태만. null = 미등록.
-  notifyPhone: { phoneMasked: string; status: "pending" | "verified" } | null;
+  notifyPhone: { phoneMasked: string; status: "pending" | "verified"; paused: boolean } | null;
 };
 
 // 같은 이메일 도메인을 쓰는 다른 법인 — "같은 도메인 새 법인 등록" 알림의 확인 대상.
@@ -118,7 +118,7 @@ export default function OrgMembersPage() {
   // 알림은 번호 주인이 카톡에서 "번호 확인"을 눌러야 켜진다(서버가 확인 카톡 발송).
   const editPhone = async (m: Member) => {
     const current = m.notifyPhone
-      ? `현재: ${m.notifyPhone.phoneMasked} (${m.notifyPhone.status === "verified" ? "알림 받는 중" : "확인 대기"})\n\n`
+      ? `현재: ${m.notifyPhone.phoneMasked} (${phoneStateLabel(m.notifyPhone)})\n\n`
       : "";
     const input = prompt(
       `${m.name || m.email} 님의 면접 일정 카톡 알림 번호\n\n${current}번호를 입력하면 그 번호로 확인 카톡이 가고, 본인이 확인해야 알림이 켜집니다.${m.notifyPhone ? "\n비워 두고 확인을 누르면 등록된 번호를 삭제합니다." : ""}`,
@@ -555,12 +555,21 @@ function PhoneBadge({ phone }: { phone: Member["notifyPhone"] }) {
   return (
     <div
       className={`mt-0.5 text-[11px] ${
-        phone.status === "verified" ? "text-primary-deep" : "text-warning"
+        phone.status !== "verified"
+          ? "text-warning"
+          : phone.paused
+            ? "text-ink-muted"
+            : "text-primary-deep"
       }`}
     >
-      카톡 {phone.phoneMasked} · {phone.status === "verified" ? "알림 받는 중" : "확인 대기"}
+      카톡 {phone.phoneMasked} · {phoneStateLabel(phone)}
     </div>
   );
+}
+
+function phoneStateLabel(phone: NonNullable<Member["notifyPhone"]>) {
+  if (phone.status !== "verified") return "확인 대기";
+  return phone.paused ? "알림 꺼 둠(본인 설정)" : "알림 받는 중";
 }
 
 // 합류 요청 대기 행의 메일 소유 확인 안내 — 사회공학 방어(사칭 가입 조기 차단).

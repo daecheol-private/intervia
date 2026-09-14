@@ -650,16 +650,18 @@ function NotifyInterviewerPicker({
                 {showKakao && (
                   <span
                     className={`ml-auto shrink-0 text-[10px] ${
-                      phone?.status === "verified"
+                      phone?.status === "verified" && !phone.paused
                         ? "text-primary-deep font-medium"
                         : "text-ink-muted"
                     }`}
                   >
-                    {phone?.status === "verified"
-                      ? "카톡 받는 중"
-                      : phone
+                    {!phone
+                      ? "카톡 미등록"
+                      : phone.status !== "verified"
                         ? "카톡 확인 대기"
-                        : "카톡 미등록"}
+                        : phone.paused
+                          ? "카톡 꺼 둠"
+                          : "카톡 받는 중"}
                   </span>
                 )}
               </label>

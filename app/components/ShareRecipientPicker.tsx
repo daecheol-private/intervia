@@ -18,7 +18,7 @@ export type ShareRecipient = {
 };
 
 /** 번호 확인 상태 — 화면에는 가린 번호만 온다. */
-export type PhoneStatus = { phoneMasked: string; status: "pending" | "verified" };
+export type PhoneStatus = { phoneMasked: string; status: "pending" | "verified"; paused: boolean };
 
 /** 서버(lib/schedule-share.ts)와 동일한 상한 — 초과 시 API 가 400 을 준다. */
 const MAX_RECIPIENTS = 10;

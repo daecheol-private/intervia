@@ -6,9 +6,10 @@
  * 일정 알림(lib/staff-alimtalk.ts)은 verified 번호에만 나간다 — 오타 번호로 지원자 일정이
  * 새는 것을 막고, 확인 시각·IP·UA 를 수신 동의 기록으로 남긴다.
  * "받지 않기"·삭제는 행 자체를 지운다(보관할 이유가 없는 연락처).
+ * 본인이 알림을 끄면(paused_at) 번호·확인 기록은 두고 발송 대상에서만 뺀다 — 다시 켤 때 재확인 없이 복귀.
  */
 import { randomBytes } from "node:crypto";
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 import { db } from "./db";
 import { notifyPhones, organizations, type NotifyPhone } from "./schema";
 import { isStaffAlimtalkEnabled, normalizeMobile, sendStaffAlimtalk } from "./alimtalk";
@@ -30,6 +31,8 @@ export type PhoneOwner = { userId: number } | { orgId: number; email: string };
 export type PhoneStatus = {
   phoneMasked: string;
   status: "pending" | "verified";
+  /** 본인이 알림을 꺼 둠 — verified 여도 발송하지 않는다. */
+  paused: boolean;
   verifySentAt: string | null;
 };
 
@@ -44,6 +47,7 @@ function toStatus(row: NotifyPhone): PhoneStatus {
   return {
     phoneMasked: maskPhone(row.phone),
     status: row.status,
+    paused: row.pausedAt != null,
     verifySentAt: row.verifySentAt,
   };
 }
@@ -90,7 +94,7 @@ export async function getPhoneStatusesForEmails(
   return out;
 }
 
-/** 발송용 — 본인이 확인(verified)한 번호만 돌려준다. */
+/** 발송용 — 본인이 확인(verified)했고 알림을 꺼 두지 않은 번호만 돌려준다. */
 export async function findVerifiedPhones(opts: {
   userIds: number[];
   orgId: number | null;
@@ -105,7 +109,8 @@ export async function findVerifiedPhones(opts: {
       .where(
         and(
           inArray(notifyPhones.userId, opts.userIds),
-          eq(notifyPhones.status, "verified")
+          eq(notifyPhones.status, "verified"),
+          isNull(notifyPhones.pausedAt)
         )
       );
     for (const r of rows) if (r.userId != null) byUser.set(r.userId, r.phone);
@@ -119,7 +124,8 @@ export async function findVerifiedPhones(opts: {
         and(
           eq(notifyPhones.orgId, opts.orgId),
           inArray(notifyPhones.email, emails),
-          eq(notifyPhones.status, "verified")
+          eq(notifyPhones.status, "verified"),
+          isNull(notifyPhones.pausedAt)
         )
       );
     for (const r of rows) if (r.email) byEmail.set(r.email, r.phone);
@@ -178,6 +184,7 @@ export async function requestPhoneVerification(opts: {
     verifiedAt: null,
     verifiedIp: null,
     verifiedUa: null,
+    pausedAt: null,
   };
   let rowId: number;
   try {
@@ -234,6 +241,16 @@ export async function removePhone(owner: PhoneOwner): Promise<boolean> {
   const rows = await db
     .delete(notifyPhones)
     .where(ownerWhere(owner))
+    .returning({ id: notifyPhones.id });
+  return rows.length > 0;
+}
+
+/** 확인된 번호의 알림 끄기·켜기 — 번호·확인 기록은 두고 발송 대상에서만 뺀다. 확인 전 번호는 대상이 아니다. */
+export async function setPhonePaused(owner: PhoneOwner, paused: boolean): Promise<boolean> {
+  const rows = await db
+    .update(notifyPhones)
+    .set({ pausedAt: paused ? new Date().toISOString() : null })
+    .where(and(ownerWhere(owner), eq(notifyPhones.status, "verified")))
     .returning({ id: notifyPhones.id });
   return rows.length > 0;
 }

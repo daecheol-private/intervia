@@ -1449,6 +1449,10 @@ describe("CT-12 면접 일정 알림톡", () => {
     );
     assert.equal(stored?.phone, "01012345678");
     assert.equal(stored?.status, "pending");
+
+    // 확인 전 번호는 끄고 켤 대상이 아니다 (애초에 발송 대상이 아님)
+    const pausePending = await memberA.put("/api/account/notify-phone", { paused: true });
+    assert.equal(pausePending.status, 400, pausePending.text);
   });
 
   it("CT-1202 번호 확인 — 페이지 열람만으론 미확인, 확인 버튼(confirm)으로 verified", async () => {
@@ -1487,6 +1491,22 @@ describe("CT-12 면접 일정 알림톡", () => {
     // 같은 번호를 다시 저장해도 확인 상태가 풀리지 않는다
     const same = await memberA.put("/api/account/notify-phone", { phone: "01012345678" });
     assert.equal(field<{ status: string }>(same.body, "notifyPhone")?.status, "verified");
+
+    // 본인이 알림을 끄면 번호·확인 기록은 남고 발송 대상에서만 빠진다 — 켜면 재확인 없이 복귀.
+    const { findVerifiedPhones } = await import("../../lib/notify-phone");
+    const memberId = await userId(MEMBER_EMAIL);
+    const off = await memberA.put("/api/account/notify-phone", { paused: true });
+    assert.equal(off.status, 200, off.text);
+    const offPhone = field<{ status: string; paused: boolean }>(off.body, "notifyPhone");
+    assert.equal(offPhone?.status, "verified");
+    assert.equal(offPhone?.paused, true);
+    const offTargets = await findVerifiedPhones({ userIds: [memberId], orgId: null, emails: [] });
+    assert.equal(offTargets.byUser.has(memberId), false, "알림을 끈 번호가 발송 대상에 잡힘");
+
+    const on = await memberA.put("/api/account/notify-phone", { paused: false });
+    assert.equal(field<{ paused: boolean }>(on.body, "notifyPhone")?.paused, false);
+    const onTargets = await findVerifiedPhones({ userIds: [memberId], orgId: null, emails: [] });
+    assert.equal(onTargets.byUser.get(memberId), "01012345678");
 
     const bogus = await anon.post(`/api/verify-phone/np_does_not_exist`, { action: "confirm" });
     assert.equal(bogus.status, 404, bogus.text);
