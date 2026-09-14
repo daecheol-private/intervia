@@ -9,18 +9,48 @@
 **링크를 따라가 main 의 실제 패키지를 삭제**한다. 2026-07-21 에는 `@libsql/client` 와
 `@google/genai` 가 통째로 사라져 빌드가 불가능해졌다(같은 사고 두 번째).
 
-**안전한 절차** — 순서를 지킬 것:
+**링크는 루트 `node_modules` junction 하나가 아니다** (2026-09-14 확인). Next 빌드 폴더 안에도
+main 의 실제 패키지를 가리키는 junction 이 생긴다:
 
-```powershell
-# 1) junction 먼저 끊는다 (rmdir 은 링크만 제거, 대상은 안 건드림)
-node -e "const{rmdirSync,lstatSync}=require('fs');const p='.claude/worktrees/<이름>/node_modules';if(lstatSync(p).isSymbolicLink())rmdirSync(p)"
-# 2) main 무결성 확인 — 여기서 깨졌으면 이미 사고다
-node -e "for(const p of ['@libsql/client','@google/genai','next'])require.resolve(p)"
-# 3) 그 다음에야 디렉토리 삭제
-rm -rf .claude/worktrees/<이름>
-git worktree prune
-# 4) 삭제 후 무결성 재확인 + 빈 패키지 스캔
+- 필수 테스트(`npm run test:critical`) → `.next-test/dev/node_modules/@libsql/client-<hash>` → `D:\intervia\interviewer\node_modules\@libsql\client`
+- 검증용 dev 서버를 `NEXT_TEST_DIST_DIR=.next-<이름>` 으로 띄우면 `.next-<이름>/dev/node_modules/*` 도 같은 형태
+- 기본 `.next/` 에도 같은 형태가 있다 (`.next/dev/node_modules/…`, `.next/node_modules/…`)
+
+그래서 `node_modules` 하나만 끊고 지우면 빌드 폴더 속 링크를 따라가 같은 사고가 난다.
+경로를 외우지 말고 **`find` 로 전수 확인**한다.
+
+**안전한 절차** — 순서를 지킬 것. 셸은 **Git Bash** (PowerShell 의 `find` 는 텍스트 검색용 `find.exe` 라 못 쓴다):
+
+```bash
+# 0) 워크트리에서 띄운 dev/테스트 서버를 먼저 내린다 (preview_stop 등 — 떠 있으면 폴더가 잠긴다)
+
+# 1) 워크트리 루트(.claude/worktrees/<이름>)에서: 링크 전수 확인 → 링크만 끊기 → 다시 find 로 0개 확인
+#    Git Bash 의 find 는 링크를 따라가지 않는다. 디렉토리 링크(junction)는 fs.rmdirSync,
+#    그게 안 되는 파일 링크는 unlinkSync — 둘 다 링크만 지우고 대상은 안 건드린다
+find . -type l
+find . -type l -print0 | xargs -0 -r node -e "const fs=require('fs');for(const p of process.argv.slice(1)){if(!fs.lstatSync(p).isSymbolicLink())throw new Error('not a link: '+p);try{fs.rmdirSync(p)}catch{fs.unlinkSync(p)}console.log('unlinked',p)}"
+find . -type l | wc -l   # 0 이어야 다음 단계로
+
+# 2) 세션 cwd 를 main 폴더(D:\intervia\interviewer)로 돌린다 — cwd 가 워크트리 안이면
+#    Windows 가 폴더를 잠가 부분 삭제가 난다. 데스크톱 앱 세션이 쓰던 워크트리는
+#    ExitWorktree(action: "remove") 가 "이 세션이 소유자가 아님"으로 거부하므로
+#    ExitWorktree(action: "keep") 으로 main 에 돌아온 뒤 아래를 실행한다
+
+# 3) main 무결성 확인 — 여기서 깨졌으면 이미 사고다
+node -e "for(const p of ['@libsql/client','@google/genai','next'])console.log(p,require.resolve(p))"
+
+# 4) 그 다음에야 삭제
+git worktree remove .claude/worktrees/<이름>
+git branch -d <브랜치>
+
+# 5) 삭제 후 재확인: 3) 반복 + package.json 없는 패키지 스캔 → 0 이어야 한다
+#    (. 으로 시작하는 폴더는 npm 이 설치 중 쓰는 임시 폴더 잔여물이라 제외 — 예: @napi-rs/.canvas-win32-x64-msvc-…)
+node -e "for(const p of ['@libsql/client','@google/genai','next'])console.log(p,require.resolve(p))"
+node -e "const fs=require('fs'),path=require('path');const bad=[];for(const d of fs.readdirSync('node_modules')){if(d.startsWith('.'))continue;const ps=d.startsWith('@')?fs.readdirSync(path.join('node_modules',d)).filter(s=>!s.startsWith('.')).map(s=>d+'/'+s):[d];for(const p of ps)if(!fs.existsSync(path.join('node_modules',p,'package.json')))bad.push(p)}console.log('package.json 없는 패키지:',bad.length,bad.join(' '))"
 ```
+
+`git worktree remove` 가 실패해 `rm -rf .claude/worktrees/<이름>` + `git worktree prune` 으로 넘어갈 때도
+`find .claude/worktrees/<이름> -type l` 이 0 인지 먼저 다시 확인한다 — 링크가 하나라도 남아 있으면 같은 사고다.
 
 복구는 `npm install` 이지만 **dev 서버(3003)를 먼저 내려야 한다** — 실행 중이면 Windows
 파일잠금으로 exit 0 인데 패키지가 누락된다(§ dev 서버 중 npm install 금지).
