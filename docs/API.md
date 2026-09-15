@@ -207,8 +207,9 @@
 | GET | `/api/admin/pricing` | 🔒 | 단가 조회 (전 로그인 사용자) |
 | PATCH | `/api/admin/pricing` | 👑 | `{job_post?, resume_upload?, interview?, interview_question_gen?}` 0 이상 정수 |
 | POST | `/api/admin/orgs/[id]/grant-tokens` | 👑 | `{delta, memo?}` 수동 충전/조정 (admin_adjust ledger) |
-| GET | `/api/admin/orgs/[id]/payments` | 👑 | 법인 결제(충전) 주문 내역 — 환불 대상 식별용 |
-| POST | `/api/admin/payments/[id]/cancel` | 👑 🔐 | 결제 취소(전액 환불) — 토스 결제취소 API + 지급 토큰 회수(`reverseChargePayment`, 멱등). `paid` 만 가능(paid→cancelled 조건부 claim), `{reason(5자+)}`. 토스 실패 시 paid 복구, 이미 취소면 멱등 성공 |
+| GET | `/api/admin/orgs/[id]/payments` | 👑 | 법인 결제(충전) 주문 내역 — 환불·계좌이체 입금확인 대상 식별용. 주문별 `provider`·`depositNotifiedAt`·`confirmedAt`·`confirmedBy`, 최상위 `orgBizNo`(세금계산서 발행용) |
+| POST | `/api/admin/payments/[id]/cancel` | 👑 🔐 | 결제 취소(전액 환불) — 토스 결제취소 API + 지급 토큰 회수(`reverseChargePayment`, 멱등). `paid` 만 가능(paid→cancelled 조건부 claim), `{reason(5자+)}`. 토스 실패 시 paid 복구, 이미 취소면 멱등 성공. **계좌이체(`provider=transfer`)**: 토스 호출 없음 — pending 은 주문만 취소, 입금확인된 주문은 토큰 회수 + `manualRefund:true`(금액은 운영자가 직접 송금). 회수 여부는 `confirmed_at` 기준 |
+| POST | `/api/admin/payments/[id]/confirm-transfer` | 👑 🔐 | 계좌이체 입금확인(Slack 버튼 예비 경로) — `confirmTransferDeposit`(pending→paid 조건부 + 원장 멱등, 신청 때 안내한 토큰 지급) → `{granted, tokens, balance}`. 첫 지급이면 Slack 완료 게시 + 신청자 인앱 알림·충전 완료 메일. 계좌이체 주문 아님 404, 취소된 주문 409 |
 | GET | `/api/admin/coupons` | 👑 | 쿠폰 그룹 목록 + 사용 통계 `{groups:[{id,name,tokenAmount,validFrom,validUntil,status,total,used}]}` |
 | POST | `/api/admin/coupons` | 👑 🔐 | 쿠폰 그룹+코드 일괄 생성 — `{name, tokenAmount, count, validFrom?, validUntil?}`(날짜 `YYYY-MM-DD`). 토큰가치 발행이라 step-up. 상한 count≤1만·tokenAmount≤100만. crypto 난수 16자리, code UNIQUE 충돌 재생성 |
 | GET | `/api/admin/coupons/[id]` | 👑 | 그룹 상세 + 코드 목록(`{display(4-4-4-4), status, redeemedOrgName, redeemedAt}`) |
