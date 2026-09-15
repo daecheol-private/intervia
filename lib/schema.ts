@@ -1426,6 +1426,10 @@ export const paymentOrders = sqliteTable("payment_orders", {
   // 계좌이체 입금확인 시각(ISO)·확인자("slack:{memberId}" / "admin:{userId}"). 카드 결제는 비워 둔다.
   confirmedAt: text("confirmed_at"),
   confirmedBy: text("confirmed_by"),
+  // 계좌이체 세금계산서 발행 체크 — 운영자가 홈택스에서 발행한 뒤 표시(ISO·체크한 system_admin id).
+  // 카드 결제는 카드 매출전표가 증빙이라 대상 아님.
+  taxInvoiceIssuedAt: text("tax_invoice_issued_at"),
+  taxInvoiceIssuedBy: integer("tax_invoice_issued_by"),
   createdByUserId: integer("created_by_user_id").references(() => users.id, {
     onDelete: "set null",
   }),

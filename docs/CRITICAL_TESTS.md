@@ -243,10 +243,11 @@ CT-1107·1108 도 같은 구조다. 2자리 연도는 **생년월일 라벨 뒤 
 
 | ID | 시나리오 | 예상 결과 |
 |---|---|---|
-| CT-1301 | `POST /api/orgs/tokens/transfer` — 멤버 / 카드 금액(5만) / 30만원 → `GET` 목록(A사·B사) | 403 / 400 / 200 `status:pending`·`depositorName:"IV{id}"`·`payKrw:330000`·`tokens`=`calcTokensForKrw`, DB `provider=transfer`, A사 목록에 계좌 `1002-6424-0903`·주문 포함, B사 목록엔 없음 |
+| CT-1301 | `POST /api/orgs/tokens/transfer` — 멤버 / 카드 금액(6만) / 30만원 → `GET` 목록(A사·B사) | 403 / 400 / 200 `status:pending`·`depositorName:"IV{id}"`·`payKrw:330000`·`tokens`=`calcTokensForKrw`, DB `provider=transfer`, A사 목록에 계좌 `1002-6424-0903`·주문 포함, B사 목록엔 없음 |
 | CT-1302 | `POST /api/orgs/tokens/transfer/[id]/notify` — 타 법인 / 첫 요청 / 즉시 재요청 | 404 / 200 `sent:true`·`deposit_notified_at` 기록 / `sent:false`(10분 쿨다운), 상태 pending 유지 |
 | CT-1303 | `POST /api/slack/interactions` — 틀린 서명 / 10분 전 서명 / 권한자 아닌 Slack 사용자 / 권한자 / 권한자 재클릭 | 401 / 401 / 200 미지급(pending·charge 원장 0건) / 200 `paid`·`confirmed_by=slack:{id}`·charge 원장 1건(delta = 안내한 토큰) / 원장 여전히 1건 |
 | CT-1304 | 충전 완료 주문에 확인 요청 / 법인 관리자가 `POST /api/admin/payments/[id]/confirm-transfer` | 409 / 403 |
+| CT-1305 | 법인 관리자 `GET /api/admin/payments`·`PATCH …/tax-invoice` → 입금 전 계좌이체 신청 후 시스템 관리자 체크 → `view=invoice` → 입금확인 건 체크 → `view=paid` → 해제 | 403·403 → 409 → 입금확인 건 미발행(`taxInvoiceIssuedAt:null`)으로 포함·입금 전 건 제외·`invoicePendingAll ≥ 1` → 200·`tax_invoice_issued_at/by` 기록 → 결제 완료 목록에 포함 → 200·`tax_invoice_issued_at` NULL |
 
 ## 범위 외 (이 스위트가 다루지 않는 것)
 

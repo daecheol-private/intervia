@@ -470,6 +470,13 @@
       "when": 1789486014276,
       "tag": "0066_dizzy_meggan",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1789489738138,
+      "tag": "0067_strong_zaran",
+      "breakpoints": true
     }
   ]
 }

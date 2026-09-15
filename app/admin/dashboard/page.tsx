@@ -9,8 +9,9 @@ import {
   tokenWallets,
   screeningJobs,
   auditLogs,
+  paymentOrders,
 } from "@/lib/schema";
-import { and, count, desc, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { formatLocalDate, formatLocalDateTime } from "@/lib/utils";
 import { redirect } from "next/navigation";
@@ -125,6 +126,20 @@ export default async function AdminDashboardPage() {
   // 6) 총 법인 수 (기준선)
   const [totalOrgsAgg] = await db.select({ c: count() }).from(organizations);
 
+  // 7) 계좌이체 세금계산서 미발행 — 입금확인됐는데 홈택스 발행 체크를 안 한 건
+  const [invoiceTodoAgg] = await db
+    .select({ c: count() })
+    .from(paymentOrders)
+    .where(
+      and(
+        eq(paymentOrders.provider, "transfer"),
+        eq(paymentOrders.status, "paid"),
+        isNotNull(paymentOrders.confirmedAt),
+        isNull(paymentOrders.taxInvoiceIssuedAt)
+      )
+    );
+  const invoiceTodo = Number(invoiceTodoAgg?.c ?? 0);
+
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
@@ -135,7 +150,14 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <AlertCard
+          label="세금계산서 미발행"
+          value={invoiceTodo}
+          tone={invoiceTodo > 0 ? "amber" : "slate"}
+          sub={invoiceTodo > 0 ? "계좌이체 입금확인 건" : "없음"}
+          href="/admin/payments?view=invoice"
+        />
         <AlertCard
           label="전체 법인"
           value={Number(totalOrgsAgg?.c ?? 0)}

@@ -1799,7 +1799,7 @@ describe("CT-13 계좌이체 충전", () => {
 
   it("CT-1301 신청 — 멤버 403 · 카드 금액 400 · 30만원 → pending 주문(입금자명·입금액·계좌), 타 법인에 안 보임", async () => {
     assert.equal((await memberA.post("/api/orgs/tokens/transfer", { amountKrw: 300_000 })).status, 403);
-    assert.equal((await adminA.post("/api/orgs/tokens/transfer", { amountKrw: 50_000 })).status, 400);
+    assert.equal((await adminA.post("/api/orgs/tokens/transfer", { amountKrw: 60_000 })).status, 400);
 
     const r = await adminA.post("/api/orgs/tokens/transfer", { amountKrw: 300_000 });
     assert.equal(r.status, 200, r.text);
@@ -1879,5 +1879,55 @@ describe("CT-13 계좌이체 충전", () => {
   it("CT-1304 충전 완료 뒤 — 확인 요청 409 · 관리자 입금확인 경로는 시스템 관리자 전용(법인 관리자 403)", async () => {
     assert.equal((await adminA.post(`/api/orgs/tokens/transfer/${ct13.orderId}/notify`)).status, 409);
     assert.equal((await adminA.post(`/api/admin/payments/${ct13.orderId}/confirm-transfer`)).status, 403);
+  });
+
+  it("CT-1305 통합 결제 목록·세금계산서 체크 — 법인 관리자 403 · 입금확인 전 409 · 미발행 목록 · 체크/해제", async () => {
+    assert.equal((await adminA.get("/api/admin/payments")).status, 403);
+    assert.equal(
+      (await adminA.patch(`/api/admin/payments/${ct13.orderId}/tax-invoice`, { issued: true })).status,
+      403
+    );
+
+    // 입금확인 전(pending) 계좌이체는 발행 대상이 아니다
+    const pending = await adminA.post("/api/orgs/tokens/transfer", { amountKrw: 100_000 });
+    assert.equal(pending.status, 200, pending.text);
+    const pendingId = field<{ id: number }>(pending.body, "order")!.id;
+    assert.equal(
+      (await sysadmin.patch(`/api/admin/payments/${pendingId}/tax-invoice`, { issued: true })).status,
+      409
+    );
+
+    const todo = await sysadmin.get("/api/admin/payments?view=invoice");
+    assert.equal(todo.status, 200, todo.text);
+    const listed = field<Array<{ id: number; taxInvoiceIssuedAt: string | null }>>(todo.body, "orders") ?? [];
+    assert.equal(
+      listed.find((o) => o.id === ct13.orderId)?.taxInvoiceIssuedAt,
+      null,
+      "입금확인된 계좌이체가 미발행 목록에 없음"
+    );
+    assert.ok(!listed.some((o) => o.id === pendingId), "입금 전 주문이 발행 대상에 섞임");
+    assert.ok((field<{ invoicePendingAll: number }>(todo.body, "totals")?.invoicePendingAll ?? 0) >= 1);
+
+    const on = await sysadmin.patch(`/api/admin/payments/${ct13.orderId}/tax-invoice`, { issued: true });
+    assert.equal(on.status, 200, on.text);
+    const issued = await row<{ tax_invoice_issued_at: string | null; tax_invoice_issued_by: number | null }>(
+      `SELECT tax_invoice_issued_at, tax_invoice_issued_by FROM payment_orders WHERE id = ?`,
+      [ct13.orderId]
+    );
+    assert.ok(issued?.tax_invoice_issued_at, "발행 시각 미기록");
+    assert.ok(issued?.tax_invoice_issued_by, "발행 체크한 사람 미기록");
+
+    const paid = await sysadmin.get("/api/admin/payments");
+    assert.ok(
+      field<Array<{ id: number }>>(paid.body, "orders")?.some((o) => o.id === ct13.orderId),
+      "결제 완료 목록에 입금확인 건이 없음"
+    );
+
+    const off = await sysadmin.patch(`/api/admin/payments/${ct13.orderId}/tax-invoice`, { issued: false });
+    assert.equal(off.status, 200, off.text);
+    assert.equal(
+      (await row<{ v: string | null }>(`SELECT tax_invoice_issued_at AS v FROM payment_orders WHERE id = ?`, [ct13.orderId]))?.v,
+      null
+    );
   });
 });

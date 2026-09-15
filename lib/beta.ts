@@ -87,9 +87,10 @@ const LIST_CHARGE_BONUS: ReadonlyArray<{
   bonusPct: number;
   popular?: boolean;
 }> = [
-  { krw: 10_000, bonusPct: 0 },
+  // 카드(결제액 VAT 포함 10만원 이하) — 3만/6만/9만 → 결제 33,000/66,000/99,000원 (2026-09-16 사용자 결정)
   { krw: 30_000, bonusPct: 0 },
-  { krw: 50_000, bonusPct: 0 },
+  { krw: 60_000, bonusPct: 0 },
+  { krw: 90_000, bonusPct: 0 },
   { krw: 100_000, bonusPct: 5 },
   { krw: 300_000, bonusPct: 10, popular: true },
   { krw: 500_000, bonusPct: 15 },

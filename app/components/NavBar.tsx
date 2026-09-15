@@ -91,6 +91,7 @@ function buildSections(role: Role): NavSection[] {
       label: "관리",
       items: [
         { href: "/admin/orgs", label: "법인", Icon: Building2 },
+        { href: "/admin/payments", label: "결제", Icon: Coins },
         { href: "/admin/users", label: "사용자", Icon: Users2 },
         { href: "/admin/candidates", label: "후보자", Icon: Users },
         { href: "/admin/announcements", label: "공지", Icon: Megaphone },
@@ -206,6 +207,7 @@ export function NavBar({
                     Icon={Shield}
                     items={[
                       { href: "/admin/orgs", label: "법인", Icon: Building2 },
+                      { href: "/admin/payments", label: "결제", Icon: Coins },
                       { href: "/admin/users", label: "사용자", Icon: Users2 },
                       { href: "/admin/candidates", label: "후보자", Icon: Users },
                       { href: "/admin/announcements", label: "공지", Icon: Megaphone },

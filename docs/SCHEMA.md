@@ -689,6 +689,7 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 | id / org_id / amount_krw / tokens / status / provider / provider_ref / created_by_user_id / created_at | … | status: pending/paid/failed/cancelled. provider: toss / transfer. provider_ref = 토스 paymentKey (계좌이체는 NULL) |
 | deposit_notified_at | TEXT NULL | 계좌이체 — 고객이 입금 후 "확인 요청"을 누른 시각(ISO). 운영자 Slack 재알림은 10분 간격 |
 | confirmed_at / confirmed_by | TEXT NULL | 계좌이체 입금확인 시각(ISO)·확인자(`slack:{memberId}` / `admin:{userId}`). `confirmed_at` 이 있으면 토큰이 지급된 주문 — 취소 시 토큰 회수 판단 기준 |
+| tax_invoice_issued_at / tax_invoice_issued_by | TEXT NULL / INTEGER NULL | 계좌이체 세금계산서 발행 체크(2026-09-16, 0067 — 순수 추가). 발행은 홈택스에서, 여기엔 운영자 체크 시각(ISO)·체크한 system_admin id. 카드 결제는 매출전표가 증빙이라 대상 아님. `/admin/payments` |
 
 ## coupon_groups
 
