@@ -25,7 +25,11 @@ export async function GET(
     return new Response("orgId 형식 오류", { status: 400 });
 
   const [org] = await db
-    .select({ id: organizations.id, name: organizations.name })
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      bizNo: organizations.bizRegistrationNo,
+    })
     .from(organizations)
     .where(eq(organizations.id, orgId));
   if (!org) return new Response("법인 없음", { status: 404 });
@@ -38,6 +42,9 @@ export async function GET(
       status: paymentOrders.status,
       provider: paymentOrders.provider,
       providerRef: paymentOrders.providerRef,
+      depositNotifiedAt: paymentOrders.depositNotifiedAt,
+      confirmedAt: paymentOrders.confirmedAt,
+      confirmedBy: paymentOrders.confirmedBy,
       createdAt: paymentOrders.createdAt,
       byName: users.name,
       byEmail: users.email,

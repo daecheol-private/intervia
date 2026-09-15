@@ -146,3 +146,8 @@ export const CHARGE_BONUS_TIERS: ReadonlyArray<{
 export function isCardChargeAmount(krw: number): boolean {
   return CHARGE_PACKAGES.some((p) => p.krw === krw && p.method === "card");
 }
+
+/** 계좌이체 충전 신청 허용 금액인지 — 카드 한도를 넘는 패키지만. */
+export function isTransferChargeAmount(krw: number): boolean {
+  return CHARGE_PACKAGES.some((p) => p.krw === krw && p.method === "transfer");
+}

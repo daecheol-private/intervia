@@ -48,7 +48,13 @@ export class Client {
   async req(
     method: string,
     path: string,
-    opts: { json?: unknown; form?: FormData; headers?: Record<string, string> } = {}
+    opts: {
+      json?: unknown;
+      form?: FormData;
+      /** 원문 그대로 보낼 본문 — 서명 검증처럼 바이트가 정확해야 하는 요청용 (Content-Type 은 headers 로) */
+      raw?: string;
+      headers?: Record<string, string>;
+    } = {}
   ): Promise<Res> {
     const headers: Record<string, string> = {
       Origin: this.base,
@@ -62,6 +68,8 @@ export class Client {
       body = JSON.stringify(opts.json);
     } else if (opts.form) {
       body = opts.form; // fetch 가 multipart boundary 포함 Content-Type 자동 세팅
+    } else if (opts.raw !== undefined) {
+      body = opts.raw;
     }
     const doFetch = () =>
       fetch(this.base + path, {
@@ -105,6 +113,9 @@ export class Client {
   }
   postForm(path: string, form: FormData, headers?: Record<string, string>) {
     return this.req("POST", path, { form, headers });
+  }
+  postRaw(path: string, raw: string, headers: Record<string, string>) {
+    return this.req("POST", path, { raw, headers });
   }
   put(path: string, json?: unknown) {
     return this.req("PUT", path, { json });

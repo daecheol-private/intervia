@@ -11,7 +11,10 @@ import {
   PASSWORD,
   ROOT,
   RUN_TAG,
+  SLACK_APPROVER,
+  SLACK_SIGNING_SECRET,
 } from "./env";
+import { createHmac } from "node:crypto";
 import {
   APPLY_TOKEN_A,
   applyMigrations,
@@ -1758,5 +1761,123 @@ describe("CT-12 면접 일정 알림톡", () => {
     assert.equal(field(prefill.body, "alimtalkEnabled"), true, prefill.text.slice(0, 200));
     const status = await anon.get("/api/auth/status");
     assert.equal(field(status.body, "staffAlimtalkEnabled"), true, status.text.slice(0, 200));
+  });
+});
+
+// ─── CT-13. 계좌이체 충전 ────────────────────────────────────────────────────
+
+describe("CT-13 계좌이체 충전", () => {
+  const ct13 = { orderId: 0, tokens: 0 };
+
+  // Slack 이 보내는 형식 그대로 — form-urlencoded 의 payload=JSON + v0 서명.
+  function slackClick(opts: { orderId: number; user: string; secret?: string; ageSec?: number }) {
+    const payload = JSON.stringify({
+      type: "block_actions",
+      user: { id: opts.user },
+      // Slack 주소가 아니면 서버가 응답 전송을 건너뛴다(외부 호출 0)
+      response_url: "http://127.0.0.1:9/not-slack",
+      actions: [{ action_id: "transfer_confirm", value: String(opts.orderId) }],
+    });
+    const raw = `payload=${encodeURIComponent(payload)}`;
+    const ts = String(Math.floor(Date.now() / 1000) - (opts.ageSec ?? 0));
+    const sig =
+      "v0=" +
+      createHmac("sha256", opts.secret ?? SLACK_SIGNING_SECRET)
+        .update(`v0:${ts}:${raw}`)
+        .digest("hex");
+    return anon.postRaw("/api/slack/interactions", raw, {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "X-Slack-Request-Timestamp": ts,
+      "X-Slack-Signature": sig,
+    });
+  }
+
+  const chargeRowsFor = async (orderId: number) =>
+    (await ledgerRows(ids.orgA, "charge")).filter(
+      (l) => l.ref_type === "payment_order" && Number(l.ref_id) === orderId
+    );
+
+  it("CT-1301 신청 — 멤버 403 · 카드 금액 400 · 30만원 → pending 주문(입금자명·입금액·계좌), 타 법인에 안 보임", async () => {
+    assert.equal((await memberA.post("/api/orgs/tokens/transfer", { amountKrw: 300_000 })).status, 403);
+    assert.equal((await adminA.post("/api/orgs/tokens/transfer", { amountKrw: 50_000 })).status, 400);
+
+    const r = await adminA.post("/api/orgs/tokens/transfer", { amountKrw: 300_000 });
+    assert.equal(r.status, 200, r.text);
+    const order = field<{
+      id: number;
+      status: string;
+      depositorName: string;
+      payKrw: number;
+      tokens: number;
+    }>(r.body, "order");
+    assert.ok(order, r.text);
+    assert.equal(order.status, "pending");
+    assert.equal(order.depositorName, `IV${order.id}`);
+    assert.equal(order.payKrw, 330_000);
+    assert.equal(order.tokens, tokens.calcTokensForKrw(300_000).total);
+    ct13.orderId = order.id;
+    ct13.tokens = order.tokens;
+
+    const stored = await row<{ provider: string }>(
+      `SELECT provider FROM payment_orders WHERE id = ?`,
+      [order.id]
+    );
+    assert.equal(stored?.provider, "transfer");
+
+    const list = await adminA.get("/api/orgs/tokens/transfer");
+    assert.equal(field<{ number: string }>(list.body, "account")?.number, "1002-6424-0903");
+    assert.ok(field<Array<{ id: number }>>(list.body, "orders")?.some((o) => o.id === order.id));
+    const other = await adminB.get("/api/orgs/tokens/transfer");
+    assert.equal(other.status, 200, other.text);
+    assert.ok(!field<Array<{ id: number }>>(other.body, "orders")?.some((o) => o.id === order.id));
+  });
+
+  it("CT-1302 확인 요청 — 타 법인 404 · 첫 요청 알림 · 10분 안 재요청은 알림 없음", async () => {
+    assert.equal((await adminB.post(`/api/orgs/tokens/transfer/${ct13.orderId}/notify`)).status, 404);
+    const first = await adminA.post(`/api/orgs/tokens/transfer/${ct13.orderId}/notify`);
+    assert.equal(first.status, 200, first.text);
+    assert.equal(field(first.body, "sent"), true);
+    const again = await adminA.post(`/api/orgs/tokens/transfer/${ct13.orderId}/notify`);
+    assert.equal(field(again.body, "sent"), false);
+    const stored = await row<{ deposit_notified_at: string | null; status: string }>(
+      `SELECT deposit_notified_at, status FROM payment_orders WHERE id = ?`,
+      [ct13.orderId]
+    );
+    assert.ok(stored?.deposit_notified_at, "확인 요청 시각 미기록");
+    assert.equal(stored?.status, "pending");
+  });
+
+  it("CT-1303 Slack 입금확인 — 서명 위조·오래된 요청 401 · 권한자 아님 미지급 · 권한자 지급 · 재클릭 이중지급 없음", async () => {
+    assert.equal((await slackClick({ orderId: ct13.orderId, user: SLACK_APPROVER, secret: "wrong" })).status, 401);
+    assert.equal((await slackClick({ orderId: ct13.orderId, user: SLACK_APPROVER, ageSec: 600 })).status, 401);
+
+    const stranger = await slackClick({ orderId: ct13.orderId, user: "USTRANGER" });
+    assert.equal(stranger.status, 200, stranger.text);
+    assert.equal(
+      (await row<{ status: string }>(`SELECT status FROM payment_orders WHERE id = ?`, [ct13.orderId]))?.status,
+      "pending"
+    );
+    assert.equal((await chargeRowsFor(ct13.orderId)).length, 0, "권한 없는 사람 클릭에 지급됨");
+
+    const ok = await slackClick({ orderId: ct13.orderId, user: SLACK_APPROVER });
+    assert.equal(ok.status, 200, ok.text);
+    const paid = await row<{ status: string; confirmed_by: string | null; confirmed_at: string | null }>(
+      `SELECT status, confirmed_by, confirmed_at FROM payment_orders WHERE id = ?`,
+      [ct13.orderId]
+    );
+    assert.equal(paid?.status, "paid");
+    assert.equal(paid?.confirmed_by, `slack:${SLACK_APPROVER}`);
+    assert.ok(paid?.confirmed_at);
+    const charged = await chargeRowsFor(ct13.orderId);
+    assert.equal(charged.length, 1);
+    assert.equal(Number(charged[0].delta), ct13.tokens, "안내한 토큰과 지급 토큰이 다름");
+
+    await slackClick({ orderId: ct13.orderId, user: SLACK_APPROVER });
+    assert.equal((await chargeRowsFor(ct13.orderId)).length, 1, "재클릭에 이중 지급");
+  });
+
+  it("CT-1304 충전 완료 뒤 — 확인 요청 409 · 관리자 입금확인 경로는 시스템 관리자 전용(법인 관리자 403)", async () => {
+    assert.equal((await adminA.post(`/api/orgs/tokens/transfer/${ct13.orderId}/notify`)).status, 409);
+    assert.equal((await adminA.post(`/api/admin/payments/${ct13.orderId}/confirm-transfer`)).status, 403);
   });
 });

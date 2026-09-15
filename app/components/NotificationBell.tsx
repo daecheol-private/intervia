@@ -27,7 +27,8 @@ type NotificationType =
   | "announcement"
   | "new_inquiry"
   | "inquiry_replied"
-  | "admin_promotion";
+  | "admin_promotion"
+  | "token_charged";
 
 type Notification = {
   id: number;
@@ -49,6 +50,7 @@ const ICON_MAP: Record<NotificationType, LucideIcon> = {
   new_inquiry: LifeBuoy,
   inquiry_replied: Reply,
   admin_promotion: ShieldCheck,
+  token_charged: Coins,
 };
 
 const POLL_MS = 60_000; // 60초마다 폴링

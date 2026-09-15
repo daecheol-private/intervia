@@ -682,11 +682,13 @@ unsubscribed 행은 발송 대상에서 제외되며 삭제하지 않고 보존 
 
 ## payment_orders
 
-결제 시스템 스텁. PR-6 시점에는 row 생성 흐름 없음.
+토큰 충전 주문 — 카드(토스, `provider="toss"`) + 계좌이체(`provider="transfer"`, 2026-09-16 0066). `amount_krw` 는 공급가(실결제·입금액 = +VAT 10%), `tokens` 는 주문 시점에 계산한 지급 토큰(계좌이체는 입금확인 때 이 값을 그대로 지급 — `applyChargePayment` 의 `promisedTokens`). 지급은 `token_ledger(reason=charge, ref_type=payment_order, ref_id=id)` 멱등. 계좌이체 흐름: `lib/bank-transfer.ts`.
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
-| id / org_id / amount_krw / tokens / status / provider / provider_ref / created_by_user_id / created_at | … | status: pending/paid/failed/cancelled |
+| id / org_id / amount_krw / tokens / status / provider / provider_ref / created_by_user_id / created_at | … | status: pending/paid/failed/cancelled. provider: toss / transfer. provider_ref = 토스 paymentKey (계좌이체는 NULL) |
+| deposit_notified_at | TEXT NULL | 계좌이체 — 고객이 입금 후 "확인 요청"을 누른 시각(ISO). 운영자 Slack 재알림은 10분 간격 |
+| confirmed_at / confirmed_by | TEXT NULL | 계좌이체 입금확인 시각(ISO)·확인자(`slack:{memberId}` / `admin:{userId}`). `confirmed_at` 이 있으면 토큰이 지급된 주문 — 취소 시 토큰 회수 판단 기준 |
 
 ## coupon_groups
 

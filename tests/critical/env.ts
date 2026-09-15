@@ -23,6 +23,9 @@ export const TEST_DB_FILE = path.join(TESTDB_DIR, "critical.db");
 export const TEST_DB_URL = "file:.testdb/critical.db";
 export const INTERNAL_SECRET = "ct-internal-secret";
 export const CRON_SECRET = "ct-cron-secret";
+/** Slack 버튼 콜백 서명 키·처리 권한자 — 테스트가 서명을 직접 만들어 /api/slack/interactions 를 호출한다. */
+export const SLACK_SIGNING_SECRET = "ct-slack-signing-secret";
+export const SLACK_APPROVER = "UCTAPPROVER";
 /** 이 실행에서 만든 업로드 파일 식별용 프리픽스 (종료 시 정리) */
 export const RUN_TAG = `ct-${Date.now().toString(36)}`;
 
@@ -73,6 +76,10 @@ export const SERVER_ENV: NodeJS.ProcessEnv = {
   ALIGO_SENDER_KEY: "",
   ALIGO_SENDER: "",
   ALIMTALK_LOCAL_ENABLED: "",
+  // Slack → 실제 채널로 나가지 않게 웹훅을 비운다. 버튼 콜백 서명 키·처리 권한자는 테스트 고정값.
+  SLACK_WEBHOOK_URL: "",
+  SLACK_SIGNING_SECRET,
+  SLACK_APPROVER_USER_IDS: SLACK_APPROVER,
   // LLM → 존재하지 않는 자격증명 파일 경로: 호출 시 즉시 실패 (실호출·과금 0)
   GOOGLE_APPLICATION_CREDENTIALS: path.join(TESTDB_DIR, "no-creds.json"),
   GOOGLE_APPLICATION_CREDENTIALS_JSON: "",

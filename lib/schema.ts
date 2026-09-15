@@ -1421,6 +1421,11 @@ export const paymentOrders = sqliteTable("payment_orders", {
     .default("pending"),
   provider: text("provider"),
   providerRef: text("provider_ref"),
+  // 계좌이체(provider="transfer") — 고객이 입금 후 "확인 요청"을 누른 시각(ISO).
+  depositNotifiedAt: text("deposit_notified_at"),
+  // 계좌이체 입금확인 시각(ISO)·확인자("slack:{memberId}" / "admin:{userId}"). 카드 결제는 비워 둔다.
+  confirmedAt: text("confirmed_at"),
+  confirmedBy: text("confirmed_by"),
   createdByUserId: integer("created_by_user_id").references(() => users.id, {
     onDelete: "set null",
   }),
@@ -1531,6 +1536,7 @@ export const notifications = sqliteTable("notifications", {
       "inquiry_replied",
       "draft_reminder",
       "admin_promotion",
+      "token_charged",
     ],
   }).notNull(),
   title: text("title").notNull(),

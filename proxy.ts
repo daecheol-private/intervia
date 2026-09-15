@@ -16,6 +16,8 @@ const CSRF_EXEMPT_API_PREFIXES = [
   "/api/cron/",
   "/api/uploads/",
   "/api/schedule/",
+  // Slack 버튼 콜백 — Slack 서버가 호출(Origin 없음). SLACK_SIGNING_SECRET 서명으로 검증.
+  "/api/slack/",
 ];
 
 // state-changing 메서드. GET/HEAD/OPTIONS 는 CSRF 검증 X.
@@ -131,7 +133,9 @@ export function proxy(req: NextRequest) {
     pathname.startsWith("/api/invites/") ||
     pathname.startsWith("/api/schedule/") ||
     // 면접 일정 알림톡 번호 확인 — 계정 없는 수신자도 누른다(토큰 자체가 인증).
-    pathname.startsWith("/api/verify-phone/")
+    pathname.startsWith("/api/verify-phone/") ||
+    // Slack 버튼 콜백 — 세션 없음. 라우트가 Slack 서명으로 인증한다.
+    pathname.startsWith("/api/slack/")
   )
     return NextResponse.next();
 

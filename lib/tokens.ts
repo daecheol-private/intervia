@@ -134,6 +134,8 @@ export async function applyChargePayment(args: {
   paymentOrderId: number;
   amountKrw: number;
   userId?: number | null;
+  /** 신청 때 안내한 지급 토큰(payment_orders.tokens). 입금까지 며칠 걸리는 계좌이체는 그사이 보너스가 바뀌어도 안내한 값을 지킨다. */
+  promisedTokens?: number;
 }): Promise<{
   alreadyApplied: boolean;
   base: number;
@@ -155,7 +157,12 @@ export async function applyChargePayment(args: {
     const b = await getBalance(args.orgId);
     return { alreadyApplied: true, base: 0, bonus: 0, balance: b };
   }
-  const { base, bonus, total, bonusRatio } = calcTokensForKrw(args.amountKrw);
+  const calc = calcTokensForKrw(args.amountKrw);
+  const total = args.promisedTokens ?? calc.total;
+  const base = args.promisedTokens == null ? calc.base : Math.min(calc.base, total);
+  const bonus = total - base;
+  const bonusRatio =
+    args.promisedTokens == null ? calc.bonusRatio : base > 0 ? bonus / base : 0;
   if (total <= 0) {
     const b = await getBalance(args.orgId);
     return { alreadyApplied: false, base: 0, bonus: 0, balance: b };

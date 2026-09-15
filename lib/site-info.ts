@@ -28,6 +28,13 @@ export const COMPANY_INFO = {
   email: "admin.intervia@gmail.com",
 } as const;
 
+/** 계좌이체 충전 입금 계좌 — 카드 1회 결제 한도(10만원)를 넘는 충전용. 사업자(아임인) 명의. */
+export const BANK_TRANSFER_ACCOUNT = {
+  bank: "토스뱅크",
+  number: "1002-6424-0903",
+  holder: "아임인",
+} as const;
+
 export const DPO_INFO = {
   name: "박은숙",
   title: "대표 (개인정보보호책임자 겸직)",

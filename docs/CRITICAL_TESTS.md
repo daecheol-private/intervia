@@ -237,6 +237,17 @@ CT-1107·1108 도 같은 구조다. 2자리 연도는 **생년월일 라벨 뒤 
 | CT-1206 | `buildStaffMessage` 3종 vs ALIMTALK.md 승인 신청 코드블록(샘플 변수 치환) | 글자까지 일치 — 한쪽만 고치면 실패(카카오는 불일치 본문 발송을 거부) |
 | CT-1207 | 기능 스위치 — 테스트 프로세스에서 번호 확인 템플릿 env 를 지운 채 `requestPhoneVerification`·`parseSharePhoneInputs` 호출 → 켜진 서버의 화면 플래그 4곳 조회 | `ok:false`·등록부에 행 없음·번호 칸 입력 무시(`list:[]`, 형식 오류도 400 안 냄) → `enabled`(계정 설정)·`notifyPhoneEnabled`(멤버 목록)·`alimtalkEnabled`(일정 프리필)·`staffAlimtalkEnabled`(`/api/auth/status`) 모두 true |
 
+### CT-13. 계좌이체 충전 🏢⚙️
+
+2026-09-16 신설. 카드 한도(10만원)를 넘는 충전 — 신청 → 확인 요청 → Slack [입금확인] 버튼 → 토큰 지급. Slack 웹훅은 `SLACK_WEBHOOK_URL=""` 로 무력화돼 실발송이 없고, 버튼 콜백은 테스트가 `SLACK_SIGNING_SECRET` 고정값으로 서명을 직접 만들어 호출한다(`response_url` 이 Slack 주소가 아니라 서버가 응답 전송을 건너뜀). 처리 권한자는 `SLACK_APPROVER_USER_IDS` 고정값. 설계: `lib/bank-transfer.ts` 머리말.
+
+| ID | 시나리오 | 예상 결과 |
+|---|---|---|
+| CT-1301 | `POST /api/orgs/tokens/transfer` — 멤버 / 카드 금액(5만) / 30만원 → `GET` 목록(A사·B사) | 403 / 400 / 200 `status:pending`·`depositorName:"IV{id}"`·`payKrw:330000`·`tokens`=`calcTokensForKrw`, DB `provider=transfer`, A사 목록에 계좌 `1002-6424-0903`·주문 포함, B사 목록엔 없음 |
+| CT-1302 | `POST /api/orgs/tokens/transfer/[id]/notify` — 타 법인 / 첫 요청 / 즉시 재요청 | 404 / 200 `sent:true`·`deposit_notified_at` 기록 / `sent:false`(10분 쿨다운), 상태 pending 유지 |
+| CT-1303 | `POST /api/slack/interactions` — 틀린 서명 / 10분 전 서명 / 권한자 아닌 Slack 사용자 / 권한자 / 권한자 재클릭 | 401 / 401 / 200 미지급(pending·charge 원장 0건) / 200 `paid`·`confirmed_by=slack:{id}`·charge 원장 1건(delta = 안내한 토큰) / 원장 여전히 1건 |
+| CT-1304 | 충전 완료 주문에 확인 요청 / 법인 관리자가 `POST /api/admin/payments/[id]/confirm-transfer` | 409 / 403 |
+
 ## 범위 외 (이 스위트가 다루지 않는 것)
 
 - **LLM 응답 품질/성공 경로** — 비결정적 + 비용. 경계(과금·상태 오염 방지)만 검증. 실 LLM 스모크가 필요하면 수동으로 1건 업로드→평가 확인.

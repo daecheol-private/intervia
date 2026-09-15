@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CreditCard, Landmark, Loader2, Sparkles } from "lucide-react";
+import { Check, Copy, CreditCard, Landmark, Loader2, Sparkles } from "lucide-react";
 import {
   CHARGE_PACKAGES,
   CHARGE_BONUS_BOOSTED,
   BETA_BONUS_MULTIPLIER,
   withVat,
 } from "@/lib/beta";
+import { formatLocalDate, formatLocalDateTime } from "@/lib/utils";
+import { Badge, buttonClass } from "@/app/components/ui";
 
 // 토스 v2 표준결제 SDK(CDN)가 노출하는 전역. npm 의존 없이 스크립트로 로드.
 type TossPaymentInstance = {
@@ -199,48 +201,99 @@ export default function ChargePanel({ enabled }: { enabled: boolean }) {
   );
 }
 
+type TransferOrder = {
+  id: number;
+  amountKrw: number;
+  payKrw: number;
+  tokens: number;
+  status: "pending" | "paid" | "failed" | "cancelled";
+  depositorName: string;
+  dueAt: string;
+  depositNotifiedAt: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+};
+
+type TransferInfo = {
+  account: { bank: string; number: string; holder: string };
+  depositDays: number;
+  bizRegistrationNo: string | null;
+  orders: TransferOrder[];
+};
+
 /**
- * 10만원 이상 — 계좌이체 충전 신청. 카드 1회 결제 한도(토스 충전업종) 밖이라 카드로 팔지 않는다.
- * 고객센터 문의(billing)로 접수 → 운영자 메일·Slack 알림 → 입금 계좌·세금계산서 안내 후 수동 충전.
+ * 10만원 이상 — 계좌이체 충전. 카드 1회 결제 한도(토스 충전업종) 밖이라 카드로 팔지 않는다.
+ * 신청 → 입금 안내(화면·메일) → 입금 후 "확인 요청" → 담당자가 Slack 에서 입금확인 → 토큰 충전·메일.
  */
 function TransferRequest() {
+  const [info, setInfo] = useState<TransferInfo | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  const [state, setState] = useState<"idle" | "sending" | "done">("idle");
+  const [sending, setSending] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [err, setErr] = useState("");
+  const [notice, setNotice] = useState("");
   const pkg = TRANSFER_PACKAGES.find((p) => p.krw === selected) ?? null;
+
+  const load = useCallback(async () => {
+    const res = await fetch("/api/orgs/tokens/transfer");
+    if (res.ok) setInfo((await res.json()) as TransferInfo);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function submit() {
     if (!pkg) return;
     setErr("");
-    setState("sending");
-    const t = tokensFor(pkg);
-    const message = [
-      "[계좌이체 충전 신청]",
-      `충전 금액: ${pkg.krw.toLocaleString()}원 (VAT 별도)`,
-      `입금 금액: ${withVat(pkg.krw).toLocaleString()}원 (VAT 포함)`,
-      `지급 토큰: ${t.total.toLocaleString()} 토큰` +
-        (t.bonus > 0
-          ? ` (기본 ${t.base.toLocaleString()} + 보너스 ${t.bonus.toLocaleString()}, ${pkg.bonusPct}%)`
-          : ""),
-      "입금 계좌와 세금계산서 발행 안내를 부탁드립니다.",
-    ].join("\n");
+    setNotice("");
+    setSending(true);
     try {
-      const res = await fetch("/api/support/inquiries", {
+      const res = await fetch("/api/orgs/tokens/transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: "billing", message }),
+        body: JSON.stringify({ amountKrw: pkg.krw }),
       });
       if (!res.ok) {
         setErr(await res.text());
-        setState("idle");
         return;
       }
-      setState("done");
+      setSelected(null);
+      setNotice("신청이 접수됐습니다. 아래 안내대로 입금해 주세요. 같은 내용을 메일로도 보내 드렸습니다.");
+      await load();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "신청을 보내지 못했습니다.");
-      setState("idle");
+    } finally {
+      setSending(false);
     }
   }
+
+  async function requestCheck(o: TransferOrder) {
+    setErr("");
+    setNotice("");
+    setBusyId(o.id);
+    try {
+      const res = await fetch(`/api/orgs/tokens/transfer/${o.id}/notify`, { method: "POST" });
+      if (!res.ok) {
+        setErr(await res.text());
+        return;
+      }
+      const d = (await res.json()) as { sent: boolean };
+      setNotice(
+        d.sent
+          ? "담당자에게 입금 확인을 요청했습니다. 확인되면 토큰이 충전되고 메일로 알려 드립니다."
+          : "이미 확인을 요청했습니다. 담당자가 확인하고 있으니 잠시만 기다려 주세요."
+      );
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "요청을 보내지 못했습니다.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const pending = info?.orders.filter((o) => o.status === "pending") ?? [];
+  const paid = info?.orders.filter((o) => o.status === "paid").slice(0, 3) ?? [];
 
   return (
     <div className="mt-3 rounded-2xl border border-border-default bg-card p-4">
@@ -258,6 +311,23 @@ function TransferRequest() {
         )}
       </div>
 
+      {info &&
+        pending.map((o) => (
+          <TransferGuide
+            key={o.id}
+            order={o}
+            info={info}
+            busy={busyId === o.id}
+            onRequestCheck={() => requestCheck(o)}
+          />
+        ))}
+
+      {notice && (
+        <p className="mt-3 text-xs text-primary-deep bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
+          {notice}
+        </p>
+      )}
+
       <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
         {TRANSFER_PACKAGES.map((p) => {
           const t = tokensFor(p);
@@ -267,10 +337,9 @@ function TransferRequest() {
               key={p.krw}
               type="button"
               aria-pressed={active}
-              disabled={state === "sending"}
+              disabled={sending}
               onClick={() => {
                 setSelected(p.krw);
-                setState("idle");
                 setErr("");
               }}
               className={`relative rounded-xl p-3 border text-center transition-colors disabled:opacity-60 ${
@@ -310,42 +379,172 @@ function TransferRequest() {
         })}
       </div>
 
-      {state === "done" ? (
-        <p className="mt-3 text-xs text-ink bg-primary-soft border border-primary/30 rounded-lg px-3 py-2">
-          신청이 접수됐습니다. 입금 계좌와 세금계산서 발행 안내를 메일로 보내드리고,
-          입금이 확인되면 토큰을 충전해 드립니다.{" "}
-          <Link href="/support" className="text-primary hover:underline">
-            문의 내역 보기
-          </Link>
+      <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-[11px] text-ink-muted">
+          금액을 고르고 신청하면 입금 계좌를 바로 안내해 드립니다(메일로도 발송). 입금 후 확인을
+          요청하시면 담당자가 확인하는 대로 토큰이 충전됩니다.
         </p>
-      ) : (
-        <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-[11px] text-ink-muted">
-            금액을 고르고 신청하면 입금 계좌를 안내해 드립니다. 세금계산서는{" "}
-            <Link href="/org/settings" className="text-primary hover:underline">
-              법인 설정
-            </Link>
-            의 사업자등록번호로 발행됩니다.
-          </p>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!pkg || state === "sending"}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {state === "sending" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {pkg
-              ? `${(pkg.krw / 10_000).toLocaleString()}만원 계좌이체 신청`
-              : "금액을 선택하세요"}
-          </button>
-        </div>
-      )}
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!pkg || sending}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-surface text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {sending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          {pkg
+            ? `${(pkg.krw / 10_000).toLocaleString()}만원 계좌이체 신청`
+            : "금액을 선택하세요"}
+        </button>
+      </div>
 
       {err && (
         <p className="mt-2 text-xs text-danger bg-danger-soft border border-danger/30 rounded-lg px-3 py-2">
           {err}
         </p>
       )}
+
+      {paid.length > 0 && (
+        <ul className="mt-3 space-y-1 text-[11px] text-ink-muted">
+          {paid.map((o) => (
+            <li key={o.id} className="flex items-center gap-1.5">
+              <Check className="w-3 h-3 text-success" strokeWidth={2.5} aria-hidden />
+              {formatLocalDate(o.confirmedAt ?? o.createdAt)} ·{" "}
+              {o.payKrw.toLocaleString()}원 입금확인 · {o.tokens.toLocaleString()} 토큰 충전
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
+  );
+}
+
+function TransferGuide({
+  order,
+  info,
+  busy,
+  onRequestCheck,
+}: {
+  order: TransferOrder;
+  info: TransferInfo;
+  busy: boolean;
+  onRequestCheck: () => void;
+}) {
+  const requested = order.depositNotifiedAt != null;
+  return (
+    <div className="mt-3 rounded-xl border border-primary/30 bg-primary-soft/40 p-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-sm font-semibold text-ink">
+          {(order.amountKrw / 10_000).toLocaleString()}만원 계좌이체 충전 ·{" "}
+          {order.tokens.toLocaleString()} 토큰
+        </div>
+        <Badge tone={requested ? "info" : "warning"} dot>
+          {requested ? "입금 확인 중" : "입금 대기"}
+        </Badge>
+      </div>
+
+      <ol className="mt-3 space-y-4 text-xs text-ink-soft">
+        <li>
+          <p className="font-semibold text-ink">1. 아래 계좌로 입금해 주세요</p>
+          <dl className="mt-2 grid grid-cols-[4.5rem_1fr] items-center gap-x-3 gap-y-2 rounded-lg border border-border-default bg-card px-3 py-2.5">
+            <dt className="text-ink-muted">입금 계좌</dt>
+            <dd className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-ink tabular-nums">
+                {info.account.bank} {info.account.number}
+              </span>
+              <CopyButton value={info.account.number} label="계좌번호" />
+            </dd>
+            <dt className="text-ink-muted">예금주</dt>
+            <dd className="text-ink">{info.account.holder}</dd>
+            <dt className="text-ink-muted">입금액</dt>
+            <dd className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-ink tabular-nums">
+                {order.payKrw.toLocaleString()}원
+              </span>
+              <span className="text-ink-muted">VAT 포함</span>
+              <CopyButton value={String(order.payKrw)} label="입금액" />
+            </dd>
+            <dt className="text-ink-muted">입금자명</dt>
+            <dd className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-ink">{order.depositorName}</span>
+              <CopyButton value={order.depositorName} label="입금자명" />
+              <span className="text-ink-muted">받는 분 통장 표시에 적어 주세요</span>
+            </dd>
+            <dt className="text-ink-muted">입금 기한</dt>
+            <dd className="text-ink">{formatLocalDate(order.dueAt)}까지</dd>
+          </dl>
+        </li>
+        <li>
+          <p className="font-semibold text-ink">2. 입금한 뒤 확인을 요청해 주세요</p>
+          {requested ? (
+            <p className="mt-1 leading-relaxed">
+              {formatLocalDateTime(order.depositNotifiedAt!)}에 확인을 요청했습니다. 담당자가
+              입금을 확인하는 대로 충전됩니다.{" "}
+              <button
+                type="button"
+                onClick={onRequestCheck}
+                disabled={busy}
+                className="text-primary hover:underline disabled:opacity-50"
+              >
+                다시 요청
+              </button>
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={onRequestCheck}
+              disabled={busy}
+              className={buttonClass({ size: "sm", className: "mt-2" })}
+            >
+              {busy ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+              )}
+              입금 완료 · 확인 요청
+            </button>
+          )}
+        </li>
+        <li>
+          <p className="font-semibold text-ink">3. 확인되면 토큰이 바로 충전됩니다</p>
+          <p className="mt-1 leading-relaxed">
+            충전되면 메일로 알려 드립니다.{" "}
+            {info.bizRegistrationNo ? (
+              <>세금계산서는 사업자등록번호 {info.bizRegistrationNo}로 발행해 메일로 보내 드립니다.</>
+            ) : (
+              <>
+                세금계산서 발행을 위해{" "}
+                <Link href="/org/settings" className="text-primary hover:underline">
+                  법인 설정
+                </Link>
+                에 사업자등록번호를 등록해 주세요.
+              </>
+            )}
+          </p>
+        </li>
+      </ol>
+    </div>
+  );
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label={`${label} 복사`}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* 클립보드 권한 없음 — 무시 */
+        }
+      }}
+      className="inline-flex items-center gap-1 rounded border border-border-default bg-card px-1.5 py-0.5 text-[10px] text-ink-soft hover:bg-surface-alt"
+    >
+      {copied ? <Check className="w-3 h-3" strokeWidth={2.5} /> : <Copy className="w-3 h-3" />}
+      {copied ? "복사됨" : "복사"}
+    </button>
   );
 }

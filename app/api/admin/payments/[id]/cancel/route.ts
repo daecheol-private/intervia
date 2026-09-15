@@ -50,6 +50,60 @@ export async function POST(
     .where(eq(paymentOrders.id, paymentId));
   if (!order) return new Response("결제를 찾을 수 없습니다.", { status: 404 });
 
+  // 계좌이체 — 카드사 취소 API 가 없다. 주문만 취소하고, 입금확인(지급)까지 됐던 주문이면 토큰을
+  // 회수한다. 실제 환불 금액은 운영자가 고객 계좌로 직접 송금. 입금 전 취소는 지급한 적이 없으므로
+  // 회수하지 않는다(confirmed_at 이 지급 여부의 기준).
+  if (order.provider === "transfer") {
+    const wasPaid = order.confirmedAt != null;
+    if (order.status === "failed")
+      return new Response("취소할 수 있는 주문이 아닙니다 (현재 상태: failed).", { status: 400 });
+    if (order.status !== "cancelled") {
+      const claimed = await db
+        .update(paymentOrders)
+        .set({ status: "cancelled" })
+        .where(and(eq(paymentOrders.id, order.id), eq(paymentOrders.status, order.status)))
+        .returning({ id: paymentOrders.id });
+      if (claimed.length === 0)
+        return new Response("이미 처리 중이거나 상태가 바뀐 주문입니다. 새로고침해 주세요.", {
+          status: 409,
+        });
+    }
+    const r = wasPaid
+      ? await reverseChargePayment({
+          orgId: order.orgId,
+          paymentOrderId: order.id,
+          tokens: order.tokens,
+          amountKrw: withVat(order.amountKrw),
+          userId: me!.id,
+        })
+      : null;
+    if (order.status !== "cancelled")
+      logAudit(req, {
+        actor: me,
+        action: "payment.cancel",
+        resourceType: "organization",
+        resourceId: order.orgId,
+        orgId: order.orgId,
+        metadata: {
+          paymentOrderId: order.id,
+          provider: "transfer",
+          wasPaid,
+          amountKrw: order.amountKrw,
+          reversedTokens: r?.reversed ?? 0,
+          reason,
+          balanceAfter: r?.balance ?? null,
+        },
+      });
+    return Response.json({
+      ok: true,
+      alreadyCancelled: order.status === "cancelled",
+      manualRefund: wasPaid,
+      refundedKrw: wasPaid ? withVat(order.amountKrw) : 0,
+      reversedTokens: r?.reversed ?? 0,
+      balance: r?.balance ?? null,
+    });
+  }
+
   // 이미 취소된 주문 — 멱등: 토큰 회수만 보장하고 성공 반환.
   if (order.status === "cancelled") {
     const r = await reverseChargePayment({
