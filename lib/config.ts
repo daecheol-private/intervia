@@ -25,12 +25,18 @@ type Config = {
   CRON_SECRET?: string;
   INTERNAL_API_SECRET?: string;
   APP_BASE_URL?: string;
-  // SMTP fallback
+  // SMTP — 법인 자체 SMTP 미등록 시 쓰는 시스템 기본 발신 서버
   SMTP_HOST?: string;
   SMTP_PORT?: string;
   SMTP_USER?: string;
   SMTP_PASS?: string;
   SMTP_FROM?: string;
+  // 대체 발송 경로 — 기본 발신 서버 장애 시 자동 폴백 (lib/mailer.ts)
+  FALLBACK_SMTP_HOST?: string;
+  FALLBACK_SMTP_PORT?: string;
+  FALLBACK_SMTP_USER?: string;
+  FALLBACK_SMTP_PASS?: string;
+  FALLBACK_SMTP_FROM?: string;
   // 모니터링
   SENTRY_DSN?: string;
   SLACK_WEBHOOK_URL?: string;

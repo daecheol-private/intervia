@@ -21,16 +21,21 @@ type Transporter = nodemailer.Transporter<SMTPPool.SentMessageInfo>;
 // 발신 서버 한도가 넉넉하면 MAIL_RATE_PER_SEC 만 올리면 됨(기본은 보수적으로 2rps).
 const MAIL_RATE_PER_SEC = Number(process.env.MAIL_RATE_PER_SEC ?? 2);
 
+// 연결 타임아웃 — nodemailer 기본(2분)은 Vercel 함수 한도보다 길어서, 발신 서버가 응답
+// 없이 멈추면 대체 경로로 넘어가기 전에 함수가 먼저 잘린다. 짧게 끊어야 폴백할 시간이 남는다.
 function poolOpts() {
   return {
     pool: true as const,
     maxConnections: 2,
     rateDelta: 1000,
     rateLimit: MAIL_RATE_PER_SEC,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
   };
 }
 
-// 환경변수 fallback transporter — 법인 SMTP 미설정 시
+// 환경변수 transporter — 법인 SMTP 미설정 시의 시스템 기본 발신 서버
 let envCached: Transporter | null = null;
 
 function envTransporter(): Transporter {
@@ -49,6 +54,43 @@ function envTransporter(): Transporter {
   });
   return envCached;
 }
+
+// ── 대체 발송 경로 (FALLBACK_SMTP_*) ─────────────────────────────────────────
+// 기본 발신 서버가 멈추면 면접 링크·결과 통보가 통째로 안 나간다 = 사실상 서비스 정지.
+// FALLBACK_SMTP_* 가 설정돼 있으면 발신 서버 측 실패일 때 대체 경로(Resend)로 재발송한다.
+// ⚠️ 대체 경로는 해외(미국) 경유라 처리방침 §5 에 '이메일 발송의 대체 경로(기본 발송 서버
+//    점검·장애 시)'로 고지된 범위 안에서만 쓴다 — 그 문구가 곧 이 폴백의 근거다.
+// ⚠️ 발송량 한도가 별개(무료 티어 일 100·월 3,000)라 장기 대체용이 아니다. 장애가 길어지면
+//    env 를 통째로 대체 경로로 바꾸고 발송 예산 env 도 낮춘다 — docs/RUNBOOK.md §5-7.
+let fallbackCached: Transporter | null = null;
+let fallbackUnset = false;
+
+function fallbackTransporter(): Transporter | null {
+  if (fallbackCached) return fallbackCached;
+  if (fallbackUnset) return null;
+  const host = process.env.FALLBACK_SMTP_HOST;
+  const port = Number(process.env.FALLBACK_SMTP_PORT ?? 465);
+  const user = process.env.FALLBACK_SMTP_USER;
+  const pass = process.env.FALLBACK_SMTP_PASS;
+  if (!host || !user || !pass) {
+    fallbackUnset = true;
+    return null;
+  }
+  fallbackCached = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+    ...poolOpts(),
+  });
+  return fallbackCached;
+}
+
+// 기본 경로 장애 창 — 대체 경로로 한 번 넘어가면 이 시간 동안 기본을 건너뛴다. 서버가 죽은
+// 채로 일괄 발송(불합격 드레인 등)이 돌면 통마다 연결 타임아웃 + 재시도를 다 기다리다 함수
+// 한도에 먼저 걸린다. 창이 지나면 다시 기본부터 시도하므로 서버 복구는 자동으로 감지된다.
+const PRIMARY_DOWN_MS = 5 * 60_000;
+let primaryDownUntil = 0;
 
 type ResolvedSmtp = {
   transporter: Transporter;
@@ -183,6 +225,21 @@ function extractEmailAddress(from: string): string {
   return (m ? m[1] : from).trim();
 }
 
+/**
+ * 대체 경로의 발신 주소 — FALLBACK_SMTP_FROM 이 있으면 주소만 바꾸고 표시이름은 유지한다.
+ * 대체 경로 쪽에서 인증된 발신 도메인이 다를 때만 필요하고, 같으면 설정하지 않아도 된다.
+ */
+function fallbackFrom(
+  from: string | { name: string; address: string }
+): string | { name: string; address: string } {
+  const override = process.env.FALLBACK_SMTP_FROM;
+  if (!override) return from;
+  if (typeof from === "object") {
+    return { name: from.name, address: extractEmailAddress(override) };
+  }
+  return override;
+}
+
 // 재시도 대상 — provider rate limit(421/429/45x) 또는 일시적 소켓 오류.
 // 페이싱은 프로세스 단위라 서버리스 다중 인스턴스 합산이 팀 한도를 넘길 수 있어 별도로 필요.
 function isTransientMailError(e: unknown): boolean {
@@ -194,8 +251,23 @@ function isTransientMailError(e: unknown): boolean {
   return /too many|rate ?limit|try again later/i.test(msg);
 }
 
+/**
+ * 대체 경로로 다시 보낼 가치가 있는 실패인지 — 발신 서버 측 문제만 해당.
+ * 수신자 주소가 거부된 경우(없는 주소 등)는 어느 서버로 보내도 결과가 같아서,
+ * 한도가 빠듯한 대체 경로의 발송량만 태운다.
+ */
+function isSenderSideFailure(e: unknown): boolean {
+  const err = e as { code?: string; responseCode?: number; rejected?: unknown[] } | null;
+  if (Array.isArray(err?.rejected) && err.rejected.length > 0) return false;
+  if (err?.code === "EMESSAGE" && (err.responseCode ?? 0) >= 500) return false;
+  return true;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const MAX_SEND_RETRIES = 3;
+// 대체 경로가 있으면 기본 경로에 오래 매달리지 않는다 — 3회 백오프면 7.5초라 짧은 함수
+// 한도(maxDuration 미설정 라우트 ~15초)에선 폴백까지 갈 시간이 남지 않는다.
+const MAX_SEND_RETRIES_WITH_FALLBACK = 2;
 
 // ── 발송 실패 Slack 경보 ──────────────────────────────────────────────────────
 // 메일 장애(발신 서버 다운·인증 실패·발송률 초과 등)는 메일로 알릴 수 없으므로 Slack 이
@@ -211,10 +283,20 @@ const MAIL_FAIL_MAX_ADDRS_PER_WINDOW = 5;
 /** 최근 통지한 수신 주소 → 통지 시각. 창이 지난 항목은 호출 때마다 정리. */
 const mailFailNotifiedAt = new Map<string, number>();
 
-function reportMailFailure(
-  e: unknown,
-  ctx: { to: string; audience: MailAudience; kind?: string; orgId?: number | null }
-): void {
+type MailFailCtx = { to: string; audience: MailAudience; kind?: string; orgId?: number | null };
+
+/** 경보 문구용 맥락 태그 — "지원자 · decision_reject · org 3". */
+function mailCtxTags(ctx: MailFailCtx): string {
+  return [
+    ctx.audience === "candidate" ? "지원자" : "법인",
+    ctx.kind,
+    ctx.orgId != null ? `org ${ctx.orgId}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function reportMailFailure(e: unknown, ctx: MailFailCtx, fallbackFailed = false): void {
   const now = Date.now();
   const key = ctx.to.trim().toLowerCase();
   for (const [addr, at] of mailFailNotifiedAt) {
@@ -226,18 +308,36 @@ function reportMailFailure(
 
   const msg = e instanceof Error ? e.message : String(e);
   const quotaSuspect = /\b429\b|quota|too many|rate ?limit|daily|limit exceeded/i.test(msg);
-  const tags = [
-    ctx.audience === "candidate" ? "지원자" : "법인",
-    ctx.kind,
-    ctx.orgId != null ? `org ${ctx.orgId}` : null,
-  ].filter(Boolean);
   void notifyOps(
     `📪 메일 발송 실패 감지${
       quotaSuspect
         ? " — 발신 서버 발송량/전송률 한도 초과 의심 (일·월 한도, 초당 발송률 확인)"
         : ""
-    }\n수신: ${ctx.to} (${tags.join(" · ")})\n원인: ${msg.slice(0, 300)}` +
+    }${fallbackFailed ? " — 대체 경로(FALLBACK_SMTP)로도 실패" : ""}\n수신: ${ctx.to} (${mailCtxTags(
+      ctx
+    )})\n원인: ${msg.slice(0, 300)}` +
       `\n(같은 주소는 10분당 1회, 10분 창당 최대 ${MAIL_FAIL_MAX_ADDRS_PER_WINDOW}개 주소까지만 통지 — 전체는 Vercel 로그)`
+  ).catch(() => {});
+}
+
+// 대체 경로로 넘어간 사실은 반드시 알아야 한다 — 기본 발신 서버가 죽었다는 뜻이고, 대체
+// 경로는 발송량 한도(무료 티어)와 국외 경유가 걸려 오래 쓸 수 없다. 장애 한 건에 수십 통이
+// 몰릴 수 있으므로 30분 창당 1회만 통지한다(주소별이 아니라 전역 — 원인이 하나이므로).
+const FALLBACK_NOTIFY_WINDOW_MS = 30 * 60_000;
+let fallbackNotifiedAt = 0;
+
+function reportMailFallback(cause: unknown, ctx: MailFailCtx): void {
+  const now = Date.now();
+  if (now - fallbackNotifiedAt < FALLBACK_NOTIFY_WINDOW_MS) return;
+  fallbackNotifiedAt = now;
+  const msg = cause instanceof Error ? cause.message : String(cause);
+  void notifyOps(
+    `📮 기본 메일 서버 실패 → 대체 경로(FALLBACK_SMTP)로 발송했습니다\n` +
+      `수신: ${ctx.to} (${mailCtxTags(ctx)})\n기본 경로 오류: ${msg.slice(0, 300)}\n` +
+      `앞으로 ${PRIMARY_DOWN_MS / 60_000}분간은 기본 경로를 건너뛰고 대체 경로로 보냅니다. ` +
+      `대체 경로는 발송량 한도가 별도(무료 티어 일 100·월 3,000)이고 해외를 경유하므로, ` +
+      `장애가 길어지면 env 를 통째로 전환하세요 — docs/RUNBOOK.md §5-7.\n` +
+      `(30분당 1회만 통지 — 전체는 Vercel 로그)`
   ).catch(() => {});
 }
 
@@ -283,6 +383,38 @@ export async function sendMail({
     text,
     attachments: finalAttachments,
   };
+  const ctx: MailFailCtx = { to: finalTo, audience, kind, orgId };
+
+  // 대체 경로 발송 — 성공하면 true. 법인 자체 SMTP(source==="org")는 대상이 아니다:
+  // From 이 그 법인 도메인이라 우리 계정으로 대신 보내면 SPF/DMARC 로 거부되거나 스팸된다.
+  let fallbackAttempted = false;
+  const sendViaFallback = async (cause: unknown): Promise<boolean> => {
+    if (source !== "env" || !isSenderSideFailure(cause)) return false;
+    const fb = fallbackTransporter();
+    if (!fb) return false;
+    fallbackAttempted = true;
+    try {
+      await fb.sendMail({ ...message, from: fallbackFrom(finalFrom) });
+      primaryDownUntil = Date.now() + PRIMARY_DOWN_MS;
+      await recordMailSend(audience, kind).catch(() => {});
+      reportMailFallback(cause, ctx);
+      return true;
+    } catch (fe) {
+      console.error(`[mailer] 대체 경로 발송도 실패 (to=${finalTo}):`, String(fe));
+      return false;
+    }
+  };
+
+  // 기본 경로가 방금 죽은 것으로 확인된 동안은 건너뛰고 바로 대체 경로로 — 일괄 발송에서
+  // 통마다 연결 타임아웃을 기다리지 않도록. 대체 경로마저 안 되면 창을 풀고 기본부터 재시도.
+  if (source === "env" && Date.now() < primaryDownUntil) {
+    if (await sendViaFallback(new Error("기본 발신 서버 장애 창 — 기본 경로 건너뜀"))) return;
+    primaryDownUntil = 0;
+  }
+
+  const maxRetries =
+    source === "env" && fallbackTransporter() ? MAX_SEND_RETRIES_WITH_FALLBACK : MAX_SEND_RETRIES;
+
   for (let attempt = 0; ; attempt++) {
     try {
       await transporter.sendMail(message);
@@ -290,17 +422,19 @@ export async function sendMail({
       await recordMailSend(audience, kind).catch(() => {});
       return;
     } catch (e) {
-      if (attempt >= MAX_SEND_RETRIES || !isTransientMailError(e)) {
-        // 재시도 소진/영구 실패만 경보 — 일시 오류 재시도 성공은 조용히.
-        reportMailFailure(e, { to: finalTo, audience, kind, orgId });
-        throw e;
+      if (attempt < maxRetries && isTransientMailError(e)) {
+        const backoff = 1000 * 2 ** attempt + Math.random() * 300;
+        console.warn(
+          `[mailer] 일시 오류 — ${Math.round(backoff)}ms 후 재발송 (${attempt + 1}/${maxRetries}, to=${finalTo}):`,
+          String(e)
+        );
+        await sleep(backoff);
+        continue;
       }
-      const backoff = 1000 * 2 ** attempt + Math.random() * 300;
-      console.warn(
-        `[mailer] 일시 오류 — ${Math.round(backoff)}ms 후 재발송 (${attempt + 1}/${MAX_SEND_RETRIES}, to=${finalTo}):`,
-        String(e)
-      );
-      await sleep(backoff);
+      // 재시도 소진/영구 실패 — 발신 서버 측 문제면 대체 경로로 한 번 더.
+      if (await sendViaFallback(e)) return;
+      reportMailFailure(e, ctx, fallbackAttempted);
+      throw e;
     }
   }
 }

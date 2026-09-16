@@ -694,6 +694,7 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 
 **필수 4개**: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` (없으면 mailer가 에러 throw)
 **선택**: `SMTP_FROM` (없으면 `SMTP_USER`로 fallback), `MAIL_RATE_PER_SEC` (기본 2)
+**대체 경로**: `FALLBACK_SMTP_HOST/PORT/USER/PASS`(+선택 `FALLBACK_SMTP_FROM`) — 아래 참조
 
 ⚠️ **`SMTP_USER` 는 전체 이메일 주소**여야 하는 서버가 많다 — 로컬파트만 넣으면 `535 인증 실패`
 (2026-07-25 회사 SMTP 전환 때 실제로 겪음). 실패 메시지가 "인증 실패"면 이걸 가장 먼저 볼 것.
@@ -707,8 +708,30 @@ db.prepare('ALTER TABLE x ADD COLUMN y INTEGER NOT NULL DEFAULT 0').run();
 회사 SMTP 로 옮긴 뒤에도 서버마다 한도가 있으니 전제는 그대로다. 대응은 `lib/mailer.ts` 에 내장:
 
 - 모든 transporter 가 **pooled** + `rateLimit`(`MAIL_RATE_PER_SEC`, 기본 2/s) 로 발송 페이싱.
-- 일시 오류(SMTP 421/429/45x, 소켓 오류)는 **지수 백오프로 3회 재시도**.
+- 일시 오류(SMTP 421/429/45x, 소켓 오류)는 **지수 백오프로 재시도**(3회, 대체 경로가 설정돼
+  있으면 2회 — 남은 시간을 폴백에 쓴다).
 - 법인 SMTP transporter 는 orgId 별 캐시 (설정 변경 시 fingerprint 로 자동 재생성).
+
+### 대체 발송 경로 자동 폴백 (`FALLBACK_SMTP_*`, 2026-09-16)
+
+기본 발신 서버(회사 SMTP)가 죽으면 면접 링크·결과 통보가 통째로 멈춘다. `FALLBACK_SMTP_*`
+4개가 설정돼 있으면 `sendMail` 이 **발신 서버 측 실패**로 판단될 때 대체 경로(Resend)로 1회
+재발송한다. 설정이 없으면 폴백 없이 기존 동작이라, env 를 안 넣은 환경은 영향받지 않는다.
+
+- **폴백하지 않는 경우**: ① 수신자 주소가 거부된 실패(`rejected` 가 채워졌거나 `EMESSAGE`+5xx)
+  — 어느 서버로 보내도 같은 결과라 한도만 태운다. ② **법인이 자체 SMTP 를 등록한 발송**
+  (`source === "org"`) — From 이 그 법인 도메인이라 우리 계정으로 대신 보내면 SPF/DMARC 로 거부된다.
+- **연속 장애 대비**: 폴백이 성공하면 5분간(`PRIMARY_DOWN_MS`) 기본 경로를 건너뛰고 바로 대체
+  경로로 보낸다. 안 그러면 일괄 발송에서 통마다 연결 타임아웃을 기다리다 함수 한도에 걸린다.
+  5분이 지나면 다시 기본부터 시도하므로 서버 복구는 자동으로 감지된다(인메모리 = 인스턴스별).
+- **타임아웃**: nodemailer 기본 연결 타임아웃은 2분이라 함수가 먼저 잘린다 → `poolOpts()` 에서
+  connection/greeting 10초·socket 20초로 제한. 이게 있어야 폴백까지 갈 시간이 남는다.
+- **경보**: 폴백을 탔으면 Slack 에 `📮 기본 메일 서버 실패 → 대체 경로로 발송` (30분당 1회).
+  이게 오면 기본 발신 서버를 점검할 것 — 대체 경로는 무료 티어 한도(일 100·월 3,000)와
+  **국외 경유**가 걸려 오래 쓸 수 없다. 장애가 길어지면 RUNBOOK §5-7 로 env 를 통째로 전환.
+- **처리방침 정합**: 처리방침 §5 에 Resend 가 "이메일 발송의 대체 경로(기본 발송 서버 점검·장애
+  시)" 로 이미 고지돼 있어 이 폴백은 고지 범위 안이다. 고지에서 Resend 를 지우려면 폴백 env 도
+  함께 빼야 한다(둘은 한 세트).
 
 → 대량 발송 경로를 새로 만들 때 `sendMail` 만 쓰면 페이싱이 자동 적용된다. 단 **페이싱은
 프로세스 단위** — 서버리스 다중 인스턴스 합산이 서버 한도를 넘기면 재시도가 흡수한다.

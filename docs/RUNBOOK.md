@@ -85,7 +85,9 @@
 
 ## 5. 메일 발송 실패 (회사 SMTP / 법인 SMTP)
 
-**증상**: 면접 안내·인증·결과 통보 메일 미도착. Slack 에 `📪 메일 발송 실패 감지`.
+**증상**: 면접 안내·인증·결과 통보 메일 미도착. Slack 에 `📪 메일 발송 실패 감지`, 또는
+`📮 기본 메일 서버 실패 → 대체 경로(FALLBACK_SMTP)로 발송했습니다` (= 메일은 나갔지만 기본
+발신 서버가 죽었다는 뜻 — 아래 7번).
 
 1. **가장 흔한 원인** — `MAIL_OVERRIDE_TO` 가 production 에 남아있음(지원자 메일이 그쪽으로 감). → LAUNCH_CHECKLIST §1.
 2. **인증 실패(535)** — `SMTP_USER` 가 **전체 이메일 주소**인지 확인(로컬파트만 넣으면 실패). 비밀번호 변경·만료도 확인.
@@ -93,7 +95,12 @@
 4. **일부만 도달** — 발송률·일일 한도. `MAIL_RATE_PER_SEC`(기본 2) / `MAIL_DAILY_BUDGET` 확인, `/api/cron/quota-alerts` 응답의 `metrics.mail` 로 오늘·이번달 발송량 확인.
 5. **법인 SMTP** — 법인이 자체 SMTP 등록한 경우 그 계정 문제일 수 있음. `/api/orgs/smtp` 의 verify 로 재확인.
 6. **부분 실패는 비치명적** — 자동불합격 알림·리마인더 등은 best-effort(실패해도 cron 흐름 안 막음). 핵심은 면접 링크·결과 통보.
-7. **지속 장애 → Resend 로 수동 전환** — 회사 메일 서버 점검·장애면 법인 SMTP 미등록 법인의 메일이 전부 멈춘다. 대체 경로(Resend)를 보존해 두었으니 아래 순서로 되돌린다.
+7. **자동 폴백이 먼저 받아준다 (2026-09-16~)** — `FALLBACK_SMTP_*` 가 설정돼 있으면 기본 발신 서버 측 실패로 판단될 때 `sendMail` 이 대체 경로(Resend)로 자동 재발송하고, 이후 5분간은 기본 경로를 건너뛴다(창이 지나면 자동 복귀). 즉 `📮` 경보는 "메일은 나갔다"는 뜻이므로 **당장 급한 건 아니지만 기본 서버 점검은 필요**하다. 확인할 것:
+   - **폴백이 켜져 있나** — Vercel env 에 `FALLBACK_SMTP_HOST/PORT/USER/PASS` 4개가 다 있는지(하나라도 비면 폴백 없음).
+   - **대체 경로 한도** — Resend 무료 티어 일 100·월 3,000. 장애가 길어지면 여기에 먼저 걸린다. `/api/cron/quota-alerts` 의 `metrics.mail` 로 오늘·이번달 발송량 확인.
+   - **폴백 대상 아님** — 법인이 자체 SMTP 를 등록한 발송, 그리고 수신자 주소가 거부된 실패는 폴백하지 않는다(설계상 정상).
+   - **`📪 … 대체 경로로도 실패`** 가 보이면 폴백까지 죽은 것 — 아래 8번으로 바로 간다.
+8. **지속 장애 → Resend 로 수동 전환** — 회사 메일 서버 점검·장애가 길어지면 자동 폴백에 기대지 말고 env 를 통째로 바꾼다(폴백은 한도·국외 경유 때문에 임시 방편이다). 아래 순서로 되돌린다.
    1. **Vercel 환경변수 교체** — `SMTP_HOST=smtp.resend.com` / `SMTP_PORT=465` / `SMTP_USER=resend` / `SMTP_PASS=<Resend API 키>` / `SMTP_FROM` 유지 → **Redeploy**(env 변경은 재배포 전까지 반영 안 됨).
    2. **DNS 는 손대지 않는다.** Resend 는 Return-Path 를 `send.intervia.kr` 로 쓰므로 SPF 는 그 서브도메인의 `v=spf1 include:amazonses.com ~all` 로 통과하고, `From: noreply@intervia.kr` 의 DMARC 정렬은 `resend._domainkey` DKIM 이 맡는다. **루트 SPF(회사 서버 단독)는 Resend 발송에 관여하지 않는다** — 2026-06~07 Resend 운영 기간에 루트 SPF 가 회사 서버 값이 아니었는데도 정상 발송된 것으로 실증됨. (반대로 루트에 `include:amazonses.com` 을 넣으면 인가 범위만 넓어지고 SPF lookup 도 늘어난다.)
    3. **발송 한도 되돌리기** — Resend 무료 티어는 일 100·월 3,000통. `MAIL_DAILY_BUDGET`·`REJECTION_DAYTIME_SOFT_CAP` 을 그 범위로 낮춰야 대량 통보가 캡에 걸려 유실되지 않는다(저녁 드레인이 며칠에 걸쳐 분산).

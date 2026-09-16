@@ -147,6 +147,8 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 | `SMTP_USER` | **로그인 ID 는 전체 이메일 주소**(`user@company.co.kr`). ⚠️ 로컬파트만 넣으면 `535 인증 실패` |
 | `SMTP_PASS` | 메일 계정 비밀번호 (앱 비밀번호가 있으면 그것) |
 | `SMTP_FROM` | `Intervia <noreply@intervia.kr>` (SPF 로 발신 서버를 인가한 도메인) |
+| `FALLBACK_SMTP_HOST` / `_PORT` / `_USER` / `_PASS` | (선택·권장) **대체 발송 경로**. 기본 발신 서버 장애 시 자동 폴백 (Resend: `smtp.resend.com` / `465` / `resend` / API 키). 4개가 모두 있어야 활성 — 하나라도 비면 폴백 없이 기존 동작 |
+| `FALLBACK_SMTP_FROM` | (선택) 대체 경로에서 쓸 발신 주소. 미설정 시 `SMTP_FROM` 을 그대로 사용 (Resend 도 `noreply@intervia.kr` 가 인증돼 있어 보통 불필요) |
 | `MAIL_RATE_PER_SEC` | (선택) 프로세스 내 초당 발송 상한. 기본 `2`. 발신 서버 한도가 넉넉하면 상향 |
 | `MAIL_DAILY_BUDGET` / `MAIL_DAILY_BUFFER` | (선택) 불합격 저녁 드레인 예산·버퍼. 기본 `100` / `20`. 발신 한도에 맞춰 올릴 것 |
 | `MAIL_MONTHLY_CAP` / `MAIL_WARN_DAILY` / `MAIL_WARN_MONTHLY` | (선택) 쿼터 경보 임계. 기본 `3000` / `80` / `2400`. 구 이름(`RESEND_*`)도 계속 읽음(호환) |

@@ -69,6 +69,11 @@ export const SERVER_ENV: NodeJS.ProcessEnv = {
   SMTP_PORT: "",
   SMTP_USER: "",
   SMTP_PASS: "",
+  // 대체 발송 경로도 비워 둔다 — 안 그러면 기본 경로 실패가 폴백 실발송으로 이어진다.
+  FALLBACK_SMTP_HOST: "",
+  FALLBACK_SMTP_PORT: "",
+  FALLBACK_SMTP_USER: "",
+  FALLBACK_SMTP_PASS: "",
   MAIL_OVERRIDE_TO: "",
   // 알림톡 → 미설정 강제 (조용히 skip)
   ALIGO_API_KEY: "",
