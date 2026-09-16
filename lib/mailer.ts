@@ -252,11 +252,27 @@ function isTransientMailError(e: unknown): boolean {
 }
 
 /**
+ * 발신 서버가 "내 도메인인데 그런 계정 없음"으로 튕긴 실패인지.
+ *
+ * 회사 메일 서버(mail.expernet.co.kr)는 expernet.co.kr·erop.co.kr·intervia.kr 을 자기
+ * **로컬 가상 도메인**으로 취급해 외부로 릴레이하지 않는다. 그래서 그 도메인의 주소가
+ * 실제로는 (다른 메일 서버에) 존재해도, 이 서버의 virtual mailbox table 에 없으면
+ * `550 5.1.1 ... User unknown in virtual mailbox table` 로 거부한다.
+ * 겉보기는 수신자 거부지만 원인은 발신 서버 쪽이고, 대체 경로(외부 발신)로 보내면 MX 를
+ * 정상 조회해 배달된다 → 폴백 대상으로 친다.
+ */
+function isLocalDomainMisroute(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /user unknown in (virtual|local|relay) (mailbox|recipient) table/i.test(msg);
+}
+
+/**
  * 대체 경로로 다시 보낼 가치가 있는 실패인지 — 발신 서버 측 문제만 해당.
  * 수신자 주소가 거부된 경우(없는 주소 등)는 어느 서버로 보내도 결과가 같아서,
- * 한도가 빠듯한 대체 경로의 발송량만 태운다.
+ * 한도가 빠듯한 대체 경로의 발송량만 태운다. 단 위의 로컬 도메인 오배달은 예외다.
  */
 function isSenderSideFailure(e: unknown): boolean {
+  if (isLocalDomainMisroute(e)) return true;
   const err = e as { code?: string; responseCode?: number; rejected?: unknown[] } | null;
   if (Array.isArray(err?.rejected) && err.rejected.length > 0) return false;
   if (err?.code === "EMESSAGE" && (err.responseCode ?? 0) >= 500) return false;
@@ -341,6 +357,30 @@ function reportMailFallback(cause: unknown, ctx: MailFailCtx): void {
   ).catch(() => {});
 }
 
+// 사내 도메인 오배달로 폴백한 경우의 통지 — 발신 서버는 멀쩡하고 **그 주소만** 튕긴
+// 것이므로, 담당자가 어느 계정을 메일 서버에 추가해야 하는지 알아야 한다 → 주소별 통지.
+// 같은 주소로 반복 발송돼도 하루 몇 번이면 충분해 창을 길게 잡는다.
+const MISROUTE_NOTIFY_WINDOW_MS = 6 * 60 * 60_000;
+const misrouteNotifiedAt = new Map<string, number>();
+
+function reportMisroute(cause: unknown, ctx: MailFailCtx): void {
+  const now = Date.now();
+  const key = ctx.to.trim().toLowerCase();
+  for (const [addr, at] of misrouteNotifiedAt) {
+    if (now - at >= MISROUTE_NOTIFY_WINDOW_MS) misrouteNotifiedAt.delete(addr);
+  }
+  if (misrouteNotifiedAt.has(key)) return;
+  misrouteNotifiedAt.set(key, now);
+  const msg = cause instanceof Error ? cause.message : String(cause);
+  void notifyOps(
+    `📬 사내 도메인 주소를 발신 서버가 거부 → 대체 경로로 발송했습니다 (메일은 정상 전달됨)\n` +
+      `수신: ${ctx.to} (${mailCtxTags(ctx)})\n원인: ${msg.slice(0, 300)}\n` +
+      `발신 서버가 이 도메인을 로컬로 처리해 "계정 없음"으로 튕긴 것이고 주소 자체는 유효합니다. ` +
+      `근본 해결은 메일 서버 담당자에게 해당 계정의 메일함(또는 릴레이) 등록 요청.\n` +
+      `(같은 주소는 6시간당 1회만 통지)`
+  ).catch(() => {});
+}
+
 export async function sendMail({
   to,
   subject,
@@ -395,9 +435,15 @@ export async function sendMail({
     fallbackAttempted = true;
     try {
       await fb.sendMail({ ...message, from: fallbackFrom(finalFrom) });
-      primaryDownUntil = Date.now() + PRIMARY_DOWN_MS;
       await recordMailSend(audience, kind).catch(() => {});
-      reportMailFallback(cause, ctx);
+      if (isLocalDomainMisroute(cause)) {
+        // 발신 서버는 멀쩡하고 이 주소만 튕긴 것 — 장애 창을 열면 안 된다.
+        // (나머지 주소는 계속 기본 경로로 나가야 하고, 대체 경로 한도도 아껴야 한다.)
+        reportMisroute(cause, ctx);
+      } else {
+        primaryDownUntil = Date.now() + PRIMARY_DOWN_MS;
+        reportMailFallback(cause, ctx);
+      }
       return true;
     } catch (fe) {
       console.error(`[mailer] 대체 경로 발송도 실패 (to=${finalTo}):`, String(fe));
