@@ -4,7 +4,7 @@
 // 표시/과금 규칙:
 // - LIST_PRICING       : 정가(앵커). UI 에 취소선으로 노출해 기준가(AI 면접 3,000원)를 유지한다.
 // - BETA_PRICING       : 오픈베타 할인가 — AI 면접·대면 면접 평가만 30→10 토큰(3,000→1,000원).
-//                        이력서 평가(300원)는 그대로(이미 장벽이 아니라 인하 실익 없음).
+//                        이력서 평가(500원)·면접 문제 생성(500원)은 할인 없음.
 // - EFFECTIVE_PRICING  : 실제 차감 단가. lib/tokens.ts 의 DEFAULT_PRICING 이 이 값을 쓴다.
 //
 // 종료 / 연장:
@@ -12,9 +12,10 @@
 //   · 베타 종료: BETA.active=false 로 바꾸면 즉시 정가(LIST_PRICING)로 복귀.
 //   · 기간 연장: endsAtLabel 만 수정 (표시용 라벨).
 // - ⚠️ 운영 token_pricing 테이블에 override 행이 있으면 getPricing 에서 그 값이 우선한다.
-//   현재는 override 없음 = 코드 기본값(베타가)이 적용된다. 배포 후 /admin/pricing 또는
-//   /org/tokens 에서 AI 면접이 10 토큰으로 보이는지 확인할 것. 30 으로 보이면 override 가 있는
-//   것이므로 /admin/pricing 에서 10 으로 저장하면 된다.
+//   운영에는 2026-07-24 자 행이 있다 (job_post 0 / resume_upload 5 / interview 10 /
+//   interview_question_gen 5 / offline_interview 10). 공개 요금표(/pricing·랜딩)는 이 파일의
+//   코드값을 쓰므로, /admin/pricing 에서 단가를 바꾸면 여기도 같이 고쳐야 표시가와 실제
+//   차감가가 어긋나지 않는다 (2026-09-17 실제로 어긋나 있던 것을 코드값 쪽으로 맞춤).
 
 type Key =
   | "job_post"
@@ -39,9 +40,9 @@ export function withVat(supplyKrw: number): number {
 /** 정가(앵커) — 베타 종료 후 복귀 단가. */
 export const LIST_PRICING: Record<Key, number> = {
   job_post: 0,
-  resume_upload: 3,
+  resume_upload: 5,
   interview: 30,
-  interview_question_gen: 0,
+  interview_question_gen: 5,
   offline_interview: 30,
 };
 
