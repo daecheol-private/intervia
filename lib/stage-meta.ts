@@ -75,6 +75,78 @@ export function isScheduleSuperseded(c: {
   return STAGE_RANK[c.stage] > threshold;
 }
 
+/**
+ * 종결 사유 코드 — 자동(시스템 설정)/수동(면접관 선택) 공용.
+ * 라벨을 여기 둔 이유: 후보자 상세·공고 타임라인 등 client component 도 사유를 표시한다.
+ * (candidate-stage.ts 는 db 의존이라 client 에서 import 불가 — 거기서 re-export 한다.)
+ */
+export type OutcomeReason =
+  // 자동
+  | "candidate_withdrew"       // 지원자가 직접 지원 취소
+  | "ai_link_expired"          // AI면접 링크 7일 만료
+  | "schedule_link_expired"    // 1차 면접 일정 링크 만료
+  | "job_closed_bulk"          // 공고 종결 시 미결정 후보 일괄 처리 (closeJob)
+  // 수동 (면접관 선택)
+  | "resume_unfit"             // 서류 부적합
+  | "ai_interview_unfit"       // AI면접 평가 부적합
+  | "round1_unfit"             // 1차 면접 부적합
+  | "round2_unfit"             // 2차 면접 부적합
+  | "offer_declined"           // 처우협의 결렬
+  | "passed_final"             // 최종 합격 결정
+  | "other";                   // 기타 (자유 입력)
+
+export const OUTCOME_REASON_LABELS: Record<OutcomeReason, string> = {
+  candidate_withdrew: "지원자가 지원 취소",
+  ai_link_expired: "AI면접 링크 만료 (응시 기한 경과 — AI 평가 결과 아님)",
+  schedule_link_expired: "1차 면접 일정 링크 만료",
+  job_closed_bulk: "공고 종결로 일괄 처리",
+  resume_unfit: "서류 부적합",
+  ai_interview_unfit: "AI면접 평가 부적합",
+  round1_unfit: "1차 면접 부적합",
+  round2_unfit: "2차 면접 부적합",
+  offer_declined: "처우협의 결렬",
+  passed_final: "최종 합격 결정",
+  other: "기타",
+};
+
+/**
+ * 배지용 축약 라벨 — 이름 옆 인라인 배지에 전체 문장이 들어가면 줄이 밀린다.
+ * 전체 설명은 종결 요약 블록(후보자 상세)과 배지 title 에서 보여준다.
+ */
+export const OUTCOME_REASON_SHORT_LABELS: Record<OutcomeReason, string> = {
+  candidate_withdrew: "지원 취소",
+  ai_link_expired: "링크 기한 경과",
+  schedule_link_expired: "일정 링크 기한 경과",
+  job_closed_bulk: "공고 종결",
+  resume_unfit: "서류 부적합",
+  ai_interview_unfit: "AI면접 부적합",
+  round1_unfit: "1차 부적합",
+  round2_unfit: "2차 부적합",
+  offer_declined: "처우협의 결렬",
+  passed_final: "최종 합격",
+  other: "기타",
+};
+
+export function outcomeReasonShortLabel(
+  code: string | null | undefined
+): string | null {
+  if (!code) return null;
+  return OUTCOME_REASON_SHORT_LABELS[code as OutcomeReason] ?? code;
+}
+
+/** 시스템이 자동으로 설정하는 사유 — 사람이 누른 결정이 아님을 UI 가 구분해 표시한다. */
+export const AUTO_OUTCOME_REASONS: readonly OutcomeReason[] = [
+  "ai_link_expired",
+  "schedule_link_expired",
+  "job_closed_bulk",
+];
+
+/** 코드 → 라벨. 모르는 코드(구버전 행)는 코드 그대로 보여준다. */
+export function outcomeReasonLabel(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return OUTCOME_REASON_LABELS[code as OutcomeReason] ?? code;
+}
+
 export const STAGE_LABELS: Record<Stage, string> = {
   applied: "지원",
   screened: "서류평가",

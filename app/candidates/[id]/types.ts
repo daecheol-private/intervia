@@ -75,6 +75,11 @@ export type Candidate = {
   outcome: "hired" | "rejected" | "withdrawn" | null;
   outcomeReason: string | null;
   decidedAt: string | null;
+  /** 종결시킨 사용자. null = 시스템 자동 종결(링크 만료·공고 종결 일괄). */
+  decidedByUserId?: number | null;
+  decidedByName?: string | null;
+  /** 종결 당시 진행 단계 — "어디까지 갔다가 끝났나". */
+  decisionFromStage?: string | null;
   decisionNote: string | null;
   createdAt: string;
   interviewEmailCount?: number;

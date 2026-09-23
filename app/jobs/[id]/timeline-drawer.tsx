@@ -27,6 +27,7 @@ import {
   ScanSearch,
   Send,
   ShieldAlert,
+  TimerOff,
   Trash2,
   UserMinus,
   UserPlus,
@@ -34,7 +35,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { STAGE_LABELS, type Stage } from "@/lib/stage-meta";
+import { STAGE_LABELS, outcomeReasonLabel, type Stage } from "@/lib/stage-meta";
 import { formatLocalDate, formatLocalDateTime, parseDbTimestamp } from "@/lib/utils";
 
 type TimelineEvent = {
@@ -141,6 +142,21 @@ function describe(e: TimelineEvent): {
       };
     }
 
+    // 링크 만료로 시스템이 종결시킨 건 — 사람이 누른 기록이 없어 "왜 불합격인지" 물음이 반복됐다.
+    case "candidate.auto_close": {
+      const reason = outcomeReasonLabel(
+        typeof m.reason === "string" ? m.reason : null
+      );
+      const from =
+        typeof m.from_stage === "string" ? `${stageLabel(m.from_stage)} 단계에서 종결` : null;
+      return {
+        icon: TimerOff,
+        title: "자동 종결 — 불합격 (기한 경과)",
+        detail: [reason, from].filter(Boolean).join(" · ") || null,
+        tone: "danger",
+      };
+    }
+
     case "candidate.stage_change":
     case "user.status_change": {
       const oc = m.outcome_change as { to?: unknown; reason?: unknown } | undefined;
@@ -149,7 +165,9 @@ function describe(e: TimelineEvent): {
         return {
           icon: to === "hired" ? CheckCircle2 : to === "rejected" ? UserX : UserMinus,
           title: `종결 — ${stageLabel(to)}`,
-          detail: null,
+          detail: outcomeReasonLabel(
+            typeof oc.reason === "string" ? oc.reason : null
+          ),
           tone: to === "hired" ? "success" : to === "rejected" ? "danger" : "neutral",
         };
       }

@@ -14,11 +14,18 @@ import {
   Mail,
   PhoneCall,
   RefreshCw,
+  TimerOff,
   UserCheck,
   X,
 } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
-import { STAGE_LABELS as STAGE_LABELS_SHARED } from "@/lib/stage-meta";
+import {
+  AUTO_OUTCOME_REASONS,
+  outcomeReasonLabel,
+  outcomeReasonShortLabel,
+  STAGE_LABELS as STAGE_LABELS_SHARED,
+  type OutcomeReason,
+} from "@/lib/stage-meta";
 import { confirmDialog } from "@/app/components/Dialog";
 import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 import { CandidateChat } from "./candidate-chat";
@@ -156,19 +163,6 @@ const OUTCOME_META: Record<
   withdrawn: { label: "지원취소", color: "bg-surface-alt text-ink-soft border border-border-default" },
 };
 
-const OUTCOME_REASON_LABEL: Record<string, string> = {
-  candidate_withdrew: "지원자가 지원 취소",
-  ai_link_expired: "AI면접 링크 만료 (응시 기한 경과 — AI 평가 결과 아님)",
-  schedule_link_expired: "1차 면접 일정 링크 만료",
-  resume_unfit: "서류 부적합",
-  ai_interview_unfit: "AI면접 평가 부적합",
-  round1_unfit: "1차 면접 부적합",
-  round2_unfit: "2차 면접 부적합",
-  offer_declined: "처우협의 결렬",
-  passed_final: "최종 합격 결정",
-  other: "기타",
-};
-
 export function OutcomeBadge({
   outcome,
   reason,
@@ -177,14 +171,15 @@ export function OutcomeBadge({
   reason: string | null;
 }) {
   const m = OUTCOME_META[outcome];
-  const rl = reason ? OUTCOME_REASON_LABEL[reason] : null;
+  // 배지엔 축약형, 전체 설명은 title + 아래 종결 요약 블록.
+  const short = outcomeReasonShortLabel(reason);
   return (
     <span
       className={`text-xs px-2 py-0.5 rounded-md font-semibold ${m.color}`}
-      title={rl ?? undefined}
+      title={outcomeReasonLabel(reason) ?? undefined}
     >
       {m.label}
-      {rl && <span className="ml-1 opacity-70 font-normal">· {rl}</span>}
+      {short && <span className="ml-1 opacity-70 font-normal">· {short}</span>}
     </span>
   );
 }
@@ -706,6 +701,8 @@ export function StagePanel({
         </div>
       </div>
 
+      {isTerminal && <DecisionSummary candidate={candidate} />}
+
       {candidate.decisionNote && (
         <div className="mt-3 text-xs text-ink-soft bg-surface-alt border border-border-default rounded-lg px-3 py-2 whitespace-pre-wrap">
           📝 {candidate.decisionNote}
@@ -822,7 +819,7 @@ export function StagePanel({
                 >
                   {reasonsAvail.map((r) => (
                     <option key={r} value={r}>
-                      {OUTCOME_REASON_LABEL[r] ?? r}
+                      {outcomeReasonLabel(r)}
                     </option>
                   ))}
                 </select>
@@ -1004,5 +1001,56 @@ export function StagePanel({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * 종결 요약 — "무엇으로 · 왜 · 누가 · 언제" 를 한 줄로.
+ * 링크 만료 자동 종결은 사람이 누른 기록이 없어 화면상 이유가 사라졌었다(2026-09-23 문의).
+ */
+function DecisionSummary({ candidate }: { candidate: Candidate }) {
+  const outcomeLabel =
+    candidate.outcome === "hired"
+      ? "최종합격"
+      : candidate.outcome === "rejected"
+        ? "불합격"
+        : "지원취소";
+  const reason = outcomeReasonLabel(candidate.outcomeReason);
+  const isAuto =
+    candidate.outcomeReason != null &&
+    AUTO_OUTCOME_REASONS.includes(candidate.outcomeReason as OutcomeReason);
+  // 자동 종결은 decidedByUserId 가 없다. 이름이 비어도 "알 수 없음" 대신 주체를 분명히 밝힌다.
+  const actor = isAuto
+    ? "시스템 자동"
+    : candidate.decidedByName ?? (candidate.decidedByUserId ? "담당자" : "시스템");
+  const fromStage = candidate.decisionFromStage
+    ? STAGE_LABEL[candidate.decisionFromStage] ?? candidate.decisionFromStage
+    : null;
+  const Icon = isAuto ? TimerOff : Flag;
+
+  return (
+    <div className="mt-3 rounded-lg border border-border-default bg-surface-alt px-3 py-2.5">
+      <div className="flex items-start gap-2">
+        <Icon className="w-3.5 h-3.5 mt-0.5 shrink-0 text-ink-muted" aria-hidden />
+        <div className="min-w-0 text-xs leading-relaxed">
+          <div className="text-ink font-semibold">
+            종결 — {outcomeLabel}
+            {reason && <span className="font-normal text-ink-soft"> · {reason}</span>}
+          </div>
+          <div className="mt-0.5 text-ink-muted">
+            {actor}
+            {candidate.decidedAt && <> · {formatKstDateTime(candidate.decidedAt)}</>}
+            {fromStage && <> · {fromStage} 단계에서 종결</>}
+          </div>
+          {isAuto && (
+            <p className="mt-1 text-ink-soft">
+              {candidate.outcomeReason === "job_closed_bulk"
+                ? "공고를 종결할 때 진행 중이던 후보가 일괄 처리됐습니다."
+                : "지원자가 기한 안에 응답하지 않아 시스템이 자동으로 종결했습니다. AI 평가 결과가 아닙니다."}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

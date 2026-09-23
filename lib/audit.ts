@@ -62,6 +62,8 @@ export type AuditAction =
   | "org.resume"
   // 공고 타임라인 이벤트 (2026-07)
   | "candidate.stage_change"
+  // 링크 만료로 시스템이 자동 종결(불합격)시킨 기록 — 사람이 누른 게 아님을 타임라인·상세에서 구분.
+  | "candidate.auto_close"
   | "interview.start"
   | "interview.complete"
   | "job.close"
@@ -110,6 +112,8 @@ const CRITICAL_AUDIT_ACTIONS = new Set<string>([
   "user.status_change",
   // 합불 결정(outcome) 포함 — §37의2 분쟁 입증용 (구 user.status_change 에서 분리).
   "candidate.stage_change",
+  // 자동 종결도 불합격 확정 — 사람 개입 없이 일어나므로 기록 실패가 더 치명적이다.
+  "candidate.auto_close",
   "user.delete",
   "org.delete",
   "candidate.delete",
@@ -128,7 +132,12 @@ const CRITICAL_AUDIT_ACTIONS = new Set<string>([
   "shared_report.create",
 ]);
 
-export function logAudit(req: Request | null, entry: AuditEntry): void {
+/**
+ * 반환 Promise 는 무시해도 된다(대부분의 라우트는 응답을 막지 않으려 그대로 버린다).
+ * 다만 **cron·워커처럼 호출 직후 실행 컨텍스트가 종료되는 경로는 await 할 것** —
+ * serverless 함수가 응답과 함께 끝나면 떠 있던 insert 가 유실된다.
+ */
+export function logAudit(req: Request | null, entry: AuditEntry): Promise<void> {
   const ip = req ? extractIp(req) : null;
   const ua = req?.headers.get("user-agent")?.slice(0, 500) ?? null;
   const actorRole =
@@ -141,7 +150,7 @@ export function logAudit(req: Request | null, entry: AuditEntry): void {
     entry.orgId != null &&
     entry.actor.orgId !== entry.orgId;
 
-  void db
+  return db
     .insert(auditLogs)
     .values({
       actorUserId: entry.actor?.id ?? null,
@@ -158,6 +167,7 @@ export function logAudit(req: Request | null, entry: AuditEntry): void {
         ...(isCrossOrg ? { cross_org: true } : {}),
       },
     })
+    .then(() => undefined)
     .catch((e) => {
       console.error("[audit] insert failed:", e);
       // critical 액션 감사 실패는 컴플라이언스 사고 — Sentry/Slack 알림

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { candidates, interviewSchedules, interviewSessions, organizations, screeningJobs, userCandidateFavorites } from "@/lib/schema";
+import { candidates, interviewSchedules, interviewSessions, organizations, screeningJobs, userCandidateFavorites, users } from "@/lib/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
@@ -28,7 +28,7 @@ export async function GET(
   const { candidate, job } = g;
 
   // guard 이후 보조 조회는 전부 상호 독립 — 병렬 실행 (상세 페이지 + 평가 중 4초 폴링 핫패스).
-  const [sessions, schedules, lastJobRows, favRows, orgInfo] =
+  const [sessions, schedules, lastJobRows, favRows, orgInfo, decidedBy] =
     await Promise.all([
       db
         .select()
@@ -71,6 +71,15 @@ export async function GET(
             cultureFitProfile: string | null;
             subdomain: string | null;
           } | null>(null),
+      // 종결시킨 사람 이름 — 상세의 "누가 왜 종결했나" 표시용.
+      // decidedByUserId 가 없으면 시스템 자동 종결(링크 만료)이라 조회 자체를 건너뛴다.
+      candidate.decidedByUserId
+        ? db
+            .select({ name: users.name })
+            .from(users)
+            .where(eq(users.id, candidate.decidedByUserId))
+            .then(([u]) => u?.name ?? null)
+        : Promise.resolve<string | null>(null),
     ]);
   const [lastJob] = lastJobRows;
   const [fav] = favRows;
@@ -148,7 +157,11 @@ export async function GET(
   // 원본 이력서 텍스트(resumeText)는 항상 서버 전용 — 응답에서 명시적으로 제외한다.
   // (HR 검수용 마스킹본 resumeMaskedText 만 노출.) candidates 에 새 PII 컬럼을 추가하면
   //  여기서도 클라이언트 노출 여부를 반드시 검토할 것 — 전체 spread 로 무심코 새지 않도록.
-  const candidateSafe: Record<string, unknown> = { ...candidate, favorited };
+  const candidateSafe: Record<string, unknown> = {
+    ...candidate,
+    favorited,
+    decidedByName: decidedBy,
+  };
   delete candidateSafe.resumeText;
 
   return Response.json({

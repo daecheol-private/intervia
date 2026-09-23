@@ -38,7 +38,7 @@ export {
   STAGE_LABELS,
   STAGE_WAITER,
 } from "./stage-meta";
-import type { Stage } from "./stage-meta";
+import type { Stage, OutcomeReason } from "./stage-meta";
 
 /** 메인 단계 + 서브 상태 분리 — UI에서 메인 큰 글자 + 서브 작은 글자 노출용. */
 export function splitStage(stage: Stage): { main: string; sub: string | null } {
@@ -127,35 +127,15 @@ export const OUTCOME_TONE: Record<Outcome, "success" | "danger" | "muted"> = {
 };
 
 /**
- * 종결 사유 코드. 자동 사유는 시스템이 설정, 수동 사유는 면접관이 선택.
- * "기타" 선택 시 decisionNote 에 자유 텍스트 추가.
+ * 종결 사유 코드·라벨은 lib/stage-meta.ts 에 있다 (client component 도 표시해야 해서).
+ * 기존 import 경로(@/lib/candidate-stage)를 유지하려고 여기서 re-export 한다.
  */
-export type OutcomeReason =
-  // 자동
-  | "candidate_withdrew"       // 지원자가 직접 지원 취소
-  | "ai_link_expired"          // AI면접 링크 7일 만료
-  | "schedule_link_expired"    // 1차 면접 일정 링크 만료
-  // 수동 (면접관 선택)
-  | "resume_unfit"             // 서류 부적합
-  | "ai_interview_unfit"       // AI면접 평가 부적합
-  | "round1_unfit"             // 1차 면접 부적합
-  | "round2_unfit"             // 2차 면접 부적합
-  | "offer_declined"           // 처우협의 결렬
-  | "passed_final"             // 최종 합격 결정
-  | "other";                   // 기타 (자유 입력)
-
-export const OUTCOME_REASON_LABELS: Record<OutcomeReason, string> = {
-  candidate_withdrew: "지원자가 지원 취소",
-  ai_link_expired: "AI면접 링크 만료 (응시 기한 경과 — AI 평가 결과 아님)",
-  schedule_link_expired: "1차 면접 일정 링크 만료",
-  resume_unfit: "서류 부적합",
-  ai_interview_unfit: "AI면접 평가 부적합",
-  round1_unfit: "1차 면접 부적합",
-  round2_unfit: "2차 면접 부적합",
-  offer_declined: "처우협의 결렬",
-  passed_final: "최종 합격 결정",
-  other: "기타",
-};
+export {
+  OUTCOME_REASON_LABELS,
+  AUTO_OUTCOME_REASONS,
+  outcomeReasonLabel,
+  type OutcomeReason,
+} from "./stage-meta";
 
 /** outcome 별 선택 가능한 사유 — UI 셀렉트 박스용. */
 export const OUTCOME_REASONS_BY_OUTCOME: Record<Outcome, OutcomeReason[]> = {

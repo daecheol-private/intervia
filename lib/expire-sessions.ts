@@ -6,6 +6,7 @@ import {
 } from "./schema";
 import { and, eq, lt, sql, isNull, inArray } from "drizzle-orm";
 import { cleanupOnClose, purgeOnDecision } from "./candidate-stage";
+import { logAudit } from "./audit";
 
 /**
  * 만료 시점이 지난 면접 세션 정리.
@@ -64,6 +65,13 @@ export async function expireInterviewSessions(): Promise<{
         id: candidates.id,
         outcome: candidates.outcome,
         sessionCandidateId: interviewSessions.candidateId,
+        // 감사 기록용 — 공고 타임라인 노출에 orgId/jobId 필수, stage 는 "어디까지 갔나" 정보.
+        orgId: candidates.orgId,
+        jobId: candidates.jobId,
+        stage: candidates.stage,
+        name: candidates.name,
+        sessionId: interviewSessions.id,
+        expiresAt: interviewSessions.expiresAt,
       })
       .from(interviewSessions)
       .innerJoin(candidates, eq(candidates.id, interviewSessions.candidateId))
@@ -93,6 +101,24 @@ export async function expireInterviewSessions(): Promise<{
         await cleanupOnClose(c.id).catch((e) =>
           console.error("cleanupOnClose after ai expire failed", e)
         );
+        // 공고 타임라인·후보자 상세에 "왜 종결됐나"를 남긴다. cron 은 응답 직후 함수가
+        // 끝나므로 fire-and-forget 이면 insert 가 유실된다 — 반드시 await.
+        await logAudit(null, {
+          actorRole: "system",
+          action: "candidate.auto_close",
+          resourceType: "candidate",
+          resourceId: c.id,
+          orgId: c.orgId,
+          jobId: c.jobId,
+          metadata: {
+            outcome: "rejected",
+            reason: "ai_link_expired",
+            from_stage: c.stage,
+            name: c.name,
+            sessionId: c.sessionId,
+            expiresAt: c.expiresAt,
+          },
+        });
         aiAutoRejected++;
       } catch (e) {
         console.error("ai expire auto-reject failed", { candidateId: c.id, e });
@@ -106,6 +132,8 @@ export async function expireInterviewSessions(): Promise<{
     .select({
       id: interviewSchedules.id,
       candidateId: interviewSchedules.candidateId,
+      round: interviewSchedules.round,
+      expiresAt: interviewSchedules.expiresAt,
     })
     .from(interviewSchedules)
     .where(
@@ -127,11 +155,19 @@ export async function expireInterviewSessions(): Promise<{
       );
     const candidateIds = Array.from(new Set(expiredScheds.map((s) => s.candidateId)));
     const candsToReject = await db
-      .select({ id: candidates.id })
+      .select({
+        id: candidates.id,
+        orgId: candidates.orgId,
+        jobId: candidates.jobId,
+        stage: candidates.stage,
+        name: candidates.name,
+      })
       .from(candidates)
       .where(
         and(inArray(candidates.id, candidateIds), isNull(candidates.outcome))
       );
+    // 후보별 만료 일정 — 감사 metadata 에 어느 회차 링크가 만료됐는지 남긴다.
+    const schedOf = new Map(expiredScheds.map((s) => [s.candidateId, s]));
     for (const c of candsToReject) {
       // 후보 1건 실패가 배치 전체를 끊지 않도록 격리(위 AI 만료 루프와 동일 이유).
       try {
@@ -150,6 +186,24 @@ export async function expireInterviewSessions(): Promise<{
         await cleanupOnClose(c.id).catch((e) =>
           console.error("cleanupOnClose after schedule expire failed", e)
         );
+        const sched = schedOf.get(c.id);
+        await logAudit(null, {
+          actorRole: "system",
+          action: "candidate.auto_close",
+          resourceType: "candidate",
+          resourceId: c.id,
+          orgId: c.orgId,
+          jobId: c.jobId,
+          metadata: {
+            outcome: "rejected",
+            reason: "schedule_link_expired",
+            from_stage: c.stage,
+            name: c.name,
+            round: sched?.round ?? null,
+            scheduleId: sched?.id ?? null,
+            expiresAt: sched?.expiresAt ?? null,
+          },
+        });
         scheduleAutoRejected++;
       } catch (e) {
         console.error("schedule expire auto-reject failed", { candidateId: c.id, e });
