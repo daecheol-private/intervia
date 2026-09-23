@@ -767,6 +767,37 @@ describe("CT-7 AI 면접 플로우", () => {
     assert.equal(cand?.outcome_reason, "ai_link_expired");
   });
 
+  it("CT-713 종결 취소 — 자동 종결 후보 되살리기 (stage 보존·감사 기록·중복 거부)", async () => {
+    const before = await row<{ stage: string }>(
+      "SELECT stage FROM candidates WHERE id = ?",
+      [ctx.cCron]
+    );
+    const r = await adminA.post(`/api/candidates/${ctx.cCron}/reopen`, {});
+    assert.ok(r.status < 300, r.text);
+    const cand = await row<{
+      outcome: string | null;
+      outcome_reason: string | null;
+      decided_at: string | null;
+      stage: string;
+    }>(
+      "SELECT outcome, outcome_reason, decided_at, stage FROM candidates WHERE id = ?",
+      [ctx.cCron]
+    );
+    assert.equal(cand?.outcome, null);
+    assert.equal(cand?.outcome_reason, null);
+    assert.equal(cand?.decided_at, null);
+    // stage 는 그대로 — 종결 당시 단계부터 이어간다.
+    assert.equal(cand?.stage, before?.stage);
+    const audit = await row<{ c: number }>(
+      "SELECT COUNT(*) c FROM audit_logs WHERE action = 'candidate.reopen' AND resource_id = ?",
+      [ctx.cCron]
+    );
+    assert.equal(Number(audit?.c), 1);
+    // 이미 진행 중인 후보는 되살릴 게 없다.
+    const again = await adminA.post(`/api/candidates/${ctx.cCron}/reopen`, {});
+    assert.equal(again.status, 400, again.text);
+  });
+
   it("CT-712 지원 취소 withdraw", async () => {
     ctx.cWd = await insertCandidate({
       orgId: ids.orgA,

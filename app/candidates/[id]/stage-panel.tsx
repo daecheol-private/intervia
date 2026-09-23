@@ -15,6 +15,7 @@ import {
   PhoneCall,
   RefreshCw,
   TimerOff,
+  Undo2,
   UserCheck,
   X,
 } from "lucide-react";
@@ -220,6 +221,8 @@ export function StagePanel({
   screeningPhase,
   screeningActive,
   round2Confirmed = false,
+  jobBlocked = false,
+  hasFutureConfirmedSchedule = false,
 }: {
   candidate: Candidate;
   jobTitle: string;
@@ -235,6 +238,10 @@ export function StagePanel({
   /** 2차 일정이 이미 확정됐는지 — round2 는 확정돼도 stage 가 round1_passed 로 남아
    *  stage 만으로는 "제시 필요"와 구분되지 않는다. 확정 후 변경은 2차 면접 탭에서. */
   round2Confirmed?: boolean;
+  /** 공고가 종결됐거나 종결 예정일이 지남 — 종결을 취소해도 후속 진행이 막힌다. */
+  jobBlocked?: boolean;
+  /** 아직 치르지 않은 확정 면접이 있음 — 종결 시 관계자에게 취소 통지가 이미 나갔다. */
+  hasFutureConfirmedSchedule?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [rescreenBusy, setRescreenBusy] = useState(false);
@@ -513,6 +520,62 @@ export function StagePanel({
     onChanged();
   };
 
+  // 종결 취소 — 되돌릴 수 없는 것들을 먼저 알리고 확인받는다.
+  // 경고는 이 후보의 실제 상태에 해당하는 것만 띄운다(전부 나열하면 아무도 안 읽는다).
+  const reopen = async () => {
+    const resumePurged = !candidate.resumeFilePath && !candidate.resumeMaskedText;
+    const notified =
+      (candidate.decisionEmailCount ?? 0) > 0 ||
+      !!candidate.decisionNotifiedExternallyAt;
+    const warnings: string[] = [];
+    if (candidate.outcome === "withdrawn")
+      warnings.push(
+        "• 지원자 본인이 취소한 건입니다. 지원자 동의를 받고 진행하세요."
+      );
+    if (notified)
+      warnings.push(
+        "• 결과 통보가 이미 나갔습니다. 지원자는 종결된 것으로 알고 있으니 따로 연락이 필요합니다."
+      );
+    if (hasFutureConfirmedSchedule)
+      warnings.push(
+        "• 확정 면접의 취소 통지가 이미 나갔습니다. 면접관·공유 수신자에게 다시 안내해야 합니다."
+      );
+    if (resumePurged)
+      warnings.push(
+        "• 이력서 본문·파일·첨부는 종결 시 폐기되어 복구되지 않습니다 (평가 결과는 남아 있습니다)."
+      );
+    if (candidate.outcome === "hired")
+      warnings.push(
+        "• 합격자에게 적용되던 이력서 보존이 풀려, 공고 종결 후 폐기 대상이 됩니다."
+      );
+    if (jobBlocked)
+      warnings.push(
+        "• 공고가 종결됐거나 종결 예정일이 지났습니다. 공고를 연장·재개해야 이어서 진행할 수 있습니다."
+      );
+    warnings.push("• 이번 종결에 남긴 내부 메모는 지워집니다.");
+
+    if (
+      !(await confirmDialog(
+        `종결을 취소하고 ${STAGE_LABEL[candidate.stage] ?? candidate.stage} 단계부터 다시 진행합니다.\n\n${warnings.join("\n")}\n\nAI 면접·일정 링크는 되살아나지 않으니 필요하면 새로 발송하세요.`,
+        { title: "종결 취소", tone: "warn", confirmText: "다시 진행" }
+      ))
+    )
+      return;
+
+    setBusy(true);
+    setMsg(null);
+    const r = await fetch(`/api/candidates/${candidate.id}/reopen`, {
+      method: "POST",
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setMsg({ kind: "err", text: await r.text() });
+      return;
+    }
+    setMsg({ kind: "ok", text: "종결을 취소했습니다. 다시 진행할 수 있습니다." });
+    onChanged();
+  };
+
   // 재평가 — 공고/평가가이드 수정 후 또는 재확인용. 기존 결과는 새 평가가 끝나면 덮어쓴다.
   // 과금은 평가가 성공 완료될 때 1건 차감(오류면 과금 안 됨).
   const rescreen = async () => {
@@ -701,7 +764,9 @@ export function StagePanel({
         </div>
       </div>
 
-      {isTerminal && <DecisionSummary candidate={candidate} />}
+      {isTerminal && (
+        <DecisionSummary candidate={candidate} onReopen={reopen} busy={busy} />
+      )}
 
       {candidate.decisionNote && (
         <div className="mt-3 text-xs text-ink-soft bg-surface-alt border border-border-default rounded-lg px-3 py-2 whitespace-pre-wrap">
@@ -1008,7 +1073,15 @@ export function StagePanel({
  * 종결 요약 — "무엇으로 · 왜 · 누가 · 언제" 를 한 줄로.
  * 링크 만료 자동 종결은 사람이 누른 기록이 없어 화면상 이유가 사라졌었다(2026-09-23 문의).
  */
-function DecisionSummary({ candidate }: { candidate: Candidate }) {
+function DecisionSummary({
+  candidate,
+  onReopen,
+  busy,
+}: {
+  candidate: Candidate;
+  onReopen: () => void | Promise<void>;
+  busy: boolean;
+}) {
   const outcomeLabel =
     candidate.outcome === "hired"
       ? "최종합격"
@@ -1050,6 +1123,15 @@ function DecisionSummary({ candidate }: { candidate: Candidate }) {
             </p>
           )}
         </div>
+        <button
+          onClick={() => void onReopen()}
+          disabled={busy}
+          title="종결을 취소하고 종결 당시 단계부터 다시 진행합니다"
+          className="ml-auto shrink-0 whitespace-nowrap text-xs px-3 py-1.5 rounded-md border border-border-strong text-ink-soft hover:bg-card hover:text-ink disabled:opacity-50 transition-colors inline-flex items-center gap-1"
+        >
+          <Undo2 className="w-3.5 h-3.5" />
+          종결 취소
+        </button>
       </div>
     </div>
   );

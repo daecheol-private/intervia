@@ -136,6 +136,7 @@ npm run test:critical        # 전체 (~2/4분, dev 서버 라우트 컴파일 �
 | CT-710 | cron `expire-interviews` (Bearer CRON_SECRET) | 200 + pending 만료 세션 `expired` + 자동 불합격 처리 |
 | CT-711 | 인성검사 (법인 컬처핏 설정 시): GET 문항 → 제출 → 재제출 | 문항쌍 노출(특성 태그 비노출) → 채점 저장 → 멱등 · 동의 후 검사 전 chat 403 `personality_required` |
 | CT-712 | 지원 취소 withdraw ({email}) | 세션 expired + outcome `withdrawn` |
+| CT-713 | 종결 취소 `POST /api/candidates/[id]/reopen` (자동 종결된 후보) | outcome·사유·결정시각 해제 + stage 보존 + 감사 `candidate.reopen` 1건 · 진행 중 후보 재호출 400 |
 
 ### CT-8. 후보자 데이터 보호 / 권리 ⚙️🙋
 

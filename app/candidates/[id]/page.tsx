@@ -475,6 +475,19 @@ export default function CandidateDetailPage() {
   const round2Confirmed = (schedules ?? []).some(
     (s) => s.round === "round2" && s.status === "selected"
   );
+  // 종결 취소 경고용 사실 2가지.
+  //  - 공고가 닫혔거나 종결 예정일이 지나면 되살려도 후속 진행(면접 발급 등)이 막힌다.
+  //  - 아직 치르지 않은 확정 면접이 있었다면 종결 시 관계자에게 취소 통지가 이미 나갔다.
+  //    (일정 row 는 'selected' 로 남아 화면과 관계자 인식이 어긋난 상태)
+  const jobClosedOrExpired =
+    job?.status === "closed" ||
+    (job?.closesAt ? new Date(job.closesAt).getTime() < Date.now() : false);
+  const hasFutureConfirmedSchedule = (schedules ?? []).some(
+    (s) =>
+      s.status === "selected" &&
+      !!s.selectedSlot?.start &&
+      new Date(s.selectedSlot.start).getTime() > Date.now()
+  );
   const completedSession = sessions.find((s) => s.status === "completed");
   // 후보자에게 직접 가는 결정 통보 메일의 기본 언어 — 완료 세션(없으면 최신) 면접 언어를 따른다.
   const interviewLang: "ko" | "en" =
@@ -771,6 +784,8 @@ export default function CandidateDetailPage() {
             screeningPhase={data.screeningPhase}
             screeningActive={!!data.screeningActive}
             round2Confirmed={round2Confirmed}
+            jobBlocked={jobClosedOrExpired}
+            hasFutureConfirmedSchedule={hasFutureConfirmedSchedule}
           />
         </div>
       </div>

@@ -29,6 +29,7 @@ import {
   ShieldAlert,
   TimerOff,
   Trash2,
+  Undo2,
   UserMinus,
   UserPlus,
   UserX,
@@ -154,6 +155,22 @@ function describe(e: TimelineEvent): {
         title: "자동 종결 — 불합격 (기한 경과)",
         detail: [reason, from].filter(Boolean).join(" · ") || null,
         tone: "danger",
+      };
+    }
+
+    // 결정 번복 — 무엇을 되돌렸는지(이전 결과·사유)까지 보여야 이력이 읽힌다.
+    case "candidate.reopen": {
+      const prev =
+        typeof m.prev_outcome === "string" ? stageLabel(m.prev_outcome) : null;
+      const reason = outcomeReasonLabel(
+        typeof m.prev_reason === "string" ? m.prev_reason : null
+      );
+      return {
+        icon: Undo2,
+        title: "종결 취소 — 다시 진행",
+        detail:
+          [prev && `이전 결과: ${prev}`, reason].filter(Boolean).join(" · ") || null,
+        tone: "warn",
       };
     }
 

@@ -64,6 +64,8 @@ export type AuditAction =
   | "candidate.stage_change"
   // 링크 만료로 시스템이 자동 종결(불합격)시킨 기록 — 사람이 누른 게 아님을 타임라인·상세에서 구분.
   | "candidate.auto_close"
+  // 종결 취소(다시 진행) — 결정 번복이라 누가 무엇을 되돌렸는지 남긴다.
+  | "candidate.reopen"
   | "interview.start"
   | "interview.complete"
   | "job.close"
@@ -114,6 +116,8 @@ const CRITICAL_AUDIT_ACTIONS = new Set<string>([
   "candidate.stage_change",
   // 자동 종결도 불합격 확정 — 사람 개입 없이 일어나므로 기록 실패가 더 치명적이다.
   "candidate.auto_close",
+  // 결정 번복 — 분쟁 시 "언제 되돌렸나"가 쟁점이 된다.
+  "candidate.reopen",
   "user.delete",
   "org.delete",
   "candidate.delete",

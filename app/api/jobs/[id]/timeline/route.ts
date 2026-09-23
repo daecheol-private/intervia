@@ -33,6 +33,7 @@ const TIMELINE_ACTIONS = [
   "candidate.stage_change",
   // 링크 만료 자동 종결 — 사람이 누른 기록이 없어 예전엔 타임라인이 비어 보였다.
   "candidate.auto_close",
+  "candidate.reopen",
   // legacy — stage 변경·후보자 수정·미팅링크가 이 이름으로 기록되던 시기 행 (metadata 로 구분)
   "user.status_change",
   "interview.create",
