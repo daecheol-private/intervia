@@ -293,6 +293,9 @@ export function StagePanel({
   }, [msg]);
 
   const isTerminal = candidate.outcome != null;
+  // 이력서 원문이 남아있지 않은 상태 — 종결 시 폐기(purgeOnDecision)됐거나 보존기간이 지났다.
+  // 다운로드·마스킹 보기·재평가가 모두 불가능하므로 관련 액션의 공통 게이트로 쓴다.
+  const resumePurged = !candidate.resumeFilePath && !candidate.resumeMaskedText;
 
   // outcome 별 선택 가능 사유. 사용자가 outcome 바꿀 때 default reason 자동 선택.
   // 지원취소(withdrawn)는 후보자가 링크에서 직접 취소하거나, 유선 등으로 밝힌 취소 의사를 HR 이 대신 기록.
@@ -523,7 +526,6 @@ export function StagePanel({
   // 종결 취소 — 되돌릴 수 없는 것들을 먼저 알리고 확인받는다.
   // 경고는 이 후보의 실제 상태에 해당하는 것만 띄운다(전부 나열하면 아무도 안 읽는다).
   const reopen = async () => {
-    const resumePurged = !candidate.resumeFilePath && !candidate.resumeMaskedText;
     const notified =
       (candidate.decisionEmailCount ?? 0) > 0 ||
       !!candidate.decisionNotifiedExternallyAt;
@@ -640,8 +642,12 @@ export function StagePanel({
           </button>
         )}
         {/* 재평가 — 평가 완료/실패/재시도 대기 후보 모두 대상(공고·가이드 수정, 오류 복구, 재확인).
-            워커가 실제 처리중일 때만 버튼 숨기고 진행 표시. (not_started 는 위 평가 영역의 "AI 검토 요청" 사용) */}
-        {screeningPhase !== "not_started" &&
+            워커가 실제 처리중일 때만 버튼 숨기고 진행 표시. (not_started 는 위 평가 영역의 "AI 검토 요청" 사용)
+            이력서가 폐기된 후보(종결 시 purge / 보존기간 경과)는 제외 — 워커가 원문을 못 읽어
+            "이력서 파일 경로 없음" 으로 반드시 실패한다(재시도 불가 에러). 종결을 취소해 되살린
+            후보가 대표적이라, 눌러봐야 실패하는 버튼을 아예 보이지 않게 한다. */}
+        {!resumePurged &&
+          screeningPhase !== "not_started" &&
           (screeningActive || rescreening ? (
             <span className="shrink-0 whitespace-nowrap text-xs px-3 py-1.5 rounded-md border border-border-default bg-surface-alt text-ink-soft inline-flex items-center gap-1.5">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -662,7 +668,7 @@ export function StagePanel({
               {rescreenBusy ? "요청 중..." : "재평가"}
             </button>
           ))}
-        {!candidate.resumeFilePath && !candidate.resumeMaskedText && (
+        {resumePurged && (
           <span className="text-xs text-ink-muted italic shrink-0 whitespace-nowrap">
             🔒 보존기간 경과로 이력서 원본 폐기됨
           </span>

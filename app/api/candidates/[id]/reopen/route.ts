@@ -11,7 +11,7 @@
  */
 import { db } from "@/lib/db";
 import { candidates } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { guardCandidate } from "@/lib/candidate-guard";
@@ -35,13 +35,13 @@ export async function POST(
   const { candidate } = g;
 
   if (!candidate.outcome) {
-    return Response.json(
-      { error: "종결된 후보자가 아닙니다.", code: "not_terminated" },
-      { status: 400 }
-    );
+    // 클라이언트가 응답 본문을 그대로 사용자에게 보여주므로 평문으로 답한다.
+    return new Response("종결된 후보자가 아닙니다.", { status: 400 });
   }
 
-  await db
+  // 낙관적 잠금 — 읽은 뒤 UPDATE 하기까지 사이에 다른 사람이 결정을 바꿨다면
+  // (예: 불합격 → 최종합격) 그 결정을 조용히 지우지 않고 실패시킨다.
+  const updated = await db
     .update(candidates)
     .set({
       outcome: null,
@@ -58,7 +58,15 @@ export async function POST(
       // decisionEmailCount(실제 발송 건수·한도)는 이력이라 유지한다.
       decisionNotifiedExternallyAt: null,
     })
-    .where(eq(candidates.id, cid));
+    .where(and(eq(candidates.id, cid), eq(candidates.outcome, candidate.outcome)))
+    .returning({ id: candidates.id });
+
+  if (updated.length === 0) {
+    return new Response(
+      "다른 사용자가 방금 이 후보자의 결정을 변경했습니다. 새로고침 후 다시 시도해 주세요.",
+      { status: 409 }
+    );
+  }
 
   // cron 과 달리 응답까지 살아있는 요청 컨텍스트라 await 하지 않아도 되지만,
   // 결정 번복은 §37의2 분쟁 입증 대상이라 기록 실패를 응답보다 앞세운다.
@@ -78,6 +86,9 @@ export async function POST(
       // 되살린 시점의 "이미 알려진 사실" — 나중에 분쟁 시 무엇을 알고 되돌렸는지 추적.
       decision_emails_sent: candidate.decisionEmailCount,
       was_notified_externally: candidate.decisionNotifiedExternallyAt != null,
+      // 메모 내용은 자유서술이라 감사에 평문으로 남기지 않는다(후보자 PII 혼입 가능).
+      // 무엇이 지워졌는지 추적할 수 있게 존재 여부만 기록.
+      prev_note_present: !!candidate.decisionNote,
       resume_purged: !candidate.resumeFilePath && !candidate.resumeMaskedText,
       stage: candidate.stage,
     },
