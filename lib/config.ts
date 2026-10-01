@@ -12,11 +12,11 @@
  */
 
 type Config = {
-  // 필수 (배포 환경) — 모든 LLM 호출은 Vertex AI 서울 리전 경유 (2026-05-26 통합)
+  // 필수 (배포 환경) — 모든 LLM 호출은 Vertex AI 미국 멀티리전 경유 (2026-10-02 서울에서 전환)
   GOOGLE_CLOUD_PROJECT: string;
   MASTER_ENCRYPTION_KEY: string; // 64 hex chars
   // 선택 — 없으면 fallback 동작
-  GOOGLE_CLOUD_LOCATION?: string; // 기본 asia-northeast3
+  GEMINI_LOCATION?: string; // 기본 us. 옛 GOOGLE_CLOUD_LOCATION 은 더 이상 읽지 않음
   GOOGLE_APPLICATION_CREDENTIALS?: string; // 로컬: JSON 파일 경로
   GOOGLE_APPLICATION_CREDENTIALS_JSON?: string; // Vercel: JSON 통문자열
   TURSO_DATABASE_URL?: string;

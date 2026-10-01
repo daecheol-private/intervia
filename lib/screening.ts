@@ -137,8 +137,8 @@ async function orgAllowsScanOcr(orgId: number | null): Promise<boolean> {
  * 텍스트 레이어가 없는 스캔 PDF 를 Gemini 멀티모달로 OCR.
  * 추출 실패/빈 결과면 빈 문자열 반환(호출부가 기존 에러로 폴백).
  *
- * 별도 OCR 인프라 없이 이미 쓰는 Vertex 서울 리전 flash 를 그대로 사용 →
- * 데이터 국외이전 없이(§28의8 회피 유지) 스캔 이력서도 평가 가능.
+ * 별도 OCR 인프라 없이 평가에 쓰는 Vertex 모델(미국 멀티리전)을 그대로 사용.
+ * 원본이 국외로 가므로 폴백 금지(도쿄 임시 처리 고지는 마스킹 텍스트까지) — 법인 허용 시에만.
  */
 async function ocrPdfToText(buf: Buffer): Promise<string> {
   if (buf.length > OCR_MAX_BYTES) return "";

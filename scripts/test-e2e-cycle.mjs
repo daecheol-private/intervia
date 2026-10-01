@@ -5,11 +5,11 @@
  *   1. admin@company-a.test 로그인
  *   2. 첫 활성 공고에 consent 누락 업로드 시도 → 400
  *   3. consent=true + 실제 PDF 업로드 → 후보자 생성 + 큐 enqueue
- *   4. 서류 평가 완료까지 polling (gemini-2.5-flash)
+ *   4. 서류 평가 완료까지 polling (gemini-3.5-flash-lite)
  *   5. 면접 링크 발급 (interview 토큰 차감)
  *   6. 후보자로서 동의 제출
- *   7. 면접 채팅 3턴 (gemini-2.5-flash, thinking=128)
- *   8. 면접 종료 + 평가 생성 (gemini-2.5-flash)
+ *   7. 면접 채팅 3턴 (gemini-3.5-flash-lite, thinking=LOW)
+ *   8. 면접 종료 + 평가 생성 (gemini-3.5-flash-lite)
  *   9. 최종 상태 검증 + 토큰 잔액 변동 확인
  *
  * 사용자는 결과만 보고, 필요시 UI 로 직접 한번 더 검증.
@@ -102,8 +102,8 @@ let candidateId;
   log(`  ✅ 후보자 #${candidateId} "${ok.name}" 등록`);
 }
 
-// ─────────── Step 4. 서류 평가 polling (gemini-2.5-flash) ───────────
-log("Step 4: 서류 평가 완료 대기 (gemini-2.5-flash)");
+// ─────────── Step 4. 서류 평가 polling (gemini-3.5-flash-lite) ───────────
+log("Step 4: 서류 평가 완료 대기 (gemini-3.5-flash-lite)");
 const screenStart = Date.now();
 let screeningDone = false;
 for (let i = 0; i < 60; i++) {
@@ -166,8 +166,8 @@ log("Step 6: 후보자 동의 제출");
   log(`  ✅ 동의 ${Object.keys(consents).length}개 제출`);
 }
 
-// ─────────── Step 7. 면접 채팅 3턴 (gemini-2.5-flash) ───────────
-log("Step 7: 면접 채팅 3턴 (gemini-2.5-flash, thinking=128)");
+// ─────────── Step 7. 면접 채팅 3턴 (gemini-3.5-flash-lite) ───────────
+log("Step 7: 면접 채팅 3턴 (gemini-3.5-flash-lite, thinking=LOW)");
 const candidateAnswers = [
   "안녕하세요. 카카오에서 5년 동안 메시징 플랫폼 백엔드를 개발했고, 가장 자랑스러운 일은 채팅방 검색 시스템을 RDB에서 Elasticsearch로 마이그레이션해서 응답시간을 15배 개선한 프로젝트입니다.",
   "Elasticsearch 도입 결정은 제가 주도했습니다. 당시 채팅방 검색이 평균 1.2초 걸렸는데, 사용자 이탈이 컸어요. RDB의 LIKE 검색은 인덱스 활용이 어렵고 텍스트 분석도 약해서 한계가 명확했습니다. Elasticsearch는 한국어 nori analyzer 가 있고 inverted index 로 부분 일치도 빨라서 후보로 정했습니다.",
@@ -207,8 +207,8 @@ for (let turn = 0; turn < 3; turn++) {
   }
 }
 
-// ─────────── Step 8. 면접 종료 + 평가 (gemini-2.5-flash) ───────────
-log("Step 8: 면접 종료 + 평가 생성 (gemini-2.5-flash)");
+// ─────────── Step 8. 면접 종료 + 평가 (gemini-3.5-flash-lite) ───────────
+log("Step 8: 면접 종료 + 평가 생성 (gemini-3.5-flash-lite)");
 const evalStart = Date.now();
 {
   const r = await fetch(`${BASE}/api/interview/${interviewToken}/complete`, {
@@ -256,7 +256,7 @@ console.log("");
 console.log("━".repeat(60));
 console.log(`✅ A-6 풀 사이클 검증 통과 (${totalSec}s)`);
 console.log("━".repeat(60));
-console.log(`면접 턴 latency (gemini-2.5-flash, thinking=128):`);
+console.log(`면접 턴 latency (gemini-3.5-flash-lite, thinking=LOW):`);
 turnTimings.forEach((ms, i) => console.log(`  턴 ${i + 1}: ${ms}ms`));
 const avg = Math.round(turnTimings.reduce((a, b) => a + b, 0) / turnTimings.length);
 console.log(`  평균: ${avg}ms`);

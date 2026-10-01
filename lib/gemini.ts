@@ -1,24 +1,30 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { log } from "./logger";
 
 /**
  * 사용처별 Gemini 모델 매핑.
  *
- * 2026-05-26 단일화: 모든 task 를 Vertex AI 서울 리전(asia-northeast3) + gemini-2.5-flash 로 통합.
- *   - asia-northeast3 데이터 레지던시는 flash 만 지원 (pro 미지원).
- *   - 국외이전(§28의8) 회피 → 후보자 동의 항목 단순화.
+ * 2026-10-02 전환: 모든 task 를 Vertex AI 미국 멀티리전(us) + gemini-3.5-flash-lite 로.
+ *   - 서울(asia-northeast3) 에서 쓸 수 있던 유일한 모델 gemini-2.5-flash 가 2026-10-20 은퇴하고
+ *     후속 모델이 서울에 들어오지 않아 국외 처리로 전환(사용자 결정). 도쿄의 3.5-flash 는
+ *     단가가 2.5-flash 의 4~5배라 제외 — 3.5-flash-lite 는 거의 같은 단가이고 미국·EU 에만 있다.
+ *   - 3.5-flash-lite 는 temperature·topP 등 샘플링 값을 무시하고, 사고량은 thinkingLevel 로만
+ *     조절된다 (thinkingBudget 은 오류 없이 무시됨 — 2026-10-02 실측).
  *
  * SDK 는 통합 `@google/genai` 단일 패키지.
  */
 export const MODELS = {
-  screening: "gemini-2.5-flash",
-  interview: "gemini-2.5-flash",
-  interviewEval: "gemini-2.5-flash",
+  screening: "gemini-3.5-flash-lite",
+  interview: "gemini-3.5-flash-lite",
+  interviewEval: "gemini-3.5-flash-lite",
   // 1차 면접 질문지 생성 — 이력서·서류평가·AI면접 평가 종합. 동기 호출(버튼 클릭).
-  questionGen: "gemini-2.5-flash",
+  questionGen: "gemini-3.5-flash-lite",
   // 법인 중복 등록 탐지 — 가입 제출 시 입력 법인명 vs 기존 법인 교차표기(한글↔영문)·약칭 매칭.
-  orgMatch: "gemini-2.5-flash",
+  orgMatch: "gemini-3.5-flash-lite",
 } as const;
+
+// 도쿄 폴백 전용 — 도쿄엔 flash-lite 가 없어 3.5-flash. 장애 때만 쓰여 비용 영향은 미미하다.
+const FALLBACK_MODEL = "gemini-3.5-flash";
 
 export type LlmTask = keyof typeof MODELS;
 
@@ -32,9 +38,11 @@ export type LlmTask = keyof typeof MODELS;
 // (호출마다 새로 만들면 JWT 서명+토큰 교환으로 +100~300ms). env 는 프로세스 불변.
 const clientCache = new Map<string, GoogleGenAI>();
 
-const PRIMARY_LOCATION = process.env.GOOGLE_CLOUD_LOCATION ?? "asia-northeast3";
+// env 이름이 GOOGLE_CLOUD_LOCATION 이 아닌 이유: 운영 Vercel 에 옛 값 asia-northeast3 이 남아 있어
+// 그대로 읽으면 서울로 가서 3.5-flash-lite 가 404 난다.
+const PRIMARY_LOCATION = process.env.GEMINI_LOCATION ?? "us";
 // 폴백 리전 — 도쿄. §28의8 고지에 이전 "국가"를 특정해야 해서 글로벌 엔드포인트는 부적합하고,
-// 도쿄는 기존 처리방침 고지 국가(일본 — Turso)와 정합 + 국내 지연 최소 (2026-07-11 실측 정상).
+// 일본은 기존 처리방침 고지 국가(Turso)라 새 국가가 늘지 않는다.
 const FALLBACK_LOCATION = process.env.GEMINI_FALLBACK_LOCATION ?? "asia-northeast1";
 
 function vertexClient(location: string) {
@@ -68,22 +76,21 @@ function vertexClient(location: string) {
 }
 
 /**
- * Thinking budget — Gemini 2.5 는 기본 thinking on.
- * flash 는 thinkingBudget=0 으로 끌 수 있으나, 면접 응답 품질을 위해 최소치 유지.
+ * 사고 단계 — 3.5-flash-lite 기본값은 MINIMAL(사고 없음). 2.5-flash 는 기본이 동적 사고였다.
  *
- * 측정 (2026-05-22, pro 기준 — flash 통합 후 재측정 권장):
- *   default(dynamic) → 13~15초
- *   thinkingBudget=128 → 3~4초
- *
- * 비동기 task (screening / interviewEval) 는 기본값 유지.
+ * 실측 (2026-10-02, 3.5-flash-lite, 짧은 답변 평가 프롬프트):
+ *   MINIMAL·LOW → 사고 0토큰·1.5초, 5점 만점에 5점 (관대)
+ *   MEDIUM      → 사고 ~400토큰·2.8초, 4점 (근거를 따져 더 엄격)
+ * 평가·생성은 2.5-flash 의 동적 사고에 맞춰 MEDIUM, 면접 채팅은 지연이 중요해 LOW,
+ * 짧은 분류는 MINIMAL. 멀티모달(OCR·전사)은 추출 작업이라 설정 없이 기본값.
  */
-const THINKING_BUDGET: Record<LlmTask, number | undefined> = {
-  screening: undefined,
-  interview: 128,
-  interviewEval: undefined,
-  questionGen: undefined,
-  // 짧은 분류 작업 — thinking 불필요. 가입 동기 호출이라 지연 최소화.
-  orgMatch: 0,
+const THINKING_LEVEL: Record<LlmTask, ThinkingLevel> = {
+  screening: ThinkingLevel.MEDIUM,
+  interview: ThinkingLevel.LOW,
+  interviewEval: ThinkingLevel.MEDIUM,
+  questionGen: ThinkingLevel.MEDIUM,
+  // 짧은 분류 작업 — 가입 동기 호출이라 지연 최소화.
+  orgMatch: ThinkingLevel.MINIMAL,
 };
 
 const TRANSIENT_PATTERNS =
@@ -174,9 +181,9 @@ async function withRetry<T>(
   throw lastErr;
 }
 
-// 서울 장애 서킷브레이커 — 서버리스 웜 인스턴스 단위 best-effort.
-// transient 실패(재시도 소진)가 연속 2회면 60초간 폴백 허용 호출은 서울을 건너뛴다
-// (동기 기능이 매번 서울 재시도·타임아웃을 기다리지 않게). 만료 후 자동으로 서울 복귀.
+// 주 리전 장애 서킷브레이커 — 서버리스 웜 인스턴스 단위 best-effort.
+// transient 실패(재시도 소진)가 연속 2회면 60초간 폴백 허용 호출은 주 리전을 건너뛴다
+// (동기 기능이 매번 재시도·타임아웃을 기다리지 않게). 만료 후 자동으로 주 리전 복귀.
 let primaryFailStreak = 0;
 let primaryDownUntil = 0;
 
@@ -190,17 +197,19 @@ function notePrimary(ok: boolean) {
 }
 
 /**
- * 서울(기본 리전) 우선 실행 + allowFallback 호출만 도쿄 폴백.
+ * 미국(주 리전) 우선 실행 + allowFallback 호출만 도쿄 폴백 (도쿄는 FALLBACK_MODEL).
  *
- * ⚠️ allowFallback 은 프롬프트에 개인정보가 전혀 없는 호출만 켤 것.
- * 동의서·처리방침이 "AI 단계 국외이전 없음"을 전제하므로, 개인정보(마스킹 포함) 호출의
- * 폴백은 동의·처리방침 개정 전까지 금지 — docs/COMPLIANCE_SOP.md §4.
+ * ⚠️ allowFallback 은 개인정보가 없는 호출, 또는 동의·시행일 게이트(lib/consent.ts
+ * piiFallbackActive 등)를 통과한 마스킹 텍스트 호출만 켤 것. 처리방침의 도쿄 임시 처리
+ * 고지 범위가 마스킹 텍스트까지라 스캔 원본·음성은 폴백 금지 — docs/COMPLIANCE_SOP.md §4.
  */
 async function runWithFallback<T>(
-  run: (client: GoogleGenAI) => Promise<T>,
+  run: (client: GoogleGenAI, model: string) => Promise<T>,
   ctx: { op: string; task: LlmTask; allowFallback?: boolean }
 ): Promise<T> {
   const { op, task } = ctx;
+  const runPrimary = () => run(vertexClient(PRIMARY_LOCATION), MODELS[task]);
+  const runFallback = () => run(vertexClient(FALLBACK_LOCATION), FALLBACK_MODEL);
   if (ctx.allowFallback && Date.now() < primaryDownUntil) {
     log.warn("gemini.fallback_used", {
       op,
@@ -209,21 +218,15 @@ async function runWithFallback<T>(
       reason: "circuit_open",
     });
     try {
-      return await withRetry(() => run(vertexClient(FALLBACK_LOCATION)), {
-        op: `${op}.fallback`,
-        task,
-      });
+      return await withRetry(runFallback, { op: `${op}.fallback`, task });
     } catch (e) {
       if (!isTransient(e)) throw e;
-      // 도쿄도 장애 — 마지막으로 서울 1회
-      return await run(vertexClient(PRIMARY_LOCATION));
+      // 도쿄도 장애 — 마지막으로 주 리전 1회
+      return await runPrimary();
     }
   }
   try {
-    const result = await withRetry(() => run(vertexClient(PRIMARY_LOCATION)), {
-      op,
-      task,
-    });
+    const result = await withRetry(runPrimary, { op, task });
     notePrimary(true);
     return result;
   } catch (e) {
@@ -235,10 +238,7 @@ async function runWithFallback<T>(
       location: FALLBACK_LOCATION,
       reason: e instanceof Error ? e.message.slice(0, 150) : String(e).slice(0, 150),
     });
-    return withRetry(() => run(vertexClient(FALLBACK_LOCATION)), {
-      op: `${op}.fallback`,
-      task,
-    });
+    return withRetry(runFallback, { op: `${op}.fallback`, task });
   }
 }
 
@@ -249,17 +249,16 @@ export async function generateJSON<T>(
     responseSchema?: unknown;
     temperature?: number;
     timeoutMs?: number;
-    /** 프롬프트에 개인정보가 전혀 없는 호출만 true — runWithFallback 주석 참조. */
+    /** 개인정보 없는 호출, 또는 동의 게이트를 통과한 마스킹 텍스트 호출만 true — runWithFallback 주석 참조. */
     allowFallback?: boolean;
   }
 ): Promise<T> {
   const task: LlmTask = opts?.task ?? "screening";
-  const thinkingBudget = THINKING_BUDGET[task];
   return runWithFallback(
-    async (client) => {
+    async (client, model) => {
       const config: Record<string, unknown> = {
         responseMimeType: "application/json",
-        // 평가 일관성을 위해 호출부가 temperature 를 낮출 수 있음(screening=0). 기본 0.2.
+        // 호출부가 낮출 수 있음(screening=0). 기본 0.2. 3.5 계열은 이 값을 무시한다.
         temperature: opts?.temperature ?? 0.2,
       };
       // responseSchema 지정 시 Gemini 가 스키마에 맞는 유효 JSON 을 *보장* →
@@ -272,9 +271,7 @@ export async function generateJSON<T>(
       // (66 vs 56), seed 를 고정해도 3회가 54/44/50 으로 제각각이었다(Vertex seed 는
       // best-effort 이고 thinking 모델에서는 사실상 무효). 서류 점수의 안정성은 전적으로
       // screening.ts 의 promptHash 캐시가 담보한다 — 프롬프트를 고치면 전 후보가 재추첨된다.
-      if (thinkingBudget !== undefined) {
-        config.thinkingConfig = { thinkingBudget };
-      }
+      config.thinkingConfig = { thinkingLevel: THINKING_LEVEL[task] };
       // 하드 타임아웃 — 호출부가 timeoutMs 를 주면 httpOptions.timeout + AbortController 로
       // 응답 지연에 상한을 건다. 서버리스(maxDuration) 안에서 도는 무거운 호출(대면 면접 평가 등)이
       // 늦어질 때 함수가 통째로 강제종료(→ 큐가 "stuck: 재시도 상한 초과" 로 영구실패)되는 대신,
@@ -288,7 +285,7 @@ export async function generateJSON<T>(
       }
       try {
         const result = await client.models.generateContent({
-          model: MODELS[task],
+          model,
           contents: prompt,
           config: config as Parameters<
             GoogleGenAI["models"]["generateContent"]
@@ -316,7 +313,7 @@ export async function generateJSONMultimodal<T>(
   // 주면 httpOptions.timeout(서버 인지 타임아웃) + AbortController(클라이언트 하드 실링)를
   // 함께 걸어, 응답이 늦으면 transient 오류로 즉시 끊고 큐가 백오프 재시도하게 한다.
   return runWithFallback(
-    async (client) => {
+    async (client, model) => {
       const config: Record<string, unknown> = {
         responseMimeType: "application/json",
         temperature: 0.2,
@@ -330,7 +327,7 @@ export async function generateJSONMultimodal<T>(
       }
       try {
         const result = await client.models.generateContent({
-          model: MODELS[task],
+          model,
           contents: [{ role: "user", parts: parts as never }],
           config: config as Parameters<
             GoogleGenAI["models"]["generateContent"]
@@ -346,7 +343,7 @@ export async function generateJSONMultimodal<T>(
 }
 
 /**
- * 면접 채팅 스트리밍 시작 — generateJSON 과 동일한 서울 우선 + 도쿄 폴백 정책(runWithFallback).
+ * 면접 채팅 스트리밍 시작 — generateJSON 과 동일한 미국 우선 + 도쿄 폴백 정책(runWithFallback).
  * 스트림은 첫 토큰 이후 재시도가 불가(부분 토큰이 이미 클라이언트에 갔을 수 있음)하므로
  * 재시도·폴백은 "시작 단계"에만 적용된다.
  * allowFallback 은 호출부가 동의·시행일 게이트(lib/consent.ts piiFallbackActive 등)를 통과시킨 값.
@@ -358,18 +355,15 @@ export async function startChatStream(opts: {
   message: string;
   allowFallback?: boolean;
 }) {
-  const thinkingBudget = THINKING_BUDGET[opts.task];
   const config: Record<string, unknown> = {
     systemInstruction: opts.systemInstruction,
+    thinkingConfig: { thinkingLevel: THINKING_LEVEL[opts.task] },
   };
-  if (thinkingBudget !== undefined) {
-    config.thinkingConfig = { thinkingBudget };
-  }
   return runWithFallback(
-    (client) =>
+    (client, model) =>
       client.chats
         .create({
-          model: MODELS[opts.task],
+          model,
           history: opts.history as never,
           config: config as never,
         })

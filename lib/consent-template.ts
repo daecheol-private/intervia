@@ -25,7 +25,7 @@ export function buildApplicantConsentTemplate(contactEmail?: string): {
 
 1) 처리위탁 수탁자
    - ${COMPANY_INFO.name} (대한민국) — 서비스 운영
-   - Google Cloud (서울 리전 asia-northeast3, 대한민국 — 장애 시 일본 도쿄 리전 임시 처리) — 서류 평가·AI 면접 채팅·면접 평가 AI 호출 (Gemini), 응답 처리 후 즉시 폐기 (학습 미사용)
+   - Google Cloud (미국 멀티리전 — 장애 시 일본 도쿄 리전 임시 처리) — 서류 평가·AI 면접 채팅·면접 평가 AI 호출 (Gemini), 응답 처리 후 즉시 폐기 (학습 미사용)
    - Vercel Inc. (미국) — 호스팅 및 이력서 파일 보관
    - Turso (일본 도쿄) — 데이터베이스
    - (주) 엑스퍼넷 (대한민국) — 메일 발송 서버 운영, 면접 안내·결과 통보 메일 발송 (지원자 이메일 주소·메일 본문)
@@ -42,9 +42,10 @@ export function buildApplicantConsentTemplate(contactEmail?: string): {
    - 본 채용의 서류 평가 및 면접 평가 보조 (최종 합·불 결정은 사람이 검토)
 
 4) 국외 이전
-   - AI 처리(서류 평가·면접 채팅·면접 평가)는 Google Cloud 서울 리전 처리가 원칙이며, 서울 리전 장애 시에 한해
-     마스킹된 텍스트만 일본(도쿄 리전, Google LLC)에서 임시 처리될 수 있습니다 (즉시 폐기·학습 미사용).
-     스캔 이력서 원본·음성 데이터는 항상 국내에서만 처리됩니다.
+   - AI 처리(서류 평가·면접 채팅·면접 평가): Google LLC (미국, Google Cloud 미국 멀티리전).
+     식별 가능한 정보를 자동 마스킹한 텍스트가 전송되며(스캔 이력서는 OCR 을 위해 원본이 전송될 수 있음)
+     즉시 폐기·학습 미사용. 미국 리전 장애 시에 한해 마스킹된 텍스트만 일본(도쿄 리전, Google LLC)에서
+     임시 처리될 수 있습니다 (스캔 이력서 원본·음성 데이터는 제외).
    - 인프라 단계 이전: Vercel Inc. (미국, 호스팅·이력서 파일), Turso (일본 도쿄, 데이터베이스),
      Resend (미국, 메일 발송의 대체 경로 — 기본 발송 서버 장애 시에 한해 사용.
      평시 메일 발송은 국내 서버((주) 엑스퍼넷, 대한민국)에서 이뤄지며 국외이전 없음)
@@ -77,7 +78,7 @@ which we have contracted as a data processor, as follows:
 
 1) Processors
    - ${COMPANY_INFO.name} (Republic of Korea) — Service operation
-   - Google Cloud (Seoul region asia-northeast3, Republic of Korea — temporary processing in the Tokyo region, Japan, during a Seoul-region outage) — Resume screening / AI interview chat / interview evaluation AI (Gemini), no training use, discarded after response
+   - Google Cloud (US multi-region — temporary processing in the Tokyo region, Japan, during an outage) — Resume screening / AI interview chat / interview evaluation AI (Gemini), no training use, discarded after response
    - Vercel Inc. (USA) — Hosting and resume file storage
    - Turso (Tokyo, Japan) — Database
    - Expernet (Republic of Korea) — Mail server operation; email delivery (interview invitations / result notifications)
@@ -93,11 +94,12 @@ which we have contracted as a data processor, as follows:
      (final hiring decision made by a human reviewer)
 
 4) Cross-Border Transfer
-   - AI processing (resume screening / interview chat / interview evaluation) is
-     performed in the Seoul region in principle; only during a Seoul-region outage,
-     masked text may be temporarily processed in Japan (Tokyo region, Google LLC —
-     discarded immediately, no training use). Scanned resume originals and voice
-     data are always processed within Korea.
+   - AI processing (resume screening / interview chat / interview evaluation):
+     Google LLC (USA, Google Cloud US multi-region). Text with identifiable
+     information masked is transmitted (for scanned resumes, the original may be
+     transmitted for OCR); discarded immediately, no training use. Only during a
+     US-region outage, masked text may be temporarily processed in Japan (Tokyo
+     region, Google LLC); scanned resume originals and voice data are excluded.
    - Infrastructure-level transfer: Vercel Inc. (USA, hosting & file storage),
      Turso (Tokyo, Japan, database), Resend (USA, backup email delivery route — used
      only during a primary mail server outage; routine delivery is from a server in

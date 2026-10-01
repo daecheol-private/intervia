@@ -115,7 +115,8 @@ export default async function FaqPage() {
           a: (
             <>
               AI 에 전달하기 전 이름·연락처·학교 등 식별정보를 자동 마스킹합니다.
-              AI 추론은 서울 리전에서 처리되어 국외로 이전되지 않습니다.{" "}
+              AI 추론은 Google Cloud 미국 리전에서 처리되며, 전달된 데이터는 응답
+              후 즉시 폐기되고 AI 학습에 쓰이지 않습니다.{" "}
               <Link href="/security" className={linkCls}>
                 보안·데이터 보호
               </Link>{" "}
@@ -153,8 +154,8 @@ export default async function FaqPage() {
           q: "데이터는 어디에 저장되나요?",
           a: (
             <>
-              AI 추론은 서울 리전(국내)에서 처리합니다. 저장 등 일부 인프라는
-              해외 클라우드에 위탁되며, 국외이전 현황은{" "}
+              AI 추론은 Google Cloud 미국 리전에서 처리하며, 저장 등 일부
+              인프라도 해외 클라우드에 위탁됩니다. 국외이전 현황은{" "}
               <Link href="/privacy" className={linkCls}>
                 개인정보 처리방침
               </Link>

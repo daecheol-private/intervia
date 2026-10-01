@@ -969,10 +969,10 @@ export default function OrgSettingsPage() {
             <SaveMsg msg={msg} section="ocr" />
             <p className="text-[11px] text-warning bg-warning-soft border border-warning rounded-md px-3 py-2 mt-3 leading-relaxed">
               ⚠️ 켜면 스캔 이력서의 <b>마스킹 전 원본</b>이 AI 처리 수탁자(Vertex
-              AI 서울 리전)로 전송됩니다. 일반 이력서의 "로컬 마스킹 후 전송"
+              AI 미국 멀티리전)로 전송됩니다. 일반 이력서의 "로컬 마스킹 후 전송"
               원칙과 달라지므로, <b>개인정보 처리방침·후보자 동의 범위를 먼저
-              정비</b>한 뒤 켜세요. 데이터는 국내(서울 리전)에 머물러 국외이전은
-              발생하지 않으며, 모든 OCR 전송은 감사 로그에 기록됩니다. 꺼두면
+              정비</b>한 뒤 켜세요. 원본은 미국 리전에서만 처리되고(국외이전 —
+              처리방침에 고지), 모든 OCR 전송은 감사 로그에 기록됩니다. 꺼두면
               스캔 이력서는 평가되지 않고 재업로드 안내만 표시됩니다.
             </p>
           </section>

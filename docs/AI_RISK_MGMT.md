@@ -24,7 +24,7 @@
 | 항목 | 내용 |
 |---|---|
 | 기능 | ① 서류(이력서) LLM 평가 — 6축 점수 + 의견, ② 채팅 기반 AI 면접 진행, ③ 면접 응답 LLM 평가 |
-| 모델 | Google Gemini 2.5 Flash (전 task), Vertex AI 서울 리전(asia-northeast3) — `lib/gemini.ts` `MODELS` |
+| 모델 | Google Gemini 3.5 Flash-Lite (전 task), Vertex AI 미국 멀티리전(us) — 장애 시 도쿄 3.5 Flash (2026-10-02 서울에서 전환) — `lib/gemini.ts` `MODELS` |
 | 출력 성격 | **추천(참고 자료)** — 합·불 자동 확정 없음. 최종 결정은 채용 담당자(§5) |
 | 입력 | 마스킹 처리된 이력서·면접 발화 텍스트만 (원본 텍스트 DB 미보관, §2-1) |
 
@@ -114,7 +114,7 @@
 
 | 조치 | 내용 | 구현 근거 |
 |---|---|---|
-| 모델·엔드포인트 고정 | task별 모델을 `MODELS` 상수로 고정(전 task gemini-2.5-flash, Vertex AI 서울). 호출부의 모델 직접 지정·엔드포인트 우회 금지 | `lib/gemini.ts`, CLAUDE.md LLM 모델 정책 |
+| 모델·엔드포인트 고정 | task별 모델을 `MODELS` 상수로 고정(전 task gemini-3.5-flash-lite, Vertex AI 미국 멀티리전). 호출부의 모델 직접 지정·엔드포인트 우회 금지 | `lib/gemini.ts`, CLAUDE.md LLM 모델 정책 |
 | 평가 일관성 | screening `temperature: 0` + `screening_cache`(prompt_hash 캐싱) — 같은 입력은 같은 결과 재사용. 내용 해시 2차 dedup 으로 중복 이력서 독립 재평가 차단 | `lib/screening.ts`, [GOTCHAS.md](GOTCHAS.md) §0-5 |
 | 점수 재계산 검증 | LLM 이 출력한 종합 점수를 신뢰하지 않고 시스템이 6축 가중평균을 직접 재계산(`recomputeScore`) — 산술 오류·점수 조작 무력화 | `lib/screening.ts` |
 | 출력 구조 보장 | `responseSchema` 로 유효 JSON 강제(깨진 응답 → 평가 실패로 처리, 잘못된 값 유입 차단) | `lib/screening.ts` `SCREENING_SCHEMA` |

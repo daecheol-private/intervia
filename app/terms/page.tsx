@@ -81,8 +81,8 @@ export default function TermsPage() {
             <ul className="list-disc list-inside ml-5 mt-1 space-y-0.5 text-ink-soft">
               <li>{COMPANY_INFO.name} 에 대한 개인정보 처리위탁 (PIPA §26)</li>
               <li>
-                Vercel Inc.(미국)·Turso(일본 도쿄) 등 인프라 단계 국외 처리자로의
-                이전 (PIPA §28의8, 별도 동의 필요)
+                Google LLC(미국, AI 처리)·Vercel Inc.(미국)·Turso(일본 도쿄) 등
+                국외 처리자로의 이전 (PIPA §28의8, 별도 동의 필요)
               </li>
               <li>AI 자동화 평가 적용 사실 및 거부권 고지 (PIPA §37의2)</li>
               <li>채용 종료 시까지의 보유·이용</li>

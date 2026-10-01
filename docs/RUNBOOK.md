@@ -71,7 +71,7 @@
    - `503/UNAVAILABLE/timeout` → 일시 장애. `withRetry`(lib/gemini.ts)가 2회 자동 재시도, 큐는 backoff 재시도 → **대개 자동 회복**.
 2. **자동 안전망 신뢰** — 서류평가는 큐(transient 실패 backoff 3회). 일시 장애면 손 안 대도 회복. 영구 실패만 누적되면(파싱 불가 등) 후보 개별 이슈.
 3. **지속 장애** — 쿼터/권한 문제면 위 env·GCP 수정 후, 실패한 `failed` 잡은 후보 상세에서 "재평가"로 재시도(과금은 성공 시만).
-4. **리전 고정 주의** — `GOOGLE_CLOUD_LOCATION=asia-northeast3` 절대 변경 금지(§28의8 국외이전 회피 핵심). 다른 리전으로 우회하지 말 것.
+4. **리전 주의** — 주 리전은 미국 멀티리전(`us`, 코드 기본값), 장애 폴백은 도쿄(`asia-northeast1`, 3.5-flash). 처리방침에 고지된 국가는 미국·일본뿐이라 **다른 리전(EU·global 등)으로 우회하지 말 것** — 처리방침·동의 개정 없이 국가가 늘어난다. `Publisher model ... was not found`(404) 는 리전에 모델이 없는 것(3.5-flash-lite 는 `us`·`eu` 만).
 
 ## 4. 평가 큐 정체 / 멈춤
 

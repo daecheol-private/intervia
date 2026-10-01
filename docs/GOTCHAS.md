@@ -459,37 +459,42 @@ Next 16 의 `after(async () => ...)` (from `next/server`) 는 Vercel 이 응답 
 
 ⚠️ **이미 저장된 나이는 재평가로 안 고쳐진다** — `lib/screening.ts` 가 `age: c.age ?? pii.age` 라, 값이 이미 있으면 재파싱해도 유지된다. 잘못 저장된 행은 `age` 를 null 로 비우고 재평가하거나 직접 UPDATE.
 
-## 1. Gemini 모델 선택 (paid tier, 2026-05-26 통합)
+## 1. Gemini 모델 선택 (paid tier, 2026-10-02 미국 전환)
 
-**현재 셋업**: paid tier. 모든 task 가 Vertex AI 서울 + flash 로 단일화.
+**현재 셋업**: paid tier. 모든 task 가 Vertex AI 미국 멀티리전(`us`) + `gemini-3.5-flash-lite` 로 단일화. 장애 폴백은 도쿄 + `gemini-3.5-flash`.
 
-| Task | 모델 | 엔드포인트 | 위치 |
-|---|---|---|---|
-| `screening` | `gemini-2.5-flash` | Vertex AI (asia-northeast3) | 🇰🇷 |
-| `interview` | `gemini-2.5-flash` | Vertex AI (asia-northeast3) | 🇰🇷 |
-| `interviewEval` | `gemini-2.5-flash` | Vertex AI (asia-northeast3) | 🇰🇷 |
+| Task | 모델 | 엔드포인트 | 위치 | 사고 단계 |
+|---|---|---|---|---|
+| `screening` | `gemini-3.5-flash-lite` | Vertex AI (us) | 🇺🇸 | MEDIUM |
+| `interview` | `gemini-3.5-flash-lite` | Vertex AI (us) | 🇺🇸 | LOW |
+| `interviewEval` | `gemini-3.5-flash-lite` | Vertex AI (us) | 🇺🇸 | MEDIUM |
+| `questionGen` | `gemini-3.5-flash-lite` | Vertex AI (us) | 🇺🇸 | MEDIUM |
+| `orgMatch` | `gemini-3.5-flash-lite` | Vertex AI (us) | 🇺🇸 | MINIMAL |
 
 호출 시 `task` 파라미터만 넘기면 됨:
 ```ts
-createChat({ task: "interview", systemInstruction, history });
+startChatStream({ task: "interview", systemInstruction, history, message });
 generateJSON<X>(prompt, { task: "screening" });
 generateJSON<X>(prompt, { task: "interviewEval" });
 ```
+
+**3.5 계열 함정 (2026-10-02)**: ① `temperature`·`topP`·`topK` 는 **조용히 무시**된다 — "temperature 0 으로 일관성" 같은 기대는 성립 안 함(§1-1 캐시가 유일한 안정 장치). ② `frequencyPenalty`·`presencePenalty` 는 넣으면 **오류**. ③ 마지막 턴이 `role: "model"` 인 요청(모델 응답 prefill)은 **오류**. ④ 사고량은 `thinkingLevel` 로만 조절 — `thinkingBudget` 은 오류 없이 무시돼서, 2.5 시절 값을 그대로 두면 사고가 꺼진 채 돈다. 3.5-flash-lite 기본값 MINIMAL 은 평가가 관대해지는 경향(같은 답변 MINIMAL 5점 vs MEDIUM 4점 실측)이라 평가 task 는 MEDIUM.
 
 SDK: **`@google/genai`** 단일 (vertexai: true 고정).
 
 **구조화 출력(responseSchema) — 서류평가는 필수**: `responseMimeType: "application/json"` *만* 쓰면 Gemini 가 긴 한국어 자유서술 필드(summary·reason 등)에서 **간헐적으로 깨진 JSON**(이스케이프 누락)을 뱉어 `parseJsonResponse` 가 실패 → UI 에 "AI 응답 형식 오류"(`shortenError`). `finishReason=STOP`(정상완료)인데도 파싱 실패하면 이 케이스다. screening 은 `generateJSON(prompt, { task, responseSchema: SCREENING_SCHEMA })` 로 스키마를 넘겨 유효 JSON 을 보장한다(`lib/screening.ts` SCREENING_SCHEMA — prompts.ts 출력 형식과 1:1 일치 유지). 큰 자유서술 JSON 을 새로 추가하면 동일하게 responseSchema 를 권장.
 
-**Vertex AI 서울 응답 시간**: 13K char 프롬프트 기준 30~40초. 비동기 task (screening / interviewEval) 는 큐 처리라 UX 영향 X. interview 는 thinkingBudget=128 로 3~4초 응답 유지.
+**응답 시간 (2026-10-02 실측, 미국 멀티리전)**: 짧은 평가 프롬프트 MINIMAL 1.5초 · MEDIUM 2.8초, 면접 채팅 스트리밍 첫 글자 ~2초. 비동기 task (screening / interviewEval) 는 큐 처리라 UX 영향 X.
 
 **환경변수** (모두 Vertex 용):
-- `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (기본 `asia-northeast3`)
+- `GOOGLE_CLOUD_PROJECT`, `GEMINI_LOCATION` (기본 `us`), `GEMINI_FALLBACK_LOCATION` (기본 `asia-northeast1`)
 - 로컬: `GOOGLE_APPLICATION_CREDENTIALS` (서비스계정 JSON 파일 경로)
 - Vercel: `GOOGLE_APPLICATION_CREDENTIALS_JSON` (JSON 통문자열)
+- ⚠️ 옛 `GOOGLE_CLOUD_LOCATION` 은 읽지 않는다 — 운영 Vercel 에 `asia-northeast3` 이 남아 있어 다시 읽으면 서울로 가서 404.
 
-**왜 flash 통일인가**: asia-northeast3 데이터 레지던시는 Flash 만 보장됨 (Pro 미지원, 2026-05 기준). Pro 사용 시 직접 API (US) 경유 → §28의8 동의 항목 부활. UX 단순화를 위해 flash 선택.
+**왜 미국 + flash-lite 인가**: 서울의 유일한 모델 2.5-flash 가 2026-10-20 은퇴, 후속 모델이 서울에 없음. 도쿄엔 3.5-flash 만 있는데 단가 5배. 3.5-flash-lite 는 2.5-flash 와 거의 같은 단가지만 `us`·`eu` 멀티리전에만 있다. 미국은 이미 처리방침 고지 국가(Vercel). 한국 처리 대안(AWS 서울 Claude·네이버 HCX)은 비용으로 제외 — 조사 근거는 사용자 TODO(2026-10-02).
 
-**과거 메모** (참고): 2026-04 무료 티어 daily limit=0 으로 flash-lite 고정 → 2026-05 paid 전환 → 2026-05-26 모든 task Vertex 서울+flash 로 통합.
+**과거 메모** (참고): 2026-04 무료 티어 daily limit=0 으로 flash-lite 고정 → 2026-05 paid 전환 → 2026-05-26 모든 task Vertex 서울+2.5-flash 로 통합(§28의8 회피) → 2026-10-02 서울 모델 은퇴로 미국+3.5-flash-lite 전환.
 
 ## 1-1. LLM 응답은 재현되지 않는다 — 점수 안정성은 캐시가 전부 (2026-07-27)
 
@@ -581,7 +586,7 @@ const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
 
 **원인**: 글자가 이미지로 들어간 스캔/캡처 PDF는 pdf-parse 가 빈 텍스트(줄바꿈만)를 반환 → 30자 미만 → 영구 실패.
 
-**해결**: `lib/screening.ts` `ensureParsed()` 에서 PDF 텍스트가 30자 미만이면 `ocrPdfToText()` 가 PDF 원본을 `generateJSONMultimodal`(Vertex 서울 리전 flash)에 직접 넘겨 OCR. 별도 OCR 인프라 없음 → 데이터 국외이전(§28의8) 회피 유지. 14MB 초과 PDF·OCR 빈 결과는 기존 에러로 폴백. 비용 절감 위해 **스캔 PDF일 때만** 타는 경로(정상 텍스트 PDF는 영향 없음). OCR 자체는 ~50초 소요(7페이지 기준)라 worker maxDuration(120s) 안에서 처리됨.
+**해결**: `lib/screening.ts` `ensureParsed()` 에서 PDF 텍스트가 30자 미만이면 `ocrPdfToText()` 가 PDF 원본을 `generateJSONMultimodal`(평가와 같은 Vertex 모델, 2026-10-02부터 미국 멀티리전)에 직접 넘겨 OCR. 별도 OCR 인프라 없음. 원본이 국외로 가므로 법인 허용(`allowScanOcr`) 시에만, 도쿄 폴백 금지. 14MB 초과 PDF·OCR 빈 결과는 기존 에러로 폴백. 비용 절감 위해 **스캔 PDF일 때만** 타는 경로(정상 텍스트 PDF는 영향 없음). OCR 자체는 ~50초 소요(7페이지 기준)라 worker maxDuration(120s) 안에서 처리됨.
 
 **⚠️ 개인정보 게이트 — `organizations.allowScanOcr` (기본 OFF)**: OCR 은 정상 PDF 의 "로컬 마스킹 후 전송" 원칙과 달리 **마스킹 전 원본** 이력서를 AI 수탁자(Vertex)로 보낸다. 그래서 법인이 명시적으로 토글을 켠 경우(`allowScanOcr=true`)만 OCR 이 돌고, 꺼져 있으면 스캔 PDF 는 평가 실패. 이때 `ensureParsed()` 는 PDF+OCR미허용 케이스를 구분해 **"스캔 PDF OCR을 활성화하면 평가할 수 있습니다"** 라는 안내성 `lastError` 를 남긴다 → 공고 카드는 "스캔 PDF — OCR 활성화 필요"(`shortenError`), 후보 상세는 amber 배너로 OCR 활성화/재업로드 안내. (OCR 허용인데도 빈 결과면 이미 시도한 것이라 generic "텍스트 추출 실패" 메시지.) 토글은 `app/org/settings` 법인 설정 페이지(org_admin/system_admin 전용, 경고문 포함) + `PUT /api/orgs/me/scan-ocr`. OCR 전송 시 `candidate.scan_ocr` 감사 로그(critical) 기록. 켜기 전 **처리방침·후보자 동의 범위 정비 선행 필요**. 추출 직후 마스킹되므로 *평가*에 쓰는 텍스트·DB 저장본은 여전히 마스킹본(블라인드 유지).
 

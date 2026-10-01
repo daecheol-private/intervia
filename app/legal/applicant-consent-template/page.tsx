@@ -328,7 +328,7 @@ export default async function ApplicantConsentTemplatePage({
                 지원자 안내·동의 취득의 주체는 채용을 진행하는 기업(이용약관 §5)
                 입니다. 업로드 화면의 체크는 “공고에 안내 문구를 넣었다”는 확인
                 이며, {COMPANY_INFO.name} 은 이를 신뢰하여 위탁 처리를 수행합니다.
-                안내 문구·표준 템플릿·마스킹·서울 리전 처리 등 실무 부담을 줄이는
+                안내 문구·표준 템플릿·마스킹 등 실무 부담을 줄이는
                 장치는 모두 {SITE_INFO.serviceName} 이 제공합니다.
               </p>
             </div>

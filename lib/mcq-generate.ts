@@ -26,7 +26,7 @@ export async function generateMcqSet(
   job: McqJobInput,
   count: number
 ): Promise<McqQuestion[]> {
-  // JD 만 투입 (후보자 PII 없음) — 서울 장애 시 도쿄 폴백 허용
+  // JD 만 투입 (후보자 PII 없음) — 주 리전 장애 시 도쿄 폴백 허용
   const gen = await generateJSON<{ questions?: unknown }>(
     buildMcqGenerationPrompt(job, count),
     { task: "questionGen", temperature: 0.4, allowFallback: true }

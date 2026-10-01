@@ -4,7 +4,7 @@
  * 2단계 매칭:
  *   1) 결정적: 입력 법인명 정규화 매칭 + 사업자번호 일치 + (DART 등재 시) 사업자번호의
  *      공식 법인명을 역조회해 기존 법인명과 정규화 매칭. 싸고 정확.
- *   2) LLM(flash, 서울): 결정적으로 못 잡는 교차표기(한글 "포티넷" ↔ 영문 "fortinet"),
+ *   2) LLM(flash-lite, 미국): 결정적으로 못 잡는 교차표기(한글 "포티넷" ↔ 영문 "fortinet"),
  *      음차·약칭·지사 표기 차이를 기존 법인 목록과 대조. 실패 시 graceful(결정적 결과만).
  *
  * 결과는 **비차단 제안** — 최종 합류/신규등록 선택은 사용자. 응답의 사업자번호는 마스킹.
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
       }>(prompt, {
         task: "orgMatch",
         temperature: 0,
-        // 법인명만 투입 (개인정보 없음) — 서울 장애 시 도쿄 폴백 허용
+        // 법인명만 투입 (개인정보 없음) — 주 리전 장애 시 도쿄 폴백 허용
         allowFallback: true,
         responseSchema: {
           type: "object",

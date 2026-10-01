@@ -25,7 +25,7 @@ export const metadata = {
  * 안내 페이지. 새로운 약속을 만들지 않고 두 문서의 사실만 요약·강조한다.
  *
  * ⚠️ 여기의 모든 진술은 실제 구현·처리방침과 일치해야 한다(대외 공개 = 약속):
- *   · AI 서울 리전/학습 미사용/마스킹 = lib/gemini.ts, ai-evaluation-disclosure §1·§3
+ *   · AI 처리 리전(미국)/학습 미사용/마스킹 = lib/gemini.ts, ai-evaluation-disclosure §1·§3
  *   · 위탁·국외이전·보유기간 = lib/site-info.ts PROCESSORS, ai-evaluation-disclosure §7
  *   · 비밀번호 유출검사(HIBP k-anonymity) = PROCESSORS "Have I Been Pwned"
  *   근거가 바뀌면 이 페이지도 함께 갱신.
@@ -33,8 +33,8 @@ export const metadata = {
 const HIGHLIGHTS = [
   {
     Icon: MapPin,
-    title: "AI 분석은 국내에서",
-    desc: "Google Cloud 서울 리전에서 처리 · AI 처리 단계 국외이전 없음",
+    title: "AI 처리 위치 공개",
+    desc: "Google Cloud 미국 리전에서 처리 · 국외이전 내역은 처리방침에 모두 공개",
   },
   {
     Icon: EyeOff,
@@ -89,16 +89,18 @@ export default function SecurityPage() {
         <ul className="list-disc list-inside space-y-1">
           <li>
             AI 서류·면접 평가는 Google Cloud Vertex AI{" "}
-            <strong>서울 리전(asia-northeast3, 대한민국)</strong> 에서
-            처리됩니다. AI 처리 단계에서 데이터가 국외로 이전되지 않습니다.
+            <strong>미국 멀티리전(us)</strong> 에서 처리됩니다. 미국 리전
+            장애 시에 한해 식별정보를 가린 텍스트만 일본(도쿄) 리전에서 임시
+            처리될 수 있습니다.
           </li>
           <li>
             <strong>결제 등급 계정</strong>을 사용하므로, AI 에 전달된 데이터가
             모델 학습에 활용되지 않습니다 (Google 정책).
           </li>
           <li>
-            데이터 저장·이메일 발송 등 일부 인프라는 해외 클라우드에
-            위탁됩니다(예: 데이터베이스는 일본 리전). 관련 위탁·국외이전 현황은{" "}
+            AI 외에도 데이터 저장 등 일부 인프라가 해외 클라우드에
+            위탁됩니다(예: 데이터베이스는 일본 리전). AI 처리를 포함한
+            위탁·국외이전 현황은{" "}
             <Link href="/privacy" className="text-primary hover:underline">
               개인정보 처리방침
             </Link>{" "}

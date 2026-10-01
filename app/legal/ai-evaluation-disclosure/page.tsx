@@ -200,15 +200,17 @@ export default function AiEvaluationDisclosurePage() {
             <ul className="list-disc list-inside ml-5 mt-1">
               <li>
                 서류 평가·AI 면접 채팅·면접 응답 평가 모두{" "}
-                <strong>Google Gemini 2.5 Flash</strong> —{" "}
-                <strong>Google Cloud 서울 리전(asia-northeast3, 대한민국) 에서 처리</strong>{" "}
-                (AI 처리 단계의 국외이전 없음)
+                <strong>Google Gemini 3.5 Flash-Lite</strong> —{" "}
+                <strong>Google Cloud 미국 멀티리전(us) 에서 처리</strong>{" "}
+                (미국 리전 장애 시에 한해 마스킹된 텍스트가 일본 도쿄 리전에서
+                Gemini 3.5 Flash 로 임시 처리될 수 있음)
               </li>
             </ul>
           </li>
           <li>
             LLM에 전달되는 텍스트는 본 페이지 §1 의 마스킹을 거친 텍스트로
-            한정됩니다.
+            한정됩니다. 단, 스캔(이미지) 이력서는 법인이 OCR 을 허용한 경우
+            텍스트 추출을 위해 원본 이미지가 전달됩니다.
           </li>
           <li>
             평가 결과는 JSON 으로 산출되어 회사 데이터베이스(Turso, 일본

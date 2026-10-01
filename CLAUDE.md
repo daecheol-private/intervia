@@ -17,24 +17,29 @@
    - **pre-push 게이트**: `.git/hooks/pre-push` — main push 에 `drizzle/*.sql` 변경이 포함되면 `scripts/check-migration-safety.mjs`(destructive 탐지 + 전체 journal 스크래치 dry-run) + `npx tsc --noEmit` 통과 없이는 push 가 거부된다. tsc 를 함께 도는 이유: vercel-build 가 eslint→migrate→build 순서라 build 실패 시 스키마만 운영에 적용된 채 구버전 코드가 남는다. 우회 변수 `ALLOW_MIGRATION_PUSH=1` 은 **사용자 전용** — Claude 는 훅이 차단한다.
    - **가드 파일 동결**: bash-guard.mjs / settings.json / pre-push / check-migration-safety.mjs 는 Claude 가 수정·삭제 금지(훅이 강제). 훅이 차단하면 우회 경로(cp, 스크립트 경유 덮어쓰기 등)를 찾지 말고 차단 사실을 사용자에게 보고할 것. 가드 변경은 사용자가 직접 한다.
 
-## LLM 모델 정책 (2026-05-26, 폴백 2026-07-11)
+## LLM 모델 정책 (2026-10-02 미국 전환, 폴백 2026-07-11)
 
-paid tier. **모든 task 를 Vertex AI 서울 리전 + flash 로 통합** (`lib/gemini.ts` `MODELS`):
+paid tier. **모든 task 를 Vertex AI 미국 멀티리전(us) + gemini-3.5-flash-lite 로 통합** (`lib/gemini.ts` `MODELS`):
 
-| task | 모델 | 엔드포인트 | 위치 | PIPA §28의8 |
-|---|---|---|---|---|
-| `screening` | gemini-2.5-flash | Vertex AI | 🇰🇷 asia-northeast3 (서울) | 회피 ✅ |
-| `interview` | gemini-2.5-flash | Vertex AI | 🇰🇷 asia-northeast3 (서울) | 회피 ✅ |
-| `interviewEval` | gemini-2.5-flash | Vertex AI | 🇰🇷 asia-northeast3 (서울) | 회피 ✅ |
+| task | 모델 | 엔드포인트 | 위치 | 사고 단계 | PIPA §28의8 |
+|---|---|---|---|---|---|
+| `screening` | gemini-3.5-flash-lite | Vertex AI | 🇺🇸 us (미국 멀티리전) | MEDIUM | 국외이전 (처리방침 고지 + 면접 동의) |
+| `interview` | gemini-3.5-flash-lite | Vertex AI | 🇺🇸 us | LOW | 〃 |
+| `interviewEval` | gemini-3.5-flash-lite | Vertex AI | 🇺🇸 us | MEDIUM | 〃 |
+| `questionGen` | gemini-3.5-flash-lite | Vertex AI | 🇺🇸 us | MEDIUM | 〃 |
+| `orgMatch` | gemini-3.5-flash-lite | Vertex AI | 🇺🇸 us | MINIMAL | 〃 |
 
-SDK 단일: **`@google/genai`** (vertexai: true). `clientFor(task)` 는 항상 서울 클라이언트.
+SDK 단일: **`@google/genai`** (vertexai: true).
 
-**왜 모두 flash 인가**: asia-northeast3 데이터 레지던시는 flash 만 지원 (pro 미지원). 국외이전 동의 항목을 제거하기 위해 flash 통일을 선택.
+**왜 미국 + flash-lite 인가 (2026-10-02 사용자 결정)**: 서울(asia-northeast3)에서 쓸 수 있던 유일한 모델 gemini-2.5-flash 가 **2026-10-20 은퇴**하고 후속 3.x 모델이 서울에 들어오지 않았다. 한국 처리를 유지하는 대안(AWS Bedrock 서울 Claude, 네이버 HCX)과 도쿄 3.5-flash 는 단가가 3~7배라 제외. 3.5-flash-lite 는 Google 공식 2.5-flash 대체 모델이고 단가가 거의 같다($0.33/$2.75 per 1M, 비글로벌) — 단 미국·EU 멀티리전에만 있다(도쿄 404 실측). 미국은 Vercel·Blob 으로 이미 고지된 국가.
 
-**도쿄 폴백 (2026-07-11, Phase 2 2026-07-12)**: 서울 429/503 장애(transient 재시도 소진) 시 **`allowFallback: true` 호출만** 도쿄(asia-northeast1, 같은 flash)로 우회 + 서킷브레이커(연속 2회 실패 → 60초 폴백 우선). 허용 범위: ① PII 무 5곳(MCQ 생성/번역, JD 체크리스트, 법인 매칭, 공고 URL 임포트 — 연락처 `maskContacts` 후) 무조건, ② 마스킹 텍스트 4곳(면접 채팅 `startChatStream`·종료 평가·재평가·질문지 생성)은 **이중 게이트**(`lib/consent.ts`: `piiFallbackActive()` 시행일 2026-07-12 즉시 시행 + 해당 동의 버전 ≥1.9.0) 통과 시만. 서류평가·대면 큐(역할배정·평가)·라이브 2종·스캔 원본·음성은 서울 전용 — 사유는 COMPLIANCE_SOP §4. 대면 전사는 프롬프트 경계에서 `maskText` 적용(저장·화면 원문). 폴백 발동은 `gemini.fallback_used` 로그로 감사 추적. **Phase 3 (2026-07-12)**: 서울 전용 큐(서류평가·대면)의 용량 장애(429/503, `isCapacityOutageError`)는 재시도 상한에 카운트하지 않고 재큐(`requeueOutage`/`requeueRecordedOutage`) — 장기 장애에도 영구 실패로 박제되지 않고 복구 시 자동 재개. 타임아웃 등 비용 있는 transient 는 기존대로 카운트(무한 루프 방지). 폴백 발동은 `gemini.fallback_used` 로그로 감사 추적.
+**3.5 계열 API 차이**: `temperature`·`topP`·`topK` 는 **무시**된다(오류 없음). `frequencyPenalty`·`presencePenalty` 를 넣으면 **오류**. 마지막 턴이 `role: "model"` 인 요청은 **오류**. 사고량은 `thinkingConfig.thinkingLevel`(MINIMAL/LOW/MEDIUM/HIGH)로만 조절되고 `thinkingBudget` 은 무시된다 — 새 호출에서 이 세 가지를 쓰지 말 것.
+
+**도쿄 폴백 (2026-07-11, Phase 2 2026-07-12)**: 주 리전(미국) 429/503 장애(transient 재시도 소진) 시 **`allowFallback: true` 호출만** 도쿄(asia-northeast1)로 우회 + 서킷브레이커(연속 2회 실패 → 60초 폴백 우선). 도쿄엔 flash-lite 가 없어 폴백 모델은 **gemini-3.5-flash**(`FALLBACK_MODEL`, 단가 5배 — 장애 때만). 허용 범위: ① PII 무 5곳(MCQ 생성/번역, JD 체크리스트, 법인 매칭, 공고 URL 임포트 — 연락처 `maskContacts` 후) 무조건, ② 마스킹 텍스트 4곳(면접 채팅 `startChatStream`·종료 평가·재평가·질문지 생성)은 **이중 게이트**(`lib/consent.ts`: `piiFallbackActive()` 시행일 2026-07-12 즉시 시행 + 해당 동의 버전 ≥1.9.0) 통과 시만. 서류평가·대면 큐(역할배정·평가)·라이브 2종·스캔 원본·음성은 주 리전(미국) 전용 — 사유는 COMPLIANCE_SOP §4. 대면 전사는 프롬프트 경계에서 `maskText` 적용(저장·화면 원문). 폴백 발동은 `gemini.fallback_used` 로그로 감사 추적. **Phase 3 (2026-07-12)**: 주 리전 전용 큐(서류평가·대면)의 용량 장애(429/503, `isCapacityOutageError`)는 재시도 상한에 카운트하지 않고 재큐(`requeueOutage`/`requeueRecordedOutage`) — 장기 장애에도 영구 실패로 박제되지 않고 복구 시 자동 재개. 타임아웃 등 비용 있는 transient 는 기존대로 카운트(무한 루프 방지). 폴백 발동은 `gemini.fallback_used` 로그로 감사 추적.
 
 **환경변수** (모두 Vertex 용):
-- `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` (기본 `asia-northeast3`), `GEMINI_FALLBACK_LOCATION` (기본 `asia-northeast1`)
+- `GOOGLE_CLOUD_PROJECT`, `GEMINI_LOCATION` (기본 `us`), `GEMINI_FALLBACK_LOCATION` (기본 `asia-northeast1`)
+- ⚠️ 옛 `GOOGLE_CLOUD_LOCATION` 은 **읽지 않는다** — 운영 Vercel 에 `asia-northeast3` 이 남아 있어, 그 이름을 다시 읽게 바꾸면 서울로 가서 전 LLM 호출이 404 난다.
 - 로컬: `GOOGLE_APPLICATION_CREDENTIALS` (서비스계정 JSON 파일 경로)
 - Vercel: `GOOGLE_APPLICATION_CREDENTIALS_JSON` (서비스계정 JSON 통문자열)
 - ~~`GOOGLE_API_KEY`~~ — 더 이상 사용 안 함 (직접 API 제거)

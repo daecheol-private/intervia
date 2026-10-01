@@ -555,7 +555,7 @@ export async function extractFromText(
   titleHint: string
 ): Promise<ImportedJob | null> {
   // 공개 공고 콘텐츠지만 담당자 이메일·전화가 박힌 경우가 있어 연락처만 마스킹 —
-  // PII 제거로 서울 장애 시 도쿄 폴백 허용 (이미지는 마스킹 불가하나 공개 공고 한정).
+  // PII 제거로 주 리전 장애 시 도쿄 폴백 허용 (이미지는 마스킹 불가하나 공개 공고 한정).
   const prompt = `${EXTRACTION_SCHEMA_HINT}
 ${titleHint ? `\n${titleHint}\n` : ""}
 다음은 채용 공고 페이지에서 추출한 본문 텍스트입니다.

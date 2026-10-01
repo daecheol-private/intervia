@@ -1888,7 +1888,7 @@ const FEATURES: {
   { Icon: StickyNote, title: "면접관 메모", detail: "면접관별 스코어·메모를 남겨 함께 공유합니다.", tone: "beige", size: "mini", place: "lg:col-start-2 lg:row-start-6" },
   { Icon: Target, title: "인재상 · NCS", detail: "법인 선호 인재상·NCS 핵심역량을 설정합니다.", tone: "white", size: "mini", place: "lg:col-start-3 lg:row-start-6" },
   { Icon: Server, title: "메일 서버", detail: "법인 자체 SMTP를 연동해 발송합니다 (SPF/DKIM).", tone: "beige", size: "mini", place: "lg:col-start-6 lg:row-start-6" },
-  { Icon: MapPin, title: "국내 AI", detail: "모든 AI 추론을 서울 리전에서 — 국외이전 없음.", tone: "soft", size: "mini", place: "lg:col-start-7 lg:row-start-6" },
+  { Icon: MapPin, title: "처리 위치 공개", detail: "AI 처리 국가·수탁자를 처리방침에 모두 공개합니다.", tone: "soft", size: "mini", place: "lg:col-start-7 lg:row-start-6" },
   { Icon: ScrollText, title: "감사 · 이의제기", detail: "데이터 접근을 로그로 추적하고 이의제기를 받습니다.", tone: "white", size: "mini", place: "lg:col-start-8 lg:row-start-6" },
   { Icon: KeyRound, title: "계정 보안", detail: "MFA(2단계 인증)와 세션 관리를 지원합니다.", tone: "beige", size: "mini", place: "lg:col-start-9 lg:row-start-6" },
 ];

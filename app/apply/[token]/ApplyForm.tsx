@@ -400,13 +400,13 @@ export default function ApplyForm({
           checked={agreeCollection}
           onChange={setAgreeCollection}
           label="(필수) 개인정보 수집·이용 동의"
-          desc="이름·이메일·연락처·이력서 본문을 채용 절차(서류 평가·면접 진행·합·불 결정)에 이용하며, 서비스 운영을 위해 국외(미국·일본)의 호스팅·DB에 저장될 수 있습니다."
+          desc="이름·이메일·연락처·이력서 본문을 채용 절차(서류 평가·면접 진행·합·불 결정)에 이용하며, 서비스 운영을 위해 국외(미국·일본)의 호스팅·DB에 저장되고 AI 평가는 미국(Google Cloud)에서 처리됩니다."
         />
         <Check
           checked={agreeAi}
           onChange={setAgreeAi}
           label="(필수) AI 자동 평가 적용 및 거부권 안내 확인"
-          desc="제출하신 이력서에 AI(서울 리전)가 점수·추천을 산출하나 최종 합·불은 채용 담당자가 결정합니다. AI 평가를 원치 않으면 채용 기업의 일반 절차를 요청할 수 있습니다."
+          desc="제출하신 이력서에 AI(Google Cloud 미국 리전)가 점수·추천을 산출하나 최종 합·불은 채용 담당자가 결정합니다. AI 평가를 원치 않으면 채용 기업의 일반 절차를 요청할 수 있습니다."
         />
         <Check
           checked={agreeFinal}

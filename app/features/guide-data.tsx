@@ -2783,18 +2783,19 @@ export const GUIDE: GuideCategory[] = [
             </p>
             <UL>
               <li>
-                <strong>원칙은 국내</strong> — 서류 평가·면접 채팅·면접 평가 등 AI
-                처리는 <strong>Google Cloud 서울 리전</strong>에서 수행합니다.
+                <strong>AI 처리는 미국</strong> — 서류 평가·면접 채팅·면접 평가 등 AI
+                처리는 <strong>Google Cloud 미국 멀티리전</strong>에서 수행합니다.{" "}
+                <strong>식별정보를 자동 마스킹한 텍스트</strong>를 보내고, 전송은
+                암호화되며 응답 후 즉시 폐기되고 <strong>AI 학습에 쓰이지 않습니다</strong>.
               </li>
               <li>
-                <strong>장애 시에만 예외</strong> — 서울 리전에 장애가 생기면,{" "}
-                <strong>식별정보를 자동 마스킹한 텍스트만</strong> 도쿄 리전으로
-                옮겨 임시 처리할 수 있습니다. 전송은 암호화되고, 응답 후 즉시
-                폐기되며 <strong>AI 학습에 쓰이지 않습니다</strong>.
+                <strong>장애 시에만 도쿄</strong> — 미국 리전에 장애가 생기면
+                마스킹한 텍스트만 도쿄 리전으로 옮겨 임시 처리할 수 있습니다.
               </li>
               <li>
-                <strong>스캔 이력서 원본(OCR)과 음성 데이터는 항상 국내에서만</strong>{" "}
-                처리합니다.
+                <strong>스캔 이력서 원본(OCR)과 음성 데이터는 미국에서만</strong>{" "}
+                처리하며 도쿄 임시 처리 대상이 아닙니다. 스캔 원본은 법인이 OCR 을
+                켠 경우에만 전송됩니다.
               </li>
               <li>
                 이 내용은 면접 시작 전 <strong>동의 화면과 개인정보 처리방침에

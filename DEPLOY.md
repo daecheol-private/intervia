@@ -80,9 +80,9 @@ VALUES ('admin', '<bcrypt hash 값>', '시스템관리자', 1);
 
 ---
 
-## 2-1. Vertex AI 서울 리전 설정 (서류평가용 — PIPA §28의8 회피)
+## 2-1. Vertex AI 설정 (미국 멀티리전 — 2026-10-02 서울에서 전환)
 
-서류평가는 Vertex AI 서울 리전(asia-northeast3)에서 처리되어 국외이전이 발생하지 않습니다. 운영 배포 전 다음 절차를 마쳐야 합니다.
+모든 AI 처리는 Vertex AI 미국 멀티리전(`us`) + `gemini-3.5-flash-lite` 로 처리됩니다(국외이전 — 처리방침 §5 고지 + 면접 동의). 서울(asia-northeast3)의 gemini-2.5-flash 가 2026-10-20 은퇴하고 후속 모델이 서울에 없어서 옮겼습니다. 리전은 코드 기본값(`us`)이라 환경변수가 필요 없습니다. 운영 배포 전 다음 절차를 마쳐야 합니다.
 
 ### 2-1-1. Google Cloud 프로젝트 + 서비스 계정 준비
 
@@ -97,15 +97,16 @@ VALUES ('admin', '<bcrypt hash 값>', '시스템관리자', 1);
 5. 만들어진 서비스 계정 → **"키"** 탭 → **"키 추가" → "새 키 만들기" → JSON** → 자동 다운로드
 6. ⚠️ 다운로드된 JSON 파일은 **비밀번호와 동일한 수준의 보안** — git 절대 X
 
-### 2-1-2. Vercel 환경변수 등록 (3개)
+### 2-1-2. Vercel 환경변수 등록 (2개)
 
 | 변수명 | 값 | Sensitive |
 |---|---|---|
 | `GOOGLE_CLOUD_PROJECT` | Project ID (예: `gen-lang-client-0667386019`) | ❌ |
-| `GOOGLE_CLOUD_LOCATION` | `asia-northeast3` (절대 변경 X — 서울 리전 고정이 §28의8 회피의 핵심) | ❌ |
 | `GOOGLE_APPLICATION_CREDENTIALS_JSON` | 다운로드한 JSON 파일을 **메모장 등으로 열어 전체 내용 통째로 복사**해서 붙여넣기 | ✅ **Sensitive 체크** |
 
 > ⚠️ **`GOOGLE_APPLICATION_CREDENTIALS` 는 등록하지 말 것** — 로컬 dev 전용 (파일 경로). Vercel은 파일 시스템에 키 파일이 없음.
+>
+> 옛 `GOOGLE_CLOUD_LOCATION`(=asia-northeast3) 은 코드가 더 이상 읽지 않으니 지워도 무방. 리전을 바꿔야 하면 `GEMINI_LOCATION`(기본 `us`)을 쓴다.
 
 ### 2-1-3. 동작 확인
 
@@ -113,14 +114,15 @@ VALUES ('admin', '<bcrypt hash 값>', '시스템관리자', 1);
 
 | 로그 패턴 | 의미 |
 |---|---|
-| 정상 (에러 없음) | 서울 리전 호출 성공 |
+| 정상 (에러 없음) | 미국 멀티리전 호출 성공 |
+| `Publisher model ... was not found` (404) | 모델이 그 리전에 없음 — 리전/모델 조합 확인 (3.5-flash-lite 는 `us`·`eu` 만) |
 | `GOOGLE_CLOUD_PROJECT가 설정되지 않았습니다` | 환경변수 미등록 또는 오타 |
 | `Could not load the default credentials` | `GOOGLE_APPLICATION_CREDENTIALS_JSON` JSON 형식 오류 (파싱 실패) |
 | `Permission denied` 또는 403 | 서비스 계정에 "Agent Platform 사용자" 역할 미부여 또는 Vertex AI API 미활성화 |
 
 ### 2-1-4. 응답 시간 참고
 
-Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프트 기준 30~40초).
+미국 멀티리전 3.5-flash-lite 는 짧은 프롬프트 기준 1.5~3초(2026-10-02 실측, MEDIUM 사고 포함). 한국에서 미국까지 왕복 지연이 더해지지만 서울 2.5-flash(전환 직전 8~15초·간헐 429)보다 빠르다.
 서류평가는 비동기 큐 처리라 UX 영향 없음. 다만 동시 평가가 많을 때 처리량 영향 모니터링 필요.
 
 ---
@@ -131,8 +133,8 @@ Vertex AI 서울 리전은 직접 API 대비 4~5배 느림 (13K char 프롬프�
 
 | 변수 | 값 |
 |---|---|
-| `GOOGLE_CLOUD_PROJECT` | GCP 프로젝트 ID (예: `gen-lang-client-0667386019`) — 모든 task Vertex AI 서울 |
-| `GOOGLE_CLOUD_LOCATION` | `asia-northeast3` (서울 리전 고정 — AI 단계 §28의8 회피의 핵심) |
+| `GOOGLE_CLOUD_PROJECT` | GCP 프로젝트 ID (예: `gen-lang-client-0667386019`) — 모든 task Vertex AI 미국 멀티리전 |
+| `GEMINI_LOCATION` | (선택) 기본 `us`. 옛 `GOOGLE_CLOUD_LOCATION` 은 읽지 않음 |
 | `GOOGLE_APPLICATION_CREDENTIALS_JSON` | **`.gcp-key.json` 파일 전체 내용을 통째로** (JSON 통문자열). Sensitive 체크 필수. ⚠️ `GOOGLE_APPLICATION_CREDENTIALS` 는 Vercel에 등록하지 말 것 (파일 시스템 경로 미지원) |
 | ~~`GOOGLE_API_KEY`~~ | **더 이상 사용 안 함** (직접 Gemini API 제거, 2026-05-26). 기존 등록값은 제거해도 무방. |
 | `SYSTEM_ADMIN_EMAIL` | **설정 시 첫 요청에서 이 이메일로 `system_admin` 계정 자동 생성** (`lib/bootstrap-admin.ts`). 운영 전 반드시 설정 |
@@ -349,8 +351,8 @@ Vercel Hobby 는 daily cron 만 지원하므로, 분당/시간당 cron 은 외�
 ```
 # 로컬 모드 (이게 기본)
 GOOGLE_CLOUD_PROJECT=...
-GOOGLE_CLOUD_LOCATION=asia-northeast3
 GOOGLE_APPLICATION_CREDENTIALS=./.gcp-key.json
+# (리전은 코드 기본값 us — GEMINI_LOCATION 으로만 바꿀 수 있음)
 # Turso/Blob 토큰 없음 → 자동으로 file:./data.db + ./uploads/
 ```
 

@@ -26,7 +26,7 @@ HR (로그인)
         ├─ GET /api/interview/[token] → 세션 정보 로드
         ├─ "면접을 시작해주세요" → POST /api/interview/[token]/chat (스트리밍)
         │     - 매 턴마다 시스템 프롬프트(JD+이력서) 주입
-        │     - Gemini 2.5 Flash-Lite, 스트리밍, DB에 메시지 누적 저장
+        │     - Gemini 3.5 Flash-Lite, 스트리밍, DB에 메시지 누적 저장
         │     - AI가 [INTERVIEW_END] 출력 시 자동 종료 트리거
         ├─ "면접 종료" 버튼 또는 [INTERVIEW_END] → POST /complete
         │     - 평가 LLM 호출 → JSON 평가 → DB 저장
@@ -112,12 +112,12 @@ interviewer/
 
 ### 4. AI 호출
 - Paid tier. 모든 task 통합 (`lib/gemini.ts` `MODELS`):
-  - 서류 평가·AI 면접 채팅·면접 평가 모두 → `gemini-2.5-flash` · **Vertex AI 서울 (asia-northeast3)** · AI 단계 §28의8 회피
+  - 서류 평가·AI 면접 채팅·면접 평가 모두 → `gemini-3.5-flash-lite` · **Vertex AI 미국 멀티리전 (us)** · AI 단계 국외이전(§28의8 — 처리방침 고지 + 면접 동의). 2026-10-02 서울 2.5-flash 은퇴로 전환
 - SDK 단일: `@google/genai` (vertexai: true 고정)
 - 면접 = 스트리밍 (`startChat` + `sendMessageStream`)
 - 평가 = JSON 모드 (`responseMimeType: application/json`, temperature=0.2)
 - 시스템 프롬프트에 직무+이력서 전부 주입 (벡터 검색 X — 프로토타입은 컨텍스트로 충분)
-- Vertex AI 서울 응답 시간: 13K char 프롬프트 기준 30~40초. screening 은 비동기 큐라 UX 영향 X.
+- Vertex AI 미국 응답 시간: 짧은 평가 프롬프트 1.5~3초(2026-10-02 실측). screening 은 비동기 큐라 UX 영향 X.
 
 ### 5. 면접 종료 트리거
 - 사용자가 "면접 종료" 버튼 클릭 → finalize
