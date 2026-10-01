@@ -17,6 +17,14 @@ type Message = { role: "user" | "model"; content: string };
 // 'LLM 보조 의심' 판정에 쓰지 않고, 사람 검토자용 참고 정황으로만 쓰인다 — lib/interview-signals.ts)
 const BLUR_MIN_AWAY_MS = 10_000;
 
+// 모바일은 Enter=줄바꿈(전송은 버튼)이고, 입력칸에 포커스를 되돌리면 키보드가 올라와 질문을 가린다.
+function isMobileUA() {
+  return (
+    typeof navigator !== "undefined" &&
+    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+  );
+}
+
 type ConsentItem = {
   key: string;
   kind: "consent" | "notice";
@@ -337,6 +345,8 @@ export default function InterviewPage() {
     if (!t || streaming || ended) return;
     setInput("");
     // 입력칸 높이 리셋은 input="" 변화를 감지하는 useEffect 가 담당
+    // 전송 버튼을 눌러 보내도 다음 답변을 바로 이어 쓰도록 입력칸으로 포커스 복귀 (PC 만)
+    if (!isMobileUA()) textareaRef.current?.focus();
     void sendMessage(t);
   };
 
@@ -751,16 +761,16 @@ export default function InterviewPage() {
                   sig.typedChars = Math.max(0, sig.typedChars - pasted.length);
                 }}
                 onKeyDown={(e) => {
-                  const isMobile =
-                    typeof window !== "undefined" &&
-                    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-                  if (e.key === "Enter" && !e.shiftKey && !isMobile) {
+                  // 한글 조합 중 Enter 는 조합 확정용 — 확정 뒤 이어 오는 Enter 에서 전송해야 마지막 글자가 입력칸에 남지 않는다.
+                  if (e.nativeEvent.isComposing) return;
+                  if (e.key === "Enter" && !e.shiftKey && !isMobileUA()) {
                     e.preventDefault();
                     if (hasPendingVoice) return; // 음성 확정 대기 중엔 전송 보류
                     handleSend();
                   }
                 }}
-                disabled={streaming}
+                // disabled 는 포커스를 빼앗아 응답 후 입력칸을 다시 클릭해야 했다 — readOnly 는 포커스를 유지한 채 입력만 막는다.
+                readOnly={streaming}
               />
               {voice.supported && (
                 <button
