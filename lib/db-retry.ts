@@ -29,6 +29,7 @@ const TRANSIENT_MESSAGE = [
   "baton", // hrana baton 불일치 → 재연결 필요
   "database is locked",
   "connection",
+  "s3 error", // Turso 스토리지(S3) 읽기 실패 — code 가 SQLITE_UNKNOWN 이라 메시지로만 식별
 ];
 // code/rawCode 정확일치.
 const TRANSIENT_CODE = new Set([
@@ -87,6 +88,11 @@ export async function withDbRetry<T>(
         attempt: i + 1,
         of: attempts,
         reason: e instanceof Error ? e.message : String(e),
+        // Drizzle 은 message 에 "Failed query: …" 만 남긴다 — 502 인지 S3 인지는 cause 에 있다.
+        cause:
+          e instanceof Error && e.cause instanceof Error
+            ? e.cause.message
+            : undefined,
       });
       await sleep(backoff[Math.min(i, backoff.length - 1)]);
     }
