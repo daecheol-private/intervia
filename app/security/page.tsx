@@ -44,7 +44,7 @@ const HIGHLIGHTS = [
   {
     Icon: Trash2,
     title: "이력서 원문 즉시 폐기",
-    desc: "합·불 결정 시점에 이력서 원본 파일을 삭제",
+    desc: "불합격·지원취소 결정 시 이력서 원본 파일을 삭제",
   },
   {
     Icon: UserCheck,
@@ -140,7 +140,7 @@ export default function SecurityPage() {
         <ul className="list-disc list-inside space-y-1">
           <li>
             이력서 원본 파일·마스킹 텍스트:{" "}
-            <strong>합·불 결정 시점 즉시 폐기</strong>
+            <strong>불합격·지원취소 결정 시점 즉시 폐기</strong>
           </li>
           <li>
             평가 결과(점수·의견): 채용 공고 종결 후{" "}

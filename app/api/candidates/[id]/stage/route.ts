@@ -1,7 +1,7 @@
 /**
  * 후보자 채용 단계 변경. 최종 결정 (hired/rejected/withdrawn) 도달 시:
  *   - decided_at / decided_by_user_id / decision_note 기록
- *   - 이력서 본문·파일 즉시 폐기 (A-5 결정 — PIPA 보유기간 정책)
+ *   - 이력서 본문·파일 즉시 폐기 (A-5 결정 — PIPA 보유기간 정책, 최종합격은 보존)
  *   - optional: 결정 통보 메일 발송 (sendNotification=true)
  */
 import { db } from "@/lib/db";
