@@ -93,7 +93,7 @@ function ScoreList({
           </div>
           {v.comment && (
             <p className="text-xs text-ink-soft mt-1.5 leading-relaxed">
-              {v.comment}
+              <HL text={v.comment} />
             </p>
           )}
         </div>

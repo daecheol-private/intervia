@@ -220,7 +220,7 @@ export default function ResumeGuidePage() {
       <GroupHeading
         icon={<Upload className="w-5 h-5" />}
         title="이력서 파일 직접 업로드"
-        desc="이미 가지고 있는 이력서 파일(PDF·DOCX·HWP·이미지·ZIP)을 끌어다 놓아 바로 등록합니다."
+        desc="이미 가지고 있는 이력서 파일(PDF·DOCX·HWPX·이미지·ZIP)을 끌어다 놓아 바로 등록합니다."
       />
 
       <div className="space-y-5">

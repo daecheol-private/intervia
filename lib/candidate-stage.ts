@@ -162,7 +162,7 @@ export const OUTCOME_REASONS_BY_OUTCOME: Record<Outcome, OutcomeReason[]> = {
  * 이력서/포트폴리오 원본이 필요하고, 본인 동의 하에 보관 정당성 확보.
  * (PIPA §15·§22 — 채용 이후 단계에서는 별도 동의/근거 하에 보관 가능)
  */
-export async function purgeOnDecision(candidateId: number): Promise<void> {
+export async function purgeOnDecision(candidateId: number): Promise<boolean> {
   const [c] = await db
     .select({
       resumeFilePath: candidates.resumeFilePath,
@@ -171,10 +171,10 @@ export async function purgeOnDecision(candidateId: number): Promise<void> {
     })
     .from(candidates)
     .where(eq(candidates.id, candidateId));
-  if (!c) return;
+  if (!c) return false;
   if (c.outcome === "hired") {
     // 합격자는 이력서·첨부·사진 그대로 보존
-    return;
+    return false;
   }
   const atts = await db
     .select({ id: candidateAttachments.id, filePath: candidateAttachments.filePath })
@@ -212,6 +212,7 @@ export async function purgeOnDecision(candidateId: number): Promise<void> {
       photoFilePath: null,
     })
     .where(eq(candidates.id, candidateId));
+  return true;
 }
 
 /**

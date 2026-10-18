@@ -289,7 +289,7 @@ const SLIDES: Slide[] = [
                 또는, 보유 이력서를 직접 끌어다 놓기
               </div>
               <div className="text-[9px] text-ink-soft">
-                파일 · 폴더 · 압축(ZIP) 한 번에 · PDF DOCX HWP
+                파일 · 폴더 · 압축(ZIP) 한 번에 · PDF DOCX HWPX
               </div>
             </div>
             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary text-surface text-[9px] font-medium shrink-0">

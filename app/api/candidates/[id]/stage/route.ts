@@ -307,10 +307,10 @@ export async function PATCH(
   const mailRequestedButFailed =
     body.sendNotification === true && !mailResult.sent;
   if (becameTerminal && !mailRequestedButFailed) {
-    await purgeOnDecision(cid).catch((e) =>
-      console.error("purgeOnDecision failed", e)
-    );
-    purged = true;
+    purged = await purgeOnDecision(cid).catch((e) => {
+      console.error("purgeOnDecision failed", e);
+      return false;
+    });
   }
 
   // 아직 치르지 않은 확정 면접이 있으면 일정 공유 수신자(회의실·인사팀·임원)에게 취소를 알린다.
