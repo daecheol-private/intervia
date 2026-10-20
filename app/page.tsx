@@ -31,6 +31,7 @@ import {
   Reveal,
 } from "./components/ui";
 import { getAllPricing, WELCOME_BONUS_TOKENS } from "@/lib/tokens";
+import { BROCHURE } from "@/lib/site-info";
 import {
   BETA,
   LIST_PRICING,
@@ -48,6 +49,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Coins,
+  Download,
   Columns3,
   EyeOff,
   FileSearch,
@@ -1505,6 +1507,14 @@ async function Landing() {
                   이미 계정이 있어요
                 </Link>
               </div>
+              <a
+                href={BROCHURE.href}
+                download={BROCHURE.fileName}
+                className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-surface/80 underline-offset-4 transition-colors hover:text-surface hover:underline"
+              >
+                <Download aria-hidden className="w-4 h-4" />
+                서비스 소개서 받기 (PDF)
+              </a>
             </div>
           </div>
         </Container>

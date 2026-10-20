@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
-import { COMPANY_INFO, SITE_INFO } from "@/lib/site-info";
+import { BROCHURE, COMPANY_INFO, SITE_INFO } from "@/lib/site-info";
 import { usesAppShell } from "@/lib/app-shell-routes";
 
 export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
@@ -46,6 +46,7 @@ export function Footer({ loggedIn = false }: { loggedIn?: boolean }) {
   // 랜딩 히어로·헤더에 이미 있어 중복이라 footer 에선 뺀다.
   const supportLinks = [
     { label: "자주 묻는 질문", href: "/faq" },
+    { label: "서비스 소개서 (PDF)", href: BROCHURE.href },
     { label: "도입 문의", href: `mailto:${COMPANY_INFO.email}` },
     ...(loggedIn ? [{ label: "고객센터", href: "/support" }] : []),
   ];
@@ -152,6 +153,13 @@ function FooterColumn({
 
 function FooterLink({ href, children }: { href: string; children: ReactNode }) {
   const cls = "text-ink-soft hover:text-ink hover:underline transition-colors";
+  if (href === BROCHURE.href) {
+    return (
+      <a href={href} download={BROCHURE.fileName} className={cls}>
+        {children}
+      </a>
+    );
+  }
   // mailto/외부 링크는 <a>, 내부 경로·해시 앵커는 next/link.
   if (href.startsWith("mailto:") || href.startsWith("http")) {
     return (

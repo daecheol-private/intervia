@@ -16,6 +16,12 @@ export const SITE_INFO = {
 //   구조: "아임인(대표 박은숙)이 운영하는 Intervia 서비스" (사업자등록 2026-06, 개인·일반과세).
 //   address/phone 가 빈 문자열이면 화면에서 그 줄을 숨긴다(미확정 표기 노출 방지).
 //   전자상거래법 §10 표시의무는 통신판매(유료 판매) 개시 시점에 발생 — 주소·전화는 그때까지 정비.
+/** 고객용 서비스 소개서 PDF — 원본은 marketing/brochure (node build.mjs --publish 로 public 에 복사). */
+export const BROCHURE = {
+  href: "/intervia-brochure.pdf",
+  fileName: "Intervia-서비스소개서.pdf",
+} as const;
+
 export const COMPANY_INFO = {
   name: "아임인", // 사업자 상호(법적 회사명)
   serviceName: "Intervia", // 운영 서비스 브랜드명
