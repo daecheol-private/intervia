@@ -394,10 +394,9 @@ export const GUIDE: GuideCategory[] = [
               <li>신규 법인 가입 시 무료 체험 토큰을 드립니다.</li>
               <li>
                 <strong>충전</strong> 은 법인 관리자가 <strong>토큰 지갑</strong>
-                에서 진행합니다. <strong>카드 결제</strong>는 3만·6만·9만원 중
-                고르고, <strong>10만원 이상</strong>은{" "}
-                <strong>계좌이체</strong>(세금계산서 발행)로 신청합니다. 보너스
-                토큰은 계좌이체 충전에 붙으며 금액이 클수록 많아집니다.
+                에서 진행합니다. 현재는 <strong>10만원 이상 계좌이체</strong>
+                (세금계산서 발행)로 신청하며, 카드 결제는 준비 중입니다. 보너스
+                토큰은 금액이 클수록 많아집니다.
               </li>
               <li>
                 <strong>쿠폰</strong> 을 받았다면 토큰 지갑에서 코드를 등록해
@@ -2527,10 +2526,10 @@ export const GUIDE: GuideCategory[] = [
                 평가·AI 면접 가능 횟수.
               </li>
               <li>
-                <strong>충전</strong> — <strong>카드 결제</strong>(3만·6만·9만원,
-                즉시 충전) 또는 <strong>10만원 이상 계좌이체</strong>(신청하면
-                입금 계좌 안내 → 입금 후 ‘확인 요청’ → 담당자 확인 시 충전,
-                세금계산서 발행). <strong>쿠폰 등록</strong>도 여기서 합니다.
+                <strong>충전</strong> — <strong>10만원 이상 계좌이체</strong>
+                (신청하면 입금 계좌 안내 → 입금 후 ‘확인 요청’ → 담당자 확인 시
+                충전, 세금계산서 발행). 카드 결제는 준비 중입니다.{" "}
+                <strong>쿠폰 등록</strong>도 여기서 합니다.
               </li>
               <li>
                 <strong>사용 내역</strong> — 시각·사유·처리자·변동·잔액이 기록된
