@@ -32,7 +32,6 @@ import { ScheduleProposeModal } from "@/app/components/ScheduleProposeModal";
 import { CandidateChat } from "./candidate-chat";
 import { Modal } from "./shared";
 import type { Candidate } from "./types";
-import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 const STAGE_LABEL = STAGE_LABELS_SHARED as Record<string, string>;
 // 색상은 STAGE_META.color (border 포함) 의 본문만 추출. 상세 페이지는 border 없이 사용.
@@ -809,7 +808,7 @@ export function StagePanel({
       )}
 
       {open === "stage" && (
-        <Modal onClose={() => setOpen(null)} title="단계 변경" headerExtra={<TutorialVideoLink video="A4" iconOnly />}>
+        <Modal onClose={() => setOpen(null)} title="단계 변경">
           <ProgressiveStageButtons
             currentStage={candidate.stage}
             busy={busy}
@@ -848,7 +847,7 @@ export function StagePanel({
       )}
 
       {open === "decide" && (
-        <Modal onClose={() => setOpen(null)} title="종결 결정" headerExtra={<TutorialVideoLink video="A11" iconOnly />}>
+        <Modal onClose={() => setOpen(null)} title="종결 결정">
           <div className="space-y-3">
             <div className="flex gap-2">
               {(
@@ -987,7 +986,7 @@ export function StagePanel({
       )}
 
       {open === "notify" && candidate.outcome && candidate.outcome !== "withdrawn" && (
-        <Modal onClose={() => setOpen(null)} title="결정 통보 메일 발송" headerExtra={<TutorialVideoLink video="A11" iconOnly />}>
+        <Modal onClose={() => setOpen(null)} title="결정 통보 메일 발송">
           <div className="space-y-3">
             <div className="text-sm text-ink-soft">
               <strong>{candidate.email}</strong> 로 결과 통보 메일을 발송합니다.

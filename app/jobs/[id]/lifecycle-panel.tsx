@@ -5,7 +5,6 @@ import { X, UserCheck } from "lucide-react";
 import { formatLocalDate } from "@/lib/utils";
 import { notify, confirmDialog } from "@/app/components/Dialog";
 import type { Job } from "./types";
-import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 export function LifecyclePanel({
   job,
@@ -130,7 +129,6 @@ export function LifecyclePanel({
               )}
             </>
           )}
-          <TutorialVideoLink video="B7" label="연장·종결 영상" className="-my-1.5" />
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
           {status === "closed" && dLeft != null && dLeft > 0 && (
@@ -326,7 +324,6 @@ export function InterviewersInline({ jobId }: { jobId: number }) {
           {busy ? "처리 중…" : "+ 면접관 지정"}
         </button>
       )}
-      <TutorialVideoLink video="B5" iconOnly />
     </div>
   );
 }

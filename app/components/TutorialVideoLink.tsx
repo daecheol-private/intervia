@@ -1,17 +1,12 @@
-import { CirclePlay } from "lucide-react";
 import { cn } from "@/app/components/ui";
 import { getTutorialVideo, tutorialVideoUrl, type TutorialKey } from "@/lib/tutorial-videos";
 
-/** 화면 옆에 붙는 "사용법 영상" 링크. 유튜브 새 탭으로 연다(임베드 안 함). */
+/** 페이지 제목 옆 작은 유튜브 로고 — 사용법 영상을 새 탭으로 연다(임베드 안 함). 페이지당 1개만. */
 export function TutorialVideoLink({
   video,
-  iconOnly = false,
-  label = "사용법 영상",
   className,
 }: {
   video: TutorialKey;
-  iconOnly?: boolean;
-  label?: string;
   className?: string;
 }) {
   const v = getTutorialVideo(video);
@@ -24,13 +19,17 @@ export function TutorialVideoLink({
       title={tip}
       aria-label={tip}
       className={cn(
-        "inline-flex items-center gap-1 shrink-0 rounded-md text-xs font-medium text-ink-muted hover:text-primary hover:bg-surface-alt transition-colors",
-        iconOnly ? "h-7 w-7 justify-center" : "h-7 px-1.5",
+        "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md opacity-80 hover:opacity-100 hover:bg-surface-alt transition",
         className,
       )}
     >
-      <CirclePlay className="w-4 h-4 shrink-0" aria-hidden />
-      {!iconOnly && <span>{label}</span>}
+      <svg viewBox="0 0 28 20" className="h-[13px] w-[18px]" aria-hidden>
+        <path
+          d="M27.4 3.1A3.5 3.5 0 0 0 24.9.6C22.7 0 14 0 14 0S5.3 0 3.1.6A3.5 3.5 0 0 0 .6 3.1C0 5.3 0 10 0 10s0 4.7.6 6.9a3.5 3.5 0 0 0 2.5 2.5C5.3 20 14 20 14 20s8.7 0 10.9-.6a3.5 3.5 0 0 0 2.5-2.5C28 14.7 28 10 28 10s0-4.7-.6-6.9Z"
+          fill="#FF0000"
+        />
+        <path d="M11.2 14.3 18.5 10l-7.3-4.3v8.6Z" fill="#fff" />
+      </svg>
     </a>
   );
 }

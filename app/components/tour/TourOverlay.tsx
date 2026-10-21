@@ -23,17 +23,6 @@ import {
   type TourStep,
 } from "@/lib/tour-scenarios";
 import { tourStore, useActiveTour } from "./tour-store";
-import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
-import type { TutorialKey } from "@/lib/tutorial-videos";
-
-/** 투어 마지막 단계에서 이어 볼 사용법 영상 */
-const SCENARIO_VIDEO: Record<string, TutorialKey> = {
-  "member-job-new": "B4",
-  "member-job-page": "B6",
-  "member-candidate-page": "A3",
-  "org-settings": "B2",
-};
-
 type Phase = "navigating" | "searching" | "shown" | "notfound";
 const BUBBLE_W = 340;
 
@@ -416,13 +405,6 @@ export function TourOverlay() {
               <p className="mt-1 text-xs text-ink-soft leading-relaxed">
                 {step.body}
               </p>
-              {isLast && SCENARIO_VIDEO[active.scenarioId] && (
-                <TutorialVideoLink
-                  video={SCENARIO_VIDEO[active.scenarioId]}
-                  label="영상으로 자세히 보기"
-                  className="mt-2 -ml-1.5 text-primary"
-                />
-              )}
               {phase === "notfound" && (
                 <p className="mt-2 text-[11px] text-warning bg-warning-soft border border-warning/30 rounded-lg px-2.5 py-1.5 leading-relaxed">
                   안내할 위치를 화면에서 찾지 못했어요. PC 화면에서 다시

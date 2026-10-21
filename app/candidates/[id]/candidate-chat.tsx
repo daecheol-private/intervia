@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageSquare, Send } from "lucide-react";
 import { formatKstDateTime } from "@/lib/utils";
 import { confirmDialog } from "@/app/components/Dialog";
-import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 type Comment = {
   id: number;
@@ -266,7 +265,6 @@ export function CandidateChat({ candidateId }: { candidateId: number }) {
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse" aria-hidden />
             <span className="text-sm font-bold text-ink">면접관 토론</span>
             <span className="text-[11px] text-ink-muted">실시간</span>
-            <TutorialVideoLink video="A10" iconOnly className="ml-auto" />
             <button
               data-tour="cand-discuss-close"
               onClick={() => setOpen(false)}

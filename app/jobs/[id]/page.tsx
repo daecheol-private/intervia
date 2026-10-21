@@ -1368,7 +1368,6 @@ export default function JobDetailPage() {
           {bulkBusy === "delete" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           {bulkBusy === "delete" ? "삭제 중..." : "삭제"}
         </button>
-        <TutorialVideoLink video="A12" iconOnly />
       </div>
     );
   };
@@ -1434,9 +1433,12 @@ export default function JobDetailPage() {
       <div data-tour="job-header" className="bg-card border border-border-default rounded-2xl p-4 sm:p-6 mt-3 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-ink leading-tight break-keep">
-              {job.title}
-            </h1>
+            <div className="flex items-start gap-1.5">
+              <h1 className="text-xl sm:text-2xl font-bold text-ink leading-tight break-keep">
+                {job.title}
+              </h1>
+              <TutorialVideoLink video={isEmpty ? "B6" : "A2"} className="sm:mt-0.5" />
+            </div>
             <div className="flex flex-wrap gap-1.5 mt-3">
               <Tag>{job.position}</Tag>
               <Tag>{job.level}</Tag>
@@ -1595,7 +1597,6 @@ export default function JobDetailPage() {
               <div>
                 <div className="flex items-center gap-1">
                   <h2 className="text-lg font-bold text-ink">이력서 등록</h2>
-                  <TutorialVideoLink video="B6" />
                 </div>
                 <p className="text-sm text-ink-muted mt-1">
                   지원 링크를 공유하거나, 보유한 이력서 파일을 직접 올려 평가를 시작하세요.
