@@ -21,6 +21,7 @@ import {
   type CareerInputs,
 } from "@/lib/career-level";
 import { CareerRangeInput } from "@/app/components/CareerRangeInput";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 const EMPLOYMENT = ["정규직", "계약직", "인턴", "프리랜서"];
 const MAX_PASTE_IMAGES = 5;
@@ -399,7 +400,10 @@ export default function NewJobPage() {
 
       {/* 데스크톱: 공고 등록 폼 (모바일 숨김) */}
       <div className="hidden sm:block">
-      <h1 className="text-2xl font-bold mt-3 mb-1">새 공고 등록</h1>
+      <div className="flex items-center gap-2 mt-3 mb-1">
+        <h1 className="text-2xl font-bold">새 공고 등록</h1>
+        <TutorialVideoLink video="B4" />
+      </div>
       <p className="text-sm text-ink-muted mb-6">
         등록된 정보는 면접관 페르소나 생성에 사용됩니다.
       </p>

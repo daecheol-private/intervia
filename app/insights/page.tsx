@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { candidateOrgFilter } from "@/lib/tenant";
 import { redirect } from "next/navigation";
 import { Target, TriangleAlert } from "lucide-react";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +140,7 @@ export default async function InsightsPage() {
         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary-soft text-primary uppercase tracking-wide">
           Beta
         </span>
+        <TutorialVideoLink video="B8" />
       </div>
       <p className="text-sm text-ink-soft mt-1">
         AI 점수·추천이 실제 채용 결정과 얼마나 맞았는지 봅니다. 점수대가 높을수록{" "}

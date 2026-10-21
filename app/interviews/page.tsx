@@ -19,6 +19,7 @@ import {
   type CalEvent,
   type NegoEvent,
 } from "./interview-calendar";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 export const dynamic = "force-dynamic";
 
@@ -197,6 +198,7 @@ export default async function InterviewsPage() {
           <div className="flex items-center gap-2">
             <CalendarClock className="w-6 h-6 text-primary" />
             <h1 className="text-2xl font-bold text-ink">면접 일정</h1>
+            <TutorialVideoLink video="A7" />
           </div>
           <p className="text-sm text-ink-soft mt-1">
             {me.role === "org_admin"

@@ -79,6 +79,7 @@ import {
 import { Donut, MultiLineCumulative, CATEGORICAL } from "@/components/charts";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 export const dynamic = "force-dynamic";
 
@@ -707,9 +708,12 @@ async function Dashboard({ me }: { me: CurrentUser }) {
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
       {/* 환영 헤더 — 인사만. '새 공고' 1차 액션은 아래 공고 목록 섹션 헤더에 둔다(중복 제거). */}
       <header className="mb-8">
-        <h1 className="text-2xl font-bold text-ink">
-          안녕하세요, {orgName ? `${orgName} ` : ""}{me.name} 님
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-ink">
+            안녕하세요, {orgName ? `${orgName} ` : ""}{me.name} 님
+          </h1>
+          <TutorialVideoLink video="A1" />
+        </div>
         <p className="text-sm text-ink-soft mt-1">
           {jobsWithActions.length === 0
             ? isOrgScope

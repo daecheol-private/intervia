@@ -65,6 +65,7 @@ import { ShareButton } from "./share-button";
 import { TimelineButton } from "./timeline-drawer";
 import { UnlockPanel } from "./unlock-panel";
 import type { Candidate, Job, Round1ScheduleItem } from "./types";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 // 후보 목록 폴링 (ms) — 가벼운 "변경 버전(rev)" 만 이 주기로 확인하고, rev 가 바뀐 경우에만
 // 전체 목록을 조회한다(변경 감지 후 상세 조회). 트리거가 못 잡는 변화(타 법인 큐 순번 등)
@@ -1367,6 +1368,7 @@ export default function JobDetailPage() {
           {bulkBusy === "delete" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           {bulkBusy === "delete" ? "삭제 중..." : "삭제"}
         </button>
+        <TutorialVideoLink video="A12" iconOnly />
       </div>
     );
   };
@@ -1591,7 +1593,10 @@ export default function JobDetailPage() {
           >
             <div className="flex items-start justify-between gap-3 mb-5">
               <div>
-                <h2 className="text-lg font-bold text-ink">이력서 등록</h2>
+                <div className="flex items-center gap-1">
+                  <h2 className="text-lg font-bold text-ink">이력서 등록</h2>
+                  <TutorialVideoLink video="B6" />
+                </div>
                 <p className="text-sm text-ink-muted mt-1">
                   지원 링크를 공유하거나, 보유한 이력서 파일을 직접 올려 평가를 시작하세요.
                 </p>

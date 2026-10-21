@@ -12,6 +12,7 @@ import {
   NCS_COMPETENCY_LABELS,
   type CompetencyKey,
 } from "@/lib/competencies";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 /**
  * 법인 설정 — 법인 단위 정책을 org_admin / system_admin 이 관리.
@@ -408,6 +409,7 @@ export default function OrgSettingsPage() {
         <div className="flex items-center gap-2">
           <Settings className="w-6 h-6 text-primary" />
           <h1 className="text-2xl font-bold text-ink">법인 설정</h1>
+          <TutorialVideoLink video="B2" />
         </div>
         <p className="text-sm text-ink-soft mt-1">
           법인 전체에 적용되는 정책입니다. 법인 관리자만 변경할 수 있습니다.

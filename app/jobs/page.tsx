@@ -8,6 +8,7 @@ import JobsAllList from "../jobs-list-all";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ClipboardList } from "lucide-react";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,7 @@ export default async function JobsListPage() {
           <div className="flex items-center gap-2">
             <ClipboardList className="w-6 h-6 text-primary" />
             <h1 className="text-2xl font-bold text-ink">공고</h1>
+            <TutorialVideoLink video="A2" />
           </div>
           <p className="text-sm text-ink-soft mt-1">
             법인 전체 공고 {serialized.length}건 · 내가 면접관인 공고를 먼저 표시

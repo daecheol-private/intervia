@@ -9,6 +9,7 @@ import { getUnlockChecker } from "@/lib/job-lock";
 import { AppShell } from "@/app/components/AppShell";
 import { CandidateTable, type CandidateRow } from "./candidate-table";
 import { Users } from "lucide-react";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,7 @@ export default async function CandidatesPage() {
           <div className="flex items-center gap-2">
             <Users className="w-6 h-6 text-primary" />
             <h1 className="text-2xl font-bold text-ink">후보자</h1>
+            <TutorialVideoLink video="A2" />
           </div>
           <p className="text-sm text-ink-soft mt-1">
             {me.role === "org_admin"

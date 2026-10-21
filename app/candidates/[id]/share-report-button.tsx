@@ -11,6 +11,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { formatLocalDate, formatLocalDateTime } from "@/lib/utils";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 type ShareLink = {
   id: number;
@@ -140,6 +141,7 @@ function ShareModal({
           <div className="flex items-center gap-2">
             <Share2 className="w-4 h-4 text-primary" />
             <h2 className="text-base font-semibold text-ink">평가 리포트 공유</h2>
+            <TutorialVideoLink video="A10" iconOnly />
           </div>
           <button
             onClick={onClose}

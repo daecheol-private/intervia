@@ -6,6 +6,7 @@ import Link from "next/link";
 import { FitHexagon } from "@/app/candidates/[id]/screening-report";
 import { HL } from "@/app/candidates/[id]/shared";
 import type { Candidate as DetailCandidate } from "@/app/candidates/[id]/types";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 type Report = DetailCandidate["screeningReport"];
 type Eval = { score: number | null; summary: string | null };
@@ -156,9 +157,12 @@ export default function ComparePage() {
       >
         ← 공고 상세
       </Link>
-      <h1 className="text-xl font-bold text-ink mt-2">
-        후보자 비교 ({selected.length}명)
-      </h1>
+      <div className="flex items-center gap-2 mt-2">
+        <h1 className="text-xl font-bold text-ink">
+          후보자 비교 ({selected.length}명)
+        </h1>
+        <TutorialVideoLink video="A9" />
+      </div>
       <p className="text-xs text-ink-muted mt-0.5">
         서류·AI면접·대면 평가를 한 화면에 · 서류 적합도 높은 순 정렬
       </p>

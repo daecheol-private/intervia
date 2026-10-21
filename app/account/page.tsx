@@ -11,6 +11,7 @@ import LogoutButton from "@/app/logout-button";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { formatLocalDateTime } from "@/lib/utils";
 import { NotifyPhoneRow } from "./NotifyPhoneRow";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 export default function AccountPage() {
   const router = useRouter();
@@ -90,7 +91,10 @@ export default function AccountPage() {
       <Link href="/" className="text-sm text-ink-muted hover:text-ink">
         ← 대시보드
       </Link>
-      <h1 className="text-2xl font-bold mt-3 mb-6">계정 설정</h1>
+      <div className="flex items-center gap-2 mt-3 mb-6">
+        <h1 className="text-2xl font-bold">계정 설정</h1>
+        <TutorialVideoLink video="A1" />
+      </div>
 
       <section className="bg-card border border-border-default rounded-2xl p-6 shadow-sm">
         <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">

@@ -14,6 +14,8 @@ import {
 import { BookOpen, ChevronDown, ChevronRight, List, Search, X } from "lucide-react";
 import { GUIDE, type GuideCategory } from "./guide-data";
 import { searchGuide, splitByTokens, tokenize } from "./guide-search";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
+import { TutorialVideoList } from "./TutorialVideoList";
 
 /**
  * 사용 가이드 트리 뷰 — 좌측 카테고리 트리에서 항목을 고르면 우측에 상세를 표시.
@@ -122,6 +124,7 @@ export function GuideView() {
         <div className="flex items-center gap-2">
           <BookOpen className="w-6 h-6 text-primary" />
           <h1 className="text-2xl font-bold text-ink">사용 가이드</h1>
+          <TutorialVideoLink video="0-1" />
         </div>
         <p className="mt-1 text-sm text-ink-soft">
           공고 등록부터 채용 프로세스, 기능·상태·용어까지 안내합니다.
@@ -157,6 +160,8 @@ export function GuideView() {
           )}
         </div>
       </header>
+
+      <TutorialVideoList />
 
       <div className="flex gap-8">
         {/* 좌측 트리 / 검색 결과 (데스크톱) */}

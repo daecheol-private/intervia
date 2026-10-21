@@ -7,6 +7,7 @@ import { BETA, LIST_PRICING } from "@/lib/beta";
 import ChargePanel from "./ChargePanel";
 import RedeemCoupon from "./RedeemCoupon";
 import { Coins } from "lucide-react";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 type Pricing = {
   job_post: number;
@@ -95,6 +96,7 @@ export default function TokensPage() {
         <div className="flex items-center gap-2">
           <Coins className="w-6 h-6 text-primary" />
           <h1 className="text-2xl font-bold text-ink">토큰</h1>
+          <TutorialVideoLink video="B3" />
         </div>
         <p className="text-sm text-ink-soft mt-1">법인의 토큰 잔액 및 사용 내역.</p>
       </div>

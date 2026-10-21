@@ -215,10 +215,12 @@ export function ScoreBar({ label, score }: { label: string; score: number | null
 export function Modal({
   onClose,
   title,
+  headerExtra,
   children,
 }: {
   onClose: () => void;
   title: string;
+  headerExtra?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -231,7 +233,10 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold text-ink">{title}</h3>
+          <div className="flex items-center gap-1">
+            <h3 className="font-semibold text-ink">{title}</h3>
+            {headerExtra}
+          </div>
           <button
             onClick={onClose}
             aria-label="닫기"

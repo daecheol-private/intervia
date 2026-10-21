@@ -67,6 +67,7 @@ import {
 import { OutcomeBadge, StagePanel } from "./stage-panel";
 import { CandidateTabRail, type TabItem, type TabKey } from "./tab-rail";
 import type { Candidate, Job, Schedule, Session } from "./types";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 // 면접 종료 후 평가는 complete 요청 안에서 inline 생성된다(실측 약 1분, 최대 1~2분).
 // 이 유예시간 안에 evaluation=null 이면 "실패"가 아니라 "생성 중"으로 본다.
@@ -851,6 +852,9 @@ export default function CandidateDetailPage() {
       {/* ── 종합평가 — 스코어카드 + 진행단계 + 6축 차트 ── */}
       {tab === "overview" && (
         <div className="mt-4 space-y-4 min-h-[calc(100vh-2rem)]">
+          <div className="flex justify-end gap-1 -mb-2">
+            <TutorialVideoLink video="A9" />
+          </div>
           <div
             data-tour="cand-overview"
             className="bg-card border border-border-default rounded-2xl shadow-sm p-6"
@@ -925,6 +929,9 @@ export default function CandidateDetailPage() {
       {/* ── 이력서 평가 ── */}
       {tab === "screening" && (
         <div className="mt-4 space-y-4">
+          <div className="flex justify-end gap-1 -mb-2">
+            <TutorialVideoLink video="A3" />
+          </div>
 
       {/* Screening — 타이틀 없이 본문만 (점수+요약으로 시작) */}
       <div data-tour="cand-screening" className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
@@ -1114,6 +1121,9 @@ export default function CandidateDetailPage() {
       {/* ── AI 면접 — 타이틀·구분선 없이 본문만 (서류평가 탭과 동일 구조) ── */}
       {tab === "ai" && (
         <div className="mt-4 space-y-4">
+          <div className="flex justify-end gap-1 -mb-2">
+            <TutorialVideoLink video={completedSession ? "A6" : "A5"} />
+          </div>
       <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6">
         {!activeSession && (
           <div className="text-center py-8">
@@ -1203,6 +1213,10 @@ export default function CandidateDetailPage() {
         <div
           className={`mt-4 space-y-4 min-h-[calc(100vh-2rem)] ${tab === "round1" ? "" : "hidden"}`}
         >
+          <div className="flex justify-end gap-1 -mb-2">
+            <TutorialVideoLink video="A7" label="일정 잡기 영상" />
+            <TutorialVideoLink video="A8" label="대면 면접 영상" />
+          </div>
           <InterviewQuestionsPanel
             candidateId={candidate.id}
             round="round1"
@@ -1221,6 +1235,10 @@ export default function CandidateDetailPage() {
         <div
           className={`mt-4 space-y-4 min-h-[calc(100vh-2rem)] ${tab === "round2" ? "" : "hidden"}`}
         >
+          <div className="flex justify-end gap-1 -mb-2">
+            <TutorialVideoLink video="A7" label="일정 잡기 영상" />
+            <TutorialVideoLink video="A8" label="대면 면접 영상" />
+          </div>
           <InterviewQuestionsPanel
             candidateId={candidate.id}
             round="round2"

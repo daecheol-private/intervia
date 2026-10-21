@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useStepUpFetch } from "@/app/components/StepUpModal";
 import { Users } from "lucide-react";
+import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
 
 type Member = {
   id: number;
@@ -200,6 +201,7 @@ export default function OrgMembersPage() {
         <div className="flex items-center gap-2">
           <Users className="w-6 h-6 text-primary" />
           <h1 className="text-2xl font-bold text-ink">법인 멤버 관리</h1>
+          <TutorialVideoLink video="B1" />
         </div>
         <p className="text-sm text-ink-soft mt-1">
           멤버 권한을 부여·비활성화하거나, 법인 합류 요청을 승인할 수 있습니다.
