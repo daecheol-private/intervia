@@ -30,6 +30,9 @@ const TRANSIENT_MESSAGE = [
   "database is locked",
   "connection",
   "s3 error", // Turso 스토리지(S3) 읽기 실패 — code 가 SQLITE_UNKNOWN 이라 메시지로만 식별
+  // "SQLITE_UNKNOWN: Server database …" — 서버측 DB 계층 장애(2026-10-22 블립: 한 번에
+  // screening·recorded 두 워커의 유지보수 쿼리가 500). s3 error 와 같은 이유로 메시지로만 식별.
+  "server database",
 ];
 // code/rawCode 정확일치.
 const TRANSIENT_CODE = new Set([

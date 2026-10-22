@@ -246,6 +246,21 @@ function passAlertThrottle(key: string, windowMs: number): boolean {
  * PII 스크럽 적용. `throttleKey` 별로 `windowMs`(기본 10분)당 1회만 발송해 폭주를 막는다.
  * SLACK_WEBHOOK_URL 미설정 시 notifyOps 가 조용히 no-op.
  */
+/**
+ * Slack 300자 예산 안에 *진짜 원인*이 들어오게 압축한다.
+ *
+ * Drizzle 은 message 앞머리를 "Failed query: <긴 SQL>\nparams: …" 로 채우므로,
+ * flattenError 가 뒤에 붙인 `caused by:` 줄이 300자 밖으로 밀려 잘린다 — 2026-10-22
+ * Turso 블립 알림 3건 중 2건이 원인 없이 도착해 Sentry 없이는 진단이 막혔다.
+ * 앞머리는 라벨 길이만 남기고 cause 줄을 끌어올린다(cause 가 없으면 원문 그대로).
+ */
+function compactCause(raw: string): string {
+  const [head = "", ...rest] = raw.split("\n");
+  const causes = rest.filter((l) => l.startsWith("caused by:"));
+  if (causes.length === 0) return raw;
+  return [head.slice(0, 120), ...causes].join("\n");
+}
+
 export async function alertError(
   title: string,
   err: unknown,
@@ -257,6 +272,6 @@ export async function alertError(
     err instanceof Error ? flattenError(err) : String(err ?? "unknown error");
   const mins = Math.round(windowMs / 60_000);
   await notifyOps(
-    `${title}\n원인: ${scrubString(raw).slice(0, 300)}\n(같은 유형 ${mins}분당 1회 통지 · 상세는 Sentry/Vercel 로그)`
+    `${title}\n원인: ${scrubString(compactCause(raw)).slice(0, 300)}\n(같은 유형 ${mins}분당 1회 통지 · 상세는 Sentry/Vercel 로그)`
   );
 }
