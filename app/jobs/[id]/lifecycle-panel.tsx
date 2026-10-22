@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X, UserCheck } from "lucide-react";
 import { formatLocalDate } from "@/lib/utils";
 import { notify, confirmDialog } from "@/app/components/Dialog";
+import { JobExpiredDecisionModal } from "@/app/components/JobExpiredDecisionModal";
 import type { Job } from "./types";
 
 export function LifecyclePanel({
@@ -16,6 +17,7 @@ export function LifecyclePanel({
   rightSlot?: React.ReactNode;
 }) {
   const [showExtend, setShowExtend] = useState(false);
+  const [showClose, setShowClose] = useState(false);
   const [info, setInfo] = useState<{
     candidateCount: number;
     totalCandidateCount: number;
@@ -36,6 +38,10 @@ export function LifecyclePanel({
   const dLeft = closesAt
     ? Math.ceil((new Date(closesAt).getTime() - Date.now()) / 86_400_000)
     : null;
+  // 예정일이 지난 공고는 상세 페이지가 만료 결정 모달(연장/종결)을 띄운다 — 여기선
+  // 중복 진입점을 만들지 않고, 예정일 전 "채용이 먼저 끝난" 경우만 조기 종결을 노출한다.
+  const expired =
+    status === "active" && !!closesAt && new Date(closesAt).getTime() < Date.now();
 
   const openExtend = async () => {
     setShowExtend(true);
@@ -148,9 +154,35 @@ export function LifecyclePanel({
               공고 연장
             </button>
           )}
+          {status === "active" && !expired && closesAt && (
+            <button
+              onClick={() => setShowClose(true)}
+              disabled={busy}
+              className="px-3 py-1.5 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt text-sm disabled:opacity-50"
+            >
+              공고 종결
+            </button>
+          )}
           {rightSlot}
         </div>
       </div>
+
+      {showClose && closesAt && (
+        <JobExpiredDecisionModal
+          jobId={job.id}
+          closesAt={closesAt}
+          mode="early"
+          onResolved={() => {
+            setShowClose(false);
+            notify("공고를 종결했습니다. 지원 링크는 마감으로 표시됩니다.", {
+              tone: "success",
+              title: "공고 종결 완료",
+            });
+            onChanged();
+          }}
+          onDismiss={() => setShowClose(false)}
+        />
+      )}
 
       {showExtend && (
         <div

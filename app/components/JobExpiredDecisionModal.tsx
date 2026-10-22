@@ -33,38 +33,45 @@ const REASON_LABEL: Record<Blocker["reason"], string> = {
 };
 
 /**
- * 만료된 공고(closesAt 지났고 status='active') 진입 시 강제 노출.
- * HR 이 "연장" 또는 "종결" 중 하나를 선택해야 추가 작업 가능.
+ * 두 가지 모드로 쓰인다 (종결 확인 UI·차단 사유 표시는 공유).
+ *
+ * - `expired`(기본): 만료된 공고(closesAt 지났고 status='active') 진입 시 강제 노출.
+ *   HR 이 "연장" 또는 "종결" 중 하나를 선택해야 추가 작업 가능.
+ * - `early`: 채용이 먼저 끝나 **예정일 전에 닫는** 조기 종결. 연장 선택지가 없으므로
+ *   확인 화면으로 바로 들어간다. (종결 API 자체는 만료 여부를 보지 않는다.)
  */
 export function JobExpiredDecisionModal({
   jobId,
   closesAt,
+  mode = "expired",
   onResolved,
   onDismiss,
 }: {
   jobId: number;
   closesAt: string;
+  mode?: "expired" | "early";
   onResolved: () => void;
   /** 모달을 닫되 공고는 만료 상태 유지 — 페이지에서 HR 액션은 disabled. */
   onDismiss?: () => void;
 }) {
+  const early = mode === "early";
   const [check, setCheck] = useState<CloseCheck | null>(null);
   const [extInfo, setExtInfo] = useState<ExtendInfo | null>(null);
   const [busy, setBusy] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
+  // 조기 종결은 선택지가 하나뿐 — 확인 화면에서 시작한다.
+  const [confirmClose, setConfirmClose] = useState(early);
   const [sendNotification, setSendNotification] = useState(true);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     void (async () => {
-      const [c, e] = await Promise.all([
-        fetch(`/api/jobs/${jobId}/close`).then((r) => r.json()),
-        fetch(`/api/jobs/${jobId}/extend`).then((r) => r.json()),
-      ]);
+      const c = await fetch(`/api/jobs/${jobId}/close`).then((r) => r.json());
       setCheck(c);
-      setExtInfo(e);
+      // 연장 비용 조회는 만료 모드에서만 — 조기 종결엔 연장 선택지가 없다.
+      if (early) return;
+      setExtInfo(await fetch(`/api/jobs/${jobId}/extend`).then((r) => r.json()));
     })();
-  }, [jobId]);
+  }, [jobId, early]);
 
   const doExtend = async () => {
     setBusy(true);
@@ -97,6 +104,10 @@ export function JobExpiredDecisionModal({
   };
 
   const closesDate = formatLocalDate(closesAt);
+  // 조기 종결 안내용 — 예정일까지 남은 일수(D-n).
+  const daysUntilClose = Math.ceil(
+    (new Date(closesAt).getTime() - Date.now()) / 86_400_000
+  );
   // 만료 +14일 자동 삭제까지 잔여일 (음수면 곧 삭제 대상)
   const autoDeleteAt = new Date(closesAt).getTime() + 14 * 86_400_000;
   const daysUntilAutoDelete = Math.max(
@@ -118,7 +129,7 @@ export function JobExpiredDecisionModal({
             type="button"
             onClick={onDismiss}
             aria-label="닫기"
-            title="닫기 (공고는 만료 상태로 유지됩니다)"
+            title={early ? "닫기" : "닫기 (공고는 만료 상태로 유지됩니다)"}
             className="absolute top-3 right-3 p-1.5 rounded-md text-ink-muted hover:text-ink hover:bg-surface-alt transition-colors"
           >
             <X className="w-4 h-4" strokeWidth={2.25} />
@@ -129,18 +140,34 @@ export function JobExpiredDecisionModal({
             <Calendar className="w-5 h-5 text-warning" strokeWidth={2.25} />
           </div>
           <div className="flex-1">
-            <h2 className="text-base font-bold text-ink">
-              공고 종결 예정일이 지났습니다
-            </h2>
-            <p className="text-xs text-ink-soft mt-1 leading-relaxed">
-              종결 예정일: <span className="font-medium">{closesDate}</span> ·
-              지원자의 진행은 계속되지만 새 후보자 등록·면접 발송 등 HR 추가
-              작업은 잠시 중단된 상태입니다.
-            </p>
-            <p className="text-xs text-danger mt-2 font-medium">
-              ⚠ 결정하지 않으면 {daysUntilAutoDelete}일 후 공고가 자동
-              삭제됩니다 (후보자 데이터 포함).
-            </p>
+            {early ? (
+              <>
+                <h2 className="text-base font-bold text-ink">공고 종결</h2>
+                <p className="text-xs text-ink-soft mt-1 leading-relaxed">
+                  종결 예정일은{" "}
+                  <span className="font-medium">{closesDate}</span>
+                  {daysUntilClose > 0 ? ` (D-${daysUntilClose})` : ""}{" "}
+                  이지만 지금 닫습니다. 종결하면 지원 링크로 들어온 지원자에게
+                  “지원이 마감되었습니다”가 표시되고 새 이력서 업로드가
+                  차단됩니다.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-base font-bold text-ink">
+                  공고 종결 예정일이 지났습니다
+                </h2>
+                <p className="text-xs text-ink-soft mt-1 leading-relaxed">
+                  종결 예정일: <span className="font-medium">{closesDate}</span>{" "}
+                  · 지원자의 진행은 계속되지만 새 후보자 등록·면접 발송 등 HR
+                  추가 작업은 잠시 중단된 상태입니다.
+                </p>
+                <p className="text-xs text-danger mt-2 font-medium">
+                  ⚠ 결정하지 않으면 {daysUntilAutoDelete}일 후 공고가 자동
+                  삭제됩니다 (후보자 데이터 포함).
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -152,8 +179,10 @@ export function JobExpiredDecisionModal({
             sendNotification={sendNotification}
             onToggleNotification={setSendNotification}
             onCancel={() => {
-              setConfirmClose(false);
               setErr("");
+              // 조기 종결은 돌아갈 선택 화면이 없다 — 모달을 닫는다.
+              if (early) onDismiss?.();
+              else setConfirmClose(false);
             }}
             onConfirm={doClose}
           />
