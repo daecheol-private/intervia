@@ -60,7 +60,9 @@ export function JobExpiredDecisionModal({
   const [busy, setBusy] = useState(false);
   // 조기 종결은 선택지가 하나뿐 — 확인 화면에서 시작한다.
   const [confirmClose, setConfirmClose] = useState(early);
-  const [sendNotification, setSendNotification] = useState(true);
+  // 통보 메일은 기본 꺼짐 — 종결은 되돌릴 수 있어도(재개) 나간 메일은 못 되돌린다.
+  // 보낼 사람이 의식적으로 체크하게 둔다(사용자 결정 2026-10-22).
+  const [sendNotification, setSendNotification] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
@@ -405,7 +407,7 @@ function ConfirmCloseBody({
             불합격 결과 통보 메일 자동 발송
           </span>
           <span className="text-[11px] text-ink-soft mt-0.5 block leading-relaxed">
-            체크 해제하면 메일은 보내지 않고 종결만 진행됩니다.
+            체크하면 일괄 불합격된 후보자에게 결과 메일을 보냅니다.
             <br />
             (후보자 상세에서 개별 발송도 가능합니다)
           </span>
