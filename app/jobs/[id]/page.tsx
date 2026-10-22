@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Folder,
   Mail,
+  Archive,
   Pencil,
   RefreshCw,
   Search,
@@ -103,6 +104,8 @@ export default function JobDetailPage() {
   >(null);
   // 만료 결정 모달 — 닫아도 페이지 상단 띠는 유지. 다시 열기 가능.
   const [expiredModalDismissed, setExpiredModalDismissed] = useState(false);
+  // 조기 종결(예정일 전) 확인 모달 — 헤더 아이콘에서 연다.
+  const [closeOpen, setCloseOpen] = useState(false);
   // 단일 필터 — 칩·드롭다운·펀널 박스가 전부 이 하나의 상태를 공유한다.
   // 조합 없음: 어디서든 새로 선택하면 이전 필터를 대체 (리셋 비용 제거).
   // 딥링크: ?stage=(stage·pseudo·bucket·outcome) / ?focus=(대기주체) 모두 이 상태로 수렴.
@@ -1391,6 +1394,23 @@ export default function JobDetailPage() {
           onDismiss={() => setExpiredModalDismissed(true)}
         />
       )}
+      {/* 조기 종결 — 예정일 전에 채용이 끝난 경우. 헤더의 종결 아이콘에서만 열린다. */}
+      {closeOpen && job.closesAt && (
+        <JobExpiredDecisionModal
+          jobId={Number(jobId)}
+          closesAt={job.closesAt}
+          mode="early"
+          onResolved={() => {
+            setCloseOpen(false);
+            notify("공고를 종결했습니다. 지원 링크는 마감으로 표시됩니다.", {
+              tone: "success",
+              title: "공고 종결 완료",
+            });
+            void loadJob();
+          }}
+          onDismiss={() => setCloseOpen(false)}
+        />
+      )}
       {/* 만료 상태 띠 — 모달 닫은 뒤에도 페이지 상단에 항상 노출, 다시 열기 가능 */}
       {isExpired && (
         <div className="mb-3 rounded-lg border border-warning/30 bg-warning-soft/40 px-4 py-2.5 flex items-center gap-3 text-xs flex-wrap">
@@ -1514,7 +1534,10 @@ export default function JobDetailPage() {
               );
             })()}
 
-            {/* 유틸리티 아이콘 묶음 — 공유 · 타임라인 · 리포트 · 수정 · 삭제. */}
+            {/* 유틸리티 아이콘 묶음 — 공유 · 타임라인 · 리포트 · 수정 · 종결/삭제.
+               진행 중인 공고 자리에는 삭제 대신 **종결**을 둔다: 지원자가 들어와 있는 공고를
+               한 번에 지우는 사고를 막고 "접수 종료 → (필요하면) 삭제" 순서를 UI 가 강제한다.
+               삭제는 종결된 공고와 초안에서만 노출(초안은 지울 지원자가 없으므로 바로 삭제). */}
             <div className="flex items-center gap-1">
               <ShareButton jobId={Number(jobId)} jobTitle={job.title} iconOnly />
               <TimelineButton jobId={Number(jobId)} />
@@ -1534,14 +1557,29 @@ export default function JobDetailPage() {
               >
                 <Pencil className="w-4 h-4" />
               </Link>
-              <button
-                onClick={handleDelete}
-                title="공고 삭제"
-                aria-label="공고 삭제"
-                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:border-danger/50 hover:text-danger hover:bg-danger-soft transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {(job.status ?? "active") === "active" && !job.isDraft ? (
+                <button
+                  onClick={() =>
+                    isExpired
+                      ? setExpiredModalDismissed(false)
+                      : setCloseOpen(true)
+                  }
+                  title="공고 종결 (지원 접수 종료)"
+                  aria-label="공고 종결"
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:bg-surface-alt hover:text-ink transition-colors"
+                >
+                  <Archive className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleDelete}
+                  title="공고 삭제"
+                  aria-label="공고 삭제"
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-strong text-ink-soft hover:border-danger/50 hover:text-danger hover:bg-danger-soft transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
