@@ -321,7 +321,7 @@ export function buildDecisionEmail(opts: {
       : `Dear ${candidateName},\n\nThank you for your interest in the ${jobTitle} position${coEn} and for the time you invested in your application. After careful consideration, we are unable to move forward with your application at this time. We sincerely appreciate your effort and wish you every success in your future endeavors.`
     : decision === "hired"
       ? `${candidateName}님, ${coKo}${jobTitle} 포지션 최종 합격을 진심으로 축하드립니다.\n\n곧 채용 담당자가 별도로 연락드려 입사 절차를 안내해 드릴 예정입니다.\n감사합니다.`
-      : `${candidateName}님, ${coKo}${jobTitle} 포지션에 지원해 주셔서 진심으로 감사드립니다.\n\n신중히 검토한 결과, 이번 채용에서는 함께하기 어렵게 되었음을 안내드립니다. 좋은 인연으로 다시 만날 기회가 있기를 기대하며, 앞으로의 여정에 좋은 결과 있으시기를 응원합니다.`;
+      : `${candidateName}님, ${coKo}${jobTitle} 포지션에 지원해 주셔서 감사합니다.\n아쉽지만 이번 채용에서는 함께하지 못하게 되었습니다.\n\n이번 결정은 이 포지션에서 필요로 하는 경험과 역할을 기준으로 신중하게 검토한 결과입니다.\n지원서를 준비하고 전형에 참여해 주신 시간과 정성에 진심으로 감사드립니다.\n\n${candidateName}님의 다음 걸음을 응원하겠습니다.`;
   const body = customMessage ?? defaultBody;
 
   const text = `${body}\n\n${en ? "The Intervia Recruiting Team" : "Intervia 채용팀"}`;
