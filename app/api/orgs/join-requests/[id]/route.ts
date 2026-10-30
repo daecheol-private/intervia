@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import {
   users,
@@ -8,6 +9,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { honorJobShareInvites } from "@/lib/invites";
+import { sendWelcomeMail } from "@/lib/email-welcome";
 
 export const runtime = "nodejs";
 
@@ -75,6 +77,18 @@ export async function PATCH(
   // lib/invites.ts 의 헬퍼 한 곳에 모아 두고, active 전환 지점마다 호출한다.
   if (action === "approve") {
     await honorJobShareInvites(row.userId, row.orgId);
+
+    // 환영 메일(서비스 소개서·사용 가이드) — 멤버에게는 이 승인이 계정을 처음 쓸 수 있게
+    // 되는 순간이고, 승인 사실을 본인에게 알리는 유일한 메일이기도 하다.
+    // 응답 뒤에 보낸다: 발송 실패가 승인 처리를 되돌려서는 안 된다.
+    // void 는 서버리스 suspend 로 잘려 유실되므로 after() 를 쓴다 (GOTCHAS §0-1).
+    const userId = row.userId;
+    const baseUrl = process.env.APP_BASE_URL ?? new URL(req.url).origin;
+    after(() =>
+      sendWelcomeMail({ userId, baseUrl }).catch((e) =>
+        console.error("[join-requests] 환영 메일 발송 실패:", e)
+      )
+    );
   }
 
   // 처리한 사람(본인 + 같은 법인 다른 org_admin) 의 'join_request' 알림 자동 읽음 처리.

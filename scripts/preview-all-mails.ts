@@ -33,6 +33,7 @@ async function main() {
     "../lib/invites"
   );
   const { buildVerificationEmail } = await import("../lib/email-verify");
+  const { buildWelcomeEmail } = await import("../lib/email-welcome");
   const { buildPasswordResetEmail } = await import("../lib/password-reset");
 
   const [org] = await db
@@ -261,6 +262,14 @@ async function main() {
       mail: buildVerificationEmail({
         userName: "강대철",
         verifyUrl: "http://localhost:3003/verify/v_preview",
+      }),
+    },
+    {
+      tag: "계정·가입환영",
+      audience: "org",
+      mail: buildWelcomeEmail({
+        userName: "강대철",
+        baseUrl: "http://localhost:3003",
       }),
     },
     {

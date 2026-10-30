@@ -67,6 +67,8 @@ export async function consumeVerificationToken(token: string): Promise<{
   ok: boolean;
   userId?: number;
   reason?: string;
+  /** 이 사용자의 첫 인증 완료인가 — 환영 메일을 중복 발송하지 않기 위한 신호. */
+  firstVerification?: boolean;
 }> {
   const [row] = await db
     .select()
@@ -77,6 +79,12 @@ export async function consumeVerificationToken(token: string): Promise<{
   if (new Date(row.expiresAt) < new Date())
     return { ok: false, reason: "토큰이 만료되었습니다." };
 
+  // 갱신 전 상태를 먼저 읽는다 — 아래 update 이후에는 첫 인증인지 구분할 수 없다.
+  const [prior] = await db
+    .select({ emailVerifiedAt: users.emailVerifiedAt })
+    .from(users)
+    .where(eq(users.id, row.userId));
+
   const now = new Date().toISOString();
   await db
     .update(emailVerifications)
@@ -86,7 +94,7 @@ export async function consumeVerificationToken(token: string): Promise<{
     .update(users)
     .set({ emailVerifiedAt: now })
     .where(eq(users.id, row.userId));
-  return { ok: true, userId: row.userId };
+  return { ok: true, userId: row.userId, firstVerification: !prior?.emailVerifiedAt };
 }
 
 export async function hasPendingVerification(userId: number): Promise<boolean> {

@@ -13,7 +13,7 @@
 | POST | `/api/auth/signup` | 🌐 | **410 Gone** — `/api/orgs` 또는 `/api/orgs/join-requests` 사용 |
 | POST | `/api/auth/check-email` | 🌐 | `{email}` → `{available, matchedOrg?, isPublicDomain, suggestion}` |
 | POST | `/api/auth/login` | 🌐 | 미인증 시 403 + `{code:"email_unverified"}`. pending/disabled 도 403. **429 + `{code:"rate_limited", retryAfterSeconds}`** — email 15분 5회 실패 또는 IP 20회 실패 시 15분 잠금 |
-| POST | `/api/auth/verify-email` | 🌐 | `{token}` → 인증 토큰 소비. 성공 시 `email_verified_at` 기록 |
+| POST | `/api/auth/verify-email` | 🌐 | `{token}` → 인증 토큰 소비. 성공 시 `email_verified_at` 기록. **첫 인증 완료**면 응답 뒤(`after()`)에 환영 메일 발송 — 서비스 소개서 PDF·사용 가이드 **링크**(첨부 X, `lib/email-welcome.ts`) |
 | POST | `/api/auth/resend-verification` | 🌐 | `{email}` → 미인증 사용자에게 메일 재발송 (존재 여부 노출 X) |
 | POST | `/api/auth/logout` | 🔒 | |
 | POST | `/api/auth/change-password` | 🔒 | 10자+3종+HIBP 정책. 동일 비번 거부 |
@@ -48,7 +48,7 @@
 | GET | `/api/orgs/search?q=` | 🌐 | 회사명/사업자번호 LIKE 검색 (2자 이상) |
 | POST | `/api/orgs/join-requests` | 🌐 | 비로그인 가입 + 합류 요청. user.status=pending |
 | GET | `/api/orgs/join-requests?orgId=&status=` | 🛡️ | 자기 법인 합류 요청 목록 |
-| PATCH | `/api/orgs/join-requests/[id]` | 🛡️ | `{action: 'approve'|'reject'}` |
+| PATCH | `/api/orgs/join-requests/[id]` | 🛡️ | `{action: 'approve'|'reject'}`. approve 시 user.status=active + 공유 공고 면접관 자동 등록 + 응답 뒤(`after()`)에 환영 메일 1회 (`lib/email-welcome.ts` — 멤버는 이 시점이 최초 이용 가능 시점) |
 | GET | `/api/orgs/members?orgId?` | 🛡️ | 자기 법인 멤버 (system_admin은 orgId 지정 가능). 각 멤버에 `notifyPhone: {phoneMasked, status, paused} \| null`, 최상위 `notifyPhoneEnabled`(면접 일정 알림톡 스위치 — false 면 화면이 번호 버튼·배지를 숨김) |
 | PUT | `/api/orgs/members/[id]/notify-phone` | 🛡️ | 멤버의 면접 일정 알림톡 번호 대신 등록 `{phone}` → pending + 그 번호로 확인 알림톡. 알림은 번호 주인이 확인해야 켜짐. 비활성 멤버 409, 타 법인 404, 스위치 꺼짐(템플릿 코드 미설정) 409. rate-limit 20회/10분 |
 | DELETE | `/api/orgs/members/[id]/notify-phone` | 🛡️ | 멤버 알림톡 번호 삭제 |
