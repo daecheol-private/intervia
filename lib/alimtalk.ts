@@ -532,3 +532,74 @@ export async function sendStaffAlimtalk(
   }
   return { ok: true, sent };
 }
+
+// ─── 인증번호(OTP) 공통 템플릿 ─────────────────────────────────────────────
+//
+// 기능마다 템플릿을 새로 승인받지 않도록 하나를 같이 쓴다. 용도 문구는 #{용도} 변수로 바꾼다.
+// 호출은 lib/phone-otp.ts 만 한다(발송 제한이 거기 있다). 야간 예약 없이 즉시 발송.
+// 카톡 미사용·차단 등으로 알림톡이 실패하면 알리고가 같은 내용을 문자로 대체 발송한다(failover).
+
+const OTP_TEMPLATE_ENV = "ALIGO_TPL_OTP";
+
+export function isOtpAlimtalkEnabled(): boolean {
+  return isAlimtalkConfigured() && !!process.env[OTP_TEMPLATE_ENV]?.trim();
+}
+
+export type OtpAlimtalkVars = { code: string; purposeLabel: string; ttlMin: number };
+
+/** ⚠️ docs/ALIMTALK.md 의 인증번호 템플릿 승인 본문과 글자까지 일치해야 발송된다. */
+export function buildOtpMessage(v: OtpAlimtalkVars): string {
+  return `[Intervia] 인증번호 안내\n\n인증번호: ${v.code}\n\n${v.purposeLabel} 화면에 위 6자리 번호를 입력해 주세요.\n유효시간: ${v.ttlMin}분\n\n본인이 요청하지 않았다면 이 메시지를 무시해 주세요.\n인증번호는 다른 사람에게 알려주지 마세요.`;
+}
+
+export async function sendOtpAlimtalk(
+  phone: string,
+  v: OtpAlimtalkVars
+): Promise<AlimtalkResult> {
+  if (!isAlimtalkConfigured()) return { ok: false, skipped: true, reason: "not_configured" };
+  if (process.env.NODE_ENV !== "production" && !isAlimtalkLocalEnabled())
+    return { ok: false, skipped: true, reason: "local_disabled" };
+  const tplCode = process.env[OTP_TEMPLATE_ENV]?.trim();
+  if (!tplCode) return { ok: false, skipped: true, reason: "template_not_set" };
+  const realMobile = normalizeMobile(phone);
+  if (!realMobile) return { ok: false, skipped: true, reason: "no_phone" };
+  const mobile = resolveAlimtalkOverride() ?? realMobile;
+
+  const token = await getToken();
+  if (!token) return { ok: false, skipped: false, reason: "token_failed" };
+
+  const body = new URLSearchParams({
+    apikey: process.env.ALIGO_API_KEY!,
+    userid: process.env.ALIGO_USER_ID!,
+    token,
+    senderkey: process.env.ALIGO_SENDER_KEY!,
+    tpl_code: tplCode,
+    sender: process.env.ALIGO_SENDER!,
+    receiver_1: mobile,
+    subject_1: "Intervia 인증번호",
+    message_1: buildOtpMessage(v),
+    failover: "Y",
+    fsubject_1: "인증번호",
+    fmessage_1: `[Intervia] 인증번호 ${v.code} (${v.ttlMin}분 유효). 타인에게 알려주지 마세요.`,
+    testMode: process.env.ALIGO_TEST_MODE === "1" ? "Y" : "N",
+  });
+  try {
+    const res = await fetch(
+      SEND_URL,
+      withProxy({
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      })
+    );
+    const json = (await res.json()) as { code?: number; message?: string };
+    if (Number(json.code) !== 0) {
+      console.error("[alimtalk] 인증번호 발송 실패:", json.message ?? json.code);
+      return { ok: false, skipped: false, reason: String(json.message ?? json.code) };
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error("[alimtalk] 인증번호 발송 오류:", e instanceof Error ? e.message : e);
+    return { ok: false, skipped: false, reason: "request_failed" };
+  }
+}

@@ -655,6 +655,29 @@ export const apiRateLog = sqliteTable("api_rate_log", {
 }));
 
 /**
+ * 휴대폰 인증번호(OTP) — 공통. 발송·검증·제한은 lib/phone-otp.ts 만 사용.
+ * 코드는 원문 대신 HMAC 만 저장. 발송 횟수 제한(번호·IP·전체)도 이 행 수로 센다.
+ * 시각은 전부 SQL datetime() 형식('YYYY-MM-DD HH:MM:SS' UTC)으로만 쓰고 비교한다.
+ */
+export const phoneOtps = sqliteTable("phone_otps", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  purpose: text("purpose").notNull(), // lib/phone-otp.ts OtpPurpose
+  phone: text("phone").notNull(), // 숫자만 (01012345678)
+  codeHash: text("code_hash").notNull(),
+  ip: text("ip"),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+}, (t) => ({
+  phoneIdx: index("idx_phone_otps_phone").on(t.phone, t.createdAt),
+  ipIdx: index("idx_phone_otps_ip").on(t.ip, t.createdAt),
+  createdIdx: index("idx_phone_otps_created").on(t.createdAt),
+}));
+
+/**
  * 로그인 시도 기록 — Rate limit / 무차별 대입 방어.
  *
  * 정책:

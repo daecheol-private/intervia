@@ -487,6 +487,19 @@ PK 없음 — `(job_id, user_id)` UNIQUE.
 
 정책 변경 시 `CONSENT_VERSION` (lib/consent.ts) 상향 → 신규 면접 세션이 재동의 요구. 구버전 row 는 그대로 보존 (감사·증거).
 
+## phone_otps
+
+휴대폰 인증번호(공통, `lib/phone-otp.ts` 전용). 코드 원문 대신 HMAC 만 저장. 발송 제한도 이 행 수로 센다. 2일 지나면 일일 cron 이 삭제.
+
+| 컬럼 | 설명 |
+|---|---|
+| purpose | 용도 (`OTP_PURPOSES` 키, 예: apply_duplicate) |
+| phone | 숫자만 정규화한 번호 |
+| code_hash | HMAC(purpose:phone:code) |
+| ip | 요청 IP (IP별 하루 제한) |
+| attempts | 검증 시도 수 (5회면 폐기) |
+| expires_at / consumed_at / created_at | 전부 SQL `datetime()` 형식 |
+
 ## api_rate_log
 
 범용 API rate limit 로그. `lib/rate-limit.ts` 의 `rateLimit()` 헬퍼가 사용.

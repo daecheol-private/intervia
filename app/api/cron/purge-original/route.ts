@@ -6,6 +6,7 @@ import { expireInterviewSessions } from "@/lib/expire-sessions";
 import { cleanupExpiredSessions } from "@/lib/auth";
 import { pruneMailEvents } from "@/lib/mail-usage";
 import { cleanupStalePhoneRequests } from "@/lib/notify-phone";
+import { cleanupOldPhoneOtps } from "@/lib/phone-otp";
 import { secretEquals } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
   const prunedMailEvents = await pruneMailEvents();
   // 면접 일정 알림톡 번호 중 확인하지 않은 채 기한이 한참 지난 것 삭제 (최소 보유).
   const purgedPhoneRequests = await cleanupStalePhoneRequests();
+  const purgedPhoneOtps = await cleanupOldPhoneOtps();
   return Response.json({
     ok: true,
     ...result,
@@ -57,6 +59,7 @@ export async function GET(req: Request) {
     expiry,
     prunedMailEvents,
     purgedPhoneRequests,
+    purgedPhoneOtps,
   });
 }
 
