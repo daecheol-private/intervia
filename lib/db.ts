@@ -33,6 +33,15 @@ function resolveUrl(): { url: string; authToken?: string } {
 const cfg = resolveUrl();
 const client = createClient(cfg);
 
+/**
+ * 지금 연결된 DB 가 무엇인지 — 운영 Turso 인지, 로컬 file 인지.
+ * env 만 보고 짐작하면 틀린다: dev 모드에서는 TURSO_DATABASE_URL 이 있어도 위 가드가
+ * file:./data.db 로 떨어뜨린다. 운영/로컬을 가려 말해야 하는 스크립트는 이걸 쓸 것.
+ */
+export function currentDbTarget(): { url: string; isLocalFile: boolean } {
+  return { url: cfg.url, isLocalFile: cfg.url.startsWith("file:") };
+}
+
 // 로컬 file 백엔드는 WAL 모드로 — 기본(delete 저널)에선 동시 쓰기 트랜잭션이 락을 오래 잡고
 // 깨끗이 풀지 않아, busy_timeout 이 없는 @libsql/client 에서 재시도해도 SQLITE_BUSY 가 거의
 // 항상 누락된다(QA 재현: delete=1/N 성공, WAL+재시도=N/N). WAL 은 writer↔reader 비차단 +

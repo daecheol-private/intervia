@@ -17,14 +17,19 @@
  * 중복 방지: 보낸 사람을 scripts/_welcome-backfill-sent.json 에 기록하고 다음 실행에서
  *    건너뛴다(.gitignore 의 /scripts/_* 로 커밋 제외). 리허설 발송은 기록하지 않는다.
  *
+ * ⚠️ 세 모드를 **같은 NODE_ENV 로** 돌려야 한다. dev 모드에서는 lib/db.ts 가 Turso 대신
+ *    file:./data.db 로 폴백하므로, 미리보기만 맨손으로 돌리면 로컬 목록을 보고
+ *    --send(NODE_ENV=production) 는 운영 목록으로 보내는 어긋남이 생긴다. 그래서 운영
+ *    대상 작업은 셋 다 NODE_ENV=production 으로 한다(스크립트가 어긋나면 멈춘다).
+ *
  * 실행 방법은 docs/RUNBOOK.md "기존 가입자 1회 안내" 참고.
- * 요약: 인자 없이 = 미리보기(읽기 전용) / --rehearsal = 내 메일로 리허설 /
+ * 요약: 인자 없이 = 미리보기(읽기 전용) / --rehearsal = REHEARSAL_TO 로만 발송 /
  *      --send = 실제 발송(NODE_ENV=production 필수).
  * 옵션: --limit N (상위 N명만), --before "YYYY-MM-DD HH:MM:SS" (기준 시각 UTC)
  */
 import "./_load-env.mjs";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { db } from "../lib/db";
+import { db, currentDbTarget } from "../lib/db";
 import { users } from "../lib/schema";
 import { and, eq, isNotNull, lt } from "drizzle-orm";
 import { buildWelcomeEmail } from "../lib/email-welcome";
@@ -38,6 +43,13 @@ const SENT_LOG = "scripts/_welcome-backfill-sent.json";
 
 /** 연속 발송 간격(ms) — 발신 서버에 한꺼번에 몰지 않는다. */
 const GAP_MS = 1500;
+
+/**
+ * --rehearsal 수신자. mailer 의 로컬 리다이렉트에 기대지 않고 여기서 직접 고정한다.
+ * 운영 목록을 보려면 NODE_ENV=production 이 필요한데, 그 순간 로컬 리다이렉트가 꺼져
+ * 리허설이 진짜 수신자에게 날아가기 때문이다.
+ */
+const REHEARSAL_TO = process.env.SYSTEM_ADMIN_EMAIL ?? "admin.intervia@gmail.com";
 
 /**
  * 반드시 반송되는 예약 TLD (RFC 2606/6761) — 시드·검증 계정이 여기에 걸린다.
@@ -71,8 +83,22 @@ async function main() {
   const bi = argv.indexOf("--before");
   const cutoff = bi >= 0 && argv[bi + 1] ? argv[bi + 1] : CUTOFF_UTC;
 
-  const isLocalDb = process.env.LOCAL_DB === "1";
   const isProdEnv = process.env.NODE_ENV === "production";
+
+  // env 가 아니라 "실제로 붙은 DB" 를 본다. dev 모드에서는 TURSO_DATABASE_URL 이 있어도
+  // lib/db.ts 가 file:./data.db 로 폴백하므로, LOCAL_DB 만 보고 PRODUCTION 이라 찍으면
+  // 미리보기는 로컬을 읽고 --send(NODE_ENV=production)는 운영을 읽는 어긋남이 생긴다.
+  const target = currentDbTarget();
+  if (target.isLocalFile && process.env.LOCAL_DB !== "1") {
+    console.error(
+      `✋ 운영을 보려던 것 같은데 실제로는 로컬 DB(${target.url})에 붙었습니다.\n` +
+        "   dev 모드라 lib/db.ts 가 Turso 대신 로컬 파일로 폴백했습니다.\n" +
+        "   · 운영 대상을 보려면:  $env:NODE_ENV=\"production\" 을 먼저 설정하세요\n" +
+        "   · 일부러 로컬을 보려면: LOCAL_DB=1 을 붙이세요\n" +
+        "   이대로 두면 미리보기 목록과 실제 발송 대상이 서로 다른 DB 가 됩니다."
+    );
+    process.exit(1);
+  }
 
   // 실제 발송은 NODE_ENV=production 에서만. 아니면 mailer 가 수신자를 전부
   // admin.intervia@gmail.com 으로 바꾸는데(lib/mailer.ts resolveMailOverride),
@@ -86,9 +112,13 @@ async function main() {
     process.exit(1);
   }
 
-  const mode = send ? "실제 발송 ✉️" : rehearsal ? "리허설(내 메일로) 🔁" : "미리보기 👀";
+  const mode = send
+    ? "실제 발송 ✉️"
+    : rehearsal
+      ? `리허설(${REHEARSAL_TO} 로) 🔁`
+      : "미리보기 👀";
   console.log(
-    `[welcome-backfill] DB=${isLocalDb ? "LOCAL" : "PRODUCTION ⚠️"} / mode=${mode} / 기준=${cutoff} UTC`
+    `[welcome-backfill] DB=${target.isLocalFile ? `LOCAL (${target.url})` : `PRODUCTION ⚠️ (${target.url})`} / mode=${mode} / 기준=${cutoff} UTC`
   );
 
   const sent = loadSent();
@@ -150,7 +180,7 @@ async function main() {
     });
     try {
       await sendMail({
-        to: t.email,
+        to: rehearsal ? REHEARSAL_TO : t.email,
         ...mail,
         audience: "org",
         kind: "welcome_backfill",
@@ -161,7 +191,9 @@ async function main() {
         sent.push({ userId: t.id, email: t.email, at: new Date().toISOString() });
         writeFileSync(SENT_LOG, JSON.stringify(sent, null, 2));
       }
-      console.log(`  ✓ [${t.id}] ${t.email}`);
+      console.log(
+        rehearsal ? `  ✓ [${t.id}] ${t.email} 분을 ${REHEARSAL_TO} 로` : `  ✓ [${t.id}] ${t.email}`
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       failed.push({ id: t.id, email: t.email, err: msg });

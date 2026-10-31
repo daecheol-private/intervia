@@ -157,24 +157,36 @@
 반송이 확실한 예약 TLD(`.test`·`.example` 등)는 자동 제외된다. 보낸 사람은
 `scripts/_welcome-backfill-sent.json`(커밋 제외)에 기록돼 재실행 시 건너뛴다.
 
-**순서대로** 실행한다. 1·2 는 수신자에게 가지 않는다.
+**순서대로** 실행한다. 1·2 는 실제 수신자에게 가지 않는다.
+**세 줄 모두 `NODE_ENV="production"` 을 붙인다** — 이유는 아래.
 
 ```powershell
 cd D:\intervia\interviewer
+$env:NODE_ENV="production"
 
 # 1) 운영 대상 미리보기 — 읽기 전용, 발송 없음. 목록을 눈으로 확인할 것
 npx tsx scripts/send-welcome-backfill.ts
 
-# 2) 리허설 — 전부 admin.intervia@gmail.com 으로 리다이렉트, 기록 안 남김
+# 2) 리허설 — 1명분 문구를 내 메일로만. 기록 안 남김
 npx tsx scripts/send-welcome-backfill.ts --rehearsal --limit 1
 
 # 3) 실제 발송 — 수신자에게 진짜로 간다
-$env:NODE_ENV="production"; npx tsx scripts/send-welcome-backfill.ts --send
+npx tsx scripts/send-welcome-backfill.ts --send
+
+# 끝나면 되돌린다 (이 창에서 다른 작업을 할 거면)
+$env:NODE_ENV=""
 ```
 
-⚠️ **3번은 `NODE_ENV=production` 이 필수**다. 없으면 mailer 가 수신자를 전부
+⚠️ **`NODE_ENV` 를 빼면 미리보기와 실제 발송이 서로 다른 DB 를 읽는다.** dev 모드에서는
+`TURSO_DATABASE_URL` 이 있어도 `lib/db.ts` 가 `file:./data.db` 로 폴백하기 때문이다. 맨손으로
+1번만 돌리면 **로컬** 계정 목록을 보고 안심한 뒤, 3번은 **운영** 계정에게 보내게 된다.
+(2026-10-31 실제로 이 상태로 로컬 목록을 운영 목록으로 착각했다. 지금은 스크립트가
+붙은 DB 를 그대로 출력하고, 이 어긋남이면 멈춘다.)
+
+⚠️ **3번은 `NODE_ENV=production` 이 필수**이기도 하다. 없으면 mailer 가 수신자를 전부
 `admin.intervia@gmail.com` 으로 바꾸는데(`lib/mailer.ts` `resolveMailOverride`), 그 상태로
 보내면 아무에게도 안 간 채 "보냄" 으로 기록돼 영영 누락된다. 스크립트가 이 조합을 거부한다.
+반대로 리허설(2번)은 `NODE_ENV` 와 무관하게 스크립트가 수신자를 직접 고정하므로 안전하다.
 
 실패분은 기록되지 않으므로 원인을 고친 뒤 같은 명령을 다시 돌리면 재시도된다.
 발송량이 하루 예산(`MAIL_DAILY_BUDGET`)에 가까우면 `--limit` 으로 나눠 보낸다.
