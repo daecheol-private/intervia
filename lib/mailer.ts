@@ -1,5 +1,4 @@
 import nodemailer from "nodemailer";
-import type SMTPPool from "nodemailer/lib/smtp-pool";
 import path from "node:path";
 import { db } from "./db";
 import { orgSmtpConfigs, organizations } from "./schema";
@@ -13,7 +12,7 @@ import { isValidBrandColor, textColorOn } from "./brand-color";
 import { EMAIL_LOGO_PNG_BASE64 } from "./email-logo-data";
 
 // 모든 발송 transporter 는 pooled (페이싱·연결 재사용) — verify 용 일회성 제외.
-type Transporter = nodemailer.Transporter<SMTPPool.SentMessageInfo>;
+type Transporter = ReturnType<typeof nodemailer.createTransport>;
 
 // 발송 페이싱 — 발신 서버가 초당 발송률을 제한하면 동시 발송이 몰릴 때 일부가 4xx 로
 // 거부된다 (일괄 불합격 통보 6건 중 4건 누락 사고 — 당시 발신 서버의 5rps 팀 한도).
