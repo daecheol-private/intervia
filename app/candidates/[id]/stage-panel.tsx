@@ -445,6 +445,7 @@ export function StagePanel({
     }
     const data = (await r.json()) as {
       purged: boolean;
+      purgeSkippedReason?: string;
       mail: { sent: boolean; error?: string };
     };
     const outcomeLabelMap = {
@@ -454,7 +455,9 @@ export function StagePanel({
     } as const;
     const parts: string[] = [];
     parts.push(`결과: ${outcomeLabelMap[decision]}`);
-    if (data.purged) parts.push("이력서 본문·파일 즉시 폐기됨 (PIPA)");
+    if (data.purged) parts.push("이력서 본문·파일 즉시 폐기됨");
+    else if (decision === "hired") parts.push("이력서·첨부 파일 보존(입사 절차용)");
+    else if (data.purgeSkippedReason) parts.push("메일 실패로 이력서 폐기 보류");
     if (sendMail && decision !== "withdrawn") {
       parts.push(data.mail.sent ? "메일 발송 완료" : `메일 실패: ${data.mail.error}`);
     }
@@ -961,11 +964,20 @@ export function StagePanel({
               </div>
             )}
 
-            <div className="text-[11px] text-ink-muted leading-relaxed bg-warning-soft border border-warning/40 rounded-lg p-2">
-              ⚠️ 종결 결정 시 이력서 본문·파일이 즉시 폐기됩니다.
-              공고 종결 +14일이 지나면 후보자 정보 전체(점수·평가 포함)가 자동
-              삭제됩니다 (PIPA 보유기간 정책).
-            </div>
+            {decision === "hired" ? (
+              <div className="text-[11px] text-ink-muted leading-relaxed bg-surface-alt border border-border-default rounded-lg p-2">
+                최종합격자의 이력서·첨부 파일은 입사 절차를 위해 폐기하지 않고
+                보존됩니다. 공고 종결 후에도 자동 삭제되지 않으니, 필요 없어지면
+                직접 삭제해 주세요.
+              </div>
+            ) : (
+              <div className="text-[11px] text-ink-muted leading-relaxed bg-warning-soft border border-warning/40 rounded-lg p-2">
+                ⚠️ {decision === "withdrawn" ? "지원취소" : "불합격"} 처리 시
+                이력서 본문·파일이 즉시 폐기됩니다. 공고 종결 +14일이 지나면
+                후보자 정보 전체(점수·평가 포함)가 자동 삭제됩니다 (PIPA 보유기간
+                정책).
+              </div>
+            )}
 
             <div className="flex gap-2 pt-2">
               <button

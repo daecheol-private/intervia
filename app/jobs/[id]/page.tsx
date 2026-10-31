@@ -1829,7 +1829,7 @@ export default function JobDetailPage() {
           </button>
         </div>
         <ul className="text-xs text-ink-muted mt-3 space-y-1 text-left inline-block">
-          <li>· PDF · DOCX · HWP · 이미지 · ZIP 지원</li>
+          <li>· PDF · DOCX · HWPX · 이미지 · ZIP 지원</li>
           <li>· 여러 파일 한 번에, 폴더 드래그도 가능</li>
           <li>· 개별 파일 10MB 초과는 자동 제외 (동영상 삽입된 PPT 등)</li>
           <li>

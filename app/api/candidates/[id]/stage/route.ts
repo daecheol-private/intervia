@@ -1,7 +1,7 @@
 /**
  * 후보자 채용 단계 변경. 최종 결정 (hired/rejected/withdrawn) 도달 시:
  *   - decided_at / decided_by_user_id / decision_note 기록
- *   - 이력서 본문·파일 즉시 폐기 (A-5 결정 — PIPA 보유기간 정책)
+ *   - 이력서 본문·파일 즉시 폐기 (A-5 결정 — PIPA 보유기간 정책, 최종합격은 보존)
  *   - optional: 결정 통보 메일 발송 (sendNotification=true)
  */
 import { db } from "@/lib/db";
@@ -307,10 +307,10 @@ export async function PATCH(
   const mailRequestedButFailed =
     body.sendNotification === true && !mailResult.sent;
   if (becameTerminal && !mailRequestedButFailed) {
-    await purgeOnDecision(cid).catch((e) =>
-      console.error("purgeOnDecision failed", e)
-    );
-    purged = true;
+    purged = await purgeOnDecision(cid).catch((e) => {
+      console.error("purgeOnDecision failed", e);
+      return false;
+    });
   }
 
   // 아직 치르지 않은 확정 면접이 있으면 일정 공유 수신자(회의실·인사팀·임원)에게 취소를 알린다.

@@ -88,7 +88,7 @@ export async function POST(
   if (!g.ok) return g.res;
   const { candidate } = g;
 
-  // 합·불 결정 시 파일이 즉시 폐기되는 정책 — 결정된 후보자엔 추가 무의미
+  // 결정된 후보자는 채용 절차가 끝나 첨부 추가가 무의미(불합격·지원취소는 파일도 폐기됨, 합격자는 보존만)
   if (candidate.outcome)
     return new Response("이미 합·불이 결정된 후보자에는 첨부를 추가할 수 없습니다.", {
       status: 409,
