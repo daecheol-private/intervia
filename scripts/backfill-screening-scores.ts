@@ -11,15 +11,25 @@
  *       멱등 — 입력(breakdown/level_match/focus_match)은 안 건드리고 점수만 재도출하므로
  *       여러 번 돌려도 같은 결과. 되돌리려면 해당 후보를 재평가하면 LLM 이 새로 생성.
  *
+ * ⚠️ 운영 대상이면 **DRY-RUN 과 --apply 를 같은 NODE_ENV 로** 돌려야 한다. dev 모드에서는
+ *    TURSO_DATABASE_URL 이 있어도 lib/db.ts 가 file:./data.db 로 폴백하므로, 맨손으로 돌린
+ *    미리보기는 로컬 후보자를 보여주고 --apply 는 운영에 쓰게 된다(스크립트가 멈춘다).
+ *    상세: docs/RUNBOOK.md §10.
+ *
  * 사용 (PowerShell):
- *   LOCAL_DB=1 npx tsx scripts/backfill-screening-scores.ts            # 로컬 미리보기
- *   LOCAL_DB=1 npx tsx scripts/backfill-screening-scores.ts --apply    # 로컬 적용
- *   npx tsx scripts/backfill-screening-scores.ts                       # 운영 미리보기(읽기전용)
- *   npx tsx scripts/backfill-screening-scores.ts --apply               # 운영 적용 ⚠️ 백업 후
- *   ...  --org 12                                                      # 특정 법인만
+ *   # 로컬
+ *   $env:LOCAL_DB="1"; npx tsx scripts/backfill-screening-scores.ts            # 미리보기
+ *   $env:LOCAL_DB="1"; npx tsx scripts/backfill-screening-scores.ts --apply    # 적용
+ *
+ *   # 운영 (끝나면 $env:NODE_ENV="" 로 되돌릴 것)
+ *   $env:NODE_ENV="production"
+ *   npx tsx scripts/backfill-screening-scores.ts                               # 미리보기(읽기전용)
+ *   npx tsx scripts/backfill-screening-scores.ts --apply                       # 적용 ⚠️ 백업 후
+ *
+ *   ...  --org 12                                                              # 특정 법인만
  */
 import "./_load-env.mjs";
-import { db } from "../lib/db";
+import { db, currentDbTarget } from "../lib/db";
 import { candidates, jobPostings } from "../lib/schema";
 import { recomputeScore } from "../lib/screening";
 import { hasEvaluationFocus } from "../lib/prompts";
@@ -32,13 +42,26 @@ async function main() {
   const apply = argv.includes("--apply");
   const oi = argv.indexOf("--org");
   const orgId = oi >= 0 && argv[oi + 1] ? Number(argv[oi + 1]) : null;
-  const isLocal = process.env.LOCAL_DB === "1";
+  // env 가 아니라 "실제로 붙은 DB" 를 본다. dev 모드에서는 TURSO_DATABASE_URL 이 있어도
+  // lib/db.ts 가 file:./data.db 로 폴백하므로, LOCAL_DB 만 보고 PRODUCTION 이라 찍으면
+  // DRY-RUN 은 로컬을 읽고 --apply(NODE_ENV=production)는 운영에 쓰는 어긋남이 생긴다.
+  const target = currentDbTarget();
+  if (target.isLocalFile && process.env.LOCAL_DB !== "1") {
+    console.error(
+      `✋ 운영을 대상으로 돌리려던 것 같은데 실제로는 로컬 DB(${target.url})에 붙었습니다.\n` +
+        "   dev 모드라 lib/db.ts 가 Turso 대신 로컬 파일로 폴백했습니다.\n" +
+        '   · 운영 대상이면:  $env:NODE_ENV="production" 을 먼저 설정하세요\n' +
+        "   · 일부러 로컬이면: LOCAL_DB=1 을 붙이세요\n" +
+        "   이대로 두면 미리보기와 실제 적용 대상이 서로 다른 DB 가 됩니다."
+    );
+    process.exit(1);
+  }
 
   console.log(
-    `[backfill] DB=${isLocal ? "LOCAL" : "PRODUCTION ⚠️"} / mode=${apply ? "APPLY ✍️" : "DRY-RUN 👀"}` +
+    `[backfill] DB=${target.isLocalFile ? `LOCAL (${target.url})` : `PRODUCTION ⚠️ (${target.url})`} / mode=${apply ? "APPLY ✍️" : "DRY-RUN 👀"}` +
       (orgId ? ` / org=${orgId}` : "")
   );
-  if (apply && !isLocal) {
+  if (apply && !target.isLocalFile) {
     console.log("⚠️  운영 DB 에 점수 쓰기 — 백업 확인! 5초 후 시작 (Ctrl+C 취소).");
     await new Promise((r) => setTimeout(r, 5000));
   }
