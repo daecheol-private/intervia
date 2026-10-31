@@ -3,31 +3,38 @@ import { cleanupOldAttempts } from "@/lib/auth-attempts";
 import { cleanupOldRateLog } from "@/lib/rate-limit";
 import { runLifecycleSweep } from "@/lib/job-lifecycle";
 import { expireInterviewSessions } from "@/lib/expire-sessions";
-import { cleanupExpiredSessions, getCurrentUser } from "@/lib/auth";
+import { cleanupExpiredSessions } from "@/lib/auth";
 import { pruneMailEvents } from "@/lib/mail-usage";
 import { cleanupStalePhoneRequests } from "@/lib/notify-phone";
 import { secretEquals } from "@/lib/secret-compare";
 
 export const runtime = "nodejs";
 
-async function authorize(req: Request): Promise<Response | null> {
+/**
+ * 되돌릴 수 없는 삭제라 다른 cron 과 인증을 달리한다 — **세션은 받지 않는다**.
+ *
+ * 세션 쿠키는 SameSite=Lax 라 외부 사이트에서 온 top-level GET 에도 실려 나간다.
+ * 그래서 로그인한 system_admin 이 `…/purge-original?days=0` 링크를 한 번 누르면
+ * 전 법인 이력서 원본·사진이 영구 삭제됐다(docs/SECURITY_AUDIT_2026-10-31.md C2).
+ * CRON_SECRET 헤더는 쿠키가 아니라 브라우저가 자동으로 붙이지 않으므로 이 경로가 막힌다.
+ *
+ * 미설정이면 열어 두지 않고 멈춘다 — 무인증으로 도는 것보다 안 도는 쪽이 안전하다.
+ * (Vercel Cron 은 CRON_SECRET 이 설정돼 있으면 Bearer 헤더를 자동으로 붙인다.)
+ */
+function authorize(req: Request): Response | null {
   const secret = process.env.CRON_SECRET;
-  const header = req.headers.get("authorization");
-  if (secret && secretEquals(header, `Bearer ${secret}`)) return null;
-  if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
-  const me = await getCurrentUser();
-  if (me?.role === "system_admin") return null;
+  if (!secret) return new Response("CRON_SECRET 미설정 — 폐기 크론을 실행하지 않음", { status: 503 });
+  if (secretEquals(req.headers.get("authorization"), `Bearer ${secret}`)) return null;
   return new Response("권한 없음", { status: 401 });
 }
 
 export async function GET(req: Request) {
-  const denied = await authorize(req);
+  const denied = authorize(req);
   if (denied) return denied;
-  const url = new URL(req.url);
-  const daysParam = url.searchParams.get("days");
-  const days = daysParam ? Number(daysParam) : undefined;
+  // 보관 기간은 정책값(PURGE_AFTER_DAYS)만 쓴다. 옛 `?days=N` 오버라이드는 days=0 한 번이면
+  // 전량 삭제라 제거했다 — 기간을 바꿔야 하면 환경변수로 바꾸고 배포한다.
   // 같은 일일 cron 에 끼워서 처리 — Vercel Hobby 2 cron 한도 대응
-  const result = await purgeExpiredOriginals(days);
+  const result = await purgeExpiredOriginals();
   const purgedAttempts = await cleanupOldAttempts();
   const purgedRateLog = await cleanupOldRateLog();
   const purgedSessions = await cleanupExpiredSessions();
