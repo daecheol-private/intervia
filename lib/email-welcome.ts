@@ -83,7 +83,7 @@ export function buildWelcomeEmail(opts: {
         : `${userName} 님, Intervia 가입이 완료되었습니다.`,
       "",
       isExisting
-        ? "그동안 따로 안내드리지 못했던 자료를 한 번만 보내드립니다. 사내 공유에 쓰실 서비스 소개서와, 기능을 찾아보는 사용 가이드입니다."
+        ? "그동안 따로 안내드리지 못했던 자료를 보내드립니다. 사내 공유에 쓰실 서비스 소개서와, 기능을 찾아보는 사용 가이드입니다."
         : "사내 공유에 쓰실 서비스 소개서와, 기능을 찾아보는 사용 가이드를 함께 보내드립니다.",
       "",
       `서비스 소개서 (PDF — 사용법 영상 QR 포함): ${brochureUrl}`,
@@ -101,7 +101,7 @@ export function buildWelcomeEmail(opts: {
         <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
           <strong style="color:#0f172a;">${escapeHtml(userName)}</strong> 님, ${
             isExisting
-              ? "Intervia 를 이용해 주셔서 감사합니다.<br>그동안 따로 안내드리지 못했던 자료를 한 번만 보내드립니다."
+              ? "Intervia 를 이용해 주셔서 감사합니다.<br>그동안 따로 안내드리지 못했던 자료를 보내드립니다."
               : "Intervia 에 오신 것을 환영합니다.<br>사내 공유에 쓰실 자료를 함께 보내드립니다."
           }
         </p>
