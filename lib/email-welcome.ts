@@ -44,23 +44,11 @@ function linkRow(opts: {
   </td></tr>`;
 }
 
-/**
- * variant:
- *   "signup"   — 가입 직후(인증·승인 완료). 기본값.
- *   "existing" — 이 메일이 생기기 전에 이미 가입해 있던 사용자에게 1회 안내
- *                (scripts/send-welcome-backfill.ts). "가입이 완료되었습니다" 가
- *                말이 안 되므로 인사말과 CTA 만 바꾸고 자료·흐름은 동일하게 둔다.
- */
-export type WelcomeVariant = "signup" | "existing";
-
 export function buildWelcomeEmail(opts: {
   userName: string;
   baseUrl: string;
-  variant?: WelcomeVariant;
 }): { subject: string; html: string; text: string } {
   const { userName, baseUrl } = opts;
-  const variant: WelcomeVariant = opts.variant ?? "signup";
-  const isExisting = variant === "existing";
   const appUrl = `${baseUrl}/`;
   const brochureUrl = `${baseUrl}${BROCHURE.href}`;
   const guideUrl = `${baseUrl}/features`;
@@ -74,36 +62,25 @@ export function buildWelcomeEmail(opts: {
   ).join("");
 
   return {
-    subject: isExisting
-      ? "[Intervia] 서비스 소개서와 사용 가이드를 보내드립니다"
-      : "[Intervia] 가입이 완료되었습니다 — 서비스 소개서와 사용 가이드",
+    subject: "[Intervia] 가입이 완료되었습니다 — 서비스 소개서와 사용 가이드",
     text: [
-      isExisting
-        ? `${userName} 님, Intervia 를 이용해 주셔서 감사합니다.`
-        : `${userName} 님, Intervia 가입이 완료되었습니다.`,
+      `${userName} 님, Intervia 가입이 완료되었습니다.`,
       "",
-      isExisting
-        ? "그동안 따로 안내드리지 못했던 자료를 보내드립니다. 사내 공유에 쓰실 서비스 소개서와, 기능을 찾아보는 사용 가이드입니다."
-        : "사내 공유에 쓰실 서비스 소개서와, 기능을 찾아보는 사용 가이드를 함께 보내드립니다.",
+      "사내 공유에 쓰실 서비스 소개서와, 기능을 찾아보는 사용 가이드를 함께 보내드립니다.",
       "",
       `서비스 소개서 (PDF — 사용법 영상 QR 포함): ${brochureUrl}`,
       `사용 가이드 (웹 — 사용법 영상 ${videoCount}편 포함): ${guideUrl}`,
-      `${isExisting ? "Intervia 열기" : "Intervia 시작하기"}: ${appUrl}`,
+      `Intervia 시작하기: ${appUrl}`,
       "",
       "Intervia 는 이렇게 진행됩니다.",
       ...FLOW_STEPS.map((s, i) => `${i + 1}. ${s.title} — ${s.detail}`),
     ].join("\n"),
     html: wrapEmailCard({
       innerHtml: `
-        <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">${
-          isExisting ? "소개서와 사용 가이드를 보내드립니다" : "가입이 완료되었습니다"
-        }</h1>
+        <h1 style="font-size:20px;margin:24px 0 8px;color:#0f172a;">가입이 완료되었습니다</h1>
         <p style="color:#475569;line-height:1.6;margin:0 0 20px;">
-          <strong style="color:#0f172a;">${escapeHtml(userName)}</strong> 님, ${
-            isExisting
-              ? "Intervia 를 이용해 주셔서 감사합니다.<br>그동안 따로 안내드리지 못했던 자료를 보내드립니다."
-              : "Intervia 에 오신 것을 환영합니다.<br>사내 공유에 쓰실 자료를 함께 보내드립니다."
-          }
+          <strong style="color:#0f172a;">${escapeHtml(userName)}</strong> 님, Intervia 에 오신 것을 환영합니다.<br>
+          사내 공유에 쓰실 자료를 함께 보내드립니다.
         </p>
         <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
           ${linkRow({
@@ -118,9 +95,7 @@ export function buildWelcomeEmail(opts: {
           })}
         </table>
         <p style="text-align:center;margin:0 0 20px;">
-          <a href="${appUrl}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">${
-            isExisting ? "Intervia 열기" : "Intervia 시작하기"
-          }</a>
+          <a href="${appUrl}" style="display:inline-block;background:${EMAIL_BRAND.primary};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;font-size:14px;">Intervia 시작하기</a>
         </p>
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;font-size:13px;color:#475569;line-height:1.6;">
           <div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">이용 흐름</div>
@@ -140,17 +115,12 @@ export function buildWelcomeEmail(opts: {
 export async function sendWelcomeMail(opts: {
   userId: number;
   baseUrl: string;
-  variant?: WelcomeVariant;
 }): Promise<void> {
   const [user] = await db
     .select({ email: users.email, name: users.name })
     .from(users)
     .where(eq(users.id, opts.userId));
   if (!user) return;
-  const mail = buildWelcomeEmail({
-    userName: user.name,
-    baseUrl: opts.baseUrl,
-    variant: opts.variant,
-  });
+  const mail = buildWelcomeEmail({ userName: user.name, baseUrl: opts.baseUrl });
   await sendMail({ to: user.email, ...mail, audience: "org", kind: "welcome" });
 }
