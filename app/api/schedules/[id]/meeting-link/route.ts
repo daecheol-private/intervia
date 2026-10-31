@@ -19,6 +19,7 @@ import { interviewSchedules, candidates } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import { isValidMeetingUrl, type Slot } from "@/lib/schedules";
 import { sendScheduleConfirmationEmails } from "@/lib/schedule-notify";
 import { notifyJobInterviewers } from "@/lib/notifications";
@@ -59,6 +60,8 @@ export async function POST(
   if (!sched) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, sched.orgId))
     return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, sched.jobId);
+  if (jobLocked) return jobLocked;
   if (sched.status !== "selected")
     return new Response("확정된 일정이 아닙니다.", { status: 409 });
   if (!sched.modeOnline)

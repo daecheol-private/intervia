@@ -3,6 +3,7 @@ import { jobPostings } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import { generateApplyToken } from "@/lib/apply-link";
 import { subdomainApplyEnabled, applyUrlFor } from "@/lib/subdomain";
 import { ensureOrgSubdomain } from "@/lib/org-subdomain";
@@ -41,6 +42,8 @@ export async function GET(
   const { id } = await params;
   const job = await loadOwnedJob(Number(id), (orgId) => ownsOrg(me!, orgId));
   if (!job) return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
 
   return Response.json({
     token: job.applyToken,
@@ -61,6 +64,8 @@ export async function POST(
   const jobId = Number(id);
   const job = await loadOwnedJob(jobId, (orgId) => ownsOrg(me!, orgId));
   if (!job) return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
 
   let token = job.applyToken;
   if (!token) {

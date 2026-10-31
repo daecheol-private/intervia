@@ -13,6 +13,7 @@ import {
 import { and, eq, desc } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg } from "@/lib/tenant";
+import { isJobUnlocked } from "@/lib/job-lock";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
@@ -121,6 +122,8 @@ export default async function JobReportPage({
     .where(eq(jobPostings.id, jobId));
   if (!job) notFound();
   if (!ownsOrg(me, job.orgId)) notFound();
+  // PIN 잠긴 공고는 공고 화면(잠금 해제 패널)으로 — 리포트에 후보 평가가 다 담겨 있다.
+  if (job.passwordHash && !(await isJobUnlocked(job.id, me))) redirect(`/jobs/${jobId}`);
 
   const [org] = job.orgId
     ? await db

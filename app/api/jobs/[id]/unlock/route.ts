@@ -41,6 +41,6 @@ export async function POST(
   const ok = await verifyPassword(password, row.passwordHash);
   if (!ok) return new Response("비밀번호가 일치하지 않습니다.", { status: 401 });
 
-  await setJobUnlocked(jobId);
+  await setJobUnlocked(jobId, me!.id);
   return new Response(null, { status: 204 });
 }

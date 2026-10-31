@@ -7,6 +7,7 @@ import { jobPostings } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import {
   extendJob,
   countBillableCandidates,
@@ -31,6 +32,8 @@ export async function GET(
   const [job] = await db.select().from(jobPostings).where(eq(jobPostings.id, jobId));
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId)) return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
 
   const { billable: candidateCount, total: totalCandidateCount } =
     await countBillableCandidates(jobId);
@@ -76,6 +79,8 @@ export async function POST(
   const [job] = await db.select().from(jobPostings).where(eq(jobPostings.id, jobId));
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId)) return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
   if (job.orgId == null)
     return new Response("법인 없는 공고는 연장 불가", { status: 400 });
 

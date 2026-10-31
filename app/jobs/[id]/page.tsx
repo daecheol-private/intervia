@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { upload } from "@vercel/blob/client";
+import { blobScopePrefix } from "@/lib/blob-scope";
 import { JobExpiredDecisionModal } from "@/app/components/JobExpiredDecisionModal";
 import { notify, confirmDialog } from "@/app/components/Dialog";
 import Link from "next/link";
@@ -67,6 +68,7 @@ import { TimelineButton } from "./timeline-drawer";
 import { UnlockPanel } from "./unlock-panel";
 import type { Candidate, Job, Round1ScheduleItem } from "./types";
 import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
+import { useStepUpFetch } from "@/app/components/StepUpModal";
 
 // 후보 목록 폴링 (ms) — 가벼운 "변경 버전(rev)" 만 이 주기로 확인하고, rev 가 바뀐 경우에만
 // 전체 목록을 조회한다(변경 감지 후 상세 조회). 트리거가 못 잡는 변화(타 법인 큐 순번 등)
@@ -95,6 +97,7 @@ export default function JobDetailPage() {
   } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [locked, setLocked] = useState<{ title: string } | null>(null);
+  const { ensureFetch, modal: stepUpModal } = useStepUpFetch();
   const [loadError, setLoadError] = useState<"not_found" | "failed" | null>(null);
   const [search, setSearch] = useState("");
   // 불합격 통보 미발송 안내 배너 — 닫은 시점의 미발송 명단 시그니처(공고별 localStorage).
@@ -436,8 +439,8 @@ export default function JobDetailPage() {
         let doneCount = 0;
         for (const { file, relativePath } of entries) {
           // pathname 의 경로 구분자를 살려 서버가 relativePath 로 재구성 가능하게 함.
-          // 한글/공백은 upload() 내부에서 인코딩.
-          const result = await upload(relativePath, file, {
+          // 한글/공백은 upload() 내부에서 인코딩. jobs/{id}/ 접두는 서버가 강제·검증.
+          const result = await upload(blobScopePrefix("jobs", Number(jobId)) + relativePath, file, {
             access: "private",
             handleUploadUrl: "/api/blob/upload",
             clientPayload: JSON.stringify({ jobId }),
@@ -605,8 +608,14 @@ export default function JobDetailPage() {
       ))
     )
       return;
-    const res = await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
+    let res: Response;
+    try {
+      res = await ensureFetch(`/api/jobs/${jobId}`, { method: "DELETE" }, "공고 삭제");
+    } catch {
+      return;
+    }
     if (res.ok) router.push("/");
+    else notify(await res.text(), { tone: "danger", title: "삭제 실패" });
   };
 
   // 검색은 useDeferredValue 로 지연 — 입력(setSearch)은 즉시 반영되고, 무거운 필터/정렬/그룹핑은
@@ -696,7 +705,7 @@ export default function JobDetailPage() {
         c.screeningReport?.summary,
         c.screeningReport?.strengths?.join(" "),
         c.screeningReport?.matched_keywords?.join(" "),
-        c.resumeFilePath,
+        c.resumeFileName,
         // 전형·태그·결과·점수·상태도 검색 (예: "비추천", "서류평가", "불합격", "평가 실패")
         candidateSearchExtras(c),
       ]
@@ -1382,6 +1391,7 @@ export default function JobDetailPage() {
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+      {stepUpModal}
       {/* 만료 결정 모달 — closesAt 지났는데 아직 active 면 노출. 사용자가 닫을 수 있음. */}
       {isExpired && !expiredModalDismissed && (
         <JobExpiredDecisionModal

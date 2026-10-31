@@ -3,6 +3,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ChevronRight, Loader2, Mic } from "lucide-react";
 import { upload as blobUpload } from "@vercel/blob/client";
+import { blobScopePrefix } from "@/lib/blob-scope";
 import { formatKstDateTime } from "@/lib/utils";
 import { notify } from "@/app/components/Dialog";
 import {
@@ -376,7 +377,7 @@ export function RecordedInterviewPanel({
       let r: Response;
       if (useBlobUpload) {
         setUploadPct(0);
-        const blob = await blobUpload(file.name, file, {
+        const blob = await blobUpload(blobScopePrefix("candidates", candidateId) + file.name, file, {
           access: "private",
           handleUploadUrl: "/api/blob/upload",
           clientPayload: JSON.stringify({ candidateId, kind: "audio" }),

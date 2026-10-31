@@ -11,6 +11,7 @@ import { jobPostings } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
@@ -26,6 +27,8 @@ async function setMode(req: Request, jobId: number, disabled: boolean) {
     .where(eq(jobPostings.id, jobId));
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId)) return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
 
   await db
     .update(jobPostings)

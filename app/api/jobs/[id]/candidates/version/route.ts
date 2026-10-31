@@ -12,6 +12,7 @@ import { jobPostings } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,8 @@ export async function GET(
     .where(eq(jobPostings.id, jobId));
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId)) return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, jobId);
+  if (jobLocked) return jobLocked;
 
   // 공고 단위 "최대 변경 시각". 세션·평가큐는 candidate_id 만 있어 candidates 로 좁힌다
   // (인덱스: *_candidate_updated / candidates·일정은 *_job_updated).

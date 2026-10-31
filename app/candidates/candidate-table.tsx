@@ -17,7 +17,7 @@ export type CandidateRow = {
   name: string;
   email: string | null;
   phone: string | null;
-  photoFilePath: string | null;
+  hasPhoto: boolean;
   careerYears: number | null;
   age: number | null;
   educationLevel: string | null;
@@ -187,7 +187,7 @@ export function CandidateTable({
                         <Avatar
                           id={r.id}
                           name={r.name}
-                          hasPhoto={!!r.photoFilePath}
+                          hasPhoto={r.hasPhoto}
                           locked={r.locked}
                         />
                         <div className="min-w-0">
@@ -324,7 +324,7 @@ function CandidateMobileCard({
           <Avatar
             id={r.id}
             name={r.name}
-            hasPhoto={!!r.photoFilePath}
+            hasPhoto={r.hasPhoto}
             locked={r.locked}
           />
           <div className="min-w-0 flex-1">

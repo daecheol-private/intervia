@@ -31,6 +31,7 @@ import { ensureOrgAddress } from "@/lib/org-address";
 import { and, desc, eq, inArray, sql, isNull, isNotNull, or } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import {
   generateScheduleToken,
   scheduleExpiresAt,
@@ -121,6 +122,8 @@ export async function POST(
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId))
     return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
   if (!job.orgId) return new Response("법인 없는 공고", { status: 400 });
 
   // 종결/만료 공고 가드 — interview-link·send-email 과 동일하게 일정 제시도 차단.
@@ -446,6 +449,8 @@ export async function GET(
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId))
     return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, jobId);
+  if (jobLocked) return jobLocked;
 
   const url = new URL(req.url);
   const round = url.searchParams.get("round") === "round2" ? "round2" : "round1";

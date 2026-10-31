@@ -3,6 +3,7 @@ import { jobPostings, candidates } from "@/lib/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import { enqueueScreening } from "@/lib/screening-queue";
 import { triggerWorker } from "@/lib/worker-trigger";
 import { logAudit } from "@/lib/audit";
@@ -20,6 +21,7 @@ export const runtime = "nodejs";
 async function loadOwned(jobId: number, me: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>) {
   const [job] = await db.select().from(jobPostings).where(eq(jobPostings.id, jobId));
   if (!job || !ownsOrg(me, job.orgId)) return null;
+  if (await jobLockResponse(me, job.id)) return null;
   return job;
 }
 

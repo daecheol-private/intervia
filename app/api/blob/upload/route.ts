@@ -9,10 +9,13 @@ import { isJobExpired } from "@/lib/job-lifecycle";
 import { guardCandidate } from "@/lib/candidate-guard";
 import { MAX_ATTACHMENT_SIZE, MAX_AUDIO_BYTES } from "@/lib/upload-validation";
 import { log } from "@/lib/logger";
+import { blobScopePrefix, isScopedUploadPathname } from "@/lib/blob-scope";
 
 export const runtime = "nodejs";
 
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
+// 경로를 공고/후보자 접두로 강제 — manifest 라우트가 같은 접두만 받는다(타 법인 파일 차단).
+const SCOPE_ERR = "업로드 경로가 올바르지 않습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.";
 
 // 브라우저 → Vercel Blob 직접 업로드를 위한 토큰 발급 라우트.
 // Vercel 서버리스 함수 본문 한도(4.5MB)를 우회해 100MB 파일을 받기 위함.
@@ -40,6 +43,8 @@ export async function POST(req: Request) {
         if (candidateId) {
           const g = await guardCandidate(me!, candidateId);
           if (!g.ok) throw new Error("업로드 권한이 없습니다.");
+          if (!isScopedUploadPathname(pathname, blobScopePrefix("candidates", candidateId)))
+            throw new Error(SCOPE_ERR);
           const isAudio = payload.kind === "audio";
           if (!isAudio) {
             // 첨부는 결정·폐기된 후보자에 추가 불가(대면 녹음은 결정 후에도 허용).
@@ -66,6 +71,8 @@ export async function POST(req: Request) {
           .where(eq(jobPostings.id, jobId));
         if (!job) throw new Error("공고를 찾을 수 없습니다.");
         if (!ownsOrg(me!, job.orgId)) throw new Error("권한 없음");
+        if (!isScopedUploadPathname(pathname, blobScopePrefix("jobs", jobId)))
+          throw new Error(SCOPE_ERR);
         if (job.status === "closed") throw new Error("종결된 공고입니다.");
         if (isJobExpired(job))
           throw new Error(

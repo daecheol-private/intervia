@@ -3,6 +3,7 @@ import { interviewSessions, candidates, jobPostings, organizations } from "@/lib
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import {
   sendMail,
   buildInterviewEmail,
@@ -60,6 +61,8 @@ export async function POST(
   if (!candidate) return new Response("후보자 없음", { status: 404 });
   if (!ownsOrg(me!, candidate.orgId))
     return new Response("세션 없음", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, candidate.jobId);
+  if (jobLocked) return jobLocked;
 
   // 종결된 후보 또는 AI 면접 전형을 지나(스킵 포함) 다음 전형으로 진행된 후보에게는
   // AI 면접 링크를 재발송할 수 없다.

@@ -219,7 +219,13 @@ UI 쪽은 `app/password-strength.tsx` 의 `<PasswordStrength>` 컴포넌트 사�
 - 채용 포털 등 임의 URL: `lib/job-url-import.ts` 의 `assertPublicUrl()`(사설/루프백/링크로컬 IP 차단
   + 수동 리다이렉트 hop 재검증)을 거치는 `fetchWithTimeout` 만 사용.
 - Vercel Blob URL: `blob.vercel-storage.com`(+`BLOB_ALLOWED_HOSTS`) 호스트 화이트리스트 검증
-  후 fetch (`app/api/uploads/candidate/[id]` 와 manifest 업로드 경로 참고).
+  후 fetch (`app/api/uploads/candidate/[id]` 참고).
+- **클라이언트 업로드 manifest(브라우저가 보낸 Blob URL)**: 호스트 화이트리스트로는 부족 — 타 법인 Blob
+  URL 을 넣으면 서버 권한으로 읽혀 자기 법인에 복사된다(감사 C3). `lib/blob-scope.ts` 로 경로 바인딩:
+  토큰 라우트는 pathname 이 `apply/{jobId}/`·`jobs/{jobId}/`·`candidates/{candidateId}/` 접두일 때만 발급
+  (`isScopedUploadPathname`), manifest 라우트는 `isScopedBlobUrl`(자기 스토어 호스트 + 같은 접두) 통과 시만
+  읽는다. 새 업로드 경로를 만들면 클라이언트 `upload(blobScopePrefix(...) + name)` + 양쪽 검증 둘 다 필수.
+  파일 키(Blob URL)는 화면 응답에 내려보내지 말고 `hasResume`·`hasPhoto` 같은 boolean 으로.
 
 ### (c) 보안 응답 헤더
 `next.config.ts` 의 `headers()` 가 전역 적용 — CSP `frame-ancestors`(클릭재킹), X-Frame-Options,

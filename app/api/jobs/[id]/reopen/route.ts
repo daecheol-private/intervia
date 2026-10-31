@@ -10,6 +10,7 @@ import { jobPostings } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import { reopenJob } from "@/lib/job-lifecycle";
 import { logAudit } from "@/lib/audit";
 
@@ -32,6 +33,8 @@ export async function POST(
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId))
     return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, jobId);
+  if (jobLocked) return jobLocked;
 
   const result = await reopenJob(jobId);
   if (!result.ok)

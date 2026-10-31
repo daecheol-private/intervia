@@ -127,6 +127,9 @@ export async function PATCH(
   if (me!.role === "member") return new Response("권한 없음", { status: 403 });
   if (me!.role === "org_admin" && !ownsOrg(me!, target.orgId))
     return new Response("권한 없음", { status: 403 });
+  // 시스템 관리자 계정은 시스템 관리자만 바꿀 수 있다 (같은 orgId 가 붙어 있어도).
+  if (target.role === "system_admin" && me!.role !== "system_admin")
+    return new Response("권한 없음", { status: 403 });
 
   // SYSTEM_ADMIN_EMAIL 로 지정된 보호 계정 — 권한/상태 변경 불가 (실수로 비활성화·권한 회수
   // 해 운영 락아웃되는 사고 방지). 변경이 필요하면 환경변수/DB 를 직접 다뤄야 한다.
@@ -188,6 +191,8 @@ export async function PATCH(
         );
     }
     update.role = body.role;
+    // 시스템 관리자로 올리면 법인 소속을 뗀다 — 법인 관리자 화면에서 다뤄지지 않게.
+    if (body.role === "system_admin") update.orgId = null;
     // member → org_admin 승격이면 시작 가이드 재노출(개인 단위 리셋) — 이미 셋업이
     // 끝난 법인이라도 새 관리자가 각 단계 '따라하기'로 사용법을 둘러볼 수 있게 dismiss
     // 를 해제한다. 단계 완료 표시(✓)는 법인 현황 그대로 유지. (transfer-admin 과 동일 정책)

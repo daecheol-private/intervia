@@ -9,6 +9,7 @@ import { jobPostings } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import { checkCloseable, closeJob, isJobExpired } from "@/lib/job-lifecycle";
 import { logAudit } from "@/lib/audit";
 
@@ -34,6 +35,8 @@ export async function GET(
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId))
     return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
   if (job.status === "closed")
     return new Response("이미 종결된 공고입니다.", { status: 400 });
 
@@ -64,6 +67,8 @@ export async function POST(
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId))
     return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
   if (job.status === "closed")
     return new Response("이미 종결된 공고입니다.", { status: 400 });
 

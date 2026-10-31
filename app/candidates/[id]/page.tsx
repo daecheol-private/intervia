@@ -600,7 +600,7 @@ export default function CandidateDetailPage() {
         <div className="p-6">
         <div className="flex justify-between items-start gap-4">
           <div className="flex items-start gap-4 min-w-0 flex-1">
-            {candidate.photoFilePath ? (
+            {candidate.hasPhoto ? (
               // 이력서에서 추출한 증명사진(표시 전용). 깨지면 onError 로 이니셜 폴백.
               <img
                 src={`/api/uploads/candidate/${candidate.id}/photo`}
@@ -614,7 +614,7 @@ export default function CandidateDetailPage() {
               />
             ) : null}
             <div
-              className={`w-20 h-20 shrink-0 rounded-full bg-surface-alt text-ink-soft flex items-center justify-center text-2xl font-bold ${candidate.photoFilePath ? "hidden" : ""}`}
+              className={`w-20 h-20 shrink-0 rounded-full bg-surface-alt text-ink-soft flex items-center justify-center text-2xl font-bold ${candidate.hasPhoto ? "hidden" : ""}`}
               aria-hidden
             >
               {displayCandidateName(candidate.name).trim().charAt(0).toUpperCase() || "?"}
@@ -1258,7 +1258,7 @@ export default function CandidateDetailPage() {
         screeningDone={screeningPhase === "done"}
         canModify={
           !candidate.outcome &&
-          !!(candidate.resumeFilePath || candidate.resumeMaskedText)
+          !!(candidate.hasResume || candidate.resumeMaskedText)
         }
         onCountChange={setAttachmentCount}
       />

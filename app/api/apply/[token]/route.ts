@@ -21,6 +21,7 @@ import { normalizeReferrerHost } from "@/lib/apply-source";
 import { extractKoreanNameFromFilename } from "@/lib/file-classify";
 import { normalizePhone } from "@/lib/phone";
 import { log } from "@/lib/logger";
+import { blobScopePrefix, isScopedBlobUrl } from "@/lib/blob-scope";
 
 export const runtime = "nodejs";
 
@@ -118,7 +119,22 @@ export async function POST(
         `이력서 파일은 최대 ${MAX_ATTACHMENT_SIZE / 1024 / 1024}MB 까지 업로드할 수 있습니다.`,
         413
       );
-    // Blob 에서 되읽어 magic byte·해시·텍스트에 사용. SSRF 방어는 fetchBlobFile 내부 allowlist.
+    const rawAtts = (m.attachments ?? []).filter(
+      (a): a is { url: string; name: string; size?: number } =>
+        typeof a?.url === "string" && typeof a?.name === "string"
+    );
+    if (rawAtts.length > MAX_APPLY_ATTACHMENTS)
+      return bad(`첨부 파일은 최대 ${MAX_APPLY_ATTACHMENTS}개까지 첨부할 수 있습니다.`);
+    // 이 공고 토큰으로 올린 파일만 — 타 공고·법인 Blob URL 을 넣어 서버 권한으로 읽는 경로 차단.
+    const scope = blobScopePrefix("apply", job.id);
+    if (
+      !isScopedBlobUrl(m.resume.url, scope) ||
+      rawAtts.some((a) => !isScopedBlobUrl(a.url, scope))
+    ) {
+      log.warn("apply_manifest_scope_rejected", { jobId: job.id });
+      return bad("업로드 파일 정보가 올바르지 않습니다. 다시 시도해 주세요.");
+    }
+    // Blob 에서 되읽어 magic byte·해시·텍스트에 사용.
     const fetched = await fetchBlobFile(m.resume.url);
     if (!fetched)
       return bad(
@@ -127,12 +143,6 @@ export async function POST(
       );
     resume = { buf: fetched.data, name: m.resume.name, storedKey: m.resume.url };
 
-    const rawAtts = (m.attachments ?? []).filter(
-      (a): a is { url: string; name: string; size?: number } =>
-        typeof a?.url === "string" && typeof a?.name === "string"
-    );
-    if (rawAtts.length > MAX_APPLY_ATTACHMENTS)
-      return bad(`첨부 파일은 최대 ${MAX_APPLY_ATTACHMENTS}개까지 첨부할 수 있습니다.`);
     // 누적 총량 조기 중단 — 실제 바이트 기준(manifest size 위조 방어). 개수 하드캡이
     // fetch 횟수를, 이 누적 검증이 fetch 총량을 각각 상한한다.
     let totalBytes = resume.buf.length;

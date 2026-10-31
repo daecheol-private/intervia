@@ -16,9 +16,10 @@ export type Candidate = {
   educationLevel: string | null;
   educationSchool: string | null;
   educationMajor: string | null;
-  resumeFilePath: string;
-  // 이력서에서 추출한 증명사진 경로(있을 때만). 표시 전용 — /api/uploads/candidate/[id]/photo 로 서빙.
-  photoFilePath?: string | null;
+  // 원본 이력서 파일 보유 여부 (파일 키는 응답에 없음 — 다운로드는 /api/uploads/candidate/[id])
+  hasResume: boolean;
+  // 이력서에서 추출한 증명사진 보유 여부. 표시 전용 — /api/uploads/candidate/[id]/photo 로 서빙.
+  hasPhoto?: boolean;
   resumeMaskedText: string | null;
   screeningScore: number | null;
   screeningReport: {

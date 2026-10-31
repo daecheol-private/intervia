@@ -11,6 +11,7 @@ import {
   MAX_ATTACHMENT_SIZE,
 } from "@/lib/upload-validation";
 import { log } from "@/lib/logger";
+import { blobScopePrefix, isScopedUploadPathname } from "@/lib/blob-scope";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,9 @@ export async function POST(
         if (!job) throw new Error("유효하지 않은 지원 링크입니다.");
         if (job.status === "closed" || isJobExpired(job))
           throw new Error("지원이 마감되었습니다.");
+        // 경로를 이 공고 접두로 강제 — manifest 가 같은 접두만 받는다(타 공고·법인 파일 차단).
+        if (!isScopedUploadPathname(pathname, blobScopePrefix("apply", job.id)))
+          throw new Error("업로드 경로가 올바르지 않습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.");
         // 파일 종류별 확장자 제한 — resume=이력서(pdf·docx·hwpx), attachment=첨부 허용목록.
         let kind = "attachment";
         try {

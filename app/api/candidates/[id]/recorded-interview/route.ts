@@ -17,7 +17,8 @@ import {
   serializeAudioParts,
 } from "@/lib/recorded-interview";
 import { triggerRecordedWorker } from "@/lib/recorded-interview-queue";
-import { deleteFile, saveFile, isAllowedBlobUrl } from "@/lib/storage";
+import { deleteFile, saveFile } from "@/lib/storage";
+import { blobScopePrefix, isScopedBlobUrl } from "@/lib/blob-scope";
 import {
   MAX_AUDIO_BYTES,
   MAX_AUDIO_PARTS,
@@ -102,7 +103,8 @@ export async function POST(
     mime = m.audioMime || "audio/webm";
     if (!/^(audio|video)\//.test(mime))
       return new Response("오디오 파일만 업로드할 수 있습니다.", { status: 400 });
-    // URL 은 클라이언트 제어값 — Blob 도메인만 허용(SSRF 방어). 저장만 하고 여기선 안 읽음.
+    // URL 은 클라이언트 제어값 — 자기 스토어 + 이 후보자 접두만 허용(타 법인 녹음 차단·SSRF 방어).
+    // 저장만 하고 여기선 안 읽음.
     const rawParts =
       Array.isArray(m.audioParts) && m.audioParts.length > 0
         ? m.audioParts
@@ -110,7 +112,7 @@ export async function POST(
     if (rawParts.length > MAX_AUDIO_PARTS)
       return new Response("녹음 구간이 너무 많습니다.", { status: 400 });
     for (const p of rawParts) {
-      if (!p.url || !isAllowedBlobUrl(p.url))
+      if (!isScopedBlobUrl(p.url, blobScopePrefix("candidates", cid)))
         return new Response("오디오 파일 위치가 올바르지 않습니다.", { status: 400 });
       // 파트 1건은 Gemini inline 한도(MAX_AUDIO_BYTES) 안이어야 전사할 수 있다.
       if ((p.size ?? 0) > MAX_AUDIO_BYTES)

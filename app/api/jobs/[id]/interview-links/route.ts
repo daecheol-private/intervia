@@ -23,6 +23,7 @@ import { eq, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import { generateToken, addDays, formatKstDateTime } from "@/lib/utils";
 import {
   requireSpendableBalance,
@@ -105,6 +106,8 @@ export async function POST(
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId))
     return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
   if (!job.orgId) return new Response("법인 없는 공고", { status: 400 });
   if (job.status === "closed")
     return Response.json(

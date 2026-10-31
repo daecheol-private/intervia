@@ -15,6 +15,7 @@ import {
   verifyMagic,
 } from "@/lib/upload-validation";
 import { log } from "@/lib/logger";
+import { blobScopePrefix, isScopedBlobUrl } from "@/lib/blob-scope";
 
 export const runtime = "nodejs";
 
@@ -125,7 +126,10 @@ export async function POST(
         `파일이 너무 큽니다 (최대 ${MAX_ATTACHMENT_SIZE / 1024 / 1024}MB).`,
         { status: 400 }
       );
-    // Blob 에서 되읽어 magic byte·마스킹에 사용. SSRF 방어는 fetchBlobFile 내부 allowlist.
+    // 이 후보자 접두로 올린 파일만 — 타 법인 Blob URL 을 서버 권한으로 읽어 붙이는 경로 차단.
+    if (!isScopedBlobUrl(m.url, blobScopePrefix("candidates", cid)))
+      return new Response("업로드 파일 위치가 올바르지 않습니다.", { status: 400 });
+    // Blob 에서 되읽어 magic byte·마스킹에 사용.
     const fetched = await fetchBlobFile(m.url);
     if (!fetched)
       return new Response(

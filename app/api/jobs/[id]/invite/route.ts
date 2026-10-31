@@ -22,6 +22,7 @@ import {
 import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
+import { jobLockResponse } from "@/lib/job-lock";
 import {
   generateInviteToken,
   inviteExpiresAt,
@@ -72,6 +73,8 @@ export async function POST(
   if (!job) return new Response("Not found", { status: 404 });
   if (!ownsOrg(me!, job.orgId))
     return new Response("Not found", { status: 404 });
+  const jobLocked = await jobLockResponse(me!, job.id);
+  if (jobLocked) return jobLocked;
   if (!job.orgId)
     return new Response("법인 없는 공고는 공유 불가", { status: 400 });
 

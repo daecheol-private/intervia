@@ -85,7 +85,7 @@ function CandidateCardImpl({
           <div className="flex items-start gap-3 flex-1 min-w-0">
             {/* 이력서에서 추출한 증명사진(표시 전용). 없으면 이니셜 아바타로 폴백해 정렬 유지. */}
             <div className="shrink-0">
-              {c.photoFilePath ? (
+              {c.hasPhoto ? (
                 <img
                   src={`/api/uploads/candidate/${c.id}/photo`}
                   alt=""
@@ -98,7 +98,7 @@ function CandidateCardImpl({
                 />
               ) : null}
               <div
-                className={`w-14 h-14 rounded-full bg-surface-alt text-ink-soft flex items-center justify-center text-lg font-bold ${c.photoFilePath ? "hidden" : ""}`}
+                className={`w-14 h-14 rounded-full bg-surface-alt text-ink-soft flex items-center justify-center text-lg font-bold ${c.hasPhoto ? "hidden" : ""}`}
                 aria-hidden
               >
                 {c.name.trim().charAt(0).toUpperCase() || "?"}

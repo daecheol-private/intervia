@@ -32,9 +32,11 @@ export type Candidate = {
   educationLevel: string | null;
   educationSchool: string | null;
   educationMajor: string | null;
-  resumeFilePath: string;
-  // 이력서에서 추출한 증명사진 경로(있을 때만). 카드 표시 전용.
-  photoFilePath?: string | null;
+  hasResume: boolean;
+  // 원본 파일명(검색용). 저장 주소 자체는 서버가 보내지 않는다.
+  resumeFileName: string | null;
+  // 이력서에서 추출한 증명사진 유무. 카드 표시 전용.
+  hasPhoto?: boolean;
   screeningScore: number | null;
   screeningReport: {
     score: number;

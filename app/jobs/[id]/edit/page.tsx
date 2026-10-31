@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Sparkles, Link2, Loader2, ExternalLink } from "lucide-react";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { useStepUpFetch } from "@/app/components/StepUpModal";
 import { TraitProfileSelector } from "@/app/components/TraitProfileSelector";
 import {
   DEFAULT_TRAIT_PROFILE,
@@ -54,6 +55,7 @@ export default function EditJobPage() {
   });
   const [isDraft, setIsDraft] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { ensureFetch, modal: stepUpModal } = useStepUpFetch();
   // 기존 공고 URL 자동 채우기 — 새 공고 등록과 동일 (임시공고 정식 전환 시 사람인 URL 로 내용 채우기 등).
   const [importUrl, setImportUrl] = useState("");
   const [importing, setImporting] = useState(false);
@@ -245,11 +247,18 @@ export default function EditJobPage() {
     // keepDraft=true 면 필수항목이 다 차도 정식 전환하지 않고 임시 유지(미과금).
     if (asDraft) payload.keepDraft = true;
 
-    const res = await fetch(`/api/jobs/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    let res: Response;
+    try {
+      // 잠긴 공고의 비밀번호 변경·해제는 서버가 비밀번호 재확인을 요구한다.
+      res = await ensureFetch(`/api/jobs/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }, "공고 비밀번호 변경");
+    } catch {
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     if (!res.ok) {
       alert("저장 실패: " + (await res.text()));
@@ -267,6 +276,7 @@ export default function EditJobPage() {
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+      {stepUpModal}
       <Link
         href={`/jobs/${id}`}
         className="text-sm text-ink-muted hover:text-ink"

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileDown, Loader2, X } from "lucide-react";
 import { upload as blobUpload } from "@vercel/blob/client";
+import { blobScopePrefix } from "@/lib/blob-scope";
 import { confirmDialog } from "@/app/components/Dialog";
 
 type Attachment = {
@@ -95,7 +96,7 @@ export function AttachmentsPanel({
       let r: Response;
       if (useBlobUpload) {
         setProgress(0);
-        const blob = await blobUpload(f.name, f, {
+        const blob = await blobUpload(blobScopePrefix("candidates", candidateId) + f.name, f, {
           access: "private",
           handleUploadUrl: "/api/blob/upload",
           clientPayload: JSON.stringify({ candidateId }),

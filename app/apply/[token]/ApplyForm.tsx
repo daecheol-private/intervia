@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { FileText, Paperclip, X } from "lucide-react";
 import { upload } from "@vercel/blob/client";
+import { blobScopePrefix } from "@/lib/blob-scope";
 import { isValidBrandColor, textColorOn } from "@/lib/brand-color";
 import { RecruiterContact } from "@/app/components/RecruiterContact";
 
@@ -14,6 +15,7 @@ const ATTACH_ACCEPT =
 
 export default function ApplyForm({
   token,
+  jobId,
   companyName,
   jobTitle,
   logoUrl,
@@ -21,6 +23,7 @@ export default function ApplyForm({
   contactEmail,
 }: {
   token: string;
+  jobId: number;
   companyName: string;
   jobTitle: string;
   logoUrl?: string | null;
@@ -135,7 +138,9 @@ export default function ApplyForm({
           setProgress(
             Math.min(99, Math.round(((uploadedBytes + loaded) / uploadTotal) * 100))
           );
-        const resumeBlob = await upload(file.name, file, {
+        // 경로 접두는 서버 토큰 라우트·manifest 가 강제·검증한다.
+        const blobPrefix = blobScopePrefix("apply", jobId);
+        const resumeBlob = await upload(blobPrefix + file.name, file, {
           access: "private",
           handleUploadUrl: `/api/apply/${token}/blob-upload`,
           clientPayload: JSON.stringify({ kind: "resume" }),
@@ -145,7 +150,7 @@ export default function ApplyForm({
         uploadedBytes += file.size;
         const attBlobs: { url: string; name: string; size: number }[] = [];
         for (const a of attachments) {
-          const r = await upload(a.name, a, {
+          const r = await upload(blobPrefix + a.name, a, {
             access: "private",
             handleUploadUrl: `/api/apply/${token}/blob-upload`,
             clientPayload: JSON.stringify({ kind: "attachment" }),

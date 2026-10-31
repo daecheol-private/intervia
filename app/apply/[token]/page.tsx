@@ -92,6 +92,7 @@ export default async function ApplyPage({
     <Shell>
       <ApplyForm
         token={token}
+        jobId={job.id}
         companyName={job.orgName ?? "채용 기업"}
         jobTitle={job.title}
         logoUrl={job.logoFileKey ? `/api/apply/${encodeURIComponent(token)}/logo` : null}

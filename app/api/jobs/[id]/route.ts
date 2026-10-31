@@ -6,6 +6,7 @@ import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { validateRecruitingContactEmail } from "@/lib/job-contact";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
+import { requireStepUp } from "@/lib/step-up";
 import { deleteCandidateFiles } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
 import { chargeFeature, refundFeature } from "@/lib/tokens";
@@ -165,6 +166,15 @@ export async function PUT(
     body.responsibilities !== existing.responsibilities ||
     body.requirements !== existing.requirements;
 
+  // 이미 잠긴 공고의 비밀번호 변경·해제는 법인 관리자만 + 비밀번호 재확인 (2026-10-31 결정).
+  // 잠금 없는 공고에 새로 거는 건 멤버도 가능.
+  if (existing.passwordHash != null && typeof body.password === "string") {
+    if (me!.role === "member")
+      return new Response("공고 비밀번호 변경·해제는 법인 관리자만 할 수 있습니다.", { status: 403 });
+    const stepUp = await requireStepUp();
+    if (stepUp) return stepUp;
+  }
+
   if (body.password === "") {
     update.passwordHash = null;
   } else if (typeof body.password === "string" && body.password.length > 0) {
@@ -252,11 +262,11 @@ export async function DELETE(
   if (!ownsOrg(me!, existing.orgId))
     return new Response("Not found", { status: 404 });
 
-  if (me!.role !== "system_admin" && existing.passwordHash && !(await isJobUnlocked(jobId))) {
-    return new Response("잠긴 공고입니다. 먼저 잠금을 해제하세요.", {
-      status: 403,
-    });
-  }
+  // 공고 삭제는 법인 관리자만 + 비밀번호 재확인 (후보자·면접 기록 전체가 지워진다).
+  if (me!.role === "member")
+    return new Response("공고 삭제는 법인 관리자만 할 수 있습니다.", { status: 403 });
+  const stepUp = await requireStepUp();
+  if (stepUp) return stepUp;
 
   // 1. 이 공고의 모든 후보자 ID 수집
   const candidateRows = await db

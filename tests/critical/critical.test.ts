@@ -287,6 +287,12 @@ describe("CT-3 공고 CRUD/과금", () => {
 
   it("CT-304 5분 내 삭제 → 자동 환불", async () => {
     const before = await walletBalance(ids.orgA);
+    // 공고 삭제는 법인 관리자만 + 비밀번호 재확인 (2026-10-31)
+    assert.equal((await memberA.del(`/api/jobs/${ctx.jobNew}`)).status, 403);
+    const noStepUp = await adminA.del(`/api/jobs/${ctx.jobNew}`);
+    assert.equal(noStepUp.status, 403, noStepUp.text);
+    assert.equal(field(noStepUp.body, "code"), "step_up_required");
+    assert.equal((await adminA.post("/api/auth/step-up", { password: PASSWORD })).status, 200);
     const r = await adminA.del(`/api/jobs/${ctx.jobNew}`);
     assert.equal(r.status, 204, r.text);
     assert.equal(await walletBalance(ids.orgA), before + 10, "환불 미반영");
@@ -886,6 +892,7 @@ describe("CT-8 데이터 보호/권리", () => {
       accessToken: `ct-cascade-${RUN_TAG}`,
       expiresAt: futureIso(DAY),
     });
+    assert.equal((await adminA.post("/api/auth/step-up", { password: PASSWORD })).status, 200);
     const r = await adminA.del(`/api/jobs/${jobId}`);
     assert.equal(r.status, 204, r.text);
     assert.ok(!(await row("SELECT id FROM candidates WHERE id = ?", [cid])), "후보 잔존");

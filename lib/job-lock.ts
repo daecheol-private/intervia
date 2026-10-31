@@ -1,10 +1,27 @@
 import { cookies } from "next/headers";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { getCurrentUser, type CurrentUser } from "./auth";
 import { db } from "./db";
-import { jobInterviewers } from "./schema";
+import { jobInterviewers, jobPostings } from "./schema";
 import { and, eq } from "drizzle-orm";
 
 const COOKIE_PREFIX = "job_unlock_";
+
+// 잠금 해제 쿠키는 사용자·공고에 묶인 서명값 — "1" 같은 고정값이면 개발자도구로 직접 넣어 PIN 을 건너뛴다.
+function unlockValue(userId: number, jobId: number): string {
+  const hex = process.env.MASTER_ENCRYPTION_KEY;
+  if (!hex) throw new Error("MASTER_ENCRYPTION_KEY 미설정");
+  return createHmac("sha256", Buffer.from(hex, "hex"))
+    .update(`job-unlock:${userId}:${jobId}`)
+    .digest("base64url");
+}
+
+function cookieMatches(raw: string | undefined, userId: number, jobId: number): boolean {
+  if (!raw) return false;
+  const a = Buffer.from(raw);
+  const b = Buffer.from(unlockValue(userId, jobId));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 // me 를 넘기면 getCurrentUser 재호출(세션 조인 쿼리 1회)을 생략한다.
 // 호출자가 이미 인증을 마친 라우트에서는 반드시 me 를 전달할 것.
@@ -30,7 +47,7 @@ export async function isJobUnlocked(
     );
   if (row) return true;
   const jar = await cookies();
-  return jar.get(COOKIE_PREFIX + jobId)?.value === "1";
+  return cookieMatches(jar.get(COOKIE_PREFIX + jobId)?.value, user.id, jobId);
 }
 
 // 일괄 잠금 판정 — 호출자가 사용자의 면접관 공고 집합을 이미 조회한 경우(대시보드 등)
@@ -46,13 +63,13 @@ export async function getUnlockChecker(
     // 법인담당자(org_admin): 목록은 이미 org 필터를 거쳐 본인 법인 것만 들어오므로 전부 우회.
     if (user.role === "org_admin") return true;
     if (interviewerJobIds.has(jobId)) return true;
-    return jar.get(COOKIE_PREFIX + jobId)?.value === "1";
+    return cookieMatches(jar.get(COOKIE_PREFIX + jobId)?.value, user.id, jobId);
   };
 }
 
-export async function setJobUnlocked(jobId: number) {
+export async function setJobUnlocked(jobId: number, userId: number) {
   const jar = await cookies();
-  jar.set(COOKIE_PREFIX + jobId, "1", {
+  jar.set(COOKIE_PREFIX + jobId, unlockValue(userId, jobId), {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
@@ -62,4 +79,22 @@ export async function setJobUnlocked(jobId: number) {
 
 export function isValidPin(pin: string): boolean {
   return /^\d{4}$/.test(pin);
+}
+
+/**
+ * 공고 하위 라우트용 PIN 잠금 가드. 잠겨 있으면 403 응답, 통과면 null.
+ * ownsOrg 확인 뒤에 호출할 것 — 공고 단위 액션은 전부 이걸 지나야 부서 간 칸막이가 유지된다.
+ */
+export async function jobLockResponse(
+  me: CurrentUser,
+  jobId: number | null | undefined
+): Promise<Response | null> {
+  if (!jobId) return null;
+  const [job] = await db
+    .select({ id: jobPostings.id, title: jobPostings.title, passwordHash: jobPostings.passwordHash })
+    .from(jobPostings)
+    .where(eq(jobPostings.id, jobId));
+  if (!job?.passwordHash) return null;
+  if (await isJobUnlocked(job.id, me)) return null;
+  return Response.json({ locked: true, jobId: job.id, jobTitle: job.title }, { status: 403 });
 }

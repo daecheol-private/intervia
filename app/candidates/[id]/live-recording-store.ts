@@ -14,6 +14,7 @@
  */
 
 import { upload as blobUpload } from "@vercel/blob/client";
+import { blobScopePrefix } from "@/lib/blob-scope";
 
 // 서버 MAX_AUDIO_BYTES(18MB) 와 동기 — 초과 시 업로드 전에 permanent 처리.
 const MAX_AUDIO_BYTES = 18 * 1024 * 1024;
@@ -247,15 +248,19 @@ export async function uploadLiveRecording(
     if (useBlobUpload) {
       const uploaded: Array<{ url: string; offsetMs: number; size: number }> = [];
       for (const f of files) {
-        const up = await blobUpload(f.file.name, f.file, {
-          access: "private",
-          handleUploadUrl: `/api/blob/upload`,
-          clientPayload: JSON.stringify({
-            candidateId: s.candidateId,
-            kind: "audio",
-          }),
-          multipart: f.file.size > 8 * 1024 * 1024,
-        });
+        const up = await blobUpload(
+          blobScopePrefix("candidates", s.candidateId) + f.file.name,
+          f.file,
+          {
+            access: "private",
+            handleUploadUrl: `/api/blob/upload`,
+            clientPayload: JSON.stringify({
+              candidateId: s.candidateId,
+              kind: "audio",
+            }),
+            multipart: f.file.size > 8 * 1024 * 1024,
+          }
+        );
         uploaded.push({
           url: up.url,
           offsetMs: f.offsetMs,

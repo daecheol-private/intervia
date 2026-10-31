@@ -17,6 +17,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { saveFile, fetchBlobFile } from "@/lib/storage";
 import { log } from "@/lib/logger";
+import { blobScopePrefix, isScopedBlobUrl } from "@/lib/blob-scope";
 import { createHash } from "node:crypto";
 import type { CurrentUser } from "@/lib/auth";
 import {
@@ -263,9 +264,14 @@ export async function GET(
     const j = jobByCandidate.get(r.id);
     const isActive = j?.status === "queued" || j?.status === "processing";
     const cm = commentByCandidate.get(r.id);
-    const { maskedLen, ...rest } = r;
+    const { maskedLen, resumeFilePath, photoFilePath, ...rest } = r;
     return {
       ...rest,
+      // 파일 저장 주소는 화면에 보내지 않는다 — 주소가 새면 다른 경로로 재사용될 수 있다(감사 C3).
+      // 다운로드·사진은 인증 라우트(/api/uploads/candidate/[id]) 를 거친다. 검색용 파일명만 남김.
+      hasResume: !!resumeFilePath,
+      hasPhoto: !!photoFilePath,
+      resumeFileName: storedFileName(resumeFilePath),
       // 면접관 토론 — 목록 카드 배지. 안읽음 수는 서버 읽음선 기준(기기 무관).
       commentCount: cm?.cnt ?? 0,
       unreadCommentCount: cm?.unread ?? 0,
@@ -296,6 +302,7 @@ export async function GET(
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB per file (blob 다운로드/안전 상한)
 const MAX_ZIP_SIZE = 100 * 1024 * 1024; // 100MB for ZIP
+const MAX_MANIFEST_BLOBS = 1000; // manifest 1회 파일 수 상한 (Blob 되읽기 횟수 캡)
 
 export async function POST(
   req: Request,
@@ -395,16 +402,22 @@ export async function POST(
     }
     if (!Array.isArray(manifest.blobs) || manifest.blobs.length === 0)
       return new Response("파일 없음", { status: 400 });
+    if (manifest.blobs.length > MAX_MANIFEST_BLOBS)
+      return new Response(
+        `한 번에 최대 ${MAX_MANIFEST_BLOBS}개 파일까지 올릴 수 있습니다. 나눠서 올려 주세요.`,
+        { status: 400 }
+      );
 
-    // SSRF 방어 — manifest 의 blob URL 은 클라이언트가 보냄. Vercel Blob 도메인만 허용.
-    // (다운로드 라우트 /api/uploads/candidate/[id] 와 동일 화이트리스트)
-    const allowedBlobHosts = new Set<string>([
-      "blob.vercel-storage.com",
-      ...(process.env.BLOB_ALLOWED_HOSTS ?? "")
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean),
-    ]);
+    // manifest 의 blob URL 은 클라이언트 제어값 — 자기 스토어 + 이 공고 접두(jobs/{id}/)만 허용.
+    // 타 법인 Blob URL 을 넣어 서버 권한으로 읽어 오는 경로(감사 C3)·SSRF 를 함께 차단. fetch 전에 전수 검증.
+    const scope = blobScopePrefix("jobs", job.id);
+    for (const b of manifest.blobs) {
+      if (!b?.url || !b.pathname) continue;
+      if (!isScopedBlobUrl(b.url, scope)) {
+        log.warn("job_manifest_scope_rejected", { jobId: job.id });
+        return new Response("업로드 파일 위치가 올바르지 않습니다.", { status: 400 });
+      }
+    }
 
     // 각 blob 을 다운로드 — ZIP 처리·magic byte 검증·텍스트 추출 위해 Buffer 필요.
     // 단, 비-ZIP 파일은 storedKey 를 유지하여 서버에서 재업로드하지 않음.
@@ -418,27 +431,11 @@ export async function POST(
           { status: 413 }
         );
       }
-      let blobHost = "";
-      try {
-        const u = new URL(b.url);
-        if (u.protocol !== "https:") throw new Error("not https");
-        blobHost = u.host.toLowerCase();
-      } catch {
-        return new Response("업로드 파일 URL 이 올바르지 않습니다.", { status: 400 });
-      }
-      if (
-        ![...allowedBlobHosts].some(
-          (h) => blobHost === h || blobHost.endsWith("." + h)
-        )
-      ) {
-        log.warn("blob_fetch_blocked_ssrf", { host: blobHost });
-        return new Response("허용되지 않은 파일 위치입니다.", { status: 502 });
-      }
       // private 스토어 blob 은 일반 fetch 가 403 — get()(토큰 인증)을 쓰는 헬퍼로 읽는다.
       // 실패는 종류 불문 502 로 변환 (그대로 두면 핸들러가 500 으로 떨어짐).
       const fetched = await fetchBlobFile(b.url);
       if (!fetched) {
-        log.warn("blob_fetch_failed", { url: b.url });
+        log.warn("blob_fetch_failed", { jobId: job.id });
         return new Response(
           "업로드한 파일을 가져올 수 없습니다. 잠시 후 다시 시도해 주세요.",
           { status: 502 }
@@ -446,7 +443,8 @@ export async function POST(
       }
       const buf = fetched.data;
       rawItems.push({
-        name: b.pathname,
+        // 그룹핑은 클라이언트가 보낸 상대경로 기준 — 접두가 섞여 와도 제거해 기존 동작 유지.
+        name: b.pathname.startsWith(scope) ? b.pathname.slice(scope.length) : b.pathname,
         buf,
         size: buf.length,
         storedKey: b.url,
@@ -840,4 +838,15 @@ async function processGroup(args: {
     attachments: attachmentCount,
     enqueued,
   };
+}
+
+/** 저장 주소에서 원본 파일명만 (목록 검색용). */
+function storedFileName(key: string | null | undefined): string | null {
+  if (!key) return null;
+  const last = key.split("?")[0].split("/").pop() ?? "";
+  try {
+    return decodeURIComponent(last) || null;
+  } catch {
+    return last || null;
+  }
 }

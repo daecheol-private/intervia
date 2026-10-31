@@ -303,7 +303,7 @@ export function StagePanel({
   const isTerminal = candidate.outcome != null;
   // 이력서 원문이 남아있지 않은 상태 — 종결 시 폐기(purgeOnDecision)됐거나 보존기간이 지났다.
   // 다운로드·마스킹 보기·재평가가 모두 불가능하므로 관련 액션의 공통 게이트로 쓴다.
-  const resumePurged = !candidate.resumeFilePath && !candidate.resumeMaskedText;
+  const resumePurged = !candidate.hasResume && !candidate.resumeMaskedText;
 
   // outcome 별 선택 가능 사유. 사용자가 outcome 바꿀 때 default reason 자동 선택.
   // 지원취소(withdrawn)는 후보자가 링크에서 직접 취소하거나, 유선 등으로 밝힌 취소 의사를 HR 이 대신 기록.
@@ -628,7 +628,7 @@ export function StagePanel({
             결정 {formatKstDateTime(candidate.decidedAt)}
           </span>
         )}
-        {candidate.resumeFilePath && (
+        {candidate.hasResume && (
           <a
             href={`/api/uploads/candidate/${candidate.id}`}
             target="_blank"

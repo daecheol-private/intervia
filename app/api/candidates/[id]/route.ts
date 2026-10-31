@@ -161,8 +161,13 @@ export async function GET(
     ...candidate,
     favorited,
     decidedByName: decidedBy,
+    // 파일 키(Blob URL)는 내려보내지 않는다 — 다운로드·사진은 인증 라우트 경유(감사 C3).
+    hasResume: !!candidate.resumeFilePath,
+    hasPhoto: !!candidate.photoFilePath,
   };
   delete candidateSafe.resumeText;
+  delete candidateSafe.resumeFilePath;
+  delete candidateSafe.photoFilePath;
 
   return Response.json({
     candidate: candidateSafe,
