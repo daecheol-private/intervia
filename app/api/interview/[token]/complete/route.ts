@@ -7,7 +7,7 @@ import {
   type InterviewEvaluation,
 } from "@/lib/schema";
 import { and, eq, ne } from "drizzle-orm";
-import { generateJSON } from "@/lib/gemini";
+import { buildChatTranscript, generateInterviewEvaluation } from "@/lib/interview-eval";
 import { buildSummaryPrompt, type CultureFitProfile } from "@/lib/prompts";
 import { parseTraitProfile } from "@/lib/personality";
 import { hasValidConsent, piiFallbackActive } from "@/lib/consent";
@@ -105,9 +105,8 @@ export async function POST(
         }
       : null;
 
-  const transcript = session.messages
-    .map((m) => `${m.role === "user" ? "후보자" : "면접관"}: ${m.content}`)
-    .join("\n\n");
+  // 발언마다 요청별 nonce 태그 — 답변 속 가짜 "면접관:"/"## 평가 지침" 위조 차단 (감사 H1).
+  const transcript = buildChatTranscript(session.messages);
 
   // 후보자 발언 통계 + 외부 LLM 보조 의심 신호 — complete·reevaluate 공용 헬퍼.
   const stats = computeTranscriptStats(session.messages);
@@ -205,7 +204,7 @@ export async function POST(
 
   // 4) LLM 평가. 실패해도 session 은 이미 completed → 면접완료 표시 유지.
   try {
-    const evaluation = await generateJSON<InterviewEvaluation>(
+    const evaluation = await generateInterviewEvaluation(
       buildSummaryPrompt(
         {
           company: companyName ?? undefined,
@@ -226,7 +225,7 @@ export async function POST(
         personality
       ),
       // hasValidConsent 통과 = 세션 동의가 현재 버전(1.9.0+, 도쿄 폴백 고지 포함).
-      { task: "interviewEval", allowFallback: piiFallbackActive() }
+      { stats, withCultureFit: !!cultureFit, allowFallback: piiFallbackActive() }
     );
 
     await db

@@ -297,7 +297,7 @@ interviewer/
 ### 면접 채팅 (한 턴)
 1. `POST /api/interview/[token]/chat` body=`{userMessage}`
 2. 세션 + 후보자 + 공고 로드
-3. 만료/완료 체크
+3. 만료/완료/종결(status·outcome·단계 superseded) 체크 + 비용 상한(후보자 40턴·메시지 4,000자·누적 40,000자, 응답 maxOutputTokens 8192)
 4. 첫 턴이면 `started_at` 기록, status=`in_progress`
 5. `buildSystemPrompt(job, resumeText)` → Gemini systemInstruction
 6. 이전 메시지 전부 history로 주입
@@ -308,8 +308,8 @@ interviewer/
 ### 면접 종료 (finalize)
 1. `POST /api/interview/[token]/complete`
 2. 메시지 2개 미만이면 거부
-3. 대화록 텍스트화 → `buildSummaryPrompt`
-4. `generateJSON` → 평가 JSON
+3. `lib/interview-eval.ts` `buildChatTranscript` — 발언마다 요청별 nonce 태그로 감싸고 본문의 역할 접두·제목 무력화 → `buildSummaryPrompt`
+4. `generateInterviewEvaluation` (responseSchema) → `normalizeInterviewEvaluation`: 점수 클램프, 종합=4차원 가중평균 코드 재계산, 추천=점수 매핑, 분량별 종합 상한
 5. DB 업데이트: status=`completed`, evaluation=JSON, completed_at=now
 6. `candidates.status` → `interviewed`
 

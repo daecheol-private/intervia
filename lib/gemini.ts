@@ -354,11 +354,14 @@ export async function startChatStream(opts: {
   history: Array<{ role: string; parts: Array<{ text: string }> }>;
   message: string;
   allowFallback?: boolean;
+  /** 응답 토큰 상한(사고 토큰 포함) — 비용 남용 방지. */
+  maxOutputTokens?: number;
 }) {
   const config: Record<string, unknown> = {
     systemInstruction: opts.systemInstruction,
     thinkingConfig: { thinkingLevel: THINKING_LEVEL[opts.task] },
   };
+  if (opts.maxOutputTokens) config.maxOutputTokens = opts.maxOutputTokens;
   return runWithFallback(
     (client, model) =>
       client.chats

@@ -14,14 +14,13 @@ import {
   candidates,
   jobPostings,
   organizations,
-  type InterviewEvaluation,
 } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
 import { rateLimit } from "@/lib/rate-limit";
-import { generateJSON } from "@/lib/gemini";
+import { buildChatTranscript, generateInterviewEvaluation } from "@/lib/interview-eval";
 import { buildSummaryPrompt, type CultureFitProfile } from "@/lib/prompts";
 import { parseTraitProfile } from "@/lib/personality";
 import { computeTranscriptStats } from "@/lib/interview-signals";
@@ -129,9 +128,8 @@ export async function POST(
         }
       : null;
 
-  const transcript = session.messages
-    .map((m) => `${m.role === "user" ? "후보자" : "면접관"}: ${m.content}`)
-    .join("\n\n");
+  // 발언마다 요청별 nonce 태그 — 답변 속 가짜 "면접관:"/"## 평가 지침" 위조 차단 (감사 H1).
+  const transcript = buildChatTranscript(session.messages);
 
   // 재평가도 동일 신호 로직 — 저장된 messages.inputSignals 에서 집계.
   const stats = computeTranscriptStats(session.messages);
@@ -141,7 +139,7 @@ export async function POST(
   const allowFallback = await sessionAllowsPiiFallback(session.id);
 
   try {
-    const evaluation = await generateJSON<InterviewEvaluation>(
+    const evaluation = await generateInterviewEvaluation(
       buildSummaryPrompt(
         {
           company: companyName ?? undefined,
@@ -161,7 +159,7 @@ export async function POST(
         cultureFit,
         personality
       ),
-      { task: "interviewEval", allowFallback }
+      { stats, withCultureFit: !!cultureFit, allowFallback }
     );
 
     await db

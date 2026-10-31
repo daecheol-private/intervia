@@ -26,10 +26,19 @@ import { maskText } from "@/lib/mask";
 import { newErrorRef, transientErrorMessage } from "@/lib/error-ref";
 import { log } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
+import { isAiInterviewSuperseded } from "@/lib/stage-meta";
 
 export const runtime = "nodejs";
 // 면접 대화 매 턴이 LLM 스트리밍(재시도 포함) — 기본 타임아웃(~15s)이면 긴 응답·재시도에서 잘린다.
 export const maxDuration = 120;
+
+// 비용 남용 상한 (감사 M1). 최장 30분 면접 계획이 9~12문항·약 18턴이라 그 2배+ 여유.
+const MAX_CANDIDATE_TURNS = 40;
+// sanitizeUserInput 의 절단 길이와 동일 — 넘으면 조용히 자르지 않고 알린다.
+const MAX_MESSAGE_CHARS = 4000;
+const MAX_TOTAL_CANDIDATE_CHARS = 40_000;
+// 면접관 한 턴은 질문 1개(수백 토큰). 사고 토큰 포함 상한이라 넉넉히.
+const MAX_OUTPUT_TOKENS = 8192;
 
 export async function POST(
   req: Request,
@@ -56,11 +65,12 @@ export async function POST(
     inputSignals?: InterviewMessage["inputSignals"];
   };
 
-  // 사용자 입력 길이 가드 — 8KB 초과 차단 (정상 답변은 보통 1~2KB)
-  if (userMessage && userMessage.length > 8000) {
-    return new Response("메시지가 너무 깁니다. 8000자 이내로 작성해 주세요.", {
-      status: 413,
-    });
+  // 사용자 입력 길이 가드 (정상 답변은 보통 1~2KB)
+  if (userMessage && userMessage.length > MAX_MESSAGE_CHARS) {
+    return new Response(
+      `메시지가 너무 깁니다. ${MAX_MESSAGE_CHARS}자 이내로 나눠서 작성해 주세요.`,
+      { status: 413 }
+    );
   }
 
   const [session] = await db
@@ -70,8 +80,25 @@ export async function POST(
   if (!session) return new Response("세션 없음", { status: 404 });
   if (session.status === "completed")
     return new Response("이미 완료된 면접", { status: 400 });
-  if (new Date(session.expiresAt) < new Date())
-    return new Response("만료된 링크", { status: 400 });
+  // expired 는 expiresAt 이 미래여도 종결 처리된 세션(지원취소·재발급 등) — 상태가 우선.
+  if (
+    (session.status !== "pending" && session.status !== "in_progress") ||
+    new Date(session.expiresAt) < new Date()
+  )
+    return new Response("만료된 면접 링크입니다.", { status: 400 });
+
+  const candidateTurns = session.messages.filter((m) => m.role === "user");
+  if (candidateTurns.length >= MAX_CANDIDATE_TURNS)
+    return new Response(
+      "면접 대화 가능 횟수를 모두 사용했습니다. 화면의 '면접 종료' 버튼을 눌러 제출해 주세요.",
+      { status: 409 }
+    );
+  const usedChars = candidateTurns.reduce((n, m) => n + (m.content?.length ?? 0), 0);
+  if (usedChars + (userMessage?.length ?? 0) > MAX_TOTAL_CANDIDATE_CHARS)
+    return new Response(
+      "답변 분량 한도를 넘었습니다. 화면의 '면접 종료' 버튼을 눌러 제출해 주세요.",
+      { status: 409 }
+    );
 
   // 동의 확인 ∥ 후보자·공고·법인 로드 — 상호 독립이라 병렬. 후보자/공고/법인은 JOIN 1쿼리
   // (기존 3회 순차 왕복). 컬럼도 사용분만 — 전체 select() 는 비마스킹 이력서 원문(수십 KB)
@@ -84,6 +111,8 @@ export async function POST(
           id: candidates.id,
           jobId: candidates.jobId,
           orgId: candidates.orgId,
+          stage: candidates.stage,
+          outcome: candidates.outcome,
           name: candidates.name,
           email: candidates.email,
           phone: candidates.phone,
@@ -124,6 +153,12 @@ export async function POST(
   const ctx = ctxRows[0];
   if (!ctx) return new Response("후보자 없음", { status: 404 });
   const { candidate, job } = ctx;
+  // 종결(불합격·지원취소 등)되었거나 AI 단계를 지난 후보자 — complete 라우트와 같은 기준.
+  if (isAiInterviewSuperseded({ stage: candidate.stage, outcome: candidate.outcome }))
+    return new Response(
+      "이미 다음 전형으로 진행되었거나 종료되어 이 면접은 더 이상 진행할 수 없습니다.",
+      { status: 409 }
+    );
   const companyName = ctx.orgName ?? null;
 
   let cultureFit: CultureFitProfile | null = null;
@@ -258,6 +293,7 @@ export async function POST(
         history: chatHistory,
         message: newUserMessage.content,
         allowFallback: piiFallbackActive(),
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
       }),
       markStarted,
     ]);

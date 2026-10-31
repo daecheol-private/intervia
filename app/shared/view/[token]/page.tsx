@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { CalendarCheck, CalendarX2, Clock, FileQuestion } from "lucide-react";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   candidates,
   interviewSchedules,
   jobPostings,
   organizations,
+  sharedReports,
 } from "@/lib/schema";
 import {
   emailRef,
@@ -137,7 +138,17 @@ export default async function StaffScheduleViewPage({
     );
   }
 
-  if (recipient.report) {
+  // 수동 폐기 판정 (감사 M4): 재발급(POST share)은 폐기 직후 새 행을 넣으므로, 최신 행이
+  // 폐기 상태라면 담당자가 공유 중지(DELETE)한 것 — 새 링크를 만들지 않고 일정 정보만 보여준다.
+  const [latestShare] = recipient.report
+    ? await db
+        .select({ revokedAt: sharedReports.revokedAt })
+        .from(sharedReports)
+        .where(eq(sharedReports.candidateId, sched.candidateId))
+        .orderBy(desc(sharedReports.createdAt), desc(sharedReports.id))
+        .limit(1)
+    : [];
+  if (recipient.report && !latestShare?.revokedAt) {
     const link = await ensureActiveShareLink({
       candidateId: sched.candidateId,
       orgId: sched.orgId,
