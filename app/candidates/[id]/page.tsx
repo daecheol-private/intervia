@@ -65,6 +65,7 @@ import {
   showRec,
 } from "./shared";
 import { OutcomeBadge, StagePanel } from "./stage-panel";
+import { IdentityReportBadges } from "./identity-report-badges";
 import { CandidateTabRail, type TabItem, type TabKey } from "./tab-rail";
 import type { Candidate, Job, Schedule, Session } from "./types";
 import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
@@ -640,6 +641,12 @@ export default function CandidateDetailPage() {
                   referrerHost={candidate.applyReferrerHost}
                 />
                 <EmailSentBadge sentAt={candidate.lastInterviewEmailSentAt} />
+                <IdentityReportBadges
+                  candidateId={candidate.id}
+                  reportedAt={candidate.identityReportedAt}
+                  reportOf={candidate.identityReportOf}
+                  reportNewId={candidate.identityReportNewCandidateId}
+                />
               </div>
             </div>
           </div>

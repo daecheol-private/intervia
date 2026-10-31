@@ -11,6 +11,7 @@
  *   captureCritical(err, { ... });   // → Sentry + Slack
  */
 import { log } from "./logger";
+import { redactTokensInText, redactUrl } from "./redact-url";
 
 type ErrorContext = Record<string, unknown>;
 
@@ -27,8 +28,14 @@ const PII_RULES: Array<[RegExp, string]> = [
   [/\b[0-9a-f]{32,}\b/gi, "[hex]"],
 ];
 
+// Drizzle 오류 message 는 "Failed query: <sql>\nparams: <바인딩 값>" — 값에 이름·평가문이 실려
+// 미국 Sentry 로 나간다. params 부터 다음 "caused by:" 줄(또는 끝)까지 통째로 드롭.
+function stripSqlParams(s: string): string {
+  return s.replace(/\bparams:[\s\S]*?(?=\ncaused by:|$)/g, "params: [redacted]");
+}
+
 function scrubString(s: string): string {
-  let out = s;
+  let out = redactTokensInText(stripSqlParams(s));
   for (const [re, rep] of PII_RULES) out = out.replace(re, rep);
   return out.length > 1000 ? out.slice(0, 1000) + "…" : out;
 }
@@ -42,6 +49,9 @@ const DROP_KEYS = new Set([
   "note", "memo", "comment", "message", "query", "q",
 ]);
 
+// URL 값 — query 값 전부·hash 제거 + 토큰 세그먼트 마스킹.
+const URL_KEYS = new Set(["url", "href", "path", "pathname", "referer", "referrer", "link"]);
+
 function scrubValue(v: unknown, depth: number): unknown {
   if (depth > 3) return "[depth]";
   if (typeof v === "string") return scrubString(v);
@@ -51,7 +61,9 @@ function scrubValue(v: unknown, depth: number): unknown {
     const out: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
       const norm = k.toLowerCase().replace(/[^a-z0-9]/g, "");
-      out[k] = DROP_KEYS.has(norm) ? "[redacted]" : scrubValue(val, depth + 1);
+      if (DROP_KEYS.has(norm)) out[k] = "[redacted]";
+      else if (URL_KEYS.has(norm) && typeof val === "string") out[k] = scrubString(redactUrl(val));
+      else out[k] = scrubValue(val, depth + 1);
     }
     return out;
   }
@@ -67,7 +79,7 @@ function scrubContext(ctx: ErrorContext): ErrorContext {
 // table / stream 만료 등 message·code·rawCode)을 Sentry value 에 함께 싣는다.
 // (스크럽은 호출부에서 적용 — 여기선 평문 결합만.)
 function flattenError(error: Error): string {
-  const parts = [error.message];
+  const parts = [stripSqlParams(error.message)];
   let cur: unknown = (error as { cause?: unknown }).cause;
   for (let d = 0; cur && d < 5; d++) {
     const n = cur as {
@@ -76,7 +88,7 @@ function flattenError(error: Error): string {
       rawCode?: unknown;
       cause?: unknown;
     };
-    const m = typeof n.message === "string" ? n.message : String(n);
+    const m = stripSqlParams(typeof n.message === "string" ? n.message : String(n));
     const code = n.code ?? n.rawCode;
     parts.push(`caused by: ${m}${code != null ? ` [${String(code)}]` : ""}`);
     cur = n.cause;
@@ -131,10 +143,13 @@ async function sendToSentry(
           value: scrubString(flattenError(error)),
           stacktrace: error.stack
             ? {
+                // 앞줄은 message 반복(params 포함 가능) — "at " 프레임 줄만 싣는다.
                 frames: error.stack
                   .split("\n")
-                  .slice(1, 20)
-                  .map((line) => ({ filename: scrubString(line.trim()) })),
+                  .map((line) => line.trim())
+                  .filter((line) => line.startsWith("at "))
+                  .slice(0, 19)
+                  .map((line) => ({ filename: scrubString(line) })),
               }
             : undefined,
         },

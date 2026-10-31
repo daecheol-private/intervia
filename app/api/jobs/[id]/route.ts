@@ -8,6 +8,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked, isValidPin } from "@/lib/job-lock";
 import { requireStepUp } from "@/lib/step-up";
 import { deleteCandidateFiles } from "@/lib/candidate-files";
+import { scrubCandidateTraces } from "@/lib/job-lifecycle";
 import { logAudit } from "@/lib/audit";
 import { chargeFeature, refundFeature } from "@/lib/tokens";
 import { stripBiasedLines } from "@/lib/job-bias-filter";
@@ -278,6 +279,8 @@ export async function DELETE(
   // 2. 후보자별 모든 파일(메인 이력서 + 첨부) 삭제
   //    DB 삭제는 cascade 로 candidates / attachments / sessions / notes 등 모두 사라짐.
   const fileResult = await deleteCandidateFiles(candidateIds);
+  // 감사로그·이의제기·문의에 남는 후보자 흔적도 정리(감사 M7) — cascade 는 이 표들을 건드리지 않는다.
+  for (const cid of candidateIds) await scrubCandidateTraces(cid);
 
   // 3. 공고 DB row 삭제 (cascade 발동)
   await db.delete(jobPostings).where(eq(jobPostings.id, jobId));

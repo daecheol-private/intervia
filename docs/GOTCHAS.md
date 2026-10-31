@@ -248,8 +248,11 @@ TOTP 코드 검증은 `verifyCode` 직접 호출 금지. `import { verifyAndCons
 `password-reset/confirm` 과 동일 수준 유지.
 
 ### (g) cron/internal 인증 — fail-open 금지
-cron/internal 라우트 `authorize` 는 `x-vercel-cron` 헤더 우회를 반드시 `&& !secret` 로 묶을 것
-(시크릿 설정 시 헤더 위조 차단). Vercel cron 은 `Authorization: Bearer ${CRON_SECRET}` 로 인증.
+cron/internal 라우트 인증은 **`lib/cron-auth.ts` `authorizeCron(req, "cron" | "internal")` 만** 쓴다(라우트별 자체 구현 금지).
+시크릿(CRON_SECRET / INTERNAL_API_SECRET) 미설정이면 **운영(NODE_ENV=production)은 503**, 로컬 dev 만 `x-vercel-cron: 1` 허용
+— 헤더는 누구나 위조 가능해 시크릿 없이 받으면 fail-open (SECURITY_AUDIT_2026-10-31 M16). Vercel cron 은 `Authorization: Bearer ${CRON_SECRET}` 로 인증.
+`purge-original` 은 되돌릴 수 없는 삭제라 세션도 안 받고 dev 에서도 시크릿 필수(자체 authorize 유지).
+로컬 스크립트(`scripts/*.ps1`)는 토큰을 하드코딩하지 않고 `$env:CRON_SECRET`(local 은 `.env.local` 폴백)에서 읽는다.
 
 ### (h) 로그인 next 리다이렉트 → 상대경로만
 `?next=` 같은 리다이렉트 파라미터는 내부 상대경로만 허용: `/^\/(?![/\\])/.test(next)`.

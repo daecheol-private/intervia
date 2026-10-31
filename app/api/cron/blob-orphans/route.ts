@@ -19,8 +19,7 @@ import {
   organizations,
 } from "@/lib/schema";
 import { like } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/auth";
-import { secretEquals } from "@/lib/secret-compare";
+import { authorizeCron } from "@/lib/cron-auth";
 import { notifyOps } from "@/lib/error-reporter";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { COMPANY_INFO } from "@/lib/site-info";
@@ -55,14 +54,8 @@ async function notifyOpsAndMail(subject: string, text: string): Promise<void> {
   }
 }
 
-async function authorize(req: Request): Promise<Response | null> {
-  const secret = process.env.CRON_SECRET;
-  const header = req.headers.get("authorization");
-  if (secret && secretEquals(header, `Bearer ${secret}`)) return null;
-  if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
-  const me = await getCurrentUser();
-  if (me?.role === "system_admin") return null;
-  return new Response("권한 없음", { status: 401 });
+function authorize(req: Request): Promise<Response | null> {
+  return authorizeCron(req, "cron");
 }
 
 /** DB 에서 Blob URL 을 저장하는 컬럼 전수 — 새 파일 컬럼 추가 시 여기도 추가할 것. */

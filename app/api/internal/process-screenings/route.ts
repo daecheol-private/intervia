@@ -14,8 +14,7 @@ import {
   chargeScreeningSuccess,
   ScreeningError,
 } from "@/lib/screening";
-import { getCurrentUser } from "@/lib/auth";
-import { secretEquals } from "@/lib/secret-compare";
+import { authorizeCron } from "@/lib/cron-auth";
 import { captureError, alertError } from "@/lib/error-reporter";
 import { isTransientDbError } from "@/lib/db-retry";
 import { log } from "@/lib/logger";
@@ -60,18 +59,11 @@ const WALL_CLOCK_BUDGET_MS = 70_000;
  * 종료 시점에 큐에 남아 있으면 자신을 다시 호출 (self-chain).
  *
  * 인증:
- *  - 내부 호출: X-Internal-Secret = INTERNAL_API_SECRET 또는 X-Vercel-Cron=1
+ *  - 내부 호출: X-Internal-Secret = INTERNAL_API_SECRET (운영 미설정 시 503 — lib/cron-auth)
  *  - 수동 호출: 로그인된 system_admin
  */
-async function authorize(req: Request): Promise<Response | null> {
-  const secret = process.env.INTERNAL_API_SECRET;
-  const header = req.headers.get("x-internal-secret");
-  if (secret && secretEquals(header, secret)) return null;
-  // internal 은 cron(X-Internal-Secret)·self-chain 만 호출. 시크릿 설정 시 헤더 위조 우회 차단.
-  if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
-  const me = await getCurrentUser();
-  if (me?.role === "system_admin") return null;
-  return new Response("권한 없음", { status: 401 });
+function authorize(req: Request): Promise<Response | null> {
+  return authorizeCron(req, "internal");
 }
 
 type RunStats = {

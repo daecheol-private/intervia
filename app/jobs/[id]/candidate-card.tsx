@@ -2,7 +2,9 @@
 
 import { memo } from "react";
 import Link from "next/link";
-import { MessageSquare } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Link2, MessageSquare, ShieldAlert, UserCheck } from "lucide-react";
+import { Badge } from "@/app/components/ui";
 
 import { formatKstDateTime } from "@/lib/utils";
 import { CandidateScores } from "./candidate-scores";
@@ -64,6 +66,8 @@ function CandidateCardImpl({
   selected,
   onToggleSelect,
 }: Props) {
+  const router = useRouter();
+  const related = c.identityRelated;
   return (
     <li className="relative group">
       <div
@@ -135,6 +139,49 @@ function CandidateCardImpl({
                 <RecBadge rec={c.screeningReport.recommendation} />
               )}
               <CommentBadge count={c.commentCount} unread={c.unreadCommentCount} />
+              {c.identityReportedAt && (
+                <Badge
+                  tone="danger"
+                  icon={ShieldAlert}
+                  className="text-[11px]"
+                  title="휴대폰 번호 소유자가 본인 제출이 아니라고 신고했습니다. 자동 진행이 멈췄고 서류평가 차감은 환불됐습니다."
+                >
+                  명의도용 신고됨
+                </Badge>
+              )}
+              {related && related.ids.length > 0 && (
+                // 카드 전체가 링크라 중첩 <a> 대신 클릭 시 이동.
+                <span
+                  role="link"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    router.push(`/candidates/${related.ids[0]}`);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      router.push(`/candidates/${related.ids[0]}`);
+                    }
+                  }}
+                >
+                  <Badge tone="neutral" icon={Link2} className="text-[11px] hover:bg-border-default">
+                    관련 지원서 {related.ids.length}건
+                  </Badge>
+                </span>
+              )}
+              {related?.sameName && (
+                <Badge
+                  tone="warning"
+                  icon={UserCheck}
+                  className="text-[11px]"
+                  title="명의도용 신고된 지원서와 이름이 같습니다. 같은 사람이 다시 지원했을 수 있습니다."
+                >
+                  동일인 의심
+                </Badge>
+              )}
             </div>
             {/* 메타(경력·나이·학력·연락처)는 모바일에선 숨김 — 목록 가독성. 상세 화면에서 확인. */}
             <div className="hidden sm:flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted mt-1.5">

@@ -7,6 +7,10 @@ export type Candidate = {
   source: string;
   // apply_link 유입 시 referrer 호스트 (예: www.saramin.co.kr). 감지 실패 시 null.
   applyReferrerHost?: string | null;
+  // 명의도용 신고 (lib/apply-identity.ts) — 신고된 지원서 / 신고와 함께 접수된 새 지원서 연결.
+  identityReportedAt?: string | null;
+  identityReportOf?: number | null;
+  identityReportNewCandidateId?: number | null;
   name: string;
   email: string | null;
   phone: string | null;

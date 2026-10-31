@@ -6,6 +6,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
 import { deleteCandidateFiles } from "@/lib/candidate-files";
 import { logAudit } from "@/lib/audit";
+import { scrubCandidateTraces } from "@/lib/job-lifecycle";
 
 export const runtime = "nodejs";
 
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
   const allowedIds = allowed.map((r) => r.id);
   // 파일 먼저 (메인 이력서 + 모든 첨부) → DB row 삭제
   const fileResult = await deleteCandidateFiles(allowedIds);
+  for (const id of allowedIds) await scrubCandidateTraces(id);
   await db.delete(candidates).where(inArray(candidates.id, allowedIds));
 
   // 실사용상 벌크는 공고 상세에서 단일 공고 대상 — 전원 같은 공고일 때만 jobId 기록.

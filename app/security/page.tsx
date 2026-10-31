@@ -151,8 +151,8 @@ export default function SecurityPage() {
             <strong>최장 5년</strong> 보관 후 폐기
           </li>
           <li>
-            최종 합격자 정보는 입사·인사기록 목적으로 채용기업이 삭제할 때까지
-            보유됩니다.
+            최종 합격자 정보는 입사·인사기록 목적으로 합격 결정일로부터{" "}
+            <strong>1년</strong> 보관 후 자동 파기됩니다(30일 전 안내).
           </li>
         </ul>
       </Section>

@@ -49,6 +49,16 @@ export async function POST(
   if (!ownsOrg(me!, candidate.orgId))
     return new Response("Not found", { status: 404 });
 
+  // 명의도용 신고된 지원서는 평가하지 않는다 (서류평가 차감도 환불된 상태).
+  if (candidate.identityReportedAt)
+    return Response.json(
+      {
+        code: "identity_reported",
+        message: "명의도용 신고된 지원서라 AI 평가를 진행할 수 없습니다.",
+      },
+      { status: 409 }
+    );
+
   // 지원자 동의 확인 게이트 — 업로드 시점에 confirm 했어야 평가 가능.
   // 마이그레이션 이전 row 보호: 2026-05-22 이전 createdAt 은 면제 (legacy).
   if (

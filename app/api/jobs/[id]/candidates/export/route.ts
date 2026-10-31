@@ -17,6 +17,7 @@ import { isJobUnlocked } from "@/lib/job-lock";
 import { compositeScore } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
 import { requireStepUp } from "@/lib/step-up";
+import { csvCell } from "@/lib/csv";
 
 export const runtime = "nodejs";
 
@@ -35,12 +36,6 @@ const STAGE_KO: Record<string, string> = {
   withdrawn: "지원취소",
 };
 
-function csvCell(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  const s = String(v);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
 
 export async function GET(
   req: Request,
@@ -171,7 +166,7 @@ export async function GET(
 
   logAudit(req, {
     actor: me!,
-    action: "candidate.bulk_delete" as const, // generic — CSV export tracking
+    action: "candidate.export_csv",
     resourceType: "job",
     resourceId: jobId,
     orgId: job.orgId,

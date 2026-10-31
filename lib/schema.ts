@@ -570,6 +570,14 @@ export const candidates = sqliteTable("candidates", {
   applicantConsentConfirmedByUserId: integer(
     "applicant_consent_confirmed_by_user_id"
   ).references(() => users.id, { onDelete: "set null" }),
+  // 명의도용 신고 (lib/apply-identity.ts) — 같은 공고에 같은 번호로 먼저 접수된 지원서를
+  // 번호 주인이 휴대폰 인증 후 "본인이 제출하지 않음"으로 신고한 시각. 자동 진행(서류평가 큐·
+  // 일괄 면접 발송) 대상에서 빠지고 서류평가 차감은 환불된다. 행은 삭제하지 않는다.
+  identityReportedAt: text("identity_reported_at"),
+  // 신고된 지원서 → 신고와 함께 새로 접수된 지원서 id. FK 없음(ADD COLUMN 전용 마이그레이션).
+  identityReportNewCandidateId: integer("identity_report_new_candidate_id"),
+  // 새 지원서 → 신고된 기존 지원서 id ("관련 지원서" 링크). FK 없음.
+  identityReportOf: integer("identity_report_of"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),

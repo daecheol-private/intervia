@@ -33,6 +33,8 @@ const heldFilter = (jobId: number) =>
     eq(candidates.jobId, jobId),
     eq(candidates.source, "apply_link"),
     isNull(candidates.screeningScore),
+    // 명의도용 신고된 지원서는 일괄 평가 대상에서 제외.
+    isNull(candidates.identityReportedAt),
     sql`NOT EXISTS (SELECT 1 FROM screening_jobs sj WHERE sj.candidate_id = ${candidates.id} AND sj.status IN ('queued','processing','paused'))`
   );
 

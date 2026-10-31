@@ -8,8 +8,7 @@ import {
   RecordedInterviewError,
 } from "@/lib/recorded-interview-queue";
 import { isCapacityOutageError } from "@/lib/gemini";
-import { getCurrentUser } from "@/lib/auth";
-import { secretEquals } from "@/lib/secret-compare";
+import { authorizeCron } from "@/lib/cron-auth";
 import { workerBaseUrl } from "@/lib/worker-trigger";
 import { isTransientDbError } from "@/lib/db-retry";
 import { captureError } from "@/lib/error-reporter";
@@ -22,18 +21,12 @@ export const maxDuration = 300;
 /**
  * 대면 면접 녹음(업로드 모드) 백그라운드 워커.
  *
- * 인증: 내부 호출(X-Internal-Secret) / Vercel cron(시크릿 미설정 시) / system_admin.
+ * 인증: 내부 호출(X-Internal-Secret) / system_admin. 운영에서 시크릿 미설정이면 503 (lib/cron-auth).
  * 한 실행 = 한 건 처리 (전사+평가가 길어 단건). 성공 후 남은 queued 있으면 self-chain.
  * 실패-재큐 건은 self-chain 하지 않음 — busy-loop 대신 매분 cron 이 ~1분 backoff 로 재시도.
  */
-async function authorize(req: Request): Promise<Response | null> {
-  const secret = process.env.INTERNAL_API_SECRET;
-  const header = req.headers.get("x-internal-secret");
-  if (secret && secretEquals(header, secret)) return null;
-  if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
-  const me = await getCurrentUser();
-  if (me?.role === "system_admin") return null;
-  return new Response("권한 없음", { status: 401 });
+function authorize(req: Request): Promise<Response | null> {
+  return authorizeCron(req, "internal");
 }
 
 function chainSelf(req: Request) {

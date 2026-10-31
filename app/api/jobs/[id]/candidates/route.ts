@@ -33,6 +33,7 @@ import {
   insufficientTokensResponse,
 } from "@/lib/wallet-guard";
 import { logAudit } from "@/lib/audit";
+import { isSameApplicantName } from "@/lib/apply-identity";
 import { enqueueScreening } from "@/lib/screening-queue";
 import { triggerWorker } from "@/lib/worker-trigger";
 import {
@@ -99,6 +100,9 @@ export async function GET(
       lastInterviewEmailSentAt: candidates.lastInterviewEmailSentAt,
       decisionEmailCount: candidates.decisionEmailCount,
       decisionNotifiedExternallyAt: candidates.decisionNotifiedExternallyAt,
+      identityReportedAt: candidates.identityReportedAt,
+      identityReportOf: candidates.identityReportOf,
+      identityReportNewCandidateId: candidates.identityReportNewCandidateId,
     })
     .from(candidates)
     .where(eq(candidates.jobId, Number(id)))
@@ -259,6 +263,28 @@ export async function GET(
     });
   }
 
+  // 명의도용 신고 — 새 지원서 쪽에 "관련 지원서"(신고된 기존 지원서) + 이름 같으면 "동일인 의심".
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const reportedByNew = new Map<number, typeof rows>();
+  for (const r of rows) {
+    if (r.identityReportNewCandidateId == null) continue;
+    const list = reportedByNew.get(r.identityReportNewCandidateId) ?? [];
+    list.push(r);
+    reportedByNew.set(r.identityReportNewCandidateId, list);
+  }
+  const identityRelatedOf = (r: (typeof rows)[number]) => {
+    let related = reportedByNew.get(r.id) ?? [];
+    if (!related.length && r.identityReportOf != null) {
+      const o = byId.get(r.identityReportOf);
+      related = o ? [o] : [];
+    }
+    if (!related.length) return null;
+    return {
+      ids: related.map((x) => x.id),
+      sameName: related.some((x) => isSameApplicantName(x.name, r.name)),
+    };
+  };
+
   const result = rows.map((r) => {
     const s = latestByCandidate.get(r.id);
     const j = jobByCandidate.get(r.id);
@@ -267,6 +293,7 @@ export async function GET(
     const { maskedLen, resumeFilePath, photoFilePath, ...rest } = r;
     return {
       ...rest,
+      identityRelated: identityRelatedOf(r),
       // 파일 저장 주소는 화면에 보내지 않는다 — 주소가 새면 다른 경로로 재사용될 수 있다(감사 C3).
       // 다운로드·사진은 인증 라우트(/api/uploads/candidate/[id]) 를 거친다. 검색용 파일명만 남김.
       hasResume: !!resumeFilePath,

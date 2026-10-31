@@ -200,6 +200,9 @@
 | pii_purged_at | TEXT NULL | ⚠️ **현재 미사용 컬럼** — 종결 +14일 폐기는 `purgePiiAfterClose` 가 candidates **행 자체를 삭제**(anonymize-in-place 아님)하므로 이 값을 set 하는 코드 경로가 없음. 향후 "행 보존 + 익명화" 전략으로 바꿀 때 사용 예정. (감사 로그 metadata 의 후보자 PII 는 삭제 시 `redactCandidateAuditPii` 로 [redacted] 처리) |
 | applicant_consent_confirmed_at | TEXT NULL | 채용기업이 "지원자가 AI 평가 적용에 동의했음"을 확인한 시각. PIPA §15·§26·§28의8·§37의2 책임을 고객사로 전가. 업로드/평가 라우트가 NOT NULL 검증 (2026-05-22 이전 row 는 legacy 면제) |
 | applicant_consent_confirmed_by_user_id | INTEGER NULL FK users(id) ON DELETE SET NULL | 동의 확인을 클릭한 채용기업 사용자 |
+| identity_reported_at | TEXT NULL | **명의도용 신고됨** 시각 (0069, `lib/apply-identity.ts`). 같은 공고에 같은 번호로 먼저 접수된 지원서를 번호 주인이 휴대폰 인증 후 "본인이 제출하지 않음"으로 신고. 세팅되면 서류평가 큐·일괄 평가(evaluate-held)·일괄 면접 발송에서 제외, 처리 중 평가는 과금 안 함, 기존 서류평가 차감은 `refundFeature` 로 환불. 행은 삭제하지 않음 |
+| identity_report_new_candidate_id | INTEGER NULL (FK 없음) | 신고된 행 → 신고와 함께 접수된 새 지원서 id |
+| identity_report_of | INTEGER NULL (FK 없음) | 신고로 접수된 새 지원서 → 신고된 기존 지원서 id("관련 지원서" 링크). 번호당 공고별 신고 1회 판정에도 사용(같은 번호 행 중 `identity_reported_at` 또는 `identity_report_of` 가 있으면 재신고 불가) |
 | resume_file_path | TEXT NOT NULL | 로컬 파일명 또는 Blob URL. 폐기 시 빈 문자열 |
 | resume_text | TEXT NOT NULL | **항상 빈 문자열** — 원본은 DB 에 저장 안 함 (PIPA). 컬럼은 호환성 위해 유지 |
 | resume_masked_text | TEXT NULL | 마스킹된 텍스트. **LLM 에 전달되는 유일한 본문**. UI 미리보기도 이 값. 폐기 시 NULL |
@@ -209,6 +212,8 @@
 | created_at | TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 
 (과거 문서의 `status` 컬럼(uploaded/screening/…)은 실제 스키마에 없음 — 평가 진행 상태는 `screening_jobs` 큐와 `stage` 로 파악)
+
+지원 링크 중복(2026-10-31 M2): 같은 공고 안 **정규화 휴대폰 번호**가 주 키, 이메일·파일 해시도 차단. 안내 문구는 어느 항목이 겹쳤는지 밝히지 않음. 번호가 겹치면 그 번호로 인증 후 명의도용 신고 + 새 지원 가능(`lib/apply-identity.ts`).
 
 중복 체크: 코드는 `(job_id, resume_hash)` 로 검사 (업로더 무관) + **DB 부분 유니크 인덱스 `candidates_job_resume_hash_uq`** (`resume_hash` non-null) 가 동시 업로드 race 를 DB 레벨 차단. 2차로 워커가 `(job_id, resume_content_hash)` 비교 후 중복 자동 삭제.
 

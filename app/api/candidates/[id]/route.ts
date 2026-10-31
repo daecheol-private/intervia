@@ -7,6 +7,7 @@ import { guardCandidate } from "@/lib/candidate-guard";
 import { parseTraitProfile } from "@/lib/personality";
 import { sanitizeCompetencies } from "@/lib/competencies";
 import { deleteFilesForCandidate } from "@/lib/candidate-files";
+import { scrubCandidateTraces } from "@/lib/job-lifecycle";
 import { logAudit } from "@/lib/audit";
 import { subdomainApplyEnabled, interviewUrlFor } from "@/lib/subdomain";
 
@@ -291,6 +292,7 @@ export async function DELETE(
 
   // 파일 먼저 — DB row 삭제 후엔 path 정보 못 가져옴 (cascade 로 attachments 도 사라짐)
   const fileResult = await deleteFilesForCandidate(cid);
+  await scrubCandidateTraces(cid);
   await db.delete(candidates).where(eq(candidates.id, cid));
 
   logAudit(req, {
@@ -300,8 +302,8 @@ export async function DELETE(
     resourceId: cid,
     orgId: row.orgId,
     jobId: row.jobId,
+    // 삭제한 사람의 이름을 감사로그에 새로 남기면 삭제 의미가 없다 — id 만(감사 M7).
     metadata: {
-      name: row.name,
       deletedFiles: fileResult.deletedFiles,
       fileErrors: fileResult.errors,
     },

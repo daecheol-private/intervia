@@ -72,6 +72,9 @@
 | GET/PUT | `/api/orgs/me/culture-fit` | 🔒 / 🛡️ | 컬처핏 프로필 조회·저장 (`CultureFitProfile` — 인재상 + 정성 항목 6종). Big Five 선호 특성은 공고 단위로 이동 (`job_postings.trait_profile`) — 법인 JSON 의 `traitProfile` 은 레거시·미사용 |
 | PUT | `/api/orgs/me/branding` | 🛡️ | 지원 페이지 포인트 컬러 저장 — `{brandColor: "#rrggbb" \| null}`. 형식 위반 400 |
 | GET/POST/DELETE | `/api/orgs/me/branding/logo` | 🔒 / 🛡️ / 🛡️ | 지원 페이지 로고 — GET 미리보기 스트리밍(멤버 가능), POST multipart `file`(PNG·JPG·WebP, 2MB, 매직바이트 검증, 교체 시 이전 파일 삭제), DELETE 제거 |
+| POST | `/api/apply/[token]` | 🌐 | 공개 지원 제출. 중복(같은 파일 / 같은 번호 / 같은 이메일)은 409 `{code:"already_applied", message}` — 문구는 어느 항목인지 밝히지 않음. 번호가 겹쳤고 인증 가능하면 `otp.dupToken` 동봉. 휴대폰 인증 후 `identity_ticket` 을 붙여 재제출하면 기존 지원서를 "명의도용 신고됨"으로 표시(평가 중단·서류평가 환불·안내 메일)하고 새 지원서로 접수. 번호당 공고별 신고 1회 |
+| POST | `/api/apply/[token]/identity-otp` | 🌐 | 중복 지원 본인 확인 `{action:"send"\|"verify", phone, dupToken, code?}`. 제출 응답의 `dupToken`(공고·번호, 30분) 필수 — 접수 없는 번호·이미 신고한 번호는 409 `not_eligible`. send=`sendPhoneOtp`(OTP 미설정 운영은 503 `unavailable` → 화면은 기존 차단 안내로 폴백), verify=`verifyPhoneOtp` → `{ticket}` |
+| POST | `/api/apply/[token]/precheck` | 🌐 | 업로드 전 사전 중복체크 — `{resume_sha256}` 가 같은 공고의 `resume_hash` 와 같을 때만 `duplicate:true`. 이메일·번호로는 답하지 않음(감사 M3 — 제3자 지원 여부 조회 차단) |
 | GET | `/api/apply/[token]/logo` | 🌐 | 공개 지원 페이지 로고 스트리밍 — apply 토큰→공고→법인 로고. Blob URL 비노출 프록시, `max-age=300` |
 
 지원 링크(`GET/POST /api/jobs/[id]/apply-link`) 응답의 `url` 은 법인 서브도메인 정본 URL(`https://{sub}.intervia.kr/apply/{token}`) — 서브도메인 기능 OFF(운영 기본, `SUBDOMAIN_APPLY_ENABLED` 미설정)거나 미발급 법인이면 null 이고 클라이언트가 origin+path 로 구성. 이 라우트가 법인 서브도메인을 lazy 발급한다(`ensureOrgSubdomain`).
@@ -182,9 +185,10 @@
 
 | 메서드 | 경로 | 권한 | 설명 |
 |---|---|---|---|
-| POST | `/api/candidates/[id]/screen` | 🔒 🏢 | 단건 평가/재평가 큐 등록 (과금은 성공 시 후차감) + 워커 즉시 트리거 |
-| POST/GET | `/api/internal/process-screenings` | 🔒 (X-Internal-Secret 또는 X-Vercel-Cron 또는 system_admin) | 큐 워커. 동시성 N, 최대 M건, 잔여 시 self-chain |
-| GET/POST | `/api/cron/process-screenings` | 🔒 (CRON_SECRET 또는 X-Vercel-Cron 또는 system_admin) | 분당 워커 호출 안전망 |
+| POST | `/api/candidates/[id]/screen` | 🔒 🏢 | 단건 평가/재평가 큐 등록 (과금은 성공 시 후차감) + 워커 즉시 트리거. 명의도용 신고된 지원서는 409 `identity_reported` |
+| GET | `/api/candidates/[id]/identity-report` | 🔒 🏢 | 명의도용 신고 관계 `{reportedAt, newApplication, related[], sameName}` — 후보 상세의 "명의도용 신고됨"·"관련 지원서 N건"·"동일인 의심" 배지용 (같은 공고·법인 안에서만) |
+| POST/GET | `/api/internal/process-screenings` | 🔒 (X-Internal-Secret 또는 system_admin; dev 시크릿 미설정 시 X-Vercel-Cron) | 큐 워커. 동시성 N, 최대 M건, 잔여 시 self-chain |
+| GET/POST | `/api/cron/process-screenings` | 🔒 (CRON_SECRET 또는 system_admin; dev 시크릿 미설정 시 X-Vercel-Cron) | 분당 워커 호출 안전망 |
 
 ## Cron / 시스템 작업
 
@@ -197,7 +201,7 @@
 | GET/POST | `/api/cron/blob-orphans` | 🌐 (CRON_SECRET) 또는 👑 | **Blob 고아 파일 스위퍼** — Blob 전체 목록 vs DB 파일 키 컬럼 전수(resume/photo/attachment/audio/logo) 대조. **30일+ 미참조는 자동 삭제**(48h~30일은 "관찰 중" 집계만), **서킷 브레이커**: 삭제 대상 > max(50, 전체 10%) 면 컬럼 누락 의심으로 삭제 중단+경보. 삭제·실패 건수 Slack 통지(파일명은 인증된 응답에만). ⚠️ 새 파일 키 컬럼 추가 시 `collectKnownKeys` 등록 필수. Vercel Cron schedule = `0 4 1 * *` (매월 1일) |
 | GET/POST | `/api/cron/blob-migrate` | 🌐 (CRON_SECRET) 또는 👑 | **legacy public Blob → private 스토어 마이그레이션 (일회성 도구, cron 미등록)**. GET=dry-run 집계, POST `?limit=N` 배치(fetch→put→get 크기검증→DB 키 UPDATE, 원본 미삭제). 2026-07-12 104건 완료·잔여 0 — legacy 재발 시 재사용 가능 |
 
-인증: `Authorization: Bearer ${CRON_SECRET}` 헤더 또는 system_admin 로그인. Vercel Cron은 `x-vercel-cron: 1` 헤더로 자동 호출.
+인증(`lib/cron-auth.ts`): `Authorization: Bearer ${CRON_SECRET}` 헤더만(로그인 세션 불가 — 외부 링크 CSRF 방지). 운영에서 CRON_SECRET 미설정이면 503. `x-vercel-cron: 1` 은 로컬 dev(시크릿 미설정)에서만 통과.
 
 ## 시스템 관리자 전용
 
@@ -244,7 +248,7 @@
 | POST | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | 업로드 모드 — multipart `audio`+`round`+`consentConfirmed`. **오디오 임시저장 + `status='queued'` 적재 후 즉시 202 `{id,status:"queued"}`**. 전사·평가는 백그라운드 워커가 수행(업로드 후 화면 닫아도 됨). 잔액 가드·18MB 캡 |
 | GET | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | 후보자의 대면 면접 평가 목록(리포트 + 전사 세그먼트). 상태(queued/processing) 폴링용 |
 | PATCH | `/api/candidates/[id]/recorded-interview` | 🔒🏢🔑 | `{recordedInterviewId, action:"confirm"\|"reevaluate"}` — confirm: AI 초안 사람 확정 / reevaluate: 같은 전사로 재평가(매번 과금, maxDuration 300) |
-| POST/GET | `/api/internal/process-recorded-interviews` | 🔒 (X-Internal-Secret 또는 X-Vercel-Cron 또는 system_admin) | 업로드 모드 백그라운드 워커 — claim→전사(세그먼트 없을 때만)→오디오 폐기→평가→과금. 한 건씩, 성공 시 self-chain. stuck 복구 포함. 매분 `cron/process-screenings` 가 함께 트리거 |
+| POST/GET | `/api/internal/process-recorded-interviews` | 🔒 (X-Internal-Secret 또는 system_admin; dev 시크릿 미설정 시 X-Vercel-Cron) | 업로드 모드 백그라운드 워커 — claim→전사(세그먼트 없을 때만)→오디오 폐기→평가→과금. 한 건씩, 성공 시 self-chain. stuck 복구 포함. 매분 `cron/process-screenings` 가 함께 트리거 |
 | POST | `/api/candidates/[id]/recorded-interview/live` | 🔒🏢🔑 | 준실시간 — `action`: `start`(consentConfirmed 필수) / `chunk`(audioBase64·baseMs·chunkIndex, 즉시 전사) / `finish`(finalize) |
 | GET | `/api/candidates/[id]/recorded-interview/live?riId=` | 🔒🏢🔑 | 라이브 어시스턴트 — 누적 전사 기반 답변요약/긍정/확인/추천질문 |
 

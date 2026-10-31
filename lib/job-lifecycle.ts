@@ -33,7 +33,7 @@ import {
 import { and, count, eq, lt, sql } from "drizzle-orm";
 import { deleteFile } from "./storage";
 import { deleteCandidateFiles } from "./candidate-files";
-import { createNotification } from "./notifications";
+import { createNotification, notifyOrgAdmins } from "./notifications";
 import { getBalance, getPricing, writeLedgerIdempotent } from "./tokens";
 import {
   buildDecisionEmail,
@@ -46,6 +46,7 @@ import { sentToday } from "./mail-usage";
 import { redactCandidateAuditPii } from "./audit";
 import { notifyScheduleCancelOnCandidateClosed } from "./schedule-share";
 import { after } from "next/server";
+import { parseDbTimestamp } from "./utils";
 
 export const DEFAULT_JOB_DURATION_DAYS = 30;
 export const EXTENSION_DAYS = 30;
@@ -58,6 +59,10 @@ export const PII_PURGE_DAYS_AFTER_CLOSE = 14;
 export const UNRESOLVED_EXPIRED_DELETE_DAYS = 14;
 /** 정식 전환 안 된 임시 공고(isDraft)를 생성 후 이 일수 경과 시 자동 폐기. */
 export const DRAFT_TTL_DAYS = 7;
+/** 최종 합격자 보관 기간(결정일 기준) — 2026-10-31 결정. 처리방침 §3 과 함께 바꿀 것. */
+export const HIRED_RETENTION_DAYS = 365;
+/** 합격자 삭제 예정 안내 — 삭제 이 일수 전에 법인 관리자에게 한 번 알린다. */
+export const HIRED_RETENTION_NOTICE_DAYS = 30;
 /** 임시 공고 폐기 전 생성자에게 리마인드를 보내기 시작하는 경과 일수(폐기 D-2 무렵). */
 export const DRAFT_REMINDER_AFTER_DAYS = 5;
 
@@ -346,6 +351,7 @@ export async function closeJob(args: {
       email: candidates.email,
       stage: candidates.stage,
       orgId: candidates.orgId,
+      identityReportedAt: candidates.identityReportedAt,
     })
     .from(candidates)
     .where(and(eq(candidates.jobId, args.jobId), sql`${candidates.outcome} IS NULL`));
@@ -410,7 +416,8 @@ export async function closeJob(args: {
           .from(organizations)
           .where(eq(organizations.id, job.orgId))
       : [];
-    const mailTargets = targets.filter((t) => !!t.email);
+    // 명의도용 신고된 지원서의 이메일은 지원자 본인 것이 아닐 수 있어 통보하지 않는다.
+    const mailTargets = targets.filter((t) => !!t.email && !t.identityReportedAt);
     mailsQueued = mailTargets.length;
     if (mailTargets.length > 0) {
       after(async () => {
@@ -617,8 +624,8 @@ export async function purgePdfsAfterClose(): Promise<{
  * 익명화 + score 보존은 의미 없음 — 후보자 특정 불가능한 점수는 통계 가치 X.
  * 결정 시점 ~ +14일은 운영 마무리 안전 버퍼, 그 뒤엔 완전 소거.
  *
- * 단, **합격자(outcome='hired') 는 영구 보존** — 입사 절차 및 인사 기록 유지 목적.
- * HR 이 명시적으로 삭제할 때까지 candidates row 유지.
+ * 단, 합격자(outcome='hired') 는 여기서 지우지 않는다 — 결정일 +1년 보관 후
+ * purgeHiredAfterRetention 이 소거(2026-10-31 결정, 처리방침 §3).
  */
 export async function purgePiiAfterClose(): Promise<{
   deletedCandidates: number;
@@ -637,36 +644,7 @@ export async function purgePiiAfterClose(): Promise<{
       )
     );
 
-  for (const t of targets) {
-    // 감사 로그 metadata 의 후보자 PII redact — 행 삭제 전에 세션 id 확보 후 처리
-    // (감사 추적성은 보존, 식별자만 [redacted]. 후보자 행 삭제 후 metadata 평문 PII 잔존 방지)
-    const sess = await db
-      .select({ id: sessions.id })
-      .from(sessions)
-      .where(eq(sessions.candidateId, t.id));
-    await redactCandidateAuditPii(
-      t.id,
-      sess.map((s) => s.id)
-    ).catch((e) => console.error(`purgePii: audit redact failed (cid=${t.id})`, e));
-    // appeal / consent / inquiry — PII 마스킹 후 유지 (감사·법적 추적용. candidate_id 는 dangling FK가 되지만 의도된 동작)
-    // H7 — appeal.reason / inquiry.message·contactEmail 은 후보자가 직접 쓴 자유서술이라
-    //      직접 식별자(이름·연락처)가 섞일 수 있다. 행 삭제 후 평문 잔존을 막기 위해 폐기.
-    await db
-      .update(appealLogs)
-      .set({ email: "[purged]", reason: "[purged]", ip: null, userAgent: null })
-      .where(eq(appealLogs.candidateId, t.id));
-    await db
-      .update(consentLogs)
-      .set({ ip: null, userAgent: null })
-      .where(eq(consentLogs.candidateId, t.id));
-    await db
-      .update(inquiries)
-      .set({ message: "[purged]", contactEmail: "[purged]", ip: null, userAgent: null })
-      .where(eq(inquiries.candidateId, t.id));
-    // candidates 행 삭제 → cascade 로 interview_sessions / interviewer_notes /
-    // candidate_attachments / screening_jobs 모두 정리
-    await db.delete(candidates).where(eq(candidates.id, t.id));
-  }
+  for (const t of targets) await purgeCandidateRow(t.id);
 
   return { deletedCandidates: targets.length };
 }
@@ -819,6 +797,98 @@ export async function remindStaleDrafts(): Promise<{ reminded: number }> {
   return { reminded };
 }
 
+
+/**
+ * 후보자 1명 완전 소거 — 감사로그 PII redact, 이의제기·문의·동의 로그 마스킹, 파일 삭제, 행 삭제(cascade).
+ * 종결 +14일 정리와 합격자 보관기간 만료가 같은 절차를 쓴다.
+ */
+async function purgeCandidateRow(candidateId: number): Promise<void> {
+  await scrubCandidateTraces(candidateId);
+  // 이력서·사진·첨부·녹음 파일 (불합격자는 이미 결정 시 폐기돼 대개 no-op, 합격자는 여기서 삭제)
+  await deleteCandidateFiles([candidateId]).catch((e) =>
+    console.error(`purge: file delete failed (cid=${candidateId})`, e)
+  );
+  // 행 삭제 → cascade 로 interview_sessions / interviewer_notes / candidate_attachments / screening_jobs 정리
+  await db.delete(candidates).where(eq(candidates.id, candidateId));
+}
+
+/**
+ * 후보자 행을 지우기 전에 다른 표에 남는 흔적 정리 — 감사로그 PII redact, 이의제기·문의·동의 로그 마스킹.
+ * 자동 정리와 담당자의 수동 삭제(단건·일괄)가 같이 쓴다(감사 M7: 수동 삭제는 이걸 안 거쳐 흔적이 남았다).
+ */
+export async function scrubCandidateTraces(candidateId: number): Promise<void> {
+  const sess = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(eq(sessions.candidateId, candidateId));
+  await redactCandidateAuditPii(
+    candidateId,
+    sess.map((x) => x.id)
+  ).catch((e) => console.error(`purge: audit redact failed (cid=${candidateId})`, e));
+  // H7 — appeal.reason / inquiry.message·contactEmail 은 자유서술이라 식별자가 섞일 수 있어 폐기.
+  await db
+    .update(appealLogs)
+    .set({ email: "[purged]", reason: "[purged]", ip: null, userAgent: null })
+    .where(eq(appealLogs.candidateId, candidateId));
+  await db
+    .update(consentLogs)
+    .set({ ip: null, userAgent: null })
+    .where(eq(consentLogs.candidateId, candidateId));
+  await db
+    .update(inquiries)
+    .set({ message: "[purged]", contactEmail: "[purged]", ip: null, userAgent: null })
+    .where(eq(inquiries.candidateId, candidateId));
+}
+
+/**
+ * 합격자 보관기간 만료 정리 — 결정일 + HIRED_RETENTION_DAYS 지난 합격자 완전 소거.
+ * 결정일(decidedAt)이 없는 합격자는 기준일을 알 수 없어 건드리지 않는다.
+ */
+export async function purgeHiredAfterRetention(): Promise<{ deleted: number }> {
+  const rows = await db
+    .select({ id: candidates.id, decidedAt: candidates.decidedAt })
+    .from(candidates)
+    .where(and(eq(candidates.outcome, "hired"), sql`${candidates.decidedAt} IS NOT NULL`));
+  const cutoffMs = Date.now() - HIRED_RETENTION_DAYS * 86_400_000;
+  // decidedAt 은 ISO·SQL 형식이 섞여 있어 문자열 비교 대신 파싱해서 비교한다.
+  const expired = rows.filter((r) => parseDbTimestamp(r.decidedAt!).getTime() < cutoffMs);
+  for (const r of expired) await purgeCandidateRow(r.id);
+  return { deleted: expired.length };
+}
+
+/**
+ * 합격자 삭제 예정 안내 — 삭제일 HIRED_RETENTION_NOTICE_DAYS 전에 법인 관리자에게 알림 1회.
+ * 매일 cron 이 "오늘 안내 구간에 막 들어온" 합격자를 법인별로 묶어 보낸다(하루 창이라 중복 없음).
+ */
+export async function remindHiredRetention(): Promise<{ notifiedOrgs: number }> {
+  const rows = await db
+    .select({ id: candidates.id, orgId: candidates.orgId, decidedAt: candidates.decidedAt })
+    .from(candidates)
+    .where(and(eq(candidates.outcome, "hired"), sql`${candidates.decidedAt} IS NOT NULL`));
+  const now = Date.now();
+  const windowEnd = now - (HIRED_RETENTION_DAYS - HIRED_RETENTION_NOTICE_DAYS) * 86_400_000;
+  const windowStart = windowEnd - 86_400_000;
+  const byOrg = new Map<number, number>();
+  for (const r of rows) {
+    if (r.orgId == null) continue;
+    const t = parseDbTimestamp(r.decidedAt!).getTime();
+    if (t >= windowStart && t < windowEnd) byOrg.set(r.orgId, (byOrg.get(r.orgId) ?? 0) + 1);
+  }
+  for (const [orgId, n] of byOrg) {
+    await notifyOrgAdmins(
+      orgId,
+      {
+        type: "announcement",
+        title: `최종 합격자 ${n}명의 정보가 ${HIRED_RETENTION_NOTICE_DAYS}일 뒤 자동 삭제됩니다 (보관 기간 1년). 필요한 자료는 미리 내려받아 두세요.`,
+        href: "/candidates",
+        payload: { kind: "hired_retention_notice", count: n },
+      },
+      { email: true }
+    ).catch((e) => console.error(`[lifecycle] 합격자 삭제 예정 안내 실패 (org=${orgId}):`, e));
+  }
+  return { notifiedOrgs: byOrg.size };
+}
+
 /** 한 사이클 — close(no-op) → purge pdf → purge pii → 만료 미해결 공고 삭제 → 임시 공고 리마인드·폐기. */
 export async function runLifecycleSweep(): Promise<{
   closed: number;
@@ -827,6 +897,8 @@ export async function runLifecycleSweep(): Promise<{
   unresolvedDeleted: Awaited<ReturnType<typeof deleteUnresolvedExpiredJobs>>;
   draftReminders: Awaited<ReturnType<typeof remindStaleDrafts>>;
   draftsPurged: Awaited<ReturnType<typeof purgeAbandonedDrafts>>;
+  hiredNotice: Awaited<ReturnType<typeof remindHiredRetention>>;
+  hiredPurge: Awaited<ReturnType<typeof purgeHiredAfterRetention>>;
 }> {
   const closed = await closeExpiredJobs();
   const pdfPurge = await purgePdfsAfterClose();
@@ -835,7 +907,12 @@ export async function runLifecycleSweep(): Promise<{
   // 리마인드를 먼저(5~7일), 그다음 폐기(7일+) — 폐기 전에 알림이 가도록 순서 보장.
   const draftReminders = await remindStaleDrafts();
   const draftsPurged = await purgeAbandonedDrafts();
+  // 안내를 먼저, 그다음 삭제 — 같은 사람이 같은 날 둘 다 걸리지 않는다(30일 차이).
+  const hiredNotice = await remindHiredRetention();
+  const hiredPurge = await purgeHiredAfterRetention();
   return {
+    hiredNotice,
+    hiredPurge,
     closed,
     pdfPurge,
     piiPurge,

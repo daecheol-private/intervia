@@ -1,19 +1,19 @@
 import { db } from "@/lib/db";
 import { jobPostings, candidates } from "@/lib/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { rateLimit } from "@/lib/rate-limit";
-import { normalizePhone } from "@/lib/phone";
+import { DUPLICATE_MESSAGE_PLAIN } from "@/lib/apply-identity";
 
 export const runtime = "nodejs";
 
 /**
- * 지원 사전 중복체크 — 파일 업로드 전에 email·전화번호로 기존 지원 여부를 확인한다.
- * 이미 지원한 지원자가 큰 파일을 Blob 에 올린 뒤에야 거부돼 고아가 남는 것을 방지(조기 UX 게이트).
- * 최종 판정은 제출 시 /api/apply/[token] 이 다시 수행하므로, 여기 통과 = 최종 통과 보장은 아니다.
- * proxy.ts matcher 가 /api/apply/* 를 제외하므로 CSRF·인증 면제 — 토큰이 곧 인증.
+ * 지원 사전 중복체크 — 업로드 전에 "같은 이력서 파일이 이미 접수됐는지"만 확인한다.
  *
- * 주의(enumeration): 공개 엔드포인트라 임의 email 의 지원 여부 조회가 이론상 가능 —
- *   rate limit 으로 대량 조회를 억제한다(원래도 최종 제출로 확인 가능한 정보라 신규 노출은 아님).
+ * 보안 감사 M3: 예전엔 이메일·전화번호만으로 기존 지원 여부를 답해 "이 사람이 이 회사에
+ * 지원했나" 조회기가 됐다. 이제 브라우저가 계산한 이력서 파일의 SHA-256 이 일치할 때만
+ * 중복이라고 답한다 — 파일 바이트를 가진 사람(본인)만 알 수 있는 값이라 제3자 조회가 안 된다.
+ * 번호·이메일 중복은 이력서를 실제로 제출했을 때만(/api/apply/[token]) 판정·안내한다.
+ * 옛 클라이언트가 email·phone 을 보내도 무시하고 duplicate:false.
  */
 export async function POST(
   req: Request,
@@ -23,14 +23,15 @@ export async function POST(
   if (limited) return limited;
 
   const { token } = await params;
-  let body: { email?: string; phone?: string };
+  let body: { resume_sha256?: unknown };
   try {
-    body = (await req.json()) as { email?: string; phone?: string };
+    body = (await req.json()) as typeof body;
   } catch {
     return Response.json({ duplicate: false });
   }
-  const email = (body.email || "").trim().toLowerCase();
-  const normPhone = normalizePhone(body.phone);
+  const hash =
+    typeof body.resume_sha256 === "string" ? body.resume_sha256.toLowerCase() : "";
+  if (!/^[0-9a-f]{64}$/.test(hash)) return Response.json({ duplicate: false });
 
   const [job] = await db
     .select({ id: jobPostings.id })
@@ -38,40 +39,15 @@ export async function POST(
     .where(eq(jobPostings.applyToken, token));
   if (!job) return Response.json({ duplicate: false });
 
-  // 이메일 중복 (공고당 1회)
-  if (email && /\S+@\S+\.\S+/.test(email)) {
-    const [dup] = await db
-      .select({ id: candidates.id })
-      .from(candidates)
-      .where(and(eq(candidates.jobId, job.id), eq(candidates.email, email)));
-    if (dup)
-      return Response.json({
-        duplicate: true,
-        code: "already_applied",
-        message:
-          "이미 이 공고에 지원하셨습니다. 지원서는 한 번만 제출할 수 있습니다.",
-      });
-  }
-
-  // 연락처 중복 — 입력된 경우만. 저장값의 구분자(-, 공백, 괄호, 점)를 제거해 숫자만 비교.
-  if (normPhone) {
-    const [dup] = await db
-      .select({ id: candidates.id })
-      .from(candidates)
-      .where(
-        and(
-          eq(candidates.jobId, job.id),
-          sql`replace(replace(replace(replace(replace(${candidates.phone}, '-', ''), ' ', ''), '(', ''), ')', ''), '.', '') = ${normPhone}`
-        )
-      );
-    if (dup)
-      return Response.json({
-        duplicate: true,
-        code: "already_applied",
-        message:
-          "이미 이 연락처로 지원하신 내역이 있습니다. 지원서는 한 번만 제출할 수 있습니다.",
-      });
-  }
-
+  const [dup] = await db
+    .select({ id: candidates.id })
+    .from(candidates)
+    .where(and(eq(candidates.jobId, job.id), eq(candidates.resumeHash, hash)));
+  if (dup)
+    return Response.json({
+      duplicate: true,
+      code: "already_applied",
+      message: DUPLICATE_MESSAGE_PLAIN,
+    });
   return Response.json({ duplicate: false });
 }

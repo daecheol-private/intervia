@@ -1,9 +1,14 @@
-# Manually trigger production screening queue + interview expiry.
+﻿# Manually trigger production screening queue + interview expiry.
 # Use during beta to process the queue without cron-job.org.
 # Usage: D:\intervia\interviewer\scripts\process-now.ps1
 
 $BaseUrl = "https://intervia.kr"
-$Token   = "416682340d1d8d0c4b7b2cae3dade7896c5729b52ee5885dfd98e05058f4b16a"
+# CRON_SECRET 은 저장소에 두지 않는다 — 실행 전 `$env:CRON_SECRET = "<운영 값>"` 으로 설정.
+$Token = $env:CRON_SECRET
+if (-not $Token) {
+  Write-Host "CRON_SECRET 환경변수가 없습니다. 먼저 `$env:CRON_SECRET 을 설정하세요 (운영 값, Vercel 환경변수 참고)." -ForegroundColor Red
+  exit 1
+}
 
 Write-Host "[1/2] process-screenings ..." -ForegroundColor Cyan
 $res1 = curl.exe -X POST "$BaseUrl/api/cron/process-screenings" `

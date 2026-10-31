@@ -39,6 +39,8 @@ export async function drainQueuedDecisions(now = new Date()): Promise<{
     // 전화·문자로 이미 통보해 '이미 통보함' 표시된 후보는 제외 (이중 통보 방지).
     // 표시 시 큐 플래그도 내리지만, 순서가 엇갈려도 안 나가도록 조건으로 한 번 더 막는다.
     isNull(candidates.decisionNotifiedExternallyAt),
+    // 명의도용 신고된 지원서는 통보 대상 아님(이메일이 본인 것이 아닐 수 있음).
+    isNull(candidates.identityReportedAt),
     sql`${candidates.decisionEmailCount} < ${MAX_DECISION_EMAILS_PER_CANDIDATE}`
   );
 

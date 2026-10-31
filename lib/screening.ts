@@ -7,7 +7,7 @@ import {
   screeningCache,
   screeningJobs,
 } from "./schema";
-import { eq, and, isNotNull, ne, lt } from "drizzle-orm";
+import { eq, and, isNotNull, isNull, ne, lt } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { deleteFilesForCandidate } from "./candidate-files";
 import {
@@ -18,7 +18,7 @@ import {
 import { parseChecklist } from "./job-checklist";
 import { generateJSON, generateJSONMultimodal } from "./gemini";
 import { Type } from "@google/genai";
-import { chargeFeature } from "./tokens";
+import { chargeFeature, refundFeature } from "./tokens";
 import { extractTextFromBuffer } from "./parsers";
 import { extractPII } from "./pii-extract";
 import { extractEducation } from "./education-extract";
@@ -883,6 +883,15 @@ export class ScreeningError extends Error {
  * @throws ScreeningError(transient=false) — 영구 (마스킹 텍스트 없음, JSON 파싱 실패 등)
  */
 export async function runScreeningOnce(candidateId: number): Promise<void> {
+  // 명의도용 신고된 지원서는 파싱·평가·과금 모두 하지 않는다 (lib/apply-identity.ts).
+  const [reported] = await db
+    .select({ at: candidates.identityReportedAt })
+    .from(candidates)
+    .where(eq(candidates.id, candidateId));
+  if (reported?.at) {
+    throw new ScreeningError("명의도용 신고된 지원서라 평가를 중단했습니다.", false);
+  }
+
   // 1단계 — 아직 파싱 안 됐으면 여기서 파싱+마스킹 (업로드 시 껍데기로만 생성됨).
   await ensureParsed(candidateId);
 
@@ -907,7 +916,9 @@ export async function runScreeningOnce(candidateId: number): Promise<void> {
         and(
           eq(candidates.jobId, candidate.jobId),
           eq(candidates.resumeContentHash, candidate.resumeContentHash),
-          lt(candidates.id, candidate.id)
+          lt(candidates.id, candidate.id),
+          // 명의도용 신고된 지원서와 내용이 같아도 새 지원서(번호 주인)를 지우지 않는다.
+          isNull(candidates.identityReportedAt)
         )
       )
       .orderBy(candidates.id)
@@ -1122,11 +1133,14 @@ export async function chargeScreeningSuccess(
       orgId: candidates.orgId,
       name: candidates.name,
       aiScreeningDisabled: jobPostings.aiScreeningDisabled,
+      identityReportedAt: candidates.identityReportedAt,
     })
     .from(candidates)
     .innerJoin(jobPostings, eq(jobPostings.id, candidates.jobId))
     .where(eq(candidates.id, candidateId));
   if (!candidate?.orgId) return;
+  // 평가 도중 명의도용 신고된 지원서는 과금하지 않는다.
+  if (candidate.identityReportedAt) return;
   // AI 평가를 끈 공고는 LLM 평가를 하지 않았으므로 서류 평가 과금도 하지 않는다.
   if (candidate.aiScreeningDisabled) return;
   // 차감 주체 = 평가를 큐에 넣은 운영자 (업로드/재평가 요청자).
@@ -1142,4 +1156,18 @@ export async function chargeScreeningSuccess(
     userId: sjob?.enqueuedByUserId ?? null,
     memo: candidate.name,
   });
+  // 위 확인과 차감 사이에 신고가 끝났으면 신고 쪽 환불이 이 차감을 못 봤을 수 있다 — 여기서 환불(멱등).
+  const [after] = await db
+    .select({ at: candidates.identityReportedAt })
+    .from(candidates)
+    .where(eq(candidates.id, candidateId));
+  if (after?.at) {
+    await refundFeature({
+      orgId: candidate.orgId,
+      feature: "resume_upload",
+      refType: "screening_job",
+      refId: jobId,
+      memo: "명의도용 신고 — 서류평가 환불",
+    });
+  }
 }

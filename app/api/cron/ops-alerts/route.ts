@@ -1,5 +1,4 @@
-import { getCurrentUser } from "@/lib/auth";
-import { secretEquals } from "@/lib/secret-compare";
+import { authorizeCron } from "@/lib/cron-auth";
 import { collectOpsMetrics, evaluateAlerts, formatOpsReport } from "@/lib/ops-monitor";
 import { notifyOps } from "@/lib/error-reporter";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
@@ -17,15 +16,8 @@ export const runtime = "nodejs";
  * 안티스팸: 상태 저장 없이 임계 초과 시마다 보낸다 — 문제가 지속되면 주기마다 반복 통지(의도).
  * 둘 다 미설정이면 응답 JSON·로그로만 남는다(graceful).
  */
-async function authorize(req: Request): Promise<Response | null> {
-  const secret = process.env.CRON_SECRET;
-  const header = req.headers.get("authorization");
-  if (secret && secretEquals(header, `Bearer ${secret}`)) return null;
-  // 시크릿 미설정 시에만 Vercel cron 헤더 허용. 운영(시크릿 설정)에선 헤더 위조 우회 차단.
-  if (req.headers.get("x-vercel-cron") === "1" && !secret) return null;
-  const me = await getCurrentUser();
-  if (me?.role === "system_admin") return null;
-  return new Response("권한 없음", { status: 401 });
+function authorize(req: Request): Promise<Response | null> {
+  return authorizeCron(req, "cron");
 }
 
 export async function GET(req: Request) {

@@ -87,6 +87,9 @@ export type Candidate = {
   // unreadCommentCount=현재 사용자가 안 읽은 남의 코멘트 수(서버 읽음선 기준, 기기 무관).
   commentCount: number;
   unreadCommentCount: number;
+  // 명의도용 신고 (lib/apply-identity.ts) — 신고된 지원서 표시 + 새 지원서의 관련 지원서·동일인 의심.
+  identityReportedAt?: string | null;
+  identityRelated?: { ids: number[]; sameName: boolean } | null;
 };
 
 /** 면접 확정 일정 항목 (GET /api/jobs/[id]/round1-schedule). 1차·2차 통합. */

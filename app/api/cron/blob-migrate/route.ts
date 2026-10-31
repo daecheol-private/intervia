@@ -18,8 +18,7 @@ import {
   organizations,
 } from "@/lib/schema";
 import { eq, sql } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/auth";
-import { secretEquals } from "@/lib/secret-compare";
+import { authorizeCron } from "@/lib/cron-auth";
 import {
   saveFile,
   fetchBlobFile,
@@ -33,13 +32,8 @@ export const maxDuration = 300;
 
 const LEGACY_LIKE = "%.public.blob.vercel-storage.com%";
 
-async function authorize(req: Request): Promise<Response | null> {
-  const secret = process.env.CRON_SECRET;
-  const header = req.headers.get("authorization");
-  if (secret && secretEquals(header, `Bearer ${secret}`)) return null;
-  const me = await getCurrentUser();
-  if (me?.role === "system_admin") return null;
-  return new Response("권한 없음", { status: 401 });
+function authorize(req: Request): Promise<Response | null> {
+  return authorizeCron(req, "cron");
 }
 
 type Target = {

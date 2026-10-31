@@ -13,6 +13,14 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
   },
+  // script-src 는 우선 보고 전용으로 관찰(감사 M17) — 외부 스크립트는 토스 결제 SDK·다음 우편번호만 허용.
+  // 1~2주 csp_violation 로그가 조용하면 위 Content-Security-Policy 로 옮겨 강제한다.
+  // inline 은 Next 부트스트랩 스크립트 때문에 nonce 도입 전까지 허용.
+  {
+    key: "Content-Security-Policy-Report-Only",
+    value:
+      "script-src 'self' 'unsafe-inline' https://js.tosspayments.com https://*.tosspayments.com https://t1.daumcdn.net https://*.daumcdn.net; report-uri /api/health/csp-report",
+  },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   // MIME 스니핑 차단 (업로드/다운로드 라우트 보호).
   { key: "X-Content-Type-Options", value: "nosniff" },

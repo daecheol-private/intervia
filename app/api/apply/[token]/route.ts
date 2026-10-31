@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { jobPostings, candidates, candidateAttachments } from "@/lib/schema";
-import { eq, and, lt, sql } from "drizzle-orm";
+import { eq, and, lt, isNull, notInArray } from "drizzle-orm";
+import { after } from "next/server";
 import { createHash } from "node:crypto";
 import { saveFile, fetchBlobFile } from "@/lib/storage";
 import {
@@ -22,11 +23,37 @@ import { extractKoreanNameFromFilename } from "@/lib/file-classify";
 import { normalizePhone } from "@/lib/phone";
 import { log } from "@/lib/logger";
 import { blobScopePrefix, isScopedBlobUrl } from "@/lib/blob-scope";
+import { verifyPhoneTicket } from "@/lib/phone-otp";
+import {
+  DUPLICATE_MESSAGE_OTP,
+  DUPLICATE_MESSAGE_PLAIN,
+  findPhoneMatches,
+  reportEligible,
+  identityOtpAvailable,
+  issueDupToken,
+  claimIdentityReport,
+  releaseIdentityReport,
+  finalizeIdentityReport,
+  sendIdentityReportNotices,
+} from "@/lib/apply-identity";
 
 export const runtime = "nodejs";
 
-function bad(message: string, status = 400, code?: string) {
-  return Response.json({ message, code }, { status });
+function bad(
+  message: string,
+  status = 400,
+  code?: string,
+  extra?: Record<string, unknown>
+) {
+  return Response.json({ message, code, ...extra }, { status });
+}
+
+// 중복 안내 — 어느 항목(파일·번호·이메일)이 겹쳤는지 밝히지 않는다. 번호가 겹쳤고 인증이 가능하면
+// 휴대폰 인증용 dupToken 을 함께 준다(이 응답을 받은 요청만 인증번호를 요청할 수 있음).
+function duplicateResponse(dupToken: string | null) {
+  return dupToken
+    ? bad(DUPLICATE_MESSAGE_OTP, 409, "already_applied", { otp: { dupToken } })
+    : bad(DUPLICATE_MESSAGE_PLAIN, 409, "already_applied");
 }
 
 // 지원 1건 전체 업로드 상한 — 개별 파일 10MB(MAX_ATTACHMENT_SIZE)에 더해, 이력서+첨부
@@ -54,7 +81,8 @@ type IncomingFile = {
  *
  * 보안: proxy.ts matcher 가 /api/apply/* 를 제외 → CSRF·인증 면제(토큰=인증). 공개이므로
  *   - IP rate limit 으로 봇·플러드 차단(식별 아님)
- *   - 동일인 중복은 이메일 + 파일 해시로 차단
+ *   - 동일인 중복은 파일 해시 + 휴대폰 번호(주 키) + 이메일로 차단. 번호 주인은 휴대폰 인증 후
+ *     명의도용 신고와 함께 새로 제출할 수 있다 (lib/apply-identity.ts)
  *   - 잔액 0 이어도 업로드는 받는다(지원자 유실 방지) — 평가는 큐가 충전 후 재개.
  */
 export async function POST(
@@ -84,6 +112,8 @@ export async function POST(
   let consentCollection = false;
   let consentAi = false;
   let referrerHost: string | null = null;
+  // 명의도용 신고 증표 (휴대폰 인증 통과 후 재제출 시) — lib/phone-otp.ts verifyPhoneTicket.
+  let identityTicket: string | null = null;
   let resume: IncomingFile;
   const attachments: IncomingFile[] = [];
 
@@ -96,6 +126,7 @@ export async function POST(
       consent_collection_use?: boolean;
       consent_ai_decision?: boolean;
       referrer?: string;
+      identity_ticket?: string;
       resume?: { url?: string; name?: string; size?: number };
       attachments?: Array<{ url?: string; name?: string; size?: number }>;
     };
@@ -111,6 +142,7 @@ export async function POST(
     consentCollection = m.consent_collection_use === true;
     consentAi = m.consent_ai_decision === true;
     referrerHost = normalizeReferrerHost(m.referrer ?? null);
+    identityTicket = typeof m.identity_ticket === "string" ? m.identity_ticket.slice(0, 300) : null;
 
     if (!m.resume?.url || !m.resume.name)
       return bad("이력서 파일을 첨부해 주세요.");
@@ -168,6 +200,8 @@ export async function POST(
     consentAi = form.get("consent_ai_decision") === "true";
     // 유입 출처 — 폼이 보낸 document.referrer 에서 호스트만 (자기 도메인·비정상 값은 null).
     referrerHost = normalizeReferrerHost(form.get("referrer"));
+    const tk = form.get("identity_ticket");
+    identityTicket = typeof tk === "string" && tk ? tk.slice(0, 300) : null;
 
     const fileEntry = form.get("file");
     if (!(fileEntry instanceof File) || fileEntry.size === 0)
@@ -225,50 +259,64 @@ export async function POST(
   const magicErr = verifyMagic(resume.name, resume.buf);
   if (magicErr) return bad(magicErr);
 
-  // 동일인 중복 — 이메일(공고당 1회) + 파일 해시(같은 파일 재업로드).
+  // 중복 판정 — 같은 파일(바이트 해시) / 휴대폰 번호(정규화, 주 키) / 이메일. 안내 문구는 어느 항목이
+  // 겹쳤는지 밝히지 않는다. 번호가 겹치면 그 번호로 휴대폰 인증 후 명의도용 신고 + 새 지원이 가능하다.
   const resumeHash = createHash("sha256").update(resume.buf).digest("hex");
-  const [dupEmail] = await db
-    .select({ id: candidates.id })
-    .from(candidates)
-    .where(and(eq(candidates.jobId, job.id), eq(candidates.email, email)));
-  if (dupEmail)
-    return bad(
-      "이미 이 공고에 지원하셨습니다. 지원서는 한 번만 제출할 수 있습니다.",
-      409,
-      "already_applied"
-    );
-  // 연락처 중복 — 다른 이메일로 재지원하는 동일인 차단(입력된 경우만, 저장값 구분자 제거 후 숫자 비교).
-  const normPhone = normalizePhone(phone);
-  if (normPhone) {
-    const [dupPhone] = await db
-      .select({ id: candidates.id })
-      .from(candidates)
-      .where(
-        and(
-          eq(candidates.jobId, job.id),
-          sql`replace(replace(replace(replace(replace(${candidates.phone}, '-', ''), ' ', ''), '(', ''), ')', ''), '.', '') = ${normPhone}`
-        )
-      );
-    if (dupPhone)
-      return bad(
-        "이미 이 연락처로 지원하신 내역이 있습니다. 지원서는 한 번만 제출할 수 있습니다.",
-        409,
-        "already_applied"
-      );
-  }
   const [dupFile] = await db
     .select({ id: candidates.id })
     .from(candidates)
     .where(
       and(eq(candidates.jobId, job.id), eq(candidates.resumeHash, resumeHash))
     );
-  if (dupFile)
-    return bad("이미 동일한 이력서가 제출되어 있습니다.", 409, "duplicate_resume");
+  if (dupFile) return duplicateResponse(null);
+
+  const normPhone = normalizePhone(phone);
+  const phoneMatches = await findPhoneMatches(job.id, normPhone);
+  const canReport = reportEligible(phoneMatches);
+  // 명의도용 신고 모드 — 이 번호로 받은 인증 증표가 있고, 이 번호로 아직 신고한 적이 없을 때만.
+  const reporting =
+    !!identityTicket &&
+    canReport &&
+    verifyPhoneTicket(identityTicket, "apply_duplicate", phone);
+  const reportTargets = reporting ? phoneMatches.map((m) => m.id) : [];
+  const otpToken =
+    canReport && identityOtpAvailable(phone) ? issueDupToken(job.id, normPhone) : null;
+
+  if (phoneMatches.length > 0 && !reporting) {
+    if (identityTicket && otpToken)
+      return bad(
+        "휴대폰 인증이 만료되었거나 올바르지 않습니다. 다시 인증해 주세요.",
+        409,
+        "already_applied",
+        { otp: { dupToken: otpToken } }
+      );
+    return duplicateResponse(otpToken);
+  }
+  // 이메일 — 신고 대상 행(번호 주인이 아니라고 확인한 지원서)과의 일치는 중복으로 보지 않는다.
+  const [dupEmail] = await db
+    .select({ id: candidates.id })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.jobId, job.id),
+        eq(candidates.email, email),
+        reportTargets.length ? notInArray(candidates.id, reportTargets) : undefined
+      )
+    );
+  if (dupEmail) return duplicateResponse(null);
 
   const candidateName =
     name || extractKoreanNameFromFilename(resume.name) || "(이름 미상)";
 
+  // 신고 선점 — 동시에 같은 번호로 두 번 신고해도 한 요청만 통과(번호당 공고별 1회).
+  let claim: { ids: number[]; at: string } = { ids: [], at: "" };
+  if (reporting) {
+    claim = await claimIdentityReport(reportTargets);
+    if (claim.ids.length === 0) return duplicateResponse(null);
+  }
+
   let candidateId: number;
+  let insertedId: number | null = null;
   try {
     // storedKey 있음(Blob 직접 업로드) → 재저장 안 함. 없음(서버 경유) → 지금 저장.
     const storedKey =
@@ -292,9 +340,11 @@ export async function POST(
         // 후보자 본인 동의를 출처에서 직접 받음 → 평가 게이트 충족 (HR attest 불요).
         applicantConsentConfirmedAt: job.aiScreeningDisabled ? null : now,
         applicantConsentConfirmedByUserId: null,
+        identityReportOf: claim.ids.length ? Math.min(...claim.ids) : null,
       })
       .returning();
     candidateId = inserted.id;
+    insertedId = inserted.id;
 
     // 동시 제출 레이스 방어 — 위 이메일 dup 체크와 이 INSERT 사이에 같은 이메일의
     // 다른 동시 지원이 끼어들면(파일 바이트가 달라 resume_hash 유니크도 못 막음) 후보자
@@ -308,17 +358,15 @@ export async function POST(
           and(
             eq(candidates.jobId, job.id),
             eq(candidates.email, email),
-            lt(candidates.id, candidateId)
+            lt(candidates.id, candidateId),
+            isNull(candidates.identityReportedAt)
           )
         )
         .limit(1);
       if (earlier) {
         await db.delete(candidates).where(eq(candidates.id, candidateId));
-        return bad(
-          "이미 이 공고에 지원하셨습니다. 지원서는 한 번만 제출할 수 있습니다.",
-          409,
-          "already_applied"
-        );
+        await releaseIdentityReport(claim.ids, claim.at);
+        return duplicateResponse(null);
       }
     }
 
@@ -332,6 +380,9 @@ export async function POST(
     });
   } catch (err) {
     log.error("apply_upload_failed", err, { jobId: job.id });
+    if (insertedId == null) await releaseIdentityReport(claim.ids, claim.at).catch(() => {});
+    else if (claim.ids.length)
+      await finalizeIdentityReport({ orgId: job.orgId, reportedIds: claim.ids, newCandidateId: insertedId }).catch(() => {});
     return bad(
       "지원서 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
       500
@@ -381,6 +432,37 @@ export async function POST(
       consents: { collection_use: consentCollection, ai_decision: consentAi },
     },
   });
+
+  if (claim.ids.length) {
+    const reported = phoneMatches.filter((m) => claim.ids.includes(m.id));
+    let refunded = 0;
+    try {
+      ({ refunded } = await finalizeIdentityReport({
+        orgId: job.orgId,
+        reportedIds: claim.ids,
+        newCandidateId: candidateId,
+      }));
+    } catch (e) {
+      log.error("identity_report_finalize_failed", e, { jobId: job.id, candidateId });
+    }
+    logAudit(req, {
+      actorRole: "candidate",
+      action: "candidate.identity_report",
+      resourceType: "candidate",
+      resourceId: candidateId,
+      orgId: job.orgId,
+      jobId: job.id,
+      metadata: { reportedCandidateIds: claim.ids, refunded },
+    });
+    after(() =>
+      sendIdentityReportNotices({ jobId: job.id, orgId: job.orgId, reported }).catch((e) =>
+        log.warn("identity_report_notice_failed", {
+          jobId: job.id,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      )
+    );
+  }
 
   // 서류평가 큐 등록 — 워커가 파싱·마스킹·LLM 평가 수행(aiScreeningDisabled 면 평가는 건너뜀).
   // 잔액 0 이면 큐가 paused 로 보류했다가 충전 후 자동 재개(reconcileBalanceHolds).

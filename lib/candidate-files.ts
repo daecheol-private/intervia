@@ -9,7 +9,7 @@
  * 같은 경로(메인 이력서가 attachments 에도 등재된 케이스) 는 dedup.
  */
 import { db } from "./db";
-import { candidates, candidateAttachments } from "./schema";
+import { candidates, candidateAttachments, recordedInterviews } from "./schema";
 import { eq, inArray } from "drizzle-orm";
 import { deleteFile } from "./storage";
 
@@ -34,6 +34,12 @@ export async function deleteCandidateFiles(
     .from(candidateAttachments)
     .where(inArray(candidateAttachments.candidateId, candidateIds));
 
+  // 대면 면접 녹음 오디오 — 전사 전이면 남아 있다(감사 M7: 후보 삭제 후 최대 37일 잔존하던 경로)
+  const audioRows = await db
+    .select({ key: recordedInterviews.audioBlobKey })
+    .from(recordedInterviews)
+    .where(inArray(recordedInterviews.candidateId, candidateIds));
+
   // 중복 제거 — 같은 파일 두 번 삭제 시도 방지
   const paths = new Set<string>();
   for (const r of resumeRows) {
@@ -42,6 +48,9 @@ export async function deleteCandidateFiles(
   }
   for (const r of attRows) {
     if (r.filePath) paths.add(r.filePath);
+  }
+  for (const r of audioRows) {
+    if (r.key) paths.add(r.key);
   }
 
   let deletedFiles = 0;

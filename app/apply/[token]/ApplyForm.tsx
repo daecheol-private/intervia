@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { FileText, Paperclip, X } from "lucide-react";
+import { AlertCircle, FileText, MessageCircle, Paperclip, ShieldCheck, X } from "lucide-react";
+import { Button, Checkbox, Input } from "@/app/components/ui";
 import { upload } from "@vercel/blob/client";
 import { blobScopePrefix } from "@/lib/blob-scope";
 import { isValidBrandColor, textColorOn } from "@/lib/brand-color";
@@ -12,6 +13,21 @@ const MAX_FILE_MB = 10;
 const ACCEPT = ".pdf,.docx,.hwpx";
 const ATTACH_ACCEPT =
   ".pdf,.docx,.doc,.hwp,.hwpx,.png,.jpg,.jpeg,.pptx,.xlsx,.txt,.md";
+
+type UploadedFile = { url: string; name: string; size: number };
+
+/** 이력서 파일 SHA-256 (사전 중복체크용). 보안 컨텍스트가 아니면 null → 사전체크 생략. */
+async function sha256Hex(f: File): Promise<string | null> {
+  try {
+    if (!globalThis.crypto?.subtle) return null;
+    const d = await crypto.subtle.digest("SHA-256", await f.arrayBuffer());
+    return Array.from(new Uint8Array(d))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return null;
+  }
+}
 
 export default function ApplyForm({
   token,
@@ -43,6 +59,31 @@ export default function ApplyForm({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const resumeInputRef = useRef<HTMLInputElement>(null);
+  // 중복 안내 + 명의도용 신고(휴대폰 인증) — dupToken 이 있으면 인증번호를 요청할 수 있다.
+  const [dup, setDup] = useState<{ message: string; dupToken: string | null } | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [notMine, setNotMine] = useState(false);
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpInfo, setOtpInfo] = useState<string | null>(null);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpUnavailable, setOtpUnavailable] = useState(false);
+  // 이미 Blob 에 올린 파일 — 인증 후 재제출 때 다시 올리지 않는다. 파일을 바꾸면 비운다.
+  const uploadedRef = useRef<{ resume: UploadedFile; attachments: UploadedFile[] } | null>(null);
+
+  function resetDup() {
+    setDup(null);
+    setOtpSent(false);
+    setOtpCode("");
+    setNotMine(false);
+    setOtpInfo(null);
+    setOtpError(null);
+    setOtpUnavailable(false);
+  }
+  function filesChanged() {
+    uploadedRef.current = null;
+    resetDup();
+  }
 
   // 법인 브랜딩 — 헤더 밴드 배경 + 제출 버튼. 밴드 위 글자 대비는 자동 보장(textColorOn).
   const color = brandColor && isValidBrandColor(brandColor) ? brandColor : null;
@@ -62,10 +103,12 @@ export default function ApplyForm({
 
   function removeResume() {
     setFile(null);
+    filesChanged();
     if (resumeInputRef.current) resumeInputRef.current.value = "";
   }
   function removeAttachment(idx: number) {
     setAttachments((prev) => prev.filter((_, i) => i !== idx));
+    filesChanged();
   }
 
   const canSubmit =
@@ -102,33 +145,59 @@ export default function ApplyForm({
     }
     setSubmitting(true);
     setProgress(null);
+    resetDup();
     try {
-      // 사전 중복체크 — 파일 업로드 전에 email·연락처로 기존 지원 여부 확인(Blob 낭비·고아 방지).
-      // 실패(네트워크 등)는 무시하고 진행 — 최종 제출(/api/apply/[token])이 다시 검증한다.
-      try {
-        const pre = await fetch(`/api/apply/${token}/precheck`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.trim(), phone: phone.trim() }),
-        });
-        if (pre.ok) {
-          const pj = (await pre.json()) as { duplicate?: boolean; message?: string };
-          if (pj?.duplicate) {
-            setError(pj.message || "이미 지원하신 내역이 있습니다.");
-            setSubmitting(false);
-            return;
+      // 사전 중복체크 — 같은 이력서 파일(SHA-256)이 이미 접수됐는지만 확인(업로드 낭비 방지).
+      // 번호·이메일 중복은 제출 시에만 판정한다(사전 조회로 남의 지원 여부를 묻지 못하게 — 감사 M3).
+      if (!uploadedRef.current) {
+        const hash = await sha256Hex(file);
+        if (hash) {
+          try {
+            const pre = await fetch(`/api/apply/${token}/precheck`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ resume_sha256: hash }),
+            });
+            if (pre.ok) {
+              const pj = (await pre.json()) as { duplicate?: boolean; message?: string };
+              if (pj?.duplicate) {
+                setDup({
+                  message: pj.message || "이미 이 공고에 접수된 지원서가 있습니다.",
+                  dupToken: null,
+                });
+                setSubmitting(false);
+                return;
+              }
+            }
+          } catch {
+            /* 사전 체크 실패는 무시 — 최종 제출에서 다시 검증 */
           }
         }
-      } catch {
-        /* 사전 체크 실패는 무시 — 최종 제출에서 다시 검증 */
       }
+      await sendApplication(null);
+    } catch (err) {
+      // upload() 실패(형식·크기·네트워크)는 서버 토큰 라우트가 던진 한국어 메시지를 그대로 노출.
+      setProgress(null);
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+      );
+      setSubmitting(false);
+    }
+  }
 
-      // Vercel 서버 함수 본문 한도(4.5MB) 회피 — 브라우저에서 Vercel Blob 으로 직접 업로드 후
-      // 서버에는 manifest(JSON)만 전송. 최대 10MB 까지 (4.5~10MB PDF 가 413 으로 잘리던 문제 해결).
-      // dev/blob 미설정 환경에서는 NEXT_PUBLIC_BLOB_CLIENT_UPLOAD!=1 → 기존 FormData 경로.
-      const useBlobUpload = process.env.NEXT_PUBLIC_BLOB_CLIENT_UPLOAD === "1";
-      let res: Response;
-      if (useBlobUpload) {
+  // 실제 제출. 명의도용 신고 재제출(ticket)이면 이미 올린 파일(uploadedRef)을 그대로 다시 쓴다.
+  async function sendApplication(ticket: string | null) {
+    if (!file) return;
+    // Vercel 서버 함수 본문 한도(4.5MB) 회피 — 브라우저에서 Vercel Blob 으로 직접 업로드 후
+    // 서버에는 manifest(JSON)만 전송. 최대 10MB 까지 (4.5~10MB PDF 가 413 으로 잘리던 문제 해결).
+    // dev/blob 미설정 환경에서는 NEXT_PUBLIC_BLOB_CLIENT_UPLOAD!=1 → 기존 FormData 경로.
+    const useBlobUpload = process.env.NEXT_PUBLIC_BLOB_CLIENT_UPLOAD === "1";
+    let res: Response;
+    if (useBlobUpload) {
+      let uploaded = uploadedRef.current;
+      if (!uploaded) {
         // 전체 바이트 대비 진행률 — 파일별 onUploadProgress 를 누적해 표시.
         const uploadTotal =
           file.size + attachments.reduce((s, a) => s + a.size, 0) || 1;
@@ -148,7 +217,7 @@ export default function ApplyForm({
           onUploadProgress: (p) => showProgress(p.loaded),
         });
         uploadedBytes += file.size;
-        const attBlobs: { url: string; name: string; size: number }[] = [];
+        const attBlobs: UploadedFile[] = [];
         for (const a of attachments) {
           const r = await upload(blobPrefix + a.name, a, {
             access: "private",
@@ -160,60 +229,133 @@ export default function ApplyForm({
           uploadedBytes += a.size;
           attBlobs.push({ url: r.url, name: a.name, size: a.size });
         }
-        setProgress(100);
-        res = await fetch(`/api/apply/${token}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: name.trim(),
-            email: email.trim(),
-            phone: phone.trim(),
-            consent_collection_use: agreeCollection,
-            consent_ai_decision: agreeAi,
-            // 유입 출처(어느 채용사이트에서 왔는지) — 서버가 호스트만 추려 저장.
-            referrer: document.referrer || undefined,
-            resume: { url: resumeBlob.url, name: file.name, size: file.size },
-            attachments: attBlobs,
-          }),
-        });
-      } else {
-        const fd = new FormData();
-        fd.append("name", name.trim());
-        fd.append("email", email.trim());
-        fd.append("phone", phone.trim());
-        fd.append("file", file);
-        for (const a of attachments) fd.append("attachment", a);
-        fd.append("consent_collection_use", agreeCollection ? "true" : "false");
-        fd.append("consent_ai_decision", agreeAi ? "true" : "false");
-        if (document.referrer) fd.append("referrer", document.referrer);
-        res = await fetch(`/api/apply/${token}`, {
-          method: "POST",
-          body: fd,
-        });
+        uploaded = {
+          resume: { url: resumeBlob.url, name: file.name, size: file.size },
+          attachments: attBlobs,
+        };
+        uploadedRef.current = uploaded;
       }
-      if (!res.ok) {
-        let msg = "지원서 제출에 실패했습니다. 잠시 후 다시 시도해 주세요.";
-        try {
-          const j = await res.json();
-          if (j?.message) msg = j.message;
-        } catch {
-          /* non-json */
-        }
-        setProgress(null);
+      setProgress(100);
+      res = await fetch(`/api/apply/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          consent_collection_use: agreeCollection,
+          consent_ai_decision: agreeAi,
+          // 유입 출처(어느 채용사이트에서 왔는지) — 서버가 호스트만 추려 저장.
+          referrer: document.referrer || undefined,
+          resume: uploaded.resume,
+          attachments: uploaded.attachments,
+          identity_ticket: ticket ?? undefined,
+        }),
+      });
+    } else {
+      const fd = new FormData();
+      fd.append("name", name.trim());
+      fd.append("email", email.trim());
+      fd.append("phone", phone.trim());
+      fd.append("file", file);
+      for (const a of attachments) fd.append("attachment", a);
+      fd.append("consent_collection_use", agreeCollection ? "true" : "false");
+      fd.append("consent_ai_decision", agreeAi ? "true" : "false");
+      if (document.referrer) fd.append("referrer", document.referrer);
+      if (ticket) fd.append("identity_ticket", ticket);
+      res = await fetch(`/api/apply/${token}`, {
+        method: "POST",
+        body: fd,
+      });
+    }
+    if (!res.ok) {
+      let msg = "지원서 제출에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+      let j: { message?: string; code?: string; otp?: { dupToken?: string } } | null = null;
+      try {
+        j = await res.json();
+        if (j?.message) msg = j.message;
+      } catch {
+        /* non-json */
+      }
+      setProgress(null);
+      setSubmitting(false);
+      if (res.status === 409 && j?.code === "already_applied") {
+        resetDup();
+        setDup({ message: msg, dupToken: j.otp?.dupToken ?? null });
+      } else {
         setError(msg);
-        setSubmitting(false);
+      }
+      return;
+    }
+    setDup(null);
+    setDone(true);
+  }
+
+  async function callIdentityOtp(body: Record<string, unknown>) {
+    const res = await fetch(`/api/apply/${token}/identity-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: phone.trim(), dupToken: dup?.dupToken, ...body }),
+    });
+    let j: { ok?: boolean; reason?: string; message?: string; ticket?: string } = {};
+    try {
+      j = await res.json();
+    } catch {
+      /* non-json */
+    }
+    return { status: res.status, j };
+  }
+
+  async function sendOtp() {
+    if (!dup?.dupToken) return;
+    setOtpBusy(true);
+    setOtpError(null);
+    try {
+      const { status, j } = await callIdentityOtp({ action: "send" });
+      if (j.ok) {
+        setOtpSent(true);
+        setOtpInfo("입력하신 휴대폰 번호로 인증번호를 보냈습니다. 카카오톡(또는 문자)을 확인해 주세요. 5분 동안 유효합니다.");
+      } else if (j.reason === "unavailable" || j.reason === "not_eligible") {
+        // 인증을 쓸 수 없으면 기존처럼 중복 차단만 안내.
+        setOtpUnavailable(true);
+      } else {
+        setOtpError(
+          j.message ||
+            (status === 429
+              ? "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."
+              : "인증번호를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.")
+        );
+      }
+    } catch {
+      setOtpError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setOtpBusy(false);
+    }
+  }
+
+  async function verifyAndResubmit() {
+    if (!dup?.dupToken || otpCode.length !== 6 || !notMine) return;
+    setOtpBusy(true);
+    setOtpError(null);
+    try {
+      const { j } = await callIdentityOtp({ action: "verify", code: otpCode });
+      if (!j.ok || !j.ticket) {
+        if (j.reason === "unavailable" || j.reason === "not_eligible") setOtpUnavailable(true);
+        else setOtpError(j.message || "인증에 실패했습니다. 다시 시도해 주세요.");
         return;
       }
-      setDone(true);
+      setSubmitting(true);
+      await sendApplication(j.ticket);
     } catch (err) {
-      // upload() 실패(형식·크기·네트워크)는 서버 토큰 라우트가 던진 한국어 메시지를 그대로 노출.
       setProgress(null);
-      setError(
+      setSubmitting(false);
+      setOtpError(
         err instanceof Error && err.message
           ? err.message
           : "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
       );
-      setSubmitting(false);
+    } finally {
+      setOtpBusy(false);
     }
   }
 
@@ -300,7 +442,10 @@ export default function ApplyForm({
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              resetDup();
+            }}
             required
             placeholder="example@email.com"
             className="w-full rounded-lg border border-border-strong px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -310,7 +455,10 @@ export default function ApplyForm({
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              resetDup();
+            }}
             placeholder="홍길동"
             className="w-full rounded-lg border border-border-strong px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
@@ -319,7 +467,10 @@ export default function ApplyForm({
           <input
             type="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              resetDup();
+            }}
             placeholder="010-0000-0000"
             className="w-full rounded-lg border border-border-strong px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
@@ -329,7 +480,10 @@ export default function ApplyForm({
             ref={resumeInputRef}
             type="file"
             accept={ACCEPT}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              filesChanged();
+            }}
             className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-primary-soft file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary hover:file:bg-primary-soft"
           />
           {file && (
@@ -367,6 +521,7 @@ export default function ApplyForm({
                 }
                 return merged;
               });
+              filesChanged();
               e.target.value = ""; // 같은 파일 재선택 허용 + 다음 선택은 누적
             }}
             className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-surface-alt file:px-4 file:py-2 file:text-sm file:font-medium file:text-ink-soft hover:file:bg-surface-alt"
@@ -424,6 +579,82 @@ export default function ApplyForm({
         <p className="text-sm text-danger bg-danger-soft rounded-lg px-3 py-2">
           {error}
         </p>
+      )}
+
+      {dup && (
+        <div className="space-y-3 rounded-xl border border-warning/40 bg-warning-soft p-3.5">
+          <p className="flex gap-2 text-sm text-ink">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" strokeWidth={2.25} />
+            <span>
+              {dup.dupToken && !otpUnavailable
+                ? dup.message
+                : "이미 이 공고에 접수된 지원서가 있습니다. 지원서는 한 번만 제출할 수 있습니다. 문의는 아래 채용 담당자에게 연락해 주세요."}
+            </span>
+          </p>
+          {dup.dupToken && !otpUnavailable && (
+            <div className="space-y-2.5">
+              {!otpSent ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  fullWidth
+                  disabled={otpBusy}
+                  onClick={() => void sendOtp()}
+                >
+                  <MessageCircle className="h-4 w-4" strokeWidth={2.25} />
+                  {otpBusy ? "보내는 중…" : "카카오톡으로 인증번호 받기"}
+                </Button>
+              ) : (
+                <>
+                  {otpInfo && <p className="text-xs text-ink-soft">{otpInfo}</p>}
+                  <Input
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="인증번호 6자리"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void verifyAndResubmit();
+                      }
+                    }}
+                  />
+                  <Checkbox checked={notMine} onChange={(e) => setNotMine(e.target.checked)}>
+                    본인이 제출하지 않았습니다
+                  </Checkbox>
+                  <p className="text-xs text-ink-muted leading-relaxed">
+                    인증하면 먼저 접수된 지원서는 &lsquo;명의도용 신고&rsquo;로 표시되고, 지금 지원서가 새로 접수됩니다. 번호당 한 번만 신고할 수 있습니다.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="flex-1"
+                      disabled={otpBusy || submitting || otpCode.length !== 6 || !notMine}
+                      onClick={() => void verifyAndResubmit()}
+                    >
+                      <ShieldCheck className="h-4 w-4" strokeWidth={2.25} />
+                      {otpBusy || submitting ? "확인 중…" : "인증하고 제출하기"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={otpBusy}
+                      onClick={() => void sendOtp()}
+                    >
+                      다시 받기
+                    </Button>
+                  </div>
+                </>
+              )}
+              {otpError && <p className="text-xs text-danger">{otpError}</p>}
+            </div>
+          )}
+        </div>
       )}
 
       {submitting && progress !== null && (

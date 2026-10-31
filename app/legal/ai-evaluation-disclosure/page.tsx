@@ -312,7 +312,7 @@ export default function AiEvaluationDisclosurePage() {
           <li>감사 로그 (결정 시각·결정자·이의제기 기록): 분쟁 대응 목적
             상 최장 5년 보유 (법적 의무 기간 종료 시 폐기)</li>
           <li>단, 최종 합격자의 정보는 입사 절차 및 인사기록 목적으로
-            채용기업이 삭제할 때까지 보유됩니다.</li>
+            합격 결정일로부터 1년간 보유한 뒤 자동 파기됩니다.</li>
         </ul>
       </Section>
 

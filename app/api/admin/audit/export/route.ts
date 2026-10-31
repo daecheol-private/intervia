@@ -11,16 +11,10 @@ import { desc, eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { buildAuditWhere } from "@/lib/audit-query";
+import { csvCell } from "@/lib/csv";
 
 export const runtime = "nodejs";
 
-function csvEscape(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  const s = typeof v === "string" ? v : JSON.stringify(v);
-  if (s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r"))
-    return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
 
 export async function GET(req: Request) {
   const me = await getCurrentUser();
@@ -107,7 +101,7 @@ export async function GET(req: Request) {
         r.ip,
         r.metadata,
       ]
-        .map(csvEscape)
+        .map(csvCell)
         .join(",")
     );
   }

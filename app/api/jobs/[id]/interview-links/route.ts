@@ -217,6 +217,15 @@ export async function POST(
       });
       continue;
     }
+    // 명의도용 신고된 지원서는 일괄 발송에서 제외 (개별 발송은 담당자 판단으로 가능).
+    if (c.identityReportedAt) {
+      results.push({
+        candidateId: c.id,
+        status: "skipped",
+        reason: "명의도용 신고됨",
+      });
+      continue;
+    }
     if (STAGE_RANK[c.stage as Stage] > STAGE_RANK.ai_evaluated) {
       results.push({
         candidateId: c.id,

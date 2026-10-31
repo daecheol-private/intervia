@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { captureError, alertError } from "@/lib/error-reporter";
+import { redactUrl } from "@/lib/redact-url";
 
 export const runtime = "nodejs";
 
@@ -29,7 +30,8 @@ export async function POST(req: Request) {
     if (typeof body.stack === "string") err.stack = body.stack.slice(0, 8000);
     captureError(err, {
       source: "client-error-boundary",
-      url: typeof body.url === "string" ? body.url.slice(0, 500) : undefined,
+      // 구버전 클라이언트는 전체 href 를 보낸다 — 서버에서도 토큰·query 값을 가린다.
+      url: typeof body.url === "string" ? redactUrl(body.url.slice(0, 500)) : undefined,
       digest: typeof body.digest === "string" ? body.digest : undefined,
     });
     // 화면이 깨진 사용자 — 신고 전에 먼저 인지하도록 Slack 경보(전역 30분당 1회).

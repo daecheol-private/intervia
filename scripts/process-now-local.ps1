@@ -1,9 +1,21 @@
-# Manually trigger local dev server screening queue + interview expiry.
+﻿# Manually trigger local dev server screening queue + interview expiry.
 # Usage: D:\intervia\interviewer\scripts\process-now-local.ps1
 # Requires: `npm run dev` running on port 3003 in another terminal.
 
 $BaseUrl = "http://localhost:3003"
-$Token   = "416682340d1d8d0c4b7b2cae3dade7896c5729b52ee5885dfd98e05058f4b16a"
+# CRON_SECRET: 환경변수 우선, 없으면 .env.local 의 값을 읽는다 (토큰은 저장소에 두지 않음).
+$Token = $env:CRON_SECRET
+if (-not $Token) {
+  $envFile = Join-Path $PSScriptRoot "..\.env.local"
+  if (Test-Path $envFile) {
+    $line = Get-Content $envFile | Where-Object { $_ -match '^\s*CRON_SECRET\s*=' } | Select-Object -First 1
+    if ($line) { $Token = ($line -replace '^\s*CRON_SECRET\s*=\s*', '').Trim().Trim([char]34).Trim([char]39) }
+  }
+}
+if (-not $Token) {
+  Write-Host "CRON_SECRET 이 없습니다. `$env:CRON_SECRET 을 설정하거나 .env.local 에 CRON_SECRET 을 넣으세요." -ForegroundColor Red
+  exit 1
+}
 
 Write-Host "[1/2] process-screenings ..." -ForegroundColor Cyan
 $res1 = curl.exe -X POST "$BaseUrl/api/cron/process-screenings" `

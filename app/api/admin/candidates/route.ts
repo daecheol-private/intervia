@@ -10,6 +10,8 @@ import { and, desc, eq, like, or } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { requireStepUp } from "@/lib/step-up";
+import { logAudit } from "@/lib/audit";
+import { createHash } from "node:crypto";
 
 export const runtime = "nodejs";
 
@@ -57,6 +59,19 @@ export async function GET(req: Request) {
     )
     .orderBy(desc(candidates.createdAt))
     .limit(30);
+
+  // 전 법인 지원자 검색은 누가 언제 무엇을 찾았는지 남긴다 — 검색어 자체는 개인정보라 해시만(감사 M8).
+  logAudit(req, {
+    actor: me!,
+    action: "admin.candidate_search",
+    resourceType: "candidate",
+    metadata: {
+      qHash: createHash("sha256").update(q).digest("hex").slice(0, 16),
+      qLen: q.length,
+      resultCount: rows.length,
+      orgIds: [...new Set(rows.map((r) => r.orgId))].slice(0, 30),
+    },
+  });
 
   return Response.json({ results: rows });
 }

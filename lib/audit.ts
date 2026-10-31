@@ -20,6 +20,7 @@ import { extractIp } from "./auth-attempts";
 import type { CurrentUser } from "./auth";
 import { captureCritical } from "./error-reporter";
 import { and, eq, inArray, or } from "drizzle-orm";
+import { after } from "next/server";
 
 export type AuditAction =
   | "login.success"
@@ -154,7 +155,7 @@ export function logAudit(req: Request | null, entry: AuditEntry): Promise<void> 
     entry.orgId != null &&
     entry.actor.orgId !== entry.orgId;
 
-  return db
+  const p = db
     .insert(auditLogs)
     .values({
       actorUserId: entry.actor?.id ?? null,
@@ -186,6 +187,14 @@ export function logAudit(req: Request | null, entry: AuditEntry): Promise<void> 
         });
       }
     });
+  // 호출부 대부분이 await 없이 부른다 — 응답 뒤 서버리스가 멈추면 감사 기록이 사라지므로
+  // 요청 안이면 after() 로 끝날 때까지 붙잡아 둔다(감사 M8). 요청 밖(cron 스크립트 등)이면 그냥 진행.
+  try {
+    after(() => p);
+  } catch {
+    /* 요청 컨텍스트 밖 */
+  }
+  return p;
 }
 
 /**

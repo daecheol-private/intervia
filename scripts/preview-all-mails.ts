@@ -28,6 +28,7 @@ async function main() {
   const { buildInterviewEmail, buildInterviewReminderEmail, buildAppealResponseEmail } =
     await import("../lib/mailer");
   const { buildDecisionEmail } = await import("../lib/candidate-stage");
+  const { buildIdentityReportNoticeEmail } = await import("../lib/apply-identity");
   const { buildDailyDigestEmail } = await import("../lib/daily-digest");
   const { buildInterviewerAssignedEmail, buildInviteEmail } = await import(
     "../lib/invites"
@@ -179,6 +180,11 @@ async function main() {
         orgName,
         contactEmail,
       }),
+    },
+    {
+      tag: "지원자·명의도용신고안내",
+      audience: "candidate",
+      mail: buildIdentityReportNoticeEmail({ candidateName, jobTitle, orgName, contactEmail }),
     },
     // ── 면접관·제안자 메일 (담당자 박스 X) ──
     {

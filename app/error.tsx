@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { safePathname } from "@/lib/redact-url";
 
 /**
  * 전역 클라이언트 에러 바운더리. app/ 하위 어떤 페이지든 렌더 중 throw 하면
@@ -27,7 +28,8 @@ export default function GlobalRouteError({
         message: error?.message,
         stack: error?.stack,
         digest: error?.digest,
-        url: typeof window !== "undefined" ? window.location.href : undefined,
+        // pathname 만 — query(재설정·인증 토큰)·hash 는 보내지 않고 경로 토큰도 가린다.
+        url: typeof window !== "undefined" ? safePathname(window.location.pathname) : undefined,
       });
       if (typeof navigator !== "undefined" && navigator.sendBeacon) {
         navigator.sendBeacon(

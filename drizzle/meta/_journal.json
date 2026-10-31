@@ -484,6 +484,13 @@
       "when": 1793431292010,
       "tag": "0068_light_dreaming_celestial",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "6",
+      "when": 1793454012302,
+      "tag": "0069_charming_blazing_skull",
+      "breakpoints": true
     }
   ]
 }
