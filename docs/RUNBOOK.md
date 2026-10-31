@@ -154,8 +154,9 @@
 사용자는 받은 적이 없으므로 `scripts/send-welcome-backfill.ts` 로 한 번만 보낸다.
 
 대상은 `status=active` + `email_verified_at IS NOT NULL` + `created_at < CUTOFF_UTC` 이고,
-반송이 확실한 예약 TLD(`.test`·`.example` 등)는 자동 제외된다. 보낸 사람은
-`scripts/_welcome-backfill-sent.json`(커밋 제외)에 기록돼 재실행 시 건너뛴다.
+반송이 확실한 예약 TLD(`.test`·`.example` 등)와 `ALWAYS_EXCLUDE`(운영자 본인 계정들·테스트
+계정 — 2026-10-31 결정)는 자동 제외된다. 건별로 더 뺄 사람은 `--exclude 11,a@b.com`.
+보낸 사람은 `scripts/_welcome-backfill-sent.json`(커밋 제외)에 기록돼 재실행 시 건너뛴다.
 
 **순서대로** 실행한다. 1·2 는 실제 수신자에게 가지 않는다.
 **세 줄 모두 `NODE_ENV="production"` 을 붙인다** — 이유는 아래.

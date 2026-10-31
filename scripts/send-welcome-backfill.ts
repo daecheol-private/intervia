@@ -25,7 +25,8 @@
  * 실행 방법은 docs/RUNBOOK.md "기존 가입자 1회 안내" 참고.
  * 요약: 인자 없이 = 미리보기(읽기 전용) / --rehearsal = REHEARSAL_TO 로만 발송 /
  *      --send = 실제 발송(NODE_ENV=production 필수).
- * 옵션: --limit N (상위 N명만), --before "YYYY-MM-DD HH:MM:SS" (기준 시각 UTC)
+ * 옵션: --limit N (상위 N명만), --before "YYYY-MM-DD HH:MM:SS" (기준 시각 UTC),
+ *      --exclude 1,9,a@b.com (미리보기에서 보고 뺄 사람 — id 또는 이메일)
  */
 import "./_load-env.mjs";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -50,6 +51,20 @@ const GAP_MS = 1500;
  * 리허설이 진짜 수신자에게 날아가기 때문이다.
  */
 const REHEARSAL_TO = process.env.SYSTEM_ADMIN_EMAIL ?? "admin.intervia@gmail.com";
+
+/**
+ * 항상 빼는 주소 (2026-10-31 사용자 결정) — 운영자 본인 계정들과 테스트 계정.
+ * 플래그가 아니라 코드에 박는 이유: --exclude 로만 두면 미리보기·리허설엔 붙이고
+ * 정작 --send 에서 빠뜨려 본인이 4통 받는 식의 사고가 나기 쉽다.
+ * id 가 아니라 이메일로 적는다 — 읽어서 알 수 있고 DB id 변화에도 안 흔들린다.
+ */
+const ALWAYS_EXCLUDE = [
+  "admin.intervia@gmail.com", // 시스템 관리자 계정
+  "dckang@expernet.co.kr", // 운영자 본인
+  "dckang@erop.co.kr", // 운영자 본인
+  "daecheol1983@naver.com", // 운영자 본인
+  "test@intervia.kr", // 테스트 계정
+];
 
 /**
  * 반드시 반송되는 예약 TLD (RFC 2606/6761) — 시드·검증 계정이 여기에 걸린다.
@@ -82,6 +97,15 @@ async function main() {
   const limit = li >= 0 && argv[li + 1] ? Number(argv[li + 1]) : null;
   const bi = argv.indexOf("--before");
   const cutoff = bi >= 0 && argv[bi + 1] ? argv[bi + 1] : CUTOFF_UTC;
+  // --exclude 1,9,test@intervia.kr — 미리보기에서 보고 빼기로 한 사람(id 또는 이메일).
+  const xi = argv.indexOf("--exclude");
+  const excluded = new Set([
+    ...ALWAYS_EXCLUDE.map((v) => v.toLowerCase()),
+    ...(xi >= 0 && argv[xi + 1] ? argv[xi + 1] : "")
+      .split(",")
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean),
+  ]);
 
   const isProdEnv = process.env.NODE_ENV === "production";
 
@@ -142,16 +166,39 @@ async function main() {
     )
     .orderBy(users.id);
 
+  const isExcluded = (r: { id: number; email: string }) =>
+    excluded.has(String(r.id)) || excluded.has(r.email.toLowerCase());
+
   const already = rows.filter((r) => sentIds.has(r.id)).length;
   const undeliverable = rows.filter((r) => isUndeliverable(r.email));
-  const eligible = rows.filter((r) => !sentIds.has(r.id) && !isUndeliverable(r.email));
+  const skipped = rows.filter((r) => isExcluded(r));
+  const eligible = rows.filter(
+    (r) => !sentIds.has(r.id) && !isUndeliverable(r.email) && !isExcluded(r)
+  );
   const targets = limit ? eligible.slice(0, limit) : eligible;
 
   console.log(
-    `조건 충족 ${rows.length}명 / 이미 보냄 ${already}명 / 반송 예약도메인 제외 ${undeliverable.length}명 / 남은 대상 ${eligible.length}명 / 이번 실행 ${targets.length}명`
+    `조건 충족 ${rows.length}명 / 이미 보냄 ${already}명 / 반송 예약도메인 ${undeliverable.length}명 / 직접 제외 ${skipped.length}명 / 남은 대상 ${eligible.length}명 / 이번 실행 ${targets.length}명`
   );
   for (const u of undeliverable) {
     console.log(`  × [${u.id}] ${u.email} — 예약 TLD, 제외`);
+  }
+  const always = new Set(ALWAYS_EXCLUDE.map((v) => v.toLowerCase()));
+  for (const u of skipped) {
+    const why = always.has(u.email.toLowerCase()) ? "고정 제외(본인·테스트)" : "--exclude 지정";
+    console.log(`  × [${u.id}] ${u.email} — ${why}`);
+  }
+  // 오타로 아무도 안 걸러지는 걸 눈치채지 못하는 일이 없도록. ALWAYS_EXCLUDE 는
+  // 다른 환경(로컬 등)엔 없는 게 정상이므로 CLI 로 넘긴 값만 검사한다.
+  const cliExcluded = (xi >= 0 && argv[xi + 1] ? argv[xi + 1] : "")
+    .split(",")
+    .map((v) => v.trim().toLowerCase())
+    .filter(Boolean);
+  const unmatched = cliExcluded.filter(
+    (v) => !rows.some((r) => String(r.id) === v || r.email.toLowerCase() === v)
+  );
+  if (unmatched.length) {
+    console.log(`  ⚠️  --exclude 중 대상에 없는 값: ${unmatched.join(", ")}`);
   }
   for (const t of targets) {
     console.log(`  - [${t.id}] ${t.email} (${t.name}, ${t.role}, 가입 ${t.createdAt})`);
