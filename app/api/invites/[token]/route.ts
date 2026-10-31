@@ -4,7 +4,8 @@
  */
 import { db } from "@/lib/db";
 import { orgInvites, organizations, jobPostings, users } from "@/lib/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, inArray } from "drizzle-orm";
+import { inviteTokenCandidates } from "@/lib/invites";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,7 @@ export async function GET(
   const [inv] = await db
     .select()
     .from(orgInvites)
-    .where(eq(orgInvites.token, token));
+    .where(inArray(orgInvites.token, inviteTokenCandidates(token)));
   if (!inv)
     return Response.json(
       { code: "not_found", message: "유효하지 않은 초대 링크입니다." },

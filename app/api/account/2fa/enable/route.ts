@@ -1,11 +1,12 @@
 import { db } from "@/lib/db";
-import { users } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { users, sessions } from "@/lib/schema";
+import { and, eq, ne } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { verifyAndConsumeTotp } from "@/lib/totp-verify";
 import { encrypt } from "@/lib/crypto";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { requireStepUp } from "@/lib/step-up";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,10 @@ export async function POST(req: Request) {
 
   const limited = await rateLimit(req, "2fa-enable", { limit: 10, windowSec: 60 }, me.id);
   if (limited) return limited;
+
+  // 세션만 훔친 사람이 2단계 인증을 걸어 주인을 잠그지 못하게 — 비밀번호 재확인.
+  const stepUp = await requireStepUp();
+  if (stepUp) return stepUp;
 
   const { secret, code } = (await req.json().catch(() => ({}))) as {
     secret?: string;
@@ -42,6 +47,11 @@ export async function POST(req: Request) {
       totpEnabledAt: new Date().toISOString(),
     })
     .where(eq(users.id, me.id));
+
+  // 다른 기기 세션은 끊는다 — 탈취된 세션이 남아 있지 않게.
+  await db
+    .delete(sessions)
+    .where(and(eq(sessions.userId, me.id), ne(sessions.token, me.sessionToken)));
 
   logAudit(req, {
     actor: me,

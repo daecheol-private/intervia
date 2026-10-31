@@ -2,7 +2,7 @@ import { db } from "./db";
 import { users, sessions, organizations } from "./schema";
 import { eq, count, lt, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
@@ -35,6 +35,15 @@ export async function verifyPassword(
   return bcrypt.compare(plain, hash);
 }
 
+/**
+ * DB 에는 세션 토큰 원문 대신 해시만 저장한다 — DB 를 읽기만 해도 세션을 가로챌 수 있게 되지 않도록(감사 M11).
+ * 쿠키에는 원문, sessions.token 과 CurrentUser.sessionToken 은 이 해시값("h_" 접두).
+ */
+export function sessionKey(tokenOrKey: string): string {
+  if (tokenOrKey.startsWith("h_")) return tokenOrKey;
+  return "h_" + createHash("sha256").update(tokenOrKey).digest("hex");
+}
+
 export async function createSession(
   userId: number,
   meta?: { ip?: string | null; userAgent?: string | null }
@@ -42,7 +51,7 @@ export async function createSession(
   const token = "s_" + randomBytes(24).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   await db.insert(sessions).values({
-    token,
+    token: sessionKey(token),
     userId,
     expiresAt,
     ip: meta?.ip ?? null,
@@ -90,8 +99,9 @@ export type CurrentUser = {
 // 세션 조인 쿼리는 1회만. 렌더 컨텍스트 밖(route handler)에서는 그냥 통과 호출.
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const jar = await cookies();
-  const token = jar.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
+  const raw = jar.get(SESSION_COOKIE)?.value;
+  if (!raw) return null;
+  const token = sessionKey(raw);
 
   const [row] = await db
     .select({
@@ -173,8 +183,9 @@ export function assertOrgAccess(
   return user.orgId === orgId;
 }
 
+/** 쿠키 원문이나 sessionToken(해시) 어느 쪽을 받아도 된다. */
 export async function deleteSession(token: string) {
-  await db.delete(sessions).where(eq(sessions.token, token));
+  await db.delete(sessions).where(eq(sessions.token, sessionKey(token)));
 }
 
 /**

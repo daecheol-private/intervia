@@ -7,8 +7,8 @@ import {
   setSessionCookie,
 } from "@/lib/auth";
 import {
-  isLocked,
-  recordAttempt,
+  beginAttempt,
+  finishAttempt,
   extractIp,
   LOCK_WINDOW_MINUTES,
 } from "@/lib/auth-attempts";
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   const normalizedEmail = email.toLowerCase().trim();
 
   // 1) 잠금 체크 — 비밀번호 검증 전에 (계정 enum 방지 + 부하 절감)
-  const lock = await isLocked(normalizedEmail, ip);
+  const { ids: attemptIds, lock } = await beginAttempt({ email: normalizedEmail, ip, userAgent });
   if (lock.locked) {
     const minutes = Math.ceil(lock.retryAfterSeconds / 60);
     return jsonError(
@@ -71,17 +71,15 @@ export async function POST(req: Request) {
     : false;
 
   if (!user || !passwordOk) {
-    // 실패 기록
-    await recordAttempt({
-      email: normalizedEmail,
-      ip,
-      success: false,
-      userAgent,
-    });
+    // 실패는 beginAttempt 가 이미 기록함
     return new Response("이메일 또는 비밀번호가 올바르지 않습니다.", {
       status: 401,
     });
   }
+
+  // 비밀번호는 맞음 — 아래 상태 가드로 막히더라도 실패 카운트에서는 뺀다(정상 사용자가 메일 인증 안 한 케이스 등).
+  // 2단계 인증 대상도 여기서 빼고, 성공 처리(실패 기록 리셋)는 TOTP 까지 통과한 뒤에 한다.
+  await finishAttempt(attemptIds, "neutral");
 
   // 인증/상태 가드 — 실패 카운터에 포함하지 않음 (정상 사용자가 메일 인증 안 한 케이스 등)
   // 합류 요청 사용자는 emailVerifiedAt=null + status=pending 이므로 승인 대기 메시지가 우선.
@@ -141,13 +139,8 @@ export async function POST(req: Request) {
     return Response.json({ needsTotp: true, challenge });
   }
 
-  // 성공 — 실패 기록 리셋 + 세션 발급
-  await recordAttempt({
-    email: normalizedEmail,
-    ip,
-    success: true,
-    userAgent,
-  });
+  // 성공 — 그 email 의 실패 기록 리셋 + 세션 발급
+  await finishAttempt([], "success", normalizedEmail);
   void LOCK_WINDOW_MINUTES; // 정책 노출용 export 유지
 
   const token = await createSession(user.id, { ip, userAgent });

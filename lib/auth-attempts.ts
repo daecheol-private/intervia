@@ -13,7 +13,7 @@
  */
 import { db } from "./db";
 import { authAttempts } from "./schema";
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 
 export const EMAIL_FAIL_THRESHOLD = 5;
 export const IP_FAIL_THRESHOLD = 20;
@@ -74,14 +74,72 @@ export async function recordAttempt(opts: {
   }
 }
 
+type LockResult = { locked: false } | { locked: true; reason: "email" | "ip"; retryAfterSeconds: number };
+
+/**
+ * 로그인·2단계 인증 시도 시작 — 실패로 **먼저** 기록한 뒤 자기 포함으로 센다.
+ * "확인 → 검증 → 기록" 순서면 동시에 보낸 요청들이 모두 확인을 통과해 한도보다 많이 시도된다.
+ * 잠겼으면 방금 넣은 기록은 지운다(잠긴 동안의 요청이 잠금을 계속 늘리지 않게).
+ * 끝나면 반드시 finishAttempt 로 결과를 확정할 것.
+ */
+export async function beginAttempt(opts: {
+  email: string;
+  ip: string | null;
+  userAgent?: string | null;
+}): Promise<{ ids: number[]; lock: LockResult }> {
+  const ua = opts.userAgent?.slice(0, 500) ?? null;
+  const email = opts.email.toLowerCase().trim();
+  const rows: { identifier: string; kind: "email" | "ip"; success: boolean; userAgent: string | null }[] = [
+    { identifier: email, kind: "email", success: false, userAgent: ua },
+  ];
+  if (opts.ip) rows.push({ identifier: opts.ip, kind: "ip", success: false, userAgent: ua });
+  const inserted = await db.insert(authAttempts).values(rows).returning({ id: authAttempts.id });
+  const ids = inserted.map((r) => r.id);
+  const lock = await isLocked(email, opts.ip, 1);
+  if (lock.locked) await cancelAttempt(ids);
+  return { ids, lock };
+}
+
+/**
+ * 시도 결과 확정.
+ *  - "fail": 이미 실패로 기록돼 있으므로 그대로 둔다
+ *  - "success": 성공으로 바꾸고 그 email 의 실패 기록을 지운다(IP 실패 기록은 유지)
+ *  - "neutral": 비밀번호는 맞았지만 로그인은 안 된 경우(승인 대기·미인증·2단계 대기) — 기록 삭제
+ */
+export async function finishAttempt(
+  ids: number[],
+  outcome: "fail" | "success" | "neutral",
+  email?: string
+): Promise<void> {
+  if (outcome === "fail" || ids.length === 0) return;
+  if (outcome === "neutral") return cancelAttempt(ids);
+  await db.update(authAttempts).set({ success: true }).where(inArray(authAttempts.id, ids));
+  if (email) {
+    await db
+      .delete(authAttempts)
+      .where(
+        and(
+          eq(authAttempts.identifier, email.toLowerCase().trim()),
+          eq(authAttempts.kind, "email"),
+          eq(authAttempts.success, false)
+        )
+      );
+  }
+}
+
+async function cancelAttempt(ids: number[]): Promise<void> {
+  if (ids.length) await db.delete(authAttempts).where(inArray(authAttempts.id, ids));
+}
+
 /**
  * 잠금 여부 판정. 잠겼으면 unlock 시간 반환.
- * 호출은 비밀번호 검증 전에. email 미입력이면 ip 만 체크.
+ * email 미입력이면 ip 만 체크. includesCurrent=1 이면 방금 기록한 자기 시도를 빼고 판정.
  */
 export async function isLocked(
   email: string | null,
-  ip: string | null
-): Promise<{ locked: false } | { locked: true; reason: "email" | "ip"; retryAfterSeconds: number }> {
+  ip: string | null,
+  includesCurrent = 0
+): Promise<LockResult> {
   const since = windowStart();
 
   // email 체크
@@ -99,7 +157,7 @@ export async function isLocked(
         )
       );
     const count = Number(emailCount?.c ?? 0);
-    if (count >= EMAIL_FAIL_THRESHOLD) {
+    if (count - includesCurrent >= EMAIL_FAIL_THRESHOLD) {
       const oldest = emailCount?.oldest ?? sqliteTimestamp(new Date());
       const unlockAt =
         parseSqliteTimestamp(oldest).getTime() + LOCK_WINDOW_MINUTES * 60_000;
@@ -125,7 +183,7 @@ export async function isLocked(
         )
       );
     const count = Number(ipCount?.c ?? 0);
-    if (count >= IP_FAIL_THRESHOLD) {
+    if (count - includesCurrent >= IP_FAIL_THRESHOLD) {
       const oldest = ipCount?.oldest ?? sqliteTimestamp(new Date());
       const unlockAt =
         parseSqliteTimestamp(oldest).getTime() + LOCK_WINDOW_MINUTES * 60_000;

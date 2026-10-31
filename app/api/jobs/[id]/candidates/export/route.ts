@@ -16,6 +16,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import { isJobUnlocked } from "@/lib/job-lock";
 import { compositeScore } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
+import { requireStepUp } from "@/lib/step-up";
 
 export const runtime = "nodejs";
 
@@ -65,6 +66,9 @@ export async function GET(
   ) {
     return new Response("잠긴 공고입니다.", { status: 403 });
   }
+  // 후보자 개인정보 일괄 반출 — 비밀번호 재확인(감사 M14).
+  const stepUp = await requireStepUp();
+  if (stepUp) return stepUp;
 
   // CSV 에 실제 쓰는 컬럼만 — 전체 select() 는 resume_text·resume_masked_text(이력서 원문,
   // 후보자당 수십 KB)를 전 후보분 끌어왔다(GOTCHAS §0-0-5 금지 패턴). 대형 공고 export 시

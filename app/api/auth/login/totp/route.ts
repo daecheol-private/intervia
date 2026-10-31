@@ -5,7 +5,7 @@ import { createSession, setSessionCookie } from "@/lib/auth";
 import { verifyLoginChallenge } from "@/lib/login-challenge";
 import { verifyAndConsumeTotp } from "@/lib/totp-verify";
 import { decrypt } from "@/lib/crypto";
-import { recordAttempt, extractIp } from "@/lib/auth-attempts";
+import { beginAttempt, finishAttempt, extractIp } from "@/lib/auth-attempts";
 import { logAudit } from "@/lib/audit";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -49,27 +49,25 @@ export async function POST(req: Request) {
       status: 400,
     });
 
-  const secret = decrypt(user.totpSecret);
-  const ok = await verifyAndConsumeTotp(user.id, secret, code);
   const ip = extractIp(req);
   const userAgent = req.headers.get("user-agent");
+  // 비밀번호 로그인과 같은 잠금 카운터 — 잠겨 있으면 코드 검증 자체를 하지 않는다.
+  const { ids: attemptIds, lock } = await beginAttempt({ email: user.email, ip, userAgent });
+  if (lock.locked)
+    return Response.json(
+      {
+        error: `너무 많은 시도. 약 ${Math.ceil(lock.retryAfterSeconds / 60)}분 후 다시 로그인해 주세요.`,
+        code: "rate_limited",
+        retryAfterSeconds: lock.retryAfterSeconds,
+      },
+      { status: 429 }
+    );
 
-  if (!ok) {
-    await recordAttempt({
-      email: user.email,
-      ip,
-      success: false,
-      userAgent,
-    });
-    return new Response("코드가 올바르지 않습니다.", { status: 401 });
-  }
+  const secret = decrypt(user.totpSecret);
+  const ok = await verifyAndConsumeTotp(user.id, secret, code);
+  if (!ok) return new Response("코드가 올바르지 않습니다.", { status: 401 });
 
-  await recordAttempt({
-    email: user.email,
-    ip,
-    success: true,
-    userAgent,
-  });
+  await finishAttempt(attemptIds, "success", user.email);
 
   // 계정 상태 재검증 (defense in depth) — 1단계 로그인이 이미 disabled/미인증/pending/정지를
   // 차단한 뒤 challenge 를 발급하지만, challenge 유효시간(수분) 안에 상태가 바뀌는 경합을 막고

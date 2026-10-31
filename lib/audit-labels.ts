@@ -41,6 +41,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "user.email_verify": "이메일 인증",
   "user.delete": "사용자 삭제",
   "user.password_reset_email": "비밀번호 리셋 메일 발송",
+  "user.2fa_reset": "2단계 인증 해제(관리자)",
   "password_reset.confirm": "비밀번호 재설정 완료",
   "account.self_delete": "본인 계정 탈퇴",
   "org.smtp_update": "SMTP 설정 변경",

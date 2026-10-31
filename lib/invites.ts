@@ -87,6 +87,16 @@ export function generateInviteToken(): string {
   return "inv_" + crypto.randomBytes(20).toString("hex");
 }
 
+/** DB 에는 초대 토큰 해시만 저장(감사 M11). 링크에는 원문. */
+export function inviteKey(raw: string): string {
+  return "h_" + crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+/** 조회용 — 배포 전 발급된 원문 토큰도 만료 전까지는 받아준다. */
+export function inviteTokenCandidates(raw: string): string[] {
+  return [inviteKey(raw), raw];
+}
+
 export function inviteExpiresAt(from = new Date()): string {
   const d = new Date(from);
   d.setUTCDate(d.getUTCDate() + INVITE_EXPIRY_DAYS);

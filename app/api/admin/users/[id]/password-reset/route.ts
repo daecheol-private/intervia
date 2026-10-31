@@ -13,6 +13,7 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { extractIp } from "@/lib/auth-attempts";
+import { requireStepUp } from "@/lib/step-up";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,8 @@ export async function POST(
     return new Response("권한 없음 (시스템 관리자 전용)", { status: 403 });
   const pwGuard = requirePasswordChanged(me);
   if (pwGuard) return pwGuard;
+  const stepUp = await requireStepUp();
+  if (stepUp) return stepUp;
 
   const { id } = await params;
   const targetId = Number(id);

@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
+import { rateLimit } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import { users, organizations } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
@@ -13,10 +14,13 @@ export const runtime = "nodejs";
  * 권한: 로그인한 멤버 누구나 (org_admin 은 직접 충전 가능하므로 사용 안 함).
  * 대상: 본 법인의 활성 org_admin 전원.
  */
-export async function POST() {
+export async function POST(req: Request) {
   const me = await getCurrentUser();
   const guard = requireUser(me);
   if (guard) return guard;
+  // 관리자에게 메일이 나가는 요청 — 반복 클릭으로 메일 한도를 태우지 않게 1시간 3회.
+  const limited = await rateLimit(req, "request-charge", { limit: 3, windowSec: 3600 }, me!.id);
+  if (limited) return limited;
   if (!me!.orgId) return new Response("법인 없음", { status: 400 });
 
   const admins = await db

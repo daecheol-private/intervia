@@ -1,9 +1,18 @@
 import { db } from "./db";
 import { passwordResets, users } from "./schema";
-import { eq, sql, and, isNull } from "drizzle-orm";
-import { randomBytes } from "node:crypto";
+import { eq, sql, and, isNull, inArray } from "drizzle-orm";
+import { createHash, randomBytes } from "node:crypto";
 import { addDays } from "./utils";
 import { sendMail, EMAIL_BRAND, wrapEmailCard, escapeHtml } from "./mailer";
+
+/** DB 에는 토큰 해시만 저장(감사 M11). 배포 전 발급된 원문 토큰도 만료 전까지는 받아준다. */
+function tokenKey(raw: string): string {
+  return "h_" + createHash("sha256").update(raw).digest("hex");
+}
+function tokenMatch(col: Parameters<typeof eq>[0], raw: string) {
+  return inArray(col, [tokenKey(raw), raw]);
+}
+
 
 const TOKEN_TTL_HOURS = 1; // 1시간 유효 — 짧게.
 
@@ -58,7 +67,7 @@ export async function createResetToken(
     );
   await db.insert(passwordResets).values({
     userId,
-    token,
+    token: tokenKey(token),
     expiresAt,
     requestedIp: requestedIp ?? null,
   });
@@ -89,7 +98,7 @@ export async function consumeResetToken(token: string): Promise<{
   const [row] = await db
     .select()
     .from(passwordResets)
-    .where(eq(passwordResets.token, token));
+    .where(tokenMatch(passwordResets.token, token));
   if (!row) return { ok: false, reason: "유효하지 않은 토큰입니다." };
   if (row.consumedAt) return { ok: false, reason: "이미 사용된 토큰입니다." };
   if (new Date(row.expiresAt) < new Date())
@@ -117,7 +126,7 @@ export async function verifyResetTokenActive(token: string): Promise<{
     })
     .from(passwordResets)
     .innerJoin(users, eq(users.id, passwordResets.userId))
-    .where(eq(passwordResets.token, token));
+    .where(tokenMatch(passwordResets.token, token));
   if (!row) return { valid: false };
   if (row.consumedAt) return { valid: false };
   if (new Date(row.expiresAt) < new Date()) return { valid: false };

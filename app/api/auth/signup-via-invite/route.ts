@@ -14,7 +14,7 @@
 import { after } from "next/server";
 import { db } from "@/lib/db";
 import { users, orgInvites, orgJoinRequests } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth";
 import { validatePassword } from "@/lib/password-policy";
 import { rateLimit } from "@/lib/rate-limit";
@@ -22,6 +22,7 @@ import { isValidEmail, normalizeEmail } from "@/lib/email-domain";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/site-info";
 import { extractIp } from "@/lib/auth-attempts";
 import { notifyOrgAdmins } from "@/lib/notifications";
+import { inviteTokenCandidates } from "@/lib/invites";
 
 export const runtime = "nodejs";
 
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
   const [inv] = await db
     .select()
     .from(orgInvites)
-    .where(eq(orgInvites.token, token));
+    .where(inArray(orgInvites.token, inviteTokenCandidates(token)));
   if (!inv) return new Response("유효하지 않은 초대 링크입니다.", { status: 404 });
   if (inv.usedAt)
     return new Response("이미 사용된 초대 링크입니다.", { status: 410 });

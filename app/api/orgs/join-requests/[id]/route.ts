@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { honorJobShareInvites } from "@/lib/invites";
 import { sendWelcomeMail } from "@/lib/email-welcome";
+import { requireStepUp } from "@/lib/step-up";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,11 @@ export async function PATCH(
   };
   if (action !== "approve" && action !== "reject")
     return new Response("action=approve|reject 필요", { status: 400 });
+  // 승인하면 그 사람이 법인 공고·지원자 정보에 접근한다 — 비밀번호 재확인.
+  if (action === "approve") {
+    const stepUp = await requireStepUp();
+    if (stepUp) return stepUp;
+  }
 
   const [row] = await db
     .select()

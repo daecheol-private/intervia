@@ -23,14 +23,7 @@ import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { ownsOrg, requireUser } from "@/lib/tenant";
 import { jobLockResponse } from "@/lib/job-lock";
-import {
-  generateInviteToken,
-  inviteExpiresAt,
-  parseEmailList,
-  buildInviteEmail,
-  buildInterviewerAssignedEmail,
-  INVITE_MAX_PER_REQUEST,
-} from "@/lib/invites";
+import { generateInviteToken, inviteExpiresAt, parseEmailList, buildInviteEmail, buildInterviewerAssignedEmail, INVITE_MAX_PER_REQUEST, inviteKey } from "@/lib/invites";
 import { sendMail, isSmtpAvailable } from "@/lib/mailer";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
@@ -248,14 +241,18 @@ export async function POST(
 
     let token: string;
     let expiresAt: string;
+    // DB 에는 해시만 있어 옛 링크를 다시 만들 수 없다 — 같은 초대 행의 토큰을 새로 바꿔 보낸다(옛 링크는 무효).
+    token = generateInviteToken();
     if (existingInvite) {
-      token = existingInvite.token;
       expiresAt = existingInvite.expiresAt;
+      await db
+        .update(orgInvites)
+        .set({ token: inviteKey(token) })
+        .where(eq(orgInvites.id, existingInvite.id));
     } else {
-      token = generateInviteToken();
       expiresAt = inviteExpiresAt();
       await db.insert(orgInvites).values({
-        token,
+        token: inviteKey(token),
         orgId: job.orgId,
         email,
         jobId,

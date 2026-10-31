@@ -28,6 +28,8 @@ export function StepUpModal({
   onCancel: () => void;
 }) {
   const [pw, setPw] = useState("");
+  const [otp, setOtp] = useState("");
+  const [needOtp, setNeedOtp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -39,14 +41,19 @@ export function StepUpModal({
     const r = await fetch("/api/auth/step-up", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: pw }),
+      body: JSON.stringify(needOtp ? { password: pw, code: otp } : { password: pw }),
     });
     setBusy(false);
     if (!r.ok) {
+      const d = (await r.json().catch(() => null)) as { code?: string; message?: string } | null;
+      if (d?.code === "totp_required") {
+        setNeedOtp(true);
+        setErr("");
+        return;
+      }
       setErr(
-        r.status === 401
-          ? "비밀번호가 일치하지 않습니다."
-          : "인증 실패. 잠시 후 다시 시도해 주세요."
+        d?.message ??
+          (r.status === 401 ? "비밀번호가 일치하지 않습니다." : "인증 실패. 잠시 후 다시 시도해 주세요.")
       );
       return;
     }
@@ -82,6 +89,20 @@ export function StepUpModal({
             placeholder="비밀번호"
           />
         </div>
+        {needOtp && (
+          <div className="mt-3">
+            <input
+              autoFocus
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="인증 앱 6자리 코드"
+              className="w-full px-3 py-2 text-sm border border-border-strong rounded-lg bg-card text-ink"
+            />
+          </div>
+        )}
         {err && (
           <div className="mt-2 text-xs text-danger bg-danger-soft border border-danger/30 rounded px-2 py-1.5">
             {err}
@@ -97,7 +118,7 @@ export function StepUpModal({
           </button>
           <button
             type="submit"
-            disabled={busy || !pw}
+            disabled={busy || !pw || (needOtp && otp.length !== 6)}
             className="px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary-deep text-surface rounded-lg disabled:opacity-50"
           >
             {busy ? "확인 중..." : "확인"}

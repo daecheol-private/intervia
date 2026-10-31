@@ -1,9 +1,18 @@
 import { db } from "./db";
 import { emailVerifications, users } from "./schema";
-import { eq, and, isNull } from "drizzle-orm";
-import { randomBytes } from "node:crypto";
+import { eq, and, isNull, inArray } from "drizzle-orm";
+import { createHash, randomBytes } from "node:crypto";
 import { addDays } from "./utils";
 import { sendMail, EMAIL_BRAND, wrapEmailCard, escapeHtml } from "./mailer";
+
+/** DB 에는 토큰 해시만 저장(감사 M11). 배포 전 발급된 원문 토큰도 만료 전까지는 받아준다. */
+function tokenKey(raw: string): string {
+  return "h_" + createHash("sha256").update(raw).digest("hex");
+}
+function tokenMatch(col: Parameters<typeof eq>[0], raw: string) {
+  return inArray(col, [tokenKey(raw), raw]);
+}
+
 
 const TOKEN_TTL_DAYS = 3;
 
@@ -45,7 +54,7 @@ export async function createVerificationToken(userId: number): Promise<string> {
   const expiresAt = addDays(new Date(), TOKEN_TTL_DAYS).toISOString();
   await db.insert(emailVerifications).values({
     userId,
-    token,
+    token: tokenKey(token),
     expiresAt,
   });
   return token;
@@ -63,6 +72,21 @@ export async function sendVerificationMail(opts: {
   await sendMail({ to: opts.email, ...mail, audience: "org" });
 }
 
+/** 토큰이 아직 쓸 수 있는지만 확인(소비하지 않음) — 비밀번호 확인을 먼저 하기 위해. */
+export async function peekVerificationToken(
+  token: string
+): Promise<{ ok: true; userId: number } | { ok: false; reason: string }> {
+  const [row] = await db
+    .select()
+    .from(emailVerifications)
+    .where(tokenMatch(emailVerifications.token, token));
+  if (!row) return { ok: false, reason: "유효하지 않은 토큰입니다." };
+  if (row.consumedAt) return { ok: false, reason: "이미 사용된 토큰입니다." };
+  if (new Date(row.expiresAt) < new Date())
+    return { ok: false, reason: "토큰이 만료되었습니다." };
+  return { ok: true, userId: row.userId };
+}
+
 export async function consumeVerificationToken(token: string): Promise<{
   ok: boolean;
   userId?: number;
@@ -73,7 +97,7 @@ export async function consumeVerificationToken(token: string): Promise<{
   const [row] = await db
     .select()
     .from(emailVerifications)
-    .where(eq(emailVerifications.token, token));
+    .where(tokenMatch(emailVerifications.token, token));
   if (!row) return { ok: false, reason: "유효하지 않은 토큰입니다." };
   if (row.consumedAt) return { ok: false, reason: "이미 사용된 토큰입니다." };
   if (new Date(row.expiresAt) < new Date())

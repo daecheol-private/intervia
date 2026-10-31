@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { db } from "@/lib/db";
 import { users, organizations, tokenWallets } from "@/lib/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, or, isNull, isNotNull } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth";
 import { sendVerificationMail } from "@/lib/email-verify";
 import { notifySystemAdmins, notifyOrgAdmins } from "@/lib/notifications";
@@ -150,13 +150,17 @@ export async function POST(req: Request) {
   // 같은 도메인을 이미 쓰는(비-rejected) 법인이 있는지 — 멀티법인/공유 도메인 케이스.
   // 도메인 첫 법인은 도메인 이메일 인증만으로 자동 검증하지만, 2번째+ 법인은
   // 섀도우 법인(타 회사 도메인 위 사칭) 방지를 위해 사업자번호 검증을 요구한다.
+  // 이메일 인증을 안 끝낸 가입이 만든 법인은 도메인 자리를 차지하지 않는다 — 남의 회사 이메일로
+  // 먼저 가입해 진짜 회사를 "2번째 법인(검토 대기)"으로 밀어내는 선점을 막는다(감사 C5).
   const existingOnDomain = await db
     .select({ id: organizations.id })
     .from(organizations)
+    .leftJoin(users, eq(users.id, organizations.createdByUserId))
     .where(
       and(
         eq(organizations.emailDomain, emailDomain),
-        ne(organizations.verificationStatus, "rejected")
+        ne(organizations.verificationStatus, "rejected"),
+        or(isNull(organizations.createdByUserId), isNotNull(users.emailVerifiedAt))
       )
     );
   const domainTaken = existingOnDomain.length > 0;
@@ -264,10 +268,7 @@ export async function POST(req: Request) {
   // 신규 가입 무료 체험 토큰 — ledger 통해 지급 (잔액·내역 동기 보장).
   // 단 pending_review(검토 대기) 법인은 보류 — 웰컴토큰 파밍/섀도우 법인 방지.
   // 운영자 승인(admin/orgs/[id]/verify) 시점에 지급한다.
-  if (verificationStatus !== "pending_review") {
-    const { grantWelcomeBonus } = await import("@/lib/tokens");
-    await grantWelcomeBonus(org.id, user.id);
-  }
+  // → 지급 시점은 이메일 인증 완료(/api/auth/verify-email). 여기서는 주지 않는다.
 
   // after() — void 는 응답 후 서버리스 suspend 로 잘려 유실된다(GOTCHAS §0-1).
   after(() =>

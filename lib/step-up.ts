@@ -16,6 +16,7 @@ import { db } from "./db";
 import { sessions } from "./schema";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { sessionKey } from "./auth";
 
 export const STEP_UP_TTL_MS = 10 * 60 * 1000;
 
@@ -26,7 +27,7 @@ export async function isStepUpFresh(): Promise<boolean> {
   const [row] = await db
     .select({ stepUpVerifiedAt: sessions.stepUpVerifiedAt })
     .from(sessions)
-    .where(eq(sessions.token, token));
+    .where(eq(sessions.token, sessionKey(token)));
   if (!row?.stepUpVerifiedAt) return false;
   const verified = new Date(row.stepUpVerifiedAt).getTime();
   return Date.now() - verified < STEP_UP_TTL_MS;
@@ -36,7 +37,7 @@ export async function markStepUpVerified(sessionToken: string): Promise<void> {
   await db
     .update(sessions)
     .set({ stepUpVerifiedAt: new Date().toISOString() })
-    .where(eq(sessions.token, sessionToken));
+    .where(eq(sessions.token, sessionKey(sessionToken)));
 }
 
 /** API 가드. step-up 안 됐으면 403 응답 반환. 통과면 null. */

@@ -154,11 +154,17 @@ export default function OrgMembersPage() {
     if (m.joinRequestId == null) return;
     setBusyId(m.id);
     setErr("");
-    const res = await fetch(`/api/orgs/join-requests/${m.joinRequestId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
+    let res: Response;
+    try {
+      res = await ensureFetch(`/api/orgs/join-requests/${m.joinRequestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      }, "합류 승인");
+    } catch {
+      setBusyId(null);
+      return;
+    }
     setBusyId(null);
     if (!res.ok) {
       setErr(await res.text());

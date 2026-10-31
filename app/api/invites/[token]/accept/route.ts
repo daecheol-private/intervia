@@ -12,7 +12,7 @@
 import { after } from "next/server";
 import { db } from "@/lib/db";
 import { orgInvites, users, jobInterviewers, orgJoinRequests } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   getCurrentUser,
   deleteSession,
@@ -20,6 +20,7 @@ import {
 } from "@/lib/auth";
 import { requireUser } from "@/lib/tenant";
 import { notifyOrgAdmins } from "@/lib/notifications";
+import { inviteTokenCandidates } from "@/lib/invites";
 
 export const runtime = "nodejs";
 
@@ -35,7 +36,7 @@ export async function POST(
   const [inv] = await db
     .select()
     .from(orgInvites)
-    .where(eq(orgInvites.token, token));
+    .where(inArray(orgInvites.token, inviteTokenCandidates(token)));
   if (!inv)
     return Response.json(
       { code: "not_found", message: "유효하지 않은 초대 링크입니다." },

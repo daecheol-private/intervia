@@ -9,6 +9,7 @@ import {
 } from "@/app/password-strength";
 import LogoutButton from "@/app/logout-button";
 import { PasswordInput } from "@/app/components/PasswordInput";
+import { useStepUpFetch } from "@/app/components/StepUpModal";
 import { formatLocalDateTime } from "@/lib/utils";
 import { NotifyPhoneRow } from "./NotifyPhoneRow";
 import { TutorialVideoLink } from "@/app/components/TutorialVideoLink";
@@ -354,6 +355,7 @@ function DangerZone({ email }: { email: string }) {
 }
 
 function TwoFactorPanel() {
+  const { ensureFetch, modal: stepUpModal } = useStepUpFetch();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [setup, setSetup] = useState<{ secret: string; url: string; qr: string } | null>(null);
   const [code, setCode] = useState("");
@@ -393,11 +395,17 @@ function TwoFactorPanel() {
     if (!setup) return;
     setMsg(null);
     setBusy(true);
-    const r = await fetch("/api/account/2fa/enable", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ secret: setup.secret, code }),
-    });
+    let r: Response;
+    try {
+      r = await ensureFetch("/api/account/2fa/enable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret: setup.secret, code }),
+      }, "2단계 인증 켜기");
+    } catch {
+      setBusy(false);
+      return;
+    }
     setBusy(false);
     if (!r.ok) {
       setMsg({ type: "error", text: await r.text() });
@@ -437,6 +445,7 @@ function TwoFactorPanel() {
 
   return (
     <section className="mt-8 bg-card border border-border-default rounded-2xl p-6 shadow-sm">
+      {stepUpModal}
       <h2 className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-3">
         2단계 인증 (TOTP)
       </h2>

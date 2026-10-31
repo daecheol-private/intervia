@@ -152,9 +152,13 @@ export default function AdminUsersPage() {
   const passwordReset = async (u: Row) => {
     if (!confirm(`'${u.email}' 로 비밀번호 리셋 메일을 발송합니다.`)) return;
     setBusyId(u.id);
-    const res = await fetch(`/api/admin/users/${u.id}/password-reset`, {
-      method: "POST",
-    });
+    let res: Response;
+    try {
+      res = await ensureFetch(`/api/admin/users/${u.id}/password-reset`, { method: "POST" }, "비밀번호 리셋 메일");
+    } catch {
+      setBusyId(null);
+      return;
+    }
     setBusyId(null);
     if (!res.ok) {
       setErr(await res.text());
@@ -166,6 +170,26 @@ export default function AdminUsersPage() {
         ? "메일 발송 완료. 사용자가 메일함을 확인하면 됩니다."
         : `메일 발송 실패: ${d.error ?? "알 수 없는 오류"}`
     );
+  };
+
+  // 2단계 인증 해제 — 휴대폰 분실·남이 건 2FA 로 잠긴 사용자 복구. 비밀번호 재확인 + 세션 전부 끊음.
+  const reset2fa = async (u: Row) => {
+    if (!confirm(`'${u.email}' 의 2단계 인증을 해제하고 모든 기기에서 로그아웃시킵니다.
+본인 확인을 마친 경우에만 진행하세요.`)) return;
+    setBusyId(u.id);
+    let res: Response;
+    try {
+      res = await ensureFetch(`/api/admin/users/${u.id}/2fa-reset`, { method: "POST" }, "2단계 인증 해제");
+    } catch {
+      setBusyId(null);
+      return;
+    }
+    setBusyId(null);
+    if (!res.ok) {
+      setErr(await res.text());
+      return;
+    }
+    alert("2단계 인증을 해제했습니다.");
   };
 
   // 계정 영구 삭제 — sysadmin 전용. step-up + 사유 + 이메일 확인.
@@ -329,6 +353,9 @@ export default function AdminUsersPage() {
         </button>
         <button onClick={() => passwordReset(u)} disabled={busy} className={btnAccent}>
           비번 리셋
+        </button>
+        <button onClick={() => reset2fa(u)} disabled={busy} className={btnAccent}>
+          2FA 해제
         </button>
         {canDelete(u) && (
           <button

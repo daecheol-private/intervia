@@ -11,6 +11,8 @@ import { markStepUpVerified } from "@/lib/step-up";
 import { cookies } from "next/headers";
 import { rateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { verifyAndConsumeTotp } from "@/lib/totp-verify";
+import { decrypt } from "@/lib/crypto";
 
 export const runtime = "nodejs";
 
@@ -29,12 +31,13 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => null)) as {
     password?: string;
+    code?: string;
   } | null;
   if (!body?.password)
     return new Response("비밀번호 필요", { status: 400 });
 
   const [row] = await db
-    .select({ passwordHash: users.passwordHash })
+    .select({ passwordHash: users.passwordHash, totpSecret: users.totpSecret, totpEnabledAt: users.totpEnabledAt })
     .from(users)
     .where(eq(users.id, me!.id));
   if (!row) return new Response("사용자 없음", { status: 404 });
@@ -53,6 +56,20 @@ export async function POST(req: Request) {
       { ok: false, message: "비밀번호가 일치하지 않습니다." },
       { status: 401 }
     );
+  }
+
+  // 2단계 인증 사용자는 재확인에도 인증 코드까지 — 비밀번호만 아는 사람이 민감 작업을 못 하게.
+  if (row.totpEnabledAt && row.totpSecret) {
+    if (!body.code)
+      return Response.json(
+        { ok: false, code: "totp_required", message: "인증 앱의 6자리 코드를 입력해 주세요." },
+        { status: 401 }
+      );
+    if (!(await verifyAndConsumeTotp(me!.id, decrypt(row.totpSecret), body.code)))
+      return Response.json(
+        { ok: false, code: "totp_invalid", message: "인증 코드가 올바르지 않습니다." },
+        { status: 401 }
+      );
   }
 
   const c = await cookies();

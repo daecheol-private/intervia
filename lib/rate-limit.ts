@@ -11,8 +11,8 @@
  *   3) 둘 다 없으면 "anon" (운영에선 거의 발생 안 함)
  *
  * 동작:
- *   - INSERT (멱등 X — 모든 호출 1 row)
- *   - SELECT COUNT(*) FROM api_rate_log
+ *   - INSERT 먼저 (멱등 X — 모든 호출 1 row), 그 다음
+ *   - SELECT COUNT(*) FROM api_rate_log (자기 포함 → -1)
  *     WHERE scope = ? AND identifier = ? AND attempted_at >= now-window
  *   - count > limit → 429 응답 + Retry-After 헤더
  *
@@ -51,6 +51,8 @@ export async function rateLimit(
 
   const since = sqliteTimestamp(new Date(Date.now() - opts.windowSec * 1000));
 
+  // 기록을 먼저 넣고 자기 포함으로 센다 — 세고 나서 넣으면 동시 요청이 전부 한도 안으로 통과한다.
+  await db.insert(apiRateLog).values({ scope, identifier });
   const [row] = await db
     .select({ c: sql<number>`COUNT(*)` })
     .from(apiRateLog)
@@ -61,13 +63,7 @@ export async function rateLimit(
         gte(apiRateLog.attemptedAt, since)
       )
     );
-  const count = Number(row?.c ?? 0);
-
-  // INSERT — fire-and-forget 으로 응답 지연 최소화
-  void db
-    .insert(apiRateLog)
-    .values({ scope, identifier })
-    .catch((e) => console.error("[rate-limit] insert failed:", e));
+  const count = Number(row?.c ?? 0) - 1;
 
   if (count >= opts.limit) {
     return new Response(

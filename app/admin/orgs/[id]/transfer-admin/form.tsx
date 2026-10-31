@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useStepUpFetch } from "@/app/components/StepUpModal";
 
 type Member = {
   id: number;
@@ -36,6 +37,7 @@ export default function TransferAdminForm({
   );
   const [demoteFrom, setDemoteFrom] = useState(true);
   const [reason, setReason] = useState("");
+  const { ensureFetch, modal: stepUpModal } = useStepUpFetch();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -53,15 +55,21 @@ export default function TransferAdminForm({
     }
     setBusy(true);
     setErr("");
-    const res = await fetch(`/api/admin/orgs/${orgId}/transfer-admin`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        toUserId,
-        fromUserId: demoteFrom && fromUserId ? fromUserId : null,
-        reason: reason.trim(),
-      }),
-    });
+    let res: Response;
+    try {
+      res = await ensureFetch(`/api/admin/orgs/${orgId}/transfer-admin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toUserId,
+          fromUserId: demoteFrom && fromUserId ? fromUserId : null,
+          reason: reason.trim(),
+        }),
+      }, "관리자 이전");
+    } catch {
+      setBusy(false);
+      return;
+    }
     setBusy(false);
     if (!res.ok) {
       setErr(await res.text());
@@ -73,6 +81,7 @@ export default function TransferAdminForm({
 
   return (
     <div className="bg-card border border-border-default rounded-2xl shadow-sm p-6 space-y-4">
+      {stepUpModal}
       <div>
         <label className="block text-sm font-medium text-ink-soft mb-1.5">
           새 관리자 (org_admin 으로 승격)

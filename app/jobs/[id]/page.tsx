@@ -600,6 +600,29 @@ export default function JobDetailPage() {
     void loadCandidates();
   };
 
+  // CSV 반출 — 서버가 비밀번호 재확인을 요구하므로 링크 대신 fetch 후 내려받는다.
+  const exportCsv = async () => {
+    let res: Response;
+    try {
+      res = await ensureFetch(`/api/jobs/${jobId}/candidates/export`, undefined, "후보자 CSV 다운로드");
+    } catch {
+      return;
+    }
+    if (!res.ok) {
+      notify(await res.text(), { tone: "danger", title: "다운로드 실패" });
+      return;
+    }
+    const cd = res.headers.get("content-disposition") ?? "";
+    const m = /filename\*=UTF-8''([^;]+)/i.exec(cd) ?? /filename="?([^";]+)"?/i.exec(cd);
+    const name = m ? decodeURIComponent(m[1]) : `candidates-${jobId}.csv`;
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleDelete = async () => {
     if (
       !(await confirmDialog(
@@ -2008,14 +2031,15 @@ export default function JobDetailPage() {
             <option value="withdrawn">지원취소</option>
           </optgroup>
         </select>
-        <a
-          href={`/api/jobs/${jobId}/candidates/export`}
+        <button
+          type="button"
+          onClick={() => void exportCsv()}
           className="hidden sm:inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-border-strong hover:bg-surface-alt text-ink-soft text-sm ml-auto"
           title="후보자 데이터 CSV 다운로드"
         >
           <Download className="w-4 h-4" />
           CSV
-        </a>
+        </button>
       </div>
 
       {/* 불합격 통보 미발송 안내 — 통보는 의무가 아니라 선택이므로 경고가 아닌 중립 안내(톤다운).

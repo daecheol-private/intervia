@@ -14,6 +14,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { requireUser, requirePasswordChanged } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
+import { requireStepUp } from "@/lib/step-up";
 import { db } from "@/lib/db";
 import { users, organizations, orgJoinRequests } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
@@ -31,6 +32,8 @@ export async function POST(
     return new Response("권한 없음 (시스템 관리자 전용)", { status: 403 });
   const pwGuard = requirePasswordChanged(me);
   if (pwGuard) return pwGuard;
+  const stepUp = await requireStepUp();
+  if (stepUp) return stepUp;
 
   const { id } = await params;
   const orgId = Number(id);
