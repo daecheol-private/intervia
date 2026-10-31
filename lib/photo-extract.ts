@@ -13,7 +13,8 @@
  * 사진 = PII → 저장 후엔 본문(resume_file_path)과 동일한 보유기간 정책으로 폐기된다
  * (purgeOnDecision / purgeExpiredOriginals / deleteCandidateFiles).
  */
-import { unzipSync, strFromU8 } from "fflate";
+import { strFromU8 } from "fflate";
+import { safeUnzipSync } from "./safe-unzip";
 
 export type ExtractedPhoto = { data: Buffer; ext: "jpg" | "png" };
 
@@ -27,6 +28,12 @@ const MAX_LONG_SIDE = 1700; // px — 이보다 길면 전면 스캔 페이지(�
 const MAX_AREA = 2_000_000; // px² — 전면 페이지 이미지(150dpi A4 = 2.17M) 배제
 const MIN_BYTES = 2 * 1024; // 2KB 미만은 장식/스페이서
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB 초과 단일 이미지는 사진으로 취급 안 함
+// DOCX 해제 한도 — zip-extract 와 같은 값(개별 50MB·합계 100MB). 초과 시 사진 없음(null).
+const DOCX_ZIP_LIMITS = {
+  maxEntries: 5000,
+  maxEntryBytes: 50 * 1024 * 1024,
+  maxTotalBytes: 100 * 1024 * 1024,
+};
 
 type Cand = {
   data: Buffer;
@@ -136,13 +143,14 @@ function docxImageOrder(files: Record<string, Uint8Array>): Map<string, number> 
 function extractFromDocx(buffer: Buffer): ExtractedPhoto | null {
   let files: Record<string, Uint8Array>;
   try {
-    files = unzipSync(buffer, {
-      // 미디어 + 등장 순서 판별용 본문/관계 파일만 — 전체 docx 해제 비용 회피.
-      filter: (f) =>
-        /^word\/media\/[^/]+\.(jpe?g|png)$/i.test(f.name) ||
-        f.name === "word/document.xml" ||
-        f.name === "word/_rels/document.xml.rels",
-    });
+    // 미디어 + 등장 순서 판별용 본문/관계 파일만 — 전체 docx 해제 비용 회피.
+    // safeUnzipSync: 해제 전 선언 크기 검사 + 실제 해제량 상한 (압축폭탄 차단, 보안감사 H9).
+    // MAX_BYTES 초과 이미지는 어차피 후보에서 빠지므로 풀지 않는다.
+    files = safeUnzipSync(buffer, DOCX_ZIP_LIMITS, (f) =>
+      (/^word\/media\/[^/]+\.(jpe?g|png)$/i.test(f.name) && f.originalSize <= MAX_BYTES) ||
+      f.name === "word/document.xml" ||
+      f.name === "word/_rels/document.xml.rels"
+    );
   } catch {
     return null;
   }

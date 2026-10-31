@@ -1,7 +1,7 @@
 /**
  * ZIP 파일에서 이력서·포트폴리오 등 자료 추출.
  *
- * fflate 동기 unzipSync 사용 — 단건 처리 (Vercel 함수 시간 내 충분).
+ * safeUnzipSync(fflate 기반, 해제 전 선언 크기 검사 + 실제 해제량 상한) — 단건 처리.
  * 안전 가드:
  *   - 압축 해제 후 총 파일 수 200개 이내
  *   - 개별 파일 50MB 이내 (포트폴리오 PDF 20~50MB 흔함)
@@ -9,11 +9,14 @@
  *   - 디렉토리·맥OS 메타파일·시스템 파일 자동 제외
  *   - 허용 확장자만 (.pdf, .docx, .doc, .hwp, .hwpx, .png, .jpg, .jpeg, .pptx, .xlsx, .txt)
  */
-import { unzipSync, strFromU8 } from "fflate";
+import { strFromU8 } from "fflate";
+import { safeUnzipSync, ZipLimitError } from "./safe-unzip";
 
 const MAX_FILES = 200;
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+// 중앙 디렉토리 엔트리 수 상한 (선별 전 전체). 비-zip64 최대치 — 코드 프로젝트 ZIP 도 수용.
+const MAX_ENTRIES = 65535;
 
 const ALLOWED_EXT = new Set([
   "pdf",
@@ -137,10 +140,76 @@ export function extractZip(buf: Buffer): ZipEntry[] {
     );
   }
 
+  let totalEntries = 0;
+  let skippedExt = 0;
+  let mojibakeSuspect = false;
+  let fileCount = 0;
+  let declaredTotal = 0;
+
+  // 해제 전에 중앙 디렉토리의 선언 크기로 선별·한도 검사 (압축폭탄 차단, 보안감사 H9).
+  // 실제 해제량이 선언을 넘으면 safeUnzipSync 가 즉시 중단한다.
   let entries: Record<string, Uint8Array>;
   try {
-    entries = unzipSync(new Uint8Array(buf));
+    entries = safeUnzipSync(
+      new Uint8Array(buf),
+      { maxEntries: MAX_ENTRIES, maxEntryBytes: MAX_FILE_BYTES, maxTotalBytes: MAX_TOTAL_BYTES },
+      (f) => {
+        const rawName = f.name;
+        const bytes = f.compression === 0 ? f.size : f.originalSize;
+        // 디렉토리 엔트리 (마지막이 / 로 끝남) 자동 skip
+        if (rawName.endsWith("/") || bytes === 0) return false;
+        // 시스템 파일 skip
+        if (SKIP_RE.some((re) => re.test(rawName))) return false;
+
+        totalEntries++;
+        const decoded = tryDecode(rawName);
+        // 깨진 인코딩 의심 — 디코딩 결과에 ASCII 만 있거나 replacement char (U+FFFD) 가 있으면 mojibake.
+        if (
+          /�/.test(decoded) ||
+          /[-ÿ]/.test(decoded) // Latin-1 영역 (CP437/CP949 깨진 흔적)
+        ) {
+          mojibakeSuspect = true;
+        }
+        const parsed = safePath(decoded);
+        if (!parsed) return false;
+        const ext = (parsed.name.split(".").pop() ?? "").toLowerCase();
+        if (!ALLOWED_EXT.has(ext)) {
+          skippedExt++;
+          return false;
+        }
+        if (fileCount >= MAX_FILES)
+          throw new ZipExtractError(
+            "too_many_files",
+            `압축 파일 안 항목이 너무 많습니다 (최대 ${MAX_FILES}개).`
+          );
+        if (bytes > MAX_FILE_BYTES)
+          throw new ZipExtractError(
+            "file_too_large",
+            `압축 안 '${parsed.name}' 파일이 너무 큽니다 (개별 최대 50MB).`
+          );
+        declaredTotal += bytes;
+        if (declaredTotal > MAX_TOTAL_BYTES)
+          throw new ZipExtractError(
+            "total_too_large",
+            `압축 해제 후 총 크기가 너무 큽니다 (최대 100MB).`
+          );
+        fileCount++;
+        return true;
+      }
+    );
   } catch (e) {
+    if (e instanceof ZipExtractError) throw e;
+    if (e instanceof ZipLimitError) {
+      if (e.code === "too_many_entries")
+        throw new ZipExtractError(
+          "too_many_files",
+          `압축 파일 안 항목이 너무 많습니다 (최대 ${MAX_ENTRIES}개).`
+        );
+      if (e.code === "entry_too_large")
+        throw new ZipExtractError("file_too_large", `압축 안 파일이 너무 큽니다 (개별 최대 50MB).`);
+      if (e.code === "total_too_large")
+        throw new ZipExtractError("total_too_large", `압축 해제 후 총 크기가 너무 큽니다 (최대 100MB).`);
+    }
     throw new ZipExtractError(
       "invalid_zip",
       `압축 파일을 열 수 없습니다: ${e instanceof Error ? e.message : String(e)}`
@@ -148,53 +217,12 @@ export function extractZip(buf: Buffer): ZipEntry[] {
   }
 
   const out: ZipEntry[] = [];
-  let totalBytes = 0;
-  let fileCount = 0;
-  let totalEntries = 0;
-  let skippedExt = 0;
-  let mojibakeSuspect = false;
-
   for (const rawName in entries) {
-    if (fileCount >= MAX_FILES)
-      throw new ZipExtractError(
-        "too_many_files",
-        `압축 파일 안 항목이 너무 많습니다 (최대 ${MAX_FILES}개).`
-      );
     const data = entries[rawName];
-    // 디렉토리 엔트리 (마지막이 / 로 끝남) 자동 skip
-    if (rawName.endsWith("/") || data.length === 0) continue;
-    // 시스템 파일 skip
-    if (SKIP_RE.some((re) => re.test(rawName))) continue;
-
-    totalEntries++;
-    const decoded = tryDecode(rawName);
-    // 깨진 인코딩 의심 — 디코딩 결과에 ASCII 만 있거나 replacement char (U+FFFD) 가 있으면 mojibake.
-    if (
-      /�/.test(decoded) ||
-      /[-ÿ]/.test(decoded) // Latin-1 영역 (CP437/CP949 깨진 흔적)
-    ) {
-      mojibakeSuspect = true;
-    }
-    const parsed = safePath(decoded);
+    if (data.length === 0) continue;
+    const parsed = safePath(tryDecode(rawName));
     if (!parsed) continue;
-    const ext = (parsed.name.split(".").pop() ?? "").toLowerCase();
-    if (!ALLOWED_EXT.has(ext)) {
-      skippedExt++;
-      continue;
-    }
-    if (data.length > MAX_FILE_BYTES)
-      throw new ZipExtractError(
-        "file_too_large",
-        `압축 안 '${parsed.name}' 파일이 너무 큽니다 (개별 최대 50MB).`
-      );
-    totalBytes += data.length;
-    if (totalBytes > MAX_TOTAL_BYTES)
-      throw new ZipExtractError(
-        "total_too_large",
-        `압축 해제 후 총 크기가 너무 큽니다 (최대 100MB).`
-      );
     out.push({ name: parsed.name, path: parsed.path, buf: Buffer.from(data) });
-    fileCount++;
   }
 
   if (out.length === 0) {
