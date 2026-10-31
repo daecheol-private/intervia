@@ -24,12 +24,23 @@ type PendingInfo = {
   emailVerified: boolean;
 };
 
+// 오픈 리다이렉트 방어 — 같은 오리진으로 해석되는 경로만 허용. 정규식은 `/%09/evil.com` 같은 우회를 못 막는다.
+function safeNext(raw: string | null): string {
+  if (!raw || !raw.startsWith("/")) return "/";
+  try {
+    const base = "https://intervia.invalid";
+    const u = new URL(raw, base);
+    if (u.origin !== base) return "/";
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return "/";
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const search = useSearchParams();
-  // 오픈 리다이렉트 방어 — 내부 상대경로(`/...`)만 허용. `//evil`·`/\evil`·`https://evil` 차단.
-  const rawNext = search.get("next") || "/";
-  const next = /^\/(?![/\\])/.test(rawNext) ? rawNext : "/";
+  const next = safeNext(search.get("next"));
   const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
   const [form, setForm] = useState({ email: "", password: "", name: "" });
   const [rememberId, setRememberId] = useState(false);

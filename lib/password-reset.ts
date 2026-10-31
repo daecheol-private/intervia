@@ -76,7 +76,8 @@ export async function sendPasswordResetMail(opts: {
   const token = await createResetToken(opts.userId, opts.requestedIp);
   const resetUrl = `${opts.baseUrl}/password-reset?token=${token}`;
   const mail = buildPasswordResetEmail({ userName: opts.name, resetUrl });
-  await sendMail({ to: opts.email, ...mail, orgId: opts.orgId ?? null, audience: "org" });
+  // 재설정 메일은 항상 플랫폼 SMTP — 법인 SMTP 로 보내면 그 서버 관리자가 링크를 가로챌 수 있다.
+  await sendMail({ to: opts.email, ...mail, orgId: null, audience: "org" });
   void addDays; // (placeholder — keep import stable)
 }
 

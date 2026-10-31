@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DesktopOnlyNotice } from "@/app/components/DesktopOnlyNotice";
 import { PasswordInput } from "@/app/components/PasswordInput";
 import { formatLocalDateTime } from "@/lib/utils";
+import { useStepUpFetch } from "@/app/components/StepUpModal";
 
 type SmtpConfig = {
   orgId: number;
@@ -34,6 +35,7 @@ export default function OrgSmtpPage() {
     null
   );
   const [busy, setBusy] = useState(false);
+  const { ensureFetch, modal: stepUpModal } = useStepUpFetch();
 
   const load = async () => {
     const r = await fetch("/api/orgs/smtp");
@@ -58,7 +60,9 @@ export default function OrgSmtpPage() {
   const save = async () => {
     setBusy(true);
     setMsg(null);
-    const res = await fetch("/api/orgs/smtp", {
+    let res: Response;
+    try {
+      res = await ensureFetch("/api/orgs/smtp", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -70,7 +74,11 @@ export default function OrgSmtpPage() {
         fromEmail,
         fromName: fromName || null,
       }),
-    });
+    }, "메일 서버 변경");
+    } catch {
+      setBusy(false);
+      return;
+    }
     setBusy(false);
     if (!res.ok) {
       setMsg({ kind: "err", text: await res.text() });
@@ -93,7 +101,13 @@ export default function OrgSmtpPage() {
       return;
     setBusy(true);
     setMsg(null);
-    const res = await fetch("/api/orgs/smtp", { method: "DELETE" });
+    let res: Response;
+    try {
+      res = await ensureFetch("/api/orgs/smtp", { method: "DELETE" }, "메일 서버 삭제");
+    } catch {
+      setBusy(false);
+      return;
+    }
     setBusy(false);
     if (!res.ok) {
       setMsg({ kind: "err", text: await res.text() });
@@ -117,6 +131,7 @@ export default function OrgSmtpPage() {
 
   return (
     <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">
+      {stepUpModal}
       <div className="mb-6">
         <Link href="/org/settings" className="text-xs text-ink-muted hover:underline">
           ← 법인 설정

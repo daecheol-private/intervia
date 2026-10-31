@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   // 사용자 존재 여부 노출 방지: 항상 성공 응답.
   // 실제 발송은 사용자 있고 active 상태일 때만.
   if (user && user.status === "active") {
-    const smtpOk = await isSmtpAvailable(user.orgId);
+    const smtpOk = await isSmtpAvailable(null);
     if (smtpOk) {
       const base = process.env.APP_BASE_URL ?? new URL(req.url).origin;
       try {

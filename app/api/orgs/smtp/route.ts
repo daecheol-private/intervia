@@ -6,6 +6,7 @@ import { ownsOrg, requireUser } from "@/lib/tenant";
 import { verifySmtpConfig } from "@/lib/mailer";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
+import { requireStepUp } from "@/lib/step-up";
 
 export const runtime = "nodejs";
 
@@ -52,6 +53,9 @@ export async function PUT(req: Request) {
   const orgId = resolveOrgId(req, me!.orgId);
   if (!orgId) return new Response("orgId 필요", { status: 400 });
   if (!ownsOrg(me!, orgId)) return new Response("권한 없음", { status: 403 });
+  // 메일 서버를 바꾸면 그 법인 메일이 그 서버를 지나간다 — 비밀번호 재확인.
+  const stepUp = await requireStepUp();
+  if (stepUp) return stepUp;
 
   const body = (await req.json().catch(() => null)) as {
     host?: string;
@@ -181,6 +185,9 @@ export async function DELETE(req: Request) {
   const orgId = resolveOrgId(req, me!.orgId);
   if (!orgId) return new Response("orgId 필요", { status: 400 });
   if (!ownsOrg(me!, orgId)) return new Response("권한 없음", { status: 403 });
+  // 메일 서버를 바꾸면 그 법인 메일이 그 서버를 지나간다 — 비밀번호 재확인.
+  const stepUp = await requireStepUp();
+  if (stepUp) return stepUp;
 
   await db.delete(orgSmtpConfigs).where(eq(orgSmtpConfigs.orgId, orgId));
 
